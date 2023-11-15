@@ -83,6 +83,9 @@ class Command {
 
 // Define the ShowCommandPaletteCommand class
 class ShowCommandPaletteCommand extends Command {
+    constructor(){
+        super("show command palette")
+    }
     execute(){
         super.execute();
 
@@ -93,6 +96,9 @@ class ShowCommandPaletteCommand extends Command {
 
 // Define the HideCommandPaletteCommand class
 class HideCommandPaletteCommand extends Command {
+    constructor(){
+        super("hide command palette")
+    }
     execute(){
         super.execute();
 
@@ -103,6 +109,9 @@ class HideCommandPaletteCommand extends Command {
 
 // Define the ToggleCommandPaletteCommand class
 class ToggleCommandPaletteCommand extends Command {
+    constructor(){
+        super("toggle command palette")
+    }
     execute(){
         super.execute();
 
@@ -118,21 +127,32 @@ class CommandPalette {
     availableCommands = []; 
     // the list of contextually recommended commands
     filteredCommands = []; 
+
+    selectedSuggestionIndex = null;
     
     constructor(){
+        this.addDefaultCommands();
     }
 
     addDefaultCommands(){
         this.availableCommands.push(new ShowCommandPaletteCommand());
         this.availableCommands.push(new HideCommandPaletteCommand());
         this.availableCommands.push(new ToggleCommandPaletteCommand());
-        this.availableCommands.push(new Command('add node'));
+        this.availableCommands.push(new Command('switch to Select Mode'));
+        this.availableCommands.push(new Command('switch to Add Node Mode'));
+        this.availableCommands.push(new Command('switch to Add Edge Mode'));
+        
+        this.availableCommands.push(new Command('switch to Move Mode'));
+        this.availableCommands.at(-1).execute = function(){
+            //super.execute();
+            store.interactionMode = MODES.MOVE;
+        }
 
-        // let addNodeCommand = this.availableCommands.at(-1);
-        // addNodeCommand.execute = () => {
-        //     super.execute();
-        //     store.interactionMode = MODES.ADD_NODE;
-        // }
+        this.availableCommands.push(new Command('switch to Delete Mode'));
+        this.availableCommands.at(-1).execute = function(){
+            //super.execute();
+            store.interactionMode = MODES.DELETE;
+        }
     }
 
     renderSuggestedCommands(){
@@ -145,15 +165,16 @@ class CommandPalette {
             let w = 200;
             let h = 50;
             let label = command.name;
-            let selected = false;
+            let selected = this.selectedSuggestionIndex === i;
             this.renderSuggestedCommand(x,y,w,h,label,selected);
         }
     }
     renderSuggestedCommand(x,y,w,h,label,selected){
         strokeWeight(selected ? 3 : 1);
         // draw box
-        fill(255)
+        fill(selected ? "rgb(255,255,0)" : 255)
         rect(x,y,w,h);
+        strokeWeight(1);
         // draw label
         fill(0)
         textAlign(CENTER,CENTER);
@@ -161,6 +182,83 @@ class CommandPalette {
     }
 
     onCommandPaletteInput(event){
+        //console.log({event});
+
+        // if they pressed tab, select the first suggestion (if any)
+        if(event.keyCode === 9){
+            // tab was pressed
+            // select the first suggestion (if any)
+            if(this.filteredCommands.length){
+                // select the first suggestion
+                this.currentCommand = this.filteredCommands[0];
+                // update the command buffer
+                store.commandBuffer = this.currentCommand.name;
+            }
+        }
+
+        // if they pressed the down arrow key, select the next suggestion (if any)
+        if(event.keyCode === 40){
+            // down arrow was pressed
+            // select the next suggestion (if any)
+            if(this.filteredCommands.length){
+                if(this.selectedSuggestionIndex === null){
+                    this.selectedSuggestionIndex = 0;
+                }
+                else if(this.selectedSuggestionIndex < this.filteredCommands.length - 1){
+                    this.selectedSuggestionIndex++;
+                }
+                else{
+                    // loop back to the first suggestion
+                    this.selectedSuggestionIndex = 0;
+                }
+            }
+        }
+        // if they pressed the up arrow, we go to the previous suggestion index if we're > 0
+        // otherwise we go back to the previously executed command in the command history
+        if(event.keyCode === 38){
+            // up arrow was pressed
+            // select the previous suggestion (if any)
+            if(this.filteredCommands.length){
+                if(this.selectedSuggestionIndex === null){
+                    this.selectedSuggestionIndex = this.filteredCommands.length - 1;
+                }
+                else if(this.selectedSuggestionIndex > 0){
+                    this.selectedSuggestionIndex--;
+                }
+                else{
+                    // loop back to the last suggestion
+                    this.selectedSuggestionIndex = this.filteredCommands.length - 1;
+                }
+            }
+        }
+
+
+        if(event.keyCode === 13){
+            // if we have a command selected, mark it as the current command
+            if(
+                this.selectedSuggestionIndex !== null
+                && this.filteredCommands.length
+                && this.selectedSuggestionIndex < this.filteredCommands.length
+            ){
+
+                this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex];
+            }
+            console.log('enter was pressed', {
+                currentCMDName: this.currentCommand.name
+            })
+            // enter was pressed
+            // execute the current command
+            this.currentCommand.execute();
+            // reset the command buffer
+            store.commandBuffer = {};
+            // hide the command palette
+            store.commandPaletteVisible = false;
+            // clear the command palette input
+            commandPaletteInput.value('');
+            this.currentCommand = null;
+            return;
+        }
+
         //console.warn('onCommandPaletteInput',{event})
         // update the command buffer
         store.commandBuffer = commandPaletteInput.value();
@@ -171,10 +269,10 @@ class CommandPalette {
         }
         // filter the list of available commands
         this.filterCommands();
-        console.log({
-            cb:store.commandBuffer,
-            fc:cmdprompt.filteredCommands
-        });
+        // console.log({
+        //     cb:store.commandBuffer,
+        //     fc:cmdprompt.filteredCommands
+        // });
     }
 
     initCommand(){
@@ -188,6 +286,13 @@ class CommandPalette {
         this.filteredCommands = this.availableCommands.filter(command => {
             return command.name.includes(store.commandBuffer);
         });
+
+        //
+
+        // clear the selected suggestion index if it's out of bounds
+        if(!this.filteredCommands.length){
+            this.selectedSuggestionIndex = null;
+        }
     }
 }
 
@@ -487,7 +592,14 @@ function setup() {
 
     commandPaletteInput = createInput('');
     commandPaletteInput.position(10, windowHeight - 190);
-    commandPaletteInput.input(cmdprompt.onCommandPaletteInput.bind(cmdprompt));
+    // Listen for the 'keydown' event
+    commandPaletteInput.elt.addEventListener('keydown', function(e) {
+        // Check if the Enter key was pressed
+        // if (e.key === 'Enter') {
+            // Call the onCommandPaletteInput method
+            cmdprompt.onCommandPaletteInput(e);
+        // }
+    });
 
     input = createInput('');
     input.position(10, 10);
