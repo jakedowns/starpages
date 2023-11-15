@@ -1,4 +1,37 @@
 /*
+progress and todos
+11.15.23: need to add arguments to commands
+    - arguments should be flagged as required or optional
+    - arguments should have a type (string, number, boolean, etc)
+    - arguments should have a default value
+    - arguments should have a description
+    - arguments should have a name
+    - arguments should have a label
+    - arguments should have a placeholder
+    - arguments should have a validation function
+*/
+
+class Argument {
+    constructor({
+        name, 
+        label,
+        description, 
+        type, 
+        defaultValue, 
+        required, 
+        validationFn
+    }){
+        this.name = name;
+        this.label = label;
+        this.description = description;
+        this.type = type;
+        this.defaultValue = defaultValue;
+        this.required = required;
+        this.validationFn = validationFn;
+    }
+}
+
+/*
 | Step Number | Refactoring Step |
 |-------------|------------------|
 | 1 | Modularize the Code |
@@ -45,6 +78,13 @@ const MODES = {
     DELETE: 'delete',
 }
 
+const SAMPLE_GRAPHS = {
+    EMPTY: 'empty',
+    MVC: 'mvc',
+    FLUX: 'flux',
+    AJAX_FLUX: 'ajaxFlux',
+}
+
 // Define the initial state of the store
 let store = {
     interactionMode: MODES.MOVE,
@@ -63,15 +103,198 @@ let store = {
     currentCommand: {},
     commandHistory: [],
     commandPaletteVisible: false,
+
+    activeWizard: null,
 };
+
+class WizardController {
+    name = 'default wizard';
+    currentStep = 0;
+    stepResponses = [];
+    shownSteps = [];
+    selectedSuggestionIndex = 0;
+    get currentSuggestions(){
+        return this?.config?.steps?.[this?.currentStep]?.suggestions ?? []
+    };
+    constructor(wizardConfig){
+        // todo: ValidateWizardConfig
+        // if this config steps is empty or missing, throw
+        if(!wizardConfig?.steps?.length){
+            throw new Error('wizard config must have steps');
+        }
+        this.config = wizardConfig;
+        this.name = wizardConfig.name ?? this.name;
+        
+    }
+    start(){
+        store.activeWizard = this;
+        this.switchToStep(0);
+    }
+    switchToStep(stepIndex){
+        this.currentStep = stepIndex;
+        this.shownSteps.push(this.currentStep);
+        // drawSuggestions automatically updates based on the current step
+    }
+    tryCompleteStep(){
+        // process the current step
+        // proceed if the current step is valid
+
+        if(this.selectedSuggestionIndex !== null){
+            // record the current response
+            this.stepResponses[this.currentStep] = {
+                input: commandPaletteInput.value(),
+                selectedSuggestionIndex: this.selectedSuggestionIndex,
+                selectedSuggestionValue: this.currentSuggestions[this.selectedSuggestionIndex].value,
+            }
+        }
+
+        // reset the selected suggestion index between steps
+        this.selectedSuggestionIndex = null;
+        
+        // if we completed it, and it was the last step,
+        // end the wizard
+        if(this.currentStep === this.config.steps.length - 1){
+            this.end();
+        }else{
+            this.switchToStep(this.currentStep+1);
+        }
+    }
+    end(){
+        store.activeWizard = null;
+        if(this.config.finalCallback){
+            this.config.finalCallback.call(this,this);
+        }
+    }
+    onDraw(){
+        if(!store.activeWizard){
+            return;
+        }
+        this.drawCurrentStep();
+    }
+    drawCurrentStep(){
+        let question = this.config.steps[this.currentStep].question;
+        // console.warn('displaying wizard step question',{
+        //     step:this.currentStep,
+        //     question
+        // });
+        // render the question
+        textAlign(LEFT,TOP);
+        text(`${question}`, 20, 20);
+        this.drawSuggestedCommands();
+    }
+    drawSuggestedCommands(){
+        let suggestions = [
+            ...this.config.steps[this.currentStep].suggestions
+        ];
+        // TODO
+        // ...[{
+        //     name: "Skip",
+        //     value: "skip"
+        // },{
+        //     name: "Cancel",
+        //     value: "cancel"
+        // }],
+        if(!suggestions?.length){
+            return;
+        }
+        const offsetY = 60;
+        const limit = 10;
+        // render the list of the top LIMIT suggestions
+        let i = 0;
+        for(i = 0; i < limit && i < suggestions.length; i++) {
+            let suggestion = suggestions[i];
+            let x = 10;
+            let y = offsetY + 10 + (i * 50);
+            let w = 200;
+            let h = 50;
+            let label = suggestion.name;
+            let selected = this.selectedSuggestionIndex === i;
+            this.renderSuggestedCommand(x,y,w,h,label,selected);
+        }
+    }
+    renderSuggestedCommand(x,y,w,h,label,selected){
+        strokeWeight(selected ? 3 : 1);
+        // draw box
+        fill(selected ? "rgb(255,255,0)" : 255)
+        rect(x,y,w,h);
+        strokeWeight(1);
+        // draw label
+        fill(0)
+        textAlign(CENTER,CENTER);
+        text(label, x + (w/2), y + (h/2));
+    }
+    // todo: bail early on these handlers if !store.activeWizard
+    OnPressEnter(event){
+        // validate the current response to the current step
+        // if it's valid, store it
+        // if it's invalid, show an error message
+        console.warn('enter was pressed', {
+            currentCMDName: this.name,
+            currentStepConfig: this.config.steps[this.currentStep]
+        })
+        this.tryCompleteStep();
+    }
+    OnPressUp(event){
+        console.warn('UP was pressed', {
+            currentCMDName: this.name,
+            currentStepConfig: this.config.steps[this.currentStep]
+        })
+        if(this.selectedSuggestionIndex === null){
+            this.selectedSuggestionIndex = this.currentSuggestions.length - 1;
+        }else if(this.selectedSuggestionIndex > 0){
+            this.selectedSuggestionIndex--;
+        }else{
+            // loop back to the last suggestion
+            this.selectedSuggestionIndex = this.currentSuggestions.length - 1;
+        }
+    }
+    OnPressDown(event){
+        console.warn('DOWN was pressed', {
+            currentCMDName: this.name,
+            currentStepConfig: this.config.steps[this.currentStep],
+            currentSuggestionsLength: this.currentSuggestions.length
+        })
+        if(this.selectedSuggestionIndex === null){
+            this.selectedSuggestionIndex = 0;
+        }else if(this.selectedSuggestionIndex < this.currentSuggestions.length - 1){
+            this.selectedSuggestionIndex++;
+        }else{
+            // loop back to the first suggestion
+            this.selectedSuggestionIndex = 0;
+        }
+        console.warn('selectedSuggestionIndex',this.selectedSuggestionIndex)
+    }
+    OnInput(event){
+        console.warn('On Wizard Input', {
+            currentCMDName: this.name,
+            currentStepConfig: this.config.steps[this.currentStep]
+        })
+    }
+}
 
 // Define the Command class
 class Command {
     name = 'default command';
-    constructor(name){
+    constructor(name, options){
         this.name = name ?? this.name;
+        this.options = options ?? {};
     }
     execute(){
+        console.warn('executing command, has wizard, has callback?',
+        {
+            name: this.name,
+            hasWizard: this.options.wizardConfig ? true : false,
+            hasCallback: this.options.callback ? true : false,
+            options: Object.keys(this.options)
+        })
+        if(this.options.wizardConfig){
+            // the constructor validates the wizardConfig for us
+            this.wizard = new WizardController(this.options.wizardConfig);
+            this.wizard.start();
+        }
+        if(this.options.callback){
+            this.options.callback.call(this);
+        }
         // reset command buffer
         store.commandBuffer = {};
     }
@@ -84,25 +307,28 @@ class Command {
 // Define the ShowCommandPaletteCommand class
 class ShowCommandPaletteCommand extends Command {
     constructor(){
-        super("show command palette")
+        super("Show Command Prompt")
     }
     execute(){
         super.execute();
 
-        // show command palette
+        // Show Command Prompt
         store.commandPaletteVisible = true;
+
+        // focus the command palette input element
+        commandPaletteInput.elt.focus();
     }
 }
 
 // Define the HideCommandPaletteCommand class
 class HideCommandPaletteCommand extends Command {
     constructor(){
-        super("hide command palette")
+        super("Hide CMD Prompt")
     }
     execute(){
         super.execute();
 
-        // hide command palette
+        // Hide CMD Prompt
         store.commandPaletteVisible = false;
     }
 }
@@ -110,12 +336,12 @@ class HideCommandPaletteCommand extends Command {
 // Define the ToggleCommandPaletteCommand class
 class ToggleCommandPaletteCommand extends Command {
     constructor(){
-        super("toggle command palette")
+        super("Toggle CMD Prompt")
     }
     execute(){
         super.execute();
 
-        // toggle command palette
+        // Toggle CMD Prompt
         store.commandPaletteVisible = !store.commandPaletteVisible;
     }
 }
@@ -135,6 +361,137 @@ class CommandPalette {
     }
 
     addDefaultCommands(){
+        this.availableCommands.push(new Command("New Requirement",{}))
+        this.availableCommands.push(new Command("New Enum",{}))
+        this.availableCommands.push(new Command("New Action",{}))
+        this.availableCommands.push(new Command("New Event Type",{}))
+        this.availableCommands.push(new Command("New Storage Field",{}))
+        this.availableCommands.push(new Command("New Class",{}))
+        this.availableCommands.push(new Command("New Command",{
+            wizardConfig: {
+                name: "New Command Wizard",
+                steps:  [
+                    {
+                        question: "What is the name of the command?",
+                        answerStorageKey: "name",
+                        answerValidationRules: 'required:unique:string'
+                    },
+                    {
+                        question: "What is the description of the command?",
+                        answerStorageKey: "description",
+                        answerValidationRules: 'required:string'
+                    },
+                    {
+                        question: "What are the aliases for the command?",
+                        answerStorageKey: "aliases",
+                        answerValidationRules: 'optional:csv:string'
+                    },
+                    {
+                        question: "What are the key bindings for the command?",
+                        answerStorageKey: "keyBindings",
+                        answerValidationRules: 'optional:csv:string'
+                    },
+                    // {
+                    //     question: "What is the callback for the command?",
+                    //     answerStorageKey: "callback",
+                    //     answerValidationRules: 'required:unique:string'
+                    // },
+                ]
+            }
+        }));
+        this.availableCommands.push(new Command("Run Self Test",{
+            keyBindings:[
+                // {
+                //     key: "cmd+shift+t",
+                // }
+            ],
+            aliases: [
+                "/test",
+                // "/t"
+            ],
+            callback: function(){
+                console.warn('running self test...')
+                new HideCommandPaletteCommand().execute();
+            }
+        }))
+        this.availableCommands.push(
+            new Command("Clear Graph",{
+                keyBindings:[
+                    {
+                        key: "cmd+shift+c",
+                    }
+                ],
+                aliases: [
+                    "/clear",
+                    "/c"
+                ],
+                callback: function(){
+                    console.warn('clearing graph...')
+                    store.nodes = [];
+                    store.edges = [];
+                    // hide the command palette
+                    new HideCommandPaletteCommand().execute();
+                }
+            })
+        )
+        this.availableCommands.push(
+            new Command("Load Graph...",{
+                wizardConfig: {
+                    name: "Load Graph Wizard",
+                    skippable: true,
+                    required: false,
+                    finalCallback: function(wizardInstance){
+                        console.warn('Load Graph... Final Callback', {
+                            t:this,
+                            wizardInstance
+                        });
+                        switch(wizardInstance.stepResponses[0].selectedSuggestionValue){
+                            case 'mvp':
+                                loadMVCSample();
+                                break;
+                            case 'mvc':
+                                loadMVCSample();
+                                break;
+                            case 'flux':
+                                loadFluxSample();
+                                break;
+                            case 'ajaxFlux':
+                                loadAjaxFluxSample();
+                                break;
+                            default:
+                                console.warn('unknown graph type',wizardInstance.stepResponses[0].selectedSuggestionValue);
+                        }
+                        // close the command palette
+                        new HideCommandPaletteCommand().execute();
+                    },
+                    steps: [
+                        {
+                            question: "Which graph would you like to load?",
+                            suggestions: [
+                                {
+                                    name: "Empty Graph",
+                                    value: "empty"
+                                },
+                                {
+                                    name: "MVC Example",
+                                    value: "mvc"
+                                },
+                                {
+                                    name: "Flux Example",
+                                    value: "flux"
+                                },
+                                {
+                                    name: "Ajax Flux Example",
+                                    value: "ajaxFlux"
+                                },
+                                
+                            ]
+                        }
+                    ]
+                }
+            })
+        )
+
         this.availableCommands.push(new ShowCommandPaletteCommand());
         this.availableCommands.push(new HideCommandPaletteCommand());
         this.availableCommands.push(new ToggleCommandPaletteCommand());
@@ -156,12 +513,14 @@ class CommandPalette {
     }
 
     renderSuggestedCommands(){
-        // render the list of the top 3 suggestions
+        const offsetY = 60;
+        const limit = 10;
+        // render the list of the top LIMIT suggestions
         let i = 0;
-        for(i = 0; i < 3 && i < this.filteredCommands.length; i++) {
+        for(i = 0; i < limit && i < this.filteredCommands.length; i++) {
             let command = this.filteredCommands[i];
             let x = 10;
-            let y = 10 + (i * 50);
+            let y = offsetY + 10 + (i * 50);
             let w = 200;
             let h = 50;
             let label = command.name;
@@ -181,82 +540,89 @@ class CommandPalette {
         text(label, x + (w/2), y + (h/2));
     }
 
+    handleWizardInput(event){
+        switch(event.keyCode){
+            case 13:
+                // validate the current response to the current step
+                // if it's valid, store it
+                // if it's invalid, show an error message
+                store.activeWizard.OnPressEnter.call(store.activeWizard,event);
+                break;
+            case 38:
+                store.activeWizard.OnPressUp.call(store.activeWizard,event);
+                break;
+            case 40:
+                store.activeWizard.OnPressDown.call(store.activeWizard,event);
+                break;
+            default:
+                // update the current response to the current step
+                store.activeWizard.OnInput.call(store.activeWizard,event);
+        }
+    }
+
     onCommandPaletteInput(event){
         //console.log({event});
 
-        // if they pressed tab, select the first suggestion (if any)
-        if(event.keyCode === 9){
-            // tab was pressed
-            // select the first suggestion (if any)
-            if(this.filteredCommands.length){
-                // select the first suggestion
-                this.currentCommand = this.filteredCommands[0];
-                // update the command buffer
-                store.commandBuffer = this.currentCommand.name;
-            }
+        // if the cmd palette is not visible, show it
+        if(!store.commandPaletteVisible){
+            new ShowCommandPaletteCommand().execute();
         }
 
-        // if they pressed the down arrow key, select the next suggestion (if any)
-        if(event.keyCode === 40){
-            // down arrow was pressed
-            // select the next suggestion (if any)
-            if(this.filteredCommands.length){
-                if(this.selectedSuggestionIndex === null){
-                    this.selectedSuggestionIndex = 0;
-                }
-                else if(this.selectedSuggestionIndex < this.filteredCommands.length - 1){
-                    this.selectedSuggestionIndex++;
-                }
-                else{
-                    // loop back to the first suggestion
-                    this.selectedSuggestionIndex = 0;
-                }
-            }
-        }
-        // if they pressed the up arrow, we go to the previous suggestion index if we're > 0
-        // otherwise we go back to the previously executed command in the command history
-        if(event.keyCode === 38){
-            // up arrow was pressed
-            // select the previous suggestion (if any)
-            if(this.filteredCommands.length){
-                if(this.selectedSuggestionIndex === null){
-                    this.selectedSuggestionIndex = this.filteredCommands.length - 1;
-                }
-                else if(this.selectedSuggestionIndex > 0){
-                    this.selectedSuggestionIndex--;
-                }
-                else{
-                    // loop back to the last suggestion
-                    this.selectedSuggestionIndex = this.filteredCommands.length - 1;
-                }
-            }
-        }
-
-
-        if(event.keyCode === 13){
-            // if we have a command selected, mark it as the current command
-            if(
-                this.selectedSuggestionIndex !== null
-                && this.filteredCommands.length
-                && this.selectedSuggestionIndex < this.filteredCommands.length
-            ){
-
-                this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex];
-            }
-            console.log('enter was pressed', {
-                currentCMDName: this.currentCommand.name
-            })
-            // enter was pressed
-            // execute the current command
-            this.currentCommand.execute();
-            // reset the command buffer
-            store.commandBuffer = {};
-            // hide the command palette
-            store.commandPaletteVisible = false;
-            // clear the command palette input
-            commandPaletteInput.value('');
-            this.currentCommand = null;
+        // if there's an active wizard, we need to handle the input differently
+        if(store.activeWizard){
+            this.handleWizardInput(event);
             return;
+        }
+
+        switch(event.keyCode){
+            case 9:
+                // if they pressed tab, select the first suggestion (if any)
+                if(this.filteredCommands.length){
+                    // select the first suggestion
+                    this.currentCommand = this.filteredCommands[0];
+                    // update the command buffer
+                    store.commandBuffer = this.currentCommand.name;
+                }
+                break;
+            case 40:
+                // down arrow was pressed
+                // select the next suggestion (if any)
+                if(this.filteredCommands.length){
+                    if(this.selectedSuggestionIndex === null){
+                        this.selectedSuggestionIndex = 0;
+                    }
+                    else if(this.selectedSuggestionIndex < this.filteredCommands.length - 1){
+                        this.selectedSuggestionIndex++;
+                    }
+                    else{
+                        // loop back to the first suggestion
+                        this.selectedSuggestionIndex = 0;
+                    }
+                }
+                break;
+            case 38:
+                // up arrow was pressed
+                // select the previous suggestion (if any)
+                if(this.filteredCommands.length){
+                    if(this.selectedSuggestionIndex === null){
+                        this.selectedSuggestionIndex = this.filteredCommands.length - 1;
+                    }
+                    else if(this.selectedSuggestionIndex > 0){
+                        this.selectedSuggestionIndex--;
+                    }
+                    else{
+                        // loop back to the last suggestion
+                        this.selectedSuggestionIndex = this.filteredCommands.length - 1;
+                    }
+                }
+                break;
+            case 27:
+                this.OnPressEscape();
+                return;
+            case 13:
+                this.OnPressEnter()
+                return;
+            
         }
 
         //console.warn('onCommandPaletteInput',{event})
@@ -275,6 +641,33 @@ class CommandPalette {
         // });
     }
 
+    OnPressEnter(){
+        // if we have a command selected, mark it as the current command
+        if(
+            this.selectedSuggestionIndex !== null
+            && this.filteredCommands.length
+            && this.selectedSuggestionIndex < this.filteredCommands.length
+        ){
+
+            this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex];
+        }
+        console.log('enter was pressed', {
+            currentCMDName: this.currentCommand.name
+        })
+        // enter was pressed
+        // execute the current command
+        this.currentCommand.execute();
+        // reset the command buffer
+        store.commandBuffer = {};
+        // hide the command palette
+        //store.commandPaletteVisible = false;
+        // clear the command palette input
+        commandPaletteInput.value('');
+        // need to decide when the current command is deselected
+        // --- 
+        // this.currentCommand = null;
+    }
+
     initCommand(){
         this.currentCommand = new Command();
         this.currentCommand.updateFromBuffer();
@@ -284,7 +677,8 @@ class CommandPalette {
     filterCommands(){
         // filter the list of available commands based on the current command buffer
         this.filteredCommands = this.availableCommands.filter(command => {
-            return command.name.includes(store.commandBuffer);
+            return command.name.toLowerCase()
+                .includes(store.commandBuffer.toLowerCase());
         });
 
         //
@@ -333,28 +727,49 @@ function mousePressed(){
 }
 
 function checkDidClickAModeSwitcherButton(){
-    if(!modeSwitcherButtons || !modeSwitcherButtons[store.interactionMode]){
+    if(!modeSwitcherButtons){
+        console.warn('modeSwitcherButtons not ready yet')
         return false;
     }
-    let [x,y,w,h] = modeSwitcherButtons[store.interactionMode];
+    // if(!modeSwitcherButtons[store.interactionMode]){
+    //     console.error('interaction mode not found',{
+    //         available:Object.keys(modeSwitcherButtons),
+    //         interactionMode: store.interactionMode
+    //     })
+    //     return false;
+    // }
+    // loop through modeSwitcherButtons until we find the one we clicked (if any)
+    // todo: we use find instead of forEach cause we want to stop
+    // checking when we find the clicked button
     let adjustedMouseX = (mouseX - panX) / zoom;
     let adjustedMouseY = (mouseY - panY) / zoom;
-    if(
-        adjustedMouseX > x 
-        && adjustedMouseX < x + w 
-        && adjustedMouseY > y 
-        && adjustedMouseY < y + h
-    ){
-        // clicked a mode switcher button
-        // toggle the interaction mode
-        let modeKeys = Object.keys(MODES);
-        let modeIndex = modeKeys.indexOf(store.interactionMode);
-        let nextModeIndex = (modeIndex + 1) % modeKeys.length;
-        store.interactionMode = modeKeys[nextModeIndex];
-        console.log('interaction mode',store.interactionMode);
-        return true;
+    const entries = Object.entries(modeSwitcherButtons);
+    let foundClickedIndex = entries.findIndex(([key,value], index)=>{
+        let [x,y,w,h] = value;
+        // console.warn('checkDidClickAModeSwitcherButton',{
+        //     x,y,w,h,
+        //     adjustedMouseX,
+        //     adjustedMouseY,
+        //     gtX: adjustedMouseX > x,
+        //     ltX: adjustedMouseX < x + w,
+        //     gtY: adjustedMouseY > y,
+        //     ltY: adjustedMouseY < y + h,
+        // })
+        if(
+            adjustedMouseX > x 
+            && adjustedMouseX < x + w 
+            && adjustedMouseY > y 
+            && adjustedMouseY < y + h
+        ){
+            return true;
+        }
+        return false;
+    });
+    if(foundClickedIndex !== -1){
+        let found = entries[foundClickedIndex][0];
+        store.interactionMode = found;
     }
-    return false;
+    return foundClickedIndex !== -1 ? true : false;
 }
 
 // Define the mouseReleased function
@@ -439,37 +854,45 @@ function draw() {
 
     pop();
 
+    drawModeSwitcher();
+
     // if the command palette is visible, draw it
     if(store.commandPaletteVisible){
         drawCommandPalette();
     }
 
-    drawModeSwitcher();
+    if(store.activeWizard){
+        // display the current step
+        store.activeWizard.onDraw();
+    }
+
+    
 }
 
 // Define the drawCommandPalette function
 function drawCommandPalette(){
+    const cmdpPosY = 0;
     fill("blue")
     stroke("white")
-    rect(0, windowHeight - 200, windowWidth, windowHeight);
+    rect(0, cmdpPosY, windowWidth, windowHeight);
 
     // draw a large text input in the command palette
     fill("white")
     stroke("black")
-    rect(10, windowHeight - 190, windowWidth - 20, 50);
+    rect(10, cmdpPosY + 10, windowWidth - 20, 50);
     fill("black")
 
-    // call the command palette's renderSuggestedCommands method
-    cmdprompt.renderSuggestedCommands();
+    if(!store.activeWizard){
+        cmdprompt.renderSuggestedCommands();
+    }
 }
 
 let modeSwitcherButtons = {};
 
 function drawModeSwitcher(){
-    //console.warn(Object.entries(MODES));
     let i = 0;
-    Object.entries(MODES).forEach((key, value)=>{
-        //console.warn('drawModeSwitcher',{key,value})
+    Object.entries(MODES).forEach(([key,value], index)=>{
+        //console.warn('drawModeSwitcher',{key,value,index})
         let x = 10 + (i * 100);
         let y = windowHeight - 60;
         let w = 100;
@@ -601,30 +1024,32 @@ function setup() {
         // }
     });
 
-    input = createInput('');
-    input.position(10, 10);
-    input.input(handleInput);
+    // old input
 
-    button = createButton('Add Node');
-    button.position(input.x + input.width, 10);
-    button.mousePressed(addNode);
+    // input = createInput('');
+    // input.position(10, 10);
+    // input.input(handleInput);
+
+    // button = createButton('Add Node');
+    // button.position(input.x + input.width, 10);
+    // button.mousePressed(addNode);
 
     // Add buttons to load different demos
-    mvcButton = createButton('Load MVC Sample');
-    mvcButton.position(input.x + input.width, 40);
-    mvcButton.mousePressed(loadMVCSample);
+    // mvcButton = createButton('Load MVC Sample');
+    // mvcButton.position(input.x + input.width, 40);
+    // mvcButton.mousePressed(loadMVCSample);
 
-    fluxButton = createButton('Load Flux Sample');
-    fluxButton.position(input.x + input.width, 70);
-    fluxButton.mousePressed(loadFluxSample);
+    // fluxButton = createButton('Load Flux Sample');
+    // fluxButton.position(input.x + input.width, 70);
+    // fluxButton.mousePressed(loadFluxSample);
 
-    fluxAjaxButton = createButton('Load Ajax Flux Sample');
-    fluxAjaxButton.position(input.x + input.width, 130);
-    fluxAjaxButton.mousePressed(loadAjaxFluxSample);
+    // fluxAjaxButton = createButton('Load Ajax Flux Sample');
+    // fluxAjaxButton.position(input.x + input.width, 130);
+    // fluxAjaxButton.mousePressed(loadAjaxFluxSample);
 
-    emptyButton = createButton('Load Empty Graph');
-    emptyButton.position(input.x + input.width, 100);
-    emptyButton.mousePressed(loadEmptyGraph);
+    // emptyButton = createButton('Load Empty Graph');
+    // emptyButton.position(input.x + input.width, 100);
+    // emptyButton.mousePressed(loadEmptyGraph);
 }
 
 function loadMVCSample() {
