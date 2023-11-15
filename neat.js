@@ -23,8 +23,32 @@
 | 20 | Synchronize the Graph Viewer with a Video Player |
 */
 
+let cmdprompt;
+
+// Add a keyboard listener for cmd shift p
+document.addEventListener('keydown', function(event) {
+    if (event.code === 'KeyP' && event.shiftKey && event.metaKey) {
+        if(!store.commandPaletteVisible){
+            new ShowCommandPaletteCommand().execute();
+        }else{
+            new HideCommandPaletteCommand().execute();
+        }
+    }
+});
+
+
+const MODES = {
+    SELECT: 'select',
+    MOVE: 'moveNode',
+    ADD_NODE: 'addNode',
+    ADD_EDGE: 'addEdge',
+    DELETE: 'delete',
+}
+
 // Define the initial state of the store
 let store = {
+    interactionMode: MODES.MOVE,
+
     mode: 'mvc', // default mode
     events: [],
     viewValue: '',
@@ -44,12 +68,16 @@ let store = {
 // Define the Command class
 class Command {
     name = 'default command';
-    constructor(){
-        this.name = this.constructor.name;
+    constructor(name){
+        this.name = name ?? this.name;
     }
     execute(){
         // reset command buffer
         store.commandBuffer = {};
+    }
+    updateFromBuffer(){
+        // update the current command based on the command buffer
+        this.name = store.commandBuffer;
     }
 }
 
@@ -83,6 +111,86 @@ class ToggleCommandPaletteCommand extends Command {
     }
 }
 
+class CommandPalette {
+    // the current "Command" being constructed
+    currentCommand = null; 
+    // the list of available commands
+    availableCommands = []; 
+    // the list of contextually recommended commands
+    filteredCommands = []; 
+    
+    constructor(){
+    }
+
+    addDefaultCommands(){
+        this.availableCommands.push(new ShowCommandPaletteCommand());
+        this.availableCommands.push(new HideCommandPaletteCommand());
+        this.availableCommands.push(new ToggleCommandPaletteCommand());
+        this.availableCommands.push(new Command('add node'));
+
+        // let addNodeCommand = this.availableCommands.at(-1);
+        // addNodeCommand.execute = () => {
+        //     super.execute();
+        //     store.interactionMode = MODES.ADD_NODE;
+        // }
+    }
+
+    renderSuggestedCommands(){
+        // render the list of the top 3 suggestions
+        let i = 0;
+        for(i = 0; i < 3 && i < this.filteredCommands.length; i++) {
+            let command = this.filteredCommands[i];
+            let x = 10;
+            let y = 10 + (i * 50);
+            let w = 200;
+            let h = 50;
+            let label = command.name;
+            let selected = false;
+            this.renderSuggestedCommand(x,y,w,h,label,selected);
+        }
+    }
+    renderSuggestedCommand(x,y,w,h,label,selected){
+        strokeWeight(selected ? 3 : 1);
+        // draw box
+        fill(255)
+        rect(x,y,w,h);
+        // draw label
+        fill(0)
+        textAlign(CENTER,CENTER);
+        text(label, x + (w/2), y + (h/2));
+    }
+
+    onCommandPaletteInput(event){
+        //console.warn('onCommandPaletteInput',{event})
+        // update the command buffer
+        store.commandBuffer = commandPaletteInput.value();
+        if(this.currentCommand === null){
+            this.initCommand();
+        }else{
+            this.currentCommand.updateFromBuffer();
+        }
+        // filter the list of available commands
+        this.filterCommands();
+        console.log({
+            cb:store.commandBuffer,
+            fc:cmdprompt.filteredCommands
+        });
+    }
+
+    initCommand(){
+        this.currentCommand = new Command();
+        this.currentCommand.updateFromBuffer();
+    }
+    
+
+    filterCommands(){
+        // filter the list of available commands based on the current command buffer
+        this.filteredCommands = this.availableCommands.filter(command => {
+            return command.name.includes(store.commandBuffer);
+        });
+    }
+}
+
 // Define the initial state of the canvas
 let zoom = 1;
 let panX = 0;
@@ -105,6 +213,10 @@ function mouseDragged(){
 
 // Define the mousePressed function
 function mousePressed(){
+    if(checkDidClickAModeSwitcherButton()){
+        return;
+    }
+
     dragNode(); // maybe select a node
     if (selectedNode === null) {
         panningBG = true;
@@ -113,6 +225,31 @@ function mousePressed(){
     } else {
         panningBG = false;
     }
+}
+
+function checkDidClickAModeSwitcherButton(){
+    if(!modeSwitcherButtons || !modeSwitcherButtons[store.interactionMode]){
+        return false;
+    }
+    let [x,y,w,h] = modeSwitcherButtons[store.interactionMode];
+    let adjustedMouseX = (mouseX - panX) / zoom;
+    let adjustedMouseY = (mouseY - panY) / zoom;
+    if(
+        adjustedMouseX > x 
+        && adjustedMouseX < x + w 
+        && adjustedMouseY > y 
+        && adjustedMouseY < y + h
+    ){
+        // clicked a mode switcher button
+        // toggle the interaction mode
+        let modeKeys = Object.keys(MODES);
+        let modeIndex = modeKeys.indexOf(store.interactionMode);
+        let nextModeIndex = (modeIndex + 1) % modeKeys.length;
+        store.interactionMode = modeKeys[nextModeIndex];
+        console.log('interaction mode',store.interactionMode);
+        return true;
+    }
+    return false;
 }
 
 // Define the mouseReleased function
@@ -126,8 +263,17 @@ function mouseReleased(){
 
 // Define the mouseWheel function
 function mouseWheel(event) {
-    zoom += event.delta / 1000;
+    let oldZoom = zoom;
+    zoom -= event.delta / 1000;
     zoom = constrain(zoom, 0.1, 3);
+
+    // Adjust pan to account for mouse position while zooming
+    let mouseWorldX = (mouseX - panX) / oldZoom;
+    let mouseWorldY = (mouseY - panY) / oldZoom;
+    let newMouseWorldX = (mouseX - panX) / zoom;
+    let newMouseWorldY = (mouseY - panY) / zoom;
+    panX += (newMouseWorldX - mouseWorldX) * zoom;
+    panY += (newMouseWorldY - mouseWorldY) * zoom;
 }
 
 // Define the deleteSelectedNode function
@@ -148,8 +294,18 @@ function draw() {
     fill(255, 255, 255);
     // Ensure the text size is large enough to be visible
     textSize(16);
+    textAlign(LEFT, TOP);
     // Render text that lists the current zoom, panX, panY
-    text(`zoom: ${zoom.toFixed(2)} panX: ${panX.toFixed(2)} panY: ${panY.toFixed(2)}`, 50, 100);
+    text(
+        `zoom: ${zoom.toFixed(2)} panX: ${panX.toFixed(2)} panY: ${panY.toFixed(2)}`, 
+        50, 
+        300);
+    // render red text that shows the current interaction mode
+    fill(255, 0, 0);
+    text(
+        `interaction mode: ${store.interactionMode}`, 
+        50, 
+        320);
 
     push();
     translate(panX, panY);
@@ -182,11 +338,55 @@ function draw() {
     if(store.commandPaletteVisible){
         drawCommandPalette();
     }
+
+    drawModeSwitcher();
 }
 
 // Define the drawCommandPalette function
 function drawCommandPalette(){
+    fill("blue")
+    stroke("white")
+    rect(0, windowHeight - 200, windowWidth, windowHeight);
 
+    // draw a large text input in the command palette
+    fill("white")
+    stroke("black")
+    rect(10, windowHeight - 190, windowWidth - 20, 50);
+    fill("black")
+
+    // call the command palette's renderSuggestedCommands method
+    cmdprompt.renderSuggestedCommands();
+}
+
+let modeSwitcherButtons = {};
+
+function drawModeSwitcher(){
+    //console.warn(Object.entries(MODES));
+    let i = 0;
+    Object.entries(MODES).forEach((key, value)=>{
+        //console.warn('drawModeSwitcher',{key,value})
+        let x = 10 + (i * 100);
+        let y = windowHeight - 60;
+        let w = 100;
+        let h = 50;
+        let label = value;
+        let selected = store.interactionMode === key;
+        drawModeSwitcherBox(x,y,w,h,label,selected);
+        // record dimensions for our click test
+        modeSwitcherButtons[key] = [x,y,w,h];
+        i++;
+    });
+}
+
+function drawModeSwitcherBox(x,y,w,h,label,selected){
+    strokeWeight(selected ? 3 : 1);
+    // draw box
+    fill(255)
+    rect(x,y,w,h);
+    // draw label
+    fill(0)
+    textAlign(CENTER,CENTER);
+    text(label, x + (w/2), y + (h/2));
 }
 
 // Define the drawLines function
@@ -276,10 +476,19 @@ function ensureHeadTag(){
     document.getElementsByTagName('head')[0].appendChild(metaTag);
 }
 
+let commandPaletteInput = null;
+
 // Define the setup function
 function setup() {
     ensureHeadTag();
     createCanvas(windowWidth, windowHeight);
+
+    cmdprompt = new CommandPalette();
+
+    commandPaletteInput = createInput('');
+    commandPaletteInput.position(10, windowHeight - 190);
+    commandPaletteInput.input(cmdprompt.onCommandPaletteInput.bind(cmdprompt));
+
     input = createInput('');
     input.position(10, 10);
     input.input(handleInput);
@@ -621,6 +830,9 @@ function drawLines() {
 function nodesForFlowIndex(flowIndex){
     if(flowIndex === undefined || flowIndex === null){
         throw new Error('flowIndex not given');
+    }
+    if(!store.eventFlow[flowIndex]){
+        return {fromNode: null, toNodes: []};
     }
     let stage = store.eventFlow[flowIndex];
     if(!stage){
