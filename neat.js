@@ -9,6 +9,19 @@ progress and todos
     - arguments should have a label
     - arguments should have a placeholder
     - arguments should have a validation function
+
+11.15.23: 2:15PM EST:
+    - [ ] need to finish New Command Wizard
+    - [ ] need to add a way to render an "Input" and destroy it when the MVC graph is loaded (since the observered input is what trigger events)
+    - [ ] need a way to add breakpoints 
+    - [ ] need a way to add a "watch" on a variable
+    - [ ] need a stepped debugger
+    - [ ] need a way to sandbox simultaneous execution
+
+    - [ ] need a way to visualize "the system" in the graph view
+    - [ ] need a way to do nested graphs (subgraphs)
+
+    - [ ] need to refactor suggestion code so we can loop through them with the keyboard shortcuts (effectively stepping an offset value)
 */
 
 class Argument {
@@ -89,33 +102,110 @@ const SAMPLE_GRAPHS = {
 let store = {
     interactionMode: MODES.MOVE,
 
-    mode: 'mvc', // default mode
-    events: [],
     viewValue: '',
     controllerValue: '',
     modelValue: '',
     modelValueFromView: '',
     eventId: 0,
     lastReceived: Date.now(),
-    nodes: [],
-    edges: [],
-    commandBuffer: {},
+    
+    // moved to currentGraph
+    // mode: 'mvc', // default mode
+    // nodes: [],
+    // edges: [],
+    // events: [],
+    
+    commandBuffer: {
+        name: ''
+    },
     currentCommand: {},
     commandHistory: [],
     commandPaletteVisible: false,
 
     activeWizard: null,
+    // user defined commands
+    // todo: load these from local storage / remote storage
+    // todo: cache these to local storage / remote storage
+    customCommands: {},
+
+    currentGraph: null,
+
+    // TODO: move
 };
 
 class WizardController {
     name = 'default wizard';
-    currentStep = 0;
+    currentStepIndex = 0;
     stepResponses = [];
     shownSteps = [];
     selectedSuggestionIndex = 0;
-    get currentSuggestions(){
-        return this?.config?.steps?.[this?.currentStep]?.suggestions ?? []
-    };
+    wizardSuggestionList = null;
+    get steps(){
+        return this?.config?.steps ?? [];
+    }
+    get currentStep(){
+        return this?.steps?.[this?.currentStepIndex] ?? null;
+    }
+    
+    // get currentSuggestions(){
+    //     return [...this?.config?.steps?.[this?.currentStepIndex]?.suggestions ?? []]
+    // }
+    // visually limited cursor view into the current suggestions
+    get visibleSuggestions(){
+        let output = [];
+        let i = this.suggestionOffset;
+        if(!this.wizardSuggestionList){
+            return [];
+        }
+        for(i; i < this.wizardSuggestionList.maxVisibleOptionsCount && i < this.activeSuggestions.length; i++) {
+            let suggestion = this.activeSuggestions[i];
+            let x = 10;
+            let y = 10 + (i * 50);
+            let w = 200;
+            let h = 50;
+            let label = suggestion.name;
+            let selected = this.selectedSuggestionIndex === i;
+            output.push({
+                x,y,w,h,label,selected
+            })
+        }
+        return output;
+    }
+    // all valid suggestions
+    get allValidSuggestions(){
+        const cStep = this.currentStep;
+        //console.warn('activeSuggestions? cStep',{cStep})
+        let suggestions = [
+            ...(cStep?.suggestions ?? [])
+        ];
+        if(cStep.skippable){
+            suggestions.push({
+                name: "Skip",
+                value: "skip"
+            })
+        }
+        if(cStep.actions?.length){
+            cStep.actions.forEach((action)=>{
+                console.log('converting action to suggestion',{action})
+                suggestions.push({
+                    name: action.label,
+                    value: action.value
+                })
+                console.warn('inserted suggestion',{
+                    key: suggestions.length-1,
+                    value: suggestions.at(-1)
+                })
+            })
+        }
+        if(!cStep.required){
+            suggestions.push({
+                name:'Cancel',
+                value: 'cancel'
+            })
+        }
+
+        return suggestions;
+    }
     constructor(wizardConfig){
         // todo: ValidateWizardConfig
         // if this config steps is empty or missing, throw
@@ -124,16 +214,31 @@ class WizardController {
         }
         this.config = wizardConfig;
         this.name = wizardConfig.name ?? this.name;
-        
+        this.wizardSuggestionList = new SuggestionList();
+        this.wizardSuggestionList.bindOnEnterPressed(this.OnPressEnter.bind(this));
+        this.wizardSuggestionList.bindOnEscapePressed(this.OnPressEscape.bind(this));
+        this.wizardSuggestionList.bindGetFilteredOptions(()=>{
+            return this.visibleSuggestions;
+        })
+        this.wizardSuggestionList.bindGetAllOptions(()=>{
+            return this.allValidSuggestions;
+        })
     }
     start(){
         store.activeWizard = this;
         this.switchToStep(0);
     }
+    // aka goToStep, showStep, viewStep
     switchToStep(stepIndex){
-        this.currentStep = stepIndex;
-        this.shownSteps.push(this.currentStep);
+        this.currentStepIndex = stepIndex;
+        this.shownSteps.push(this.currentStepIndex);
         // drawSuggestions automatically updates based on the current step
+        this.currentStep?.onStepLoaded?.call(this);
+        
+    }
+    /** @return bool - did we click a _visible_ suggestion rect? */
+    checkDidClickASuggestion(){
+        console.warn('TODO: check did click a suggestion')
     }
     tryCompleteStep(){
         // process the current step
@@ -141,76 +246,124 @@ class WizardController {
 
         if(this.selectedSuggestionIndex !== null){
             // record the current response
-            this.stepResponses[this.currentStep] = {
-                input: commandPaletteInput.value(),
+            // let takeThingsOffThisValue = Object.keys(this.visibleSuggestions[this.selectedSuggestionIndex]);
+            // console.warn('need to take things off this value',{
+            //     takeThingsOffThisValue
+            // });
+            console.warn('recording ',{
+                cSI: this.currentStepIndex,
+                offset: this.suggestionOffset,
+                visibleLength: this.visibleSuggestions.length,
                 selectedSuggestionIndex: this.selectedSuggestionIndex,
-                selectedSuggestionValue: this.currentSuggestions[this.selectedSuggestionIndex].value,
+                value: this.visibleSuggestions[this.selectedSuggestionIndex]?.value,
+                label: this.visibleSuggestions[this.selectedSuggestionIndex]?.label
+            })
+            this.stepResponses[this.currentStepIndex] = {
+                input: commandPaletteInput.value(),
+                selectedSuggestionIndex: this.suggestionOffset + this.selectedSuggestionIndex,
+                selectedSuggestionValue: 
+                    this.visibleSuggestions[this.selectedSuggestionIndex]?.value
+                    ?? this.visibleSuggestions[this.selectedSuggestionIndex]?.label
             }
+
+            console.warn('recorded step response', {
+                step:this.currentStep,
+                response: this.stepResponses[this.currentStepIndex]
+            })
+
+            if(!this.steps || !this.steps.length){
+                console.error('no steps?',this);
+                return;
+            }
+
+            if(!this.steps[this.currentStepIndex]){
+                console.error('no step for current step index?',[this.steps,this.currentStepIndex]);
+                return;
+            }
+
+            const validatorResponse = this.validateResponseForStep(
+                this.currentStepIndex, // stepIndex
+                this.steps[this.currentStepIndex],
+                this.stepResponses);
+
+            console.warn('validation response', {
+                validatorResponse
+            })
+
+            if(!validatorResponse?.valid){
+                console.error('validation failed',validatorResponse);
+                return;
+            }
+        }
+
+        // unload the current step
+        if(this.currentStep?.onStepUnload){
+            this.currentStep.onStepUnload.call(this);
         }
 
         // reset the selected suggestion index between steps
         this.selectedSuggestionIndex = null;
+        this.suggestionOffset = 0;
         
         // if we completed it, and it was the last step,
         // end the wizard
-        if(this.currentStep === this.config.steps.length - 1){
+        if(this.currentStepIndex === this.config.steps.length - 1){
             this.end();
         }else{
-            this.switchToStep(this.currentStep+1);
+            this.switchToStep(this.currentStepIndex+1);
         }
     }
     end(){
         store.activeWizard = null;
+        console.warn("WizardController end, finalCallback Defined?",{
+            config: this.config,
+            finalCallback: this.config.finalCallback ? true : false
+        })
         if(this.config.finalCallback){
             this.config.finalCallback.call(this,this);
         }
+        // free the wizardSelectList
+        this.wizardSuggestionList?.destroy()
+        this.wizardSuggestionList = null;
     }
     onDraw(){
         if(!store.activeWizard){
             return;
         }
         this.drawCurrentStep();
+        this.drawSuggestedCommands();
     }
     drawCurrentStep(){
-        let question = this.config.steps[this.currentStep].question;
+        let questionTitle = this.config.steps[this.currentStepIndex]?.questionTitle ?? 'Question';
+        let question = this.config.steps[this.currentStepIndex].question;
+        // todo cache interpreted string that replaces {prevResp} with the previous response
         // console.warn('displaying wizard step question',{
-        //     step:this.currentStep,
+        //     currentStepIndex:this.currentStepIndex,
         //     question
         // });
         // render the question
         textAlign(LEFT,TOP);
-        text(`${question}`, 20, 20);
-        this.drawSuggestedCommands();
+        text(`${questionTitle}`, 20, 20);
+        text(`${question}`, 20, 50);
     }
     drawSuggestedCommands(){
-        let suggestions = [
-            ...this.config.steps[this.currentStep].suggestions
-        ];
-        // TODO
-        // ...[{
-        //     name: "Skip",
-        //     value: "skip"
-        // },{
-        //     name: "Cancel",
-        //     value: "cancel"
-        // }],
-        if(!suggestions?.length){
+        
+        if(!this.visibleSuggestions?.length){
             return;
         }
-        const offsetY = 60;
-        const limit = 10;
-        // render the list of the top LIMIT suggestions
-        let i = 0;
-        for(i = 0; i < limit && i < suggestions.length; i++) {
-            let suggestion = suggestions[i];
-            let x = 10;
-            let y = offsetY + 10 + (i * 50);
-            let w = 200;
-            let h = 50;
-            let label = suggestion.name;
-            let selected = this.selectedSuggestionIndex === i;
-            this.renderSuggestedCommand(x,y,w,h,label,selected);
-        }
+        const offsetY = 100;
+        // render the list of the top maxVisibleOptionsCount suggestions
+        this.visibleSuggestions.forEach((suggestion, i) => {
+            const {x,y,w,h,label,selected} = suggestion;
+            this.renderSuggestedCommand(
+                x,
+                offsetY+y,
+                w,
+                h,
+                label,
+                selected
+            );
+        })
     }
     renderSuggestedCommand(x,y,w,h,label,selected){
         strokeWeight(selected ? 3 : 1);
@@ -223,6 +376,11 @@ class WizardController {
         textAlign(CENTER,CENTER);
         text(label, x + (w/2), y + (h/2));
     }
+    OnPressEscape(event){
+        if(confirm('Are you sure?')){
+            this.end();
+        }
+    }
     // todo: bail early on these handlers if !store.activeWizard
     OnPressEnter(event){
         // validate the current response to the current step
@@ -230,45 +388,98 @@ class WizardController {
         // if it's invalid, show an error message
         console.warn('enter was pressed', {
             currentCMDName: this.name,
-            currentStepConfig: this.config.steps[this.currentStep]
+            currentStepConfig: this.config.steps[this.currentStepIndex]
         })
         this.tryCompleteStep();
     }
-    OnPressUp(event){
-        console.warn('UP was pressed', {
-            currentCMDName: this.name,
-            currentStepConfig: this.config.steps[this.currentStep]
-        })
-        if(this.selectedSuggestionIndex === null){
-            this.selectedSuggestionIndex = this.currentSuggestions.length - 1;
-        }else if(this.selectedSuggestionIndex > 0){
-            this.selectedSuggestionIndex--;
-        }else{
-            // loop back to the last suggestion
-            this.selectedSuggestionIndex = this.currentSuggestions.length - 1;
+    // OnPressUp(event){
+        
+    // }
+    // OnPressDown(event){
+        
+    // }
+    handleWizardInput(event){
+        console.warn('Wizard:handleWizardInput');
+        switch(event.keyCode){
+            case 13:
+                // validate the current response to the current step
+                // if it's valid, store it
+                // if it's invalid, show an error message
+                return this.wizardSuggestionList.OnPressEnter.call(
+                    this.wizardSuggestionList,
+                    event
+                );
+                //this.OnPressEnter.call(this,event);
+                break;
+            case 38:
+                //this.OnPressUp.call(this,event);
+                return this.wizardSuggestionList.OnPressUp.call(
+                    this.wizardSuggestionList,
+                    event
+                )
+                break;
+            case 40:
+                //this.OnPressDown.call(this,event);
+                return this.wizardSuggestionList.onPressDown.call(
+                    this.wizardSuggestionList,
+                    event
+                )
+                break;
+            default:
+                // update the current response to the current step
+                this.wizardSuggestionList?.OnInput?.call(this.wizardSuggestionList,event);
+                this.OnInput.call(this,event);
         }
     }
-    OnPressDown(event){
-        console.warn('DOWN was pressed', {
-            currentCMDName: this.name,
-            currentStepConfig: this.config.steps[this.currentStep],
-            currentSuggestionsLength: this.currentSuggestions.length
-        })
-        if(this.selectedSuggestionIndex === null){
-            this.selectedSuggestionIndex = 0;
-        }else if(this.selectedSuggestionIndex < this.currentSuggestions.length - 1){
-            this.selectedSuggestionIndex++;
-        }else{
-            // loop back to the first suggestion
-            this.selectedSuggestionIndex = 0;
+    validateResponseForStep(stepIndex,step,responseArray){
+        let {answerStorageKey,answerValidationRules} = step;
+        if(!answerStorageKey || !answerValidationRules){
+            console.warn('nothing to validate',{step,responseArray})
+            return {valid:true};
         }
-        console.warn('selectedSuggestionIndex',this.selectedSuggestionIndex)
-    }
-    OnInput(event){
-        console.warn('On Wizard Input', {
-            currentCMDName: this.name,
-            currentStepConfig: this.config.steps[this.currentStep]
+        // console.warn('validating',{
+        //     step,
+        //     responseArray,
+        //     answerStorageKey,
+        //     answerValidationRules
+        // })
+        let rules = answerValidationRules.split(':');
+        let errors = [];
+        const response = responseArray[stepIndex];
+        console.warn('validating response',{
+            response,
+            rules
         })
+        const responseValue = response?.input ?? null;
+        rules.forEach((rule)=>{
+            switch(rule){
+                case 'required':
+                    if(isEmptyOrUndefined(responseValue)){
+                        throw new Error(`Response for ${answerStorageKey} is required`);
+                    }
+                    break;
+                case 'unique':
+                    // TODO: uniqueness needs to be implemented at the command level (not the wizard level)
+                    // TODO: require a callback reference to step.checkIsUnique(value)
+                    break;
+                case 'string':
+                    if(typeof responseValue !== 'string'){
+                        throw new Error(`Response for ${answerStorageKey} must be a string`);
+                    }
+                    break;
+                case 'csv':
+                    // TODO
+                    break;
+                default:
+                    console.error('unknown validation rule name:',rule);
+                    break;
+            }
+        })
+        if(errors.length){
+            console.error('validation errors', errors)
+            return {valid:false, errors};
+        }
+        return {valid:true};
     }
 }
 
@@ -280,13 +491,13 @@ class Command {
         this.options = options ?? {};
     }
     execute(){
-        console.warn('executing command, has wizard, has callback?',
-        {
-            name: this.name,
-            hasWizard: this.options.wizardConfig ? true : false,
-            hasCallback: this.options.callback ? true : false,
-            options: Object.keys(this.options)
-        })
+        // console.warn('executing command, has wizard, has callback?',
+        // {
+        //     name: this.name,
+        //     hasWizard: this.options.wizardConfig ? true : false,
+        //     hasCallback: this.options.callback ? true : false,
+        //     options: Object.keys(this.options)
+        // })
         if(this.options.wizardConfig){
             // the constructor validates the wizardConfig for us
             this.wizard = new WizardController(this.options.wizardConfig);
@@ -300,7 +511,7 @@ class Command {
     }
     updateFromBuffer(){
         // update the current command based on the command buffer
-        this.name = store.commandBuffer;
+        this.name = store.commandBuffer.name;
     }
 }
 
@@ -346,6 +557,309 @@ class ToggleCommandPaletteCommand extends Command {
     }
 }
 
+function loadGraph(name){
+    // TODO: destruct any current graph
+    switch(name){
+        case 'empty':
+            store.currentGraph = new Graph();
+            break;
+        case 'self':
+            // Load the visualization of the system! :D
+            loadSelfGraph();
+            break;
+        case 'mvc':
+            store.currentGraph = new MVCExampleGraph();
+            break;
+        case 'flux':
+            store.currentGraph = new FluxExampleGraph();
+            break;
+        case 'ajaxFlux':
+            store.currentGraph = new AjaxFluxExampleGraph();
+            break;
+        default:
+            console.warn('unknown graph type',name);
+    }
+}
+
+class SuggestionList {
+    constructor(){
+
+    }
+}
+
+class GraphNode {
+    constructor(options){
+        this.options = options ?? {}
+        this.graph = options.graph ?? null;
+    }
+    drawNode(node){
+
+        if (this.nodes.indexOf(node) === this.selectedNode) {
+            fill(255, 0, 0); // red for selected node
+        } else {
+            fill(100 + (node.type === 'rect' ? 0 : 50)); // original fill color
+        }
+        
+        let nodeValue = node.id === 0 
+            ? store.viewValue 
+            : node.id === 1 
+                ? '' 
+                : store.modelValue;
+                
+        let otherNodeValue = node.id === 0 
+            ? store.modelValueFromView 
+            : node.id === 1 
+                ? '' 
+                : store.viewValue;
+    
+        if(node.shape === 'errorRect') {
+            drawErrorNode(node);
+        } else {
+            drawShape(node.x, node.y, node.shape, nodeValue, otherNodeValue);
+        }
+    
+        drawLabel(node.x, node.y, node.label);
+    }
+}
+
+class Edge {
+
+}
+
+class TodoNode extends GraphNode {
+
+}
+
+// an instance of a graph
+class Graph {
+    nodes = []
+    edges = []
+    eventFlow = []
+    events = []
+    selectedNodes = []
+
+    constructor(options){
+        this.options = options ?? {}
+        // TODO: merge any defaults we'd like
+    }
+    loadGraphFromJSON(json){
+        console.error('NotImplemented')
+    }
+    renderGraph(){
+        // when we render a graph, we only the top level of subgraphs for each node
+        // to prevent needing to recursively render the entire graph at all times
+
+        // draw lines first
+        this.drawLines();
+        // draw events next
+        this.events.forEach((event, i) => {
+            updateEvent(event);
+            drawEvent(event);
+        });
+        // draw nodes on top
+        this.nodes.forEach((node, i) => {
+            node.drawNode(node);
+        });
+        // TODO: draw labels last
+    }
+    drawLines(){
+        this.edges.forEach((edge) => {
+            let currentNode = this.nodes[edge.from];
+            let nextNode = this.nodes[edge.to];
+            stroke(edge.color);
+            line(
+                currentNode.x + edge.fromAnchor.x, 
+                currentNode.y + edge.fromAnchor.y, 
+                nextNode.x + edge.toAnchor.x, 
+                nextNode.y + edge.toAnchor.y
+            );
+        });
+    }
+}
+
+class MVCExampleGraph extends Graph {
+    name = "MVCExampleGraph"
+    constructor(options){
+        super(options)
+        this.nodes = [
+            { id: 0, x: 125, y: 200, shape: 'triangle', label: 'View' },
+            { id: 1, x: 300, y: 50, shape: 'ellipse', label: 'Controller' },
+            { id: 2, x: 500, y: 200, shape: 'rect', label: 'Model' }
+        ];
+        this.edges = [
+            // view -> controller
+            { from: 0, to: 1, color: 'red', fromAnchor: { x: 0, y: 30 }, toAnchor: { x: 0, y: 30 } },
+            // controller -> model
+            { from: 1, to: 2, color: 'red', fromAnchor: { x: 0, y: 30 }, toAnchor: { x: 0, y: 30 } },
+            // model -> controller
+            { from: 2, to: 1, color: 'blue', fromAnchor: { x: 0, y: 0 }, toAnchor: { x: 0, y: 0 } },
+            // controller -> view
+            { from: 1, to: 0, color: 'blue', fromAnchor: { x: 0, y: 0 }, toAnchor: { x: 0, y: 0 } }
+        ];
+        this.eventFlow = [
+            {from: 0, to: 1}, // view -> controller
+            {from: 1, to: 2}, // controller -> model
+            {from: 2, to: 1}, // model -> controller
+            {from: 1, to: 0}, // controller -> view
+        ]
+    }
+}
+
+class WizardConfig {
+    name = 'WizardConfig'
+    steps = []
+    constructor(name){
+        this.name = name ?? this.name
+    }
+}
+
+class TodoWizardConfig extends WizardConfig {
+    constructor(name){
+        super(name)
+
+        this.steps = [
+            {
+                questionTitle: "What?",
+                question: "What is the name of the todo?",
+                answerStorageKey: "name",
+                // todo: minlength / maxlength
+                answerValidationRules: 'required:string',
+                answerPlaceholder: "Enter a name for the todo",
+                actions:[
+                    {
+                        value: 'save',
+                        label: 'Save',
+                    }
+                ],
+                onStepLoaded: function(){
+                    console.warn('TodoWizardConfig Step Loaded',{t:this})
+                },
+                onStepUnload: function(){
+                    console.warn('TodoWizardConfig Step Unloaded',{t:this})
+                }
+            },
+        ]
+
+        this.config = this.config ?? {}
+        // this is called when the wizard is completed
+        // and it's time to store the results
+        this.finalCallback = function(wizardInstance){
+            console.warn('TodoWizardConfig Final Callback',{wizardInstance});
+
+            // clear the command buffer
+            store.commandBuffer = {name:''};
+            commandPaletteInput.value('');
+
+            // if no active graph, add a new graph
+            if(!store.currentGraph){
+                loadGraph("empty");
+            }
+
+            // 1. push the todo into the current graph as a node at the current level
+            // todo: make a TodoNode
+            store.currentGraph.nodes.push(new GraphNode({
+                name: wizardInstance.stepResponses[0].input,
+                x: 100,
+                y: 100,
+                width: 200,
+                height: 100,
+                shape: 'rect',
+                graph: store.currentGraph // todo: just store ID
+            }))
+
+            new HideCommandPaletteCommand().execute();
+        }
+        // we configure this callback to be called when the final output node (a todo instance) is toggled
+        // we might want to move this into the class Todo class which should extend Node as it's a special type of a node in a graph
+        this.todoOnToggledCallback = function(next, prev){
+            console.warn('todo on toggled callback',{next,prev})
+            console.warn('todo update storage')
+        }
+    }
+}
+class RepeatingTodoWizardConfig extends TodoWizardConfig {
+    constructor(name){
+        super(name)
+        this.steps.push({
+            questionTitle: "When?",
+            question: "What is the frequency of the todo? {prevResp}",
+            answerStorageKey: "frequency",
+            answerValidationRules: 'required:frequency',
+            answerDefaultValue: 'once',
+            optional: true,
+            skippable: true,
+            required: false,
+            actions: [
+                {
+                    value: 'save',
+                    label: 'Save',
+                }
+            ],
+            suggestions: [
+                {
+                    name: "Once",
+                    value: "once",
+                    selected: true
+                },
+                {
+                    name: "Daily",
+                    value: "daily"
+                },
+                {
+                    name: "Weekly",
+                    value: "weekly"
+                },
+                {
+                    name: "Monthly",
+                    value: "monthly"
+                },
+                {
+                    name: "Custom",
+                }
+            ]
+        })
+    }
+}
+class TimerWizardConfig extends WizardConfig {
+    constructor(name){
+        super(name)
+    }
+}
+
+class CommandWizardConfig extends WizardConfig {
+    name = 'CommandWizardConfig'
+    constructor(name){
+        super(name ?? this.name)
+
+        this.steps = [
+            {
+                question: "What is the name of the command?",
+                answerStorageKey: "name",
+                answerValidationRules: 'required:unique:string'
+            },
+            {
+                question: "What is the description of the command?",
+                answerStorageKey: "description",
+                answerValidationRules: 'required:string'
+            },
+            {
+                question: "What are the aliases for the command?",
+                answerStorageKey: "aliases",
+                answerValidationRules: 'optional:csv:string'
+            },
+            {
+                question: "What are the key bindings for the command?",
+                answerStorageKey: "keyBindings",
+                answerValidationRules: 'optional:csv:string'
+            },
+        ]
+    }
+}
+
+function isEmptyOrUndefined(thing){
+    return typeof thing === 'undefined' || thing === null || thing?.trim() === '' ? true : false;
+}
+
 class CommandPalette {
     // the current "Command" being constructed
     currentCommand = null; 
@@ -355,12 +869,51 @@ class CommandPalette {
     filteredCommands = []; 
 
     selectedSuggestionIndex = null;
+    suggestionOffset = 0;
     
     constructor(){
+        this.commandSelectList = new SelectList();
+        this.commandSelectList.bindOnEnterPressed(this.OnPressEnter.bind(this));
+        this.commandSelectList.bindOnEscapePressed(this.OnPressEscape.bind(this));
         this.addDefaultCommands();
     }
 
     addDefaultCommands(){
+        this.availableCommands.push(new Command("Help",{
+            wizardConfig: new WizardConfig("Help Wizard",{
+                steps: [
+                    {
+                        question: "What would you like help with?",
+                        suggestions: [
+                            {
+                                name: "Commands",
+                                value: "commands"
+                            },
+                            {
+                                name: "Graphs",
+                                value: "graphs"
+                            },
+                            {
+                                name: "About This App...",
+                                value: "show_about_info"
+                            }
+                        ]
+                    }
+                ]
+            })
+        }))
+        this.availableCommands.push(new Command("New Todo",{
+            wizardConfig: new TodoWizardConfig("New Todo Wizard")
+        }))
+        this.availableCommands.push(new Command("New Repeating Todo",{
+            wizardConfig: new RepeatingTodoWizardConfig("New Repeating Todo Wizard")
+        }))
+        this.availableCommands.push(new Command("New Timer",{
+            wizardConfig: new TimerWizardConfig("New Timer Wizard")
+        }))
+        this.availableCommands.push(new Command("New Error",{}))
+        this.availableCommands.push(new Command("New Graph",{}))
+        this.availableCommands.push(new Command("New Node Type",{}))
         this.availableCommands.push(new Command("New Requirement",{}))
         this.availableCommands.push(new Command("New Enum",{}))
         this.availableCommands.push(new Command("New Action",{}))
@@ -368,37 +921,17 @@ class CommandPalette {
         this.availableCommands.push(new Command("New Storage Field",{}))
         this.availableCommands.push(new Command("New Class",{}))
         this.availableCommands.push(new Command("New Command",{
-            wizardConfig: {
-                name: "New Command Wizard",
-                steps:  [
-                    {
-                        question: "What is the name of the command?",
-                        answerStorageKey: "name",
-                        answerValidationRules: 'required:unique:string'
-                    },
-                    {
-                        question: "What is the description of the command?",
-                        answerStorageKey: "description",
-                        answerValidationRules: 'required:string'
-                    },
-                    {
-                        question: "What are the aliases for the command?",
-                        answerStorageKey: "aliases",
-                        answerValidationRules: 'optional:csv:string'
-                    },
-                    {
-                        question: "What are the key bindings for the command?",
-                        answerStorageKey: "keyBindings",
-                        answerValidationRules: 'optional:csv:string'
-                    },
-                    // {
-                    //     question: "What is the callback for the command?",
-                    //     answerStorageKey: "callback",
-                    //     answerValidationRules: 'required:unique:string'
-                    // },
-                ]
-            }
+            wizardConfig: new CommandWizardConfig("New Command Wizard")
         }));
+
+        // List Self Tests
+        this.availableCommands.push(new Command("List Self Tests",{
+            callback: function(){
+                console.warn('listing self tests...')
+            }
+        }))
+
+        // Run Self Test
         this.availableCommands.push(new Command("Run Self Test",{
             keyBindings:[
                 // {
@@ -414,6 +947,8 @@ class CommandPalette {
                 new HideCommandPaletteCommand().execute();
             }
         }))
+        
+        // Clear Graph
         this.availableCommands.push(
             new Command("Clear Graph",{
                 keyBindings:[
@@ -427,13 +962,18 @@ class CommandPalette {
                 ],
                 callback: function(){
                     console.warn('clearing graph...')
-                    store.nodes = [];
-                    store.edges = [];
+                    // TODO: only warn if unsaved changes
+                    if(!confirm('Are you sure?')){
+                        return;
+                    }
+                    store.currentGraph = null;
                     // hide the command palette
                     new HideCommandPaletteCommand().execute();
                 }
             })
         )
+
+        // Load Graph
         this.availableCommands.push(
             new Command("Load Graph...",{
                 wizardConfig: {
@@ -441,26 +981,17 @@ class CommandPalette {
                     skippable: true,
                     required: false,
                     finalCallback: function(wizardInstance){
-                        console.warn('Load Graph... Final Callback', {
+                        console.warn('Load Graph Wizard: Final Callback', {
                             t:this,
                             wizardInstance
                         });
-                        switch(wizardInstance.stepResponses[0].selectedSuggestionValue){
-                            case 'mvp':
-                                loadMVCSample();
-                                break;
-                            case 'mvc':
-                                loadMVCSample();
-                                break;
-                            case 'flux':
-                                loadFluxSample();
-                                break;
-                            case 'ajaxFlux':
-                                loadAjaxFluxSample();
-                                break;
-                            default:
-                                console.warn('unknown graph type',wizardInstance.stepResponses[0].selectedSuggestionValue);
-                        }
+                        let prevStepResponse = wizardInstance.stepResponses[0];
+                        // it's loading by name / label here instead of value?
+                        console.warn("its loading by name instead of value?",
+                        {
+                            prevStepResponse,
+                        })
+                        loadGraph(prevStepResponse.selectedSuggestionValue)
                         // close the command palette
                         new HideCommandPaletteCommand().execute();
                     },
@@ -492,32 +1023,33 @@ class CommandPalette {
             })
         )
 
+        // Command Palette / Command Prompt Commands
         this.availableCommands.push(new ShowCommandPaletteCommand());
         this.availableCommands.push(new HideCommandPaletteCommand());
         this.availableCommands.push(new ToggleCommandPaletteCommand());
+
+        // Mode Switching Commands
         this.availableCommands.push(new Command('switch to Select Mode'));
         this.availableCommands.push(new Command('switch to Add Node Mode'));
         this.availableCommands.push(new Command('switch to Add Edge Mode'));
-        
-        this.availableCommands.push(new Command('switch to Move Mode'));
-        this.availableCommands.at(-1).execute = function(){
-            //super.execute();
-            store.interactionMode = MODES.MOVE;
-        }
-
-        this.availableCommands.push(new Command('switch to Delete Mode'));
-        this.availableCommands.at(-1).execute = function(){
-            //super.execute();
-            store.interactionMode = MODES.DELETE;
-        }
+        this.availableCommands.push(new Command('switch to Move Mode',{
+            callback: function(){
+                store.interactionMode = MODES.MOVE;
+            }
+        }));
+        this.availableCommands.push(new Command('switch to Delete Mode',{
+            callback: function(){
+                store.interactionMode = MODES.DELETE;
+                new HideCommandPaletteCommand().execute();
+            }
+        }));
     }
 
     renderSuggestedCommands(){
-        const offsetY = 60;
+        const offsetY = 100;
         const limit = 10;
         // render the list of the top LIMIT suggestions
-        let i = 0;
-        for(i = 0; i < limit && i < this.filteredCommands.length; i++) {
+        for(let i = 0; i < limit && i < this.filteredCommands.length; i++) {
             let command = this.filteredCommands[i];
             let x = 10;
             let y = offsetY + 10 + (i * 50);
@@ -540,26 +1072,6 @@ class CommandPalette {
         text(label, x + (w/2), y + (h/2));
     }
 
-    handleWizardInput(event){
-        switch(event.keyCode){
-            case 13:
-                // validate the current response to the current step
-                // if it's valid, store it
-                // if it's invalid, show an error message
-                store.activeWizard.OnPressEnter.call(store.activeWizard,event);
-                break;
-            case 38:
-                store.activeWizard.OnPressUp.call(store.activeWizard,event);
-                break;
-            case 40:
-                store.activeWizard.OnPressDown.call(store.activeWizard,event);
-                break;
-            default:
-                // update the current response to the current step
-                store.activeWizard.OnInput.call(store.activeWizard,event);
-        }
-    }
-
     onCommandPaletteInput(event){
         //console.log({event});
 
@@ -570,64 +1082,19 @@ class CommandPalette {
 
         // if there's an active wizard, we need to handle the input differently
         if(store.activeWizard){
-            this.handleWizardInput(event);
+            store.activeWizard.handleWizardInput(event);
             return;
         }
 
-        switch(event.keyCode){
-            case 9:
-                // if they pressed tab, select the first suggestion (if any)
-                if(this.filteredCommands.length){
-                    // select the first suggestion
-                    this.currentCommand = this.filteredCommands[0];
-                    // update the command buffer
-                    store.commandBuffer = this.currentCommand.name;
-                }
-                break;
-            case 40:
-                // down arrow was pressed
-                // select the next suggestion (if any)
-                if(this.filteredCommands.length){
-                    if(this.selectedSuggestionIndex === null){
-                        this.selectedSuggestionIndex = 0;
-                    }
-                    else if(this.selectedSuggestionIndex < this.filteredCommands.length - 1){
-                        this.selectedSuggestionIndex++;
-                    }
-                    else{
-                        // loop back to the first suggestion
-                        this.selectedSuggestionIndex = 0;
-                    }
-                }
-                break;
-            case 38:
-                // up arrow was pressed
-                // select the previous suggestion (if any)
-                if(this.filteredCommands.length){
-                    if(this.selectedSuggestionIndex === null){
-                        this.selectedSuggestionIndex = this.filteredCommands.length - 1;
-                    }
-                    else if(this.selectedSuggestionIndex > 0){
-                        this.selectedSuggestionIndex--;
-                    }
-                    else{
-                        // loop back to the last suggestion
-                        this.selectedSuggestionIndex = this.filteredCommands.length - 1;
-                    }
-                }
-                break;
-            case 27:
-                this.OnPressEscape();
-                return;
-            case 13:
-                this.OnPressEnter()
-                return;
-            
+        if(this.commandSelectList.handleInput(event)){
+            return;
         }
 
         //console.warn('onCommandPaletteInput',{event})
         // update the command buffer
-        store.commandBuffer = commandPaletteInput.value();
+        store.commandBuffer = {
+            name: commandPaletteInput.value()
+        }
         if(this.currentCommand === null){
             this.initCommand();
         }else{
@@ -639,6 +1106,31 @@ class CommandPalette {
         //     cb:store.commandBuffer,
         //     fc:cmdprompt.filteredCommands
         // });
+    }
+
+    checkDidClickASuggestion(){
+        console.warn('todo: check did click a suggestion')
+        return false    
+    }
+
+    OnPressEscape(){
+        // if there's an active wizard, we need to handle the input differently
+        if(store.activeWizard){
+            store.activeWizard.OnPressEscape.call(store.activeWizard);
+            return;
+        }
+        // escape was pressed
+        // hide the command palette
+        store.commandPaletteVisible = false;
+        // clear the command palette input
+        commandPaletteInput.value('');
+        // reset the command buffer
+        store.commandBuffer = {
+            name: ''
+        };
+        // need to decide when the current command is deselected
+        // --- 
+        // this.currentCommand = null;
     }
 
     OnPressEnter(){
@@ -658,7 +1150,9 @@ class CommandPalette {
         // execute the current command
         this.currentCommand.execute();
         // reset the command buffer
-        store.commandBuffer = {};
+        store.commandBuffer = {
+            name: ''
+        };
         // hide the command palette
         //store.commandPaletteVisible = false;
         // clear the command palette input
@@ -677,8 +1171,20 @@ class CommandPalette {
     filterCommands(){
         // filter the list of available commands based on the current command buffer
         this.filteredCommands = this.availableCommands.filter(command => {
-            return command.name.toLowerCase()
-                .includes(store.commandBuffer.toLowerCase());
+            if(!command){
+                return false;
+            }
+            if(!command.name){
+                return false;
+            }
+            if(!command.name.toLowerCase){
+                console.error('command name is not a string?', {command})
+                return false;
+            }
+            let compare = command?.name ? command.name.toLowerCase() 
+                : (command?.label?.toLowerCase() ?? '');
+            return compare
+                .includes(store.commandBuffer?.name?.toLowerCase());
         });
 
         //
@@ -705,13 +1211,18 @@ function mouseDragged(){
         panX += mouseX - pmouseX;
         panY += mouseY - pmouseY;
     }else{
-        store.nodes[selectedNode].x += mouseX - pmouseX;
-        store.nodes[selectedNode].y += mouseY - pmouseY;
+        // TODO: bring back node dragging
+        // store.nodes[selectedNode].x += mouseX - pmouseX;
+        // store.nodes[selectedNode].y += mouseY - pmouseY;
     }
 }
 
 // Define the mousePressed function
 function mousePressed(){
+    // bail early if one of our other handlers handled the click
+    if(checkDidClickASuggestion()){
+        return;
+    }
     if(checkDidClickAModeSwitcherButton()){
         return;
     }
@@ -724,6 +1235,23 @@ function mousePressed(){
     } else {
         panningBG = false;
     }
+}
+
+function __checkDidClickAVisibleSuggestion(){
+
+}
+
+function checkDidClickASuggestion(){
+    // if a wizard is active, have IT check
+    if(store.activeWizard){
+        return store.activeWizard.checkDidClickASuggestion();
+    }else if(store.commandPaletteVisible){
+
+        // otherwise, only check if the command prompt 
+        // is active and has visible suggestions
+        return cmdprompt.checkDidClickASuggestion();
+    }
+    return false;
 }
 
 function checkDidClickAModeSwitcherButton(){
@@ -798,44 +1326,33 @@ function mouseWheel(event) {
 
 // Define the deleteSelectedNode function
 function deleteSelectedNode() {
-    if (selectedNode !== null) {
-        store.edges = store.edges.filter(edge => edge.from !== selectedNode && edge.to !== selectedNode);
-        store.nodes.splice(selectedNode, 1);
-        selectedNode = null;
-    }
+    console.warn('TODO: put this in Graph class');
+    // if (selectedNode !== null) {
+    //     this.edges = this.edges.filter(edge => edge.from !== selectedNode && edge.to !== selectedNode);
+    //     this.nodes.splice(selectedNode, 1);
+    //     selectedNode = null;
+    // }
 }
 
 // Define the draw function
 function draw() {
     background(25);
 
-    // Check if the text color is blending with the background color
-    // If so, change the fill color
-    fill(255, 255, 255);
-    // Ensure the text size is large enough to be visible
-    textSize(16);
-    textAlign(LEFT, TOP);
-    // Render text that lists the current zoom, panX, panY
-    text(
-        `zoom: ${zoom.toFixed(2)} panX: ${panX.toFixed(2)} panY: ${panY.toFixed(2)}`, 
-        50, 
-        300);
-    // render red text that shows the current interaction mode
-    fill(255, 0, 0);
-    text(
-        `interaction mode: ${store.interactionMode}`, 
-        50, 
-        320);
-
     push();
     translate(panX, panY);
     scale(zoom);
 
-    drawLines();
+    if(store.currentGraph && !store.commandPaletteVisible){
+        store.currentGraph.renderGraph();
+    }
 
     if (selectedNode !== null) {
-        store.nodes[selectedNode].x = (mouseX - panX) / zoom;
-        store.nodes[selectedNode].y = (mouseY - panY) / zoom;
+        // TODO: bring back dragging nodes
+        // let selectedNode = store.currentGraph.seletedNodes?.[0]
+        // if(selectedNode){
+        //   store.currentGraph.nodes[selectedNode].x = (mouseX - panX) / zoom;
+        //   store.currentGraph.nodes[selectedNode].y = (mouseY - panY) / zoom;
+        // }
     } else if (panningBG) {
         panX += mouseX - dragStartX;
         panY += mouseY - dragStartY;
@@ -843,18 +1360,10 @@ function draw() {
         dragStartY = mouseY;
     }
 
-    store.events.forEach((event, i) => {
-        updateEvent(event);
-        drawEvent(event);
-    });
-    
-    store.nodes.forEach((node, i) => {
-        drawNode(node);
-    });
-
     pop();
 
-    drawModeSwitcher();
+    
+    //drawModeSwitcher();
 
     // if the command palette is visible, draw it
     if(store.commandPaletteVisible){
@@ -866,7 +1375,27 @@ function draw() {
         store.activeWizard.onDraw();
     }
 
-    
+    renderDebugUI();
+}
+
+function renderDebugUI(){
+    // Check if the text color is blending with the background color
+    // If so, change the fill color
+    fill(255, 255, 255);
+    // Ensure the text size is large enough to be visible
+    textSize(16);
+    textAlign(RIGHT, BOTTOM);
+    // Render text that lists the current zoom, panX, panY
+    text(
+        `zoom: ${zoom.toFixed(2)} panX: ${panX.toFixed(2)} panY: ${panY.toFixed(2)}`, 
+        windowWidth - 20, 
+        windowHeight - 10);
+    // render red text that shows the current interaction mode
+    fill(255, 0, 0);
+    text(
+        `interaction mode: ${store.interactionMode}`, 
+        windowWidth - 20, 
+        windowHeight - 30);
 }
 
 // Define the drawCommandPalette function
@@ -879,7 +1408,7 @@ function drawCommandPalette(){
     // draw a large text input in the command palette
     fill("white")
     stroke("black")
-    rect(10, cmdpPosY + 10, windowWidth - 20, 50);
+    rect(10, cmdpPosY + 10, windowWidth - 20, 100);
     fill("black")
 
     if(!store.activeWizard){
@@ -915,21 +1444,6 @@ function drawModeSwitcherBox(x,y,w,h,label,selected){
     fill(0)
     textAlign(CENTER,CENTER);
     text(label, x + (w/2), y + (h/2));
-}
-
-// Define the drawLines function
-function drawLines() {
-    store.edges.forEach((edge) => {
-        let currentNode = store.nodes[edge.from];
-        let nextNode = store.nodes[edge.to];
-        stroke(edge.color);
-        line(
-            currentNode.x + edge.fromAnchor.x, 
-            currentNode.y + edge.fromAnchor.y, 
-            nextNode.x + edge.toAnchor.x, 
-            nextNode.y + edge.toAnchor.y
-        );
-    });
 }
 
 // Define the updateEvent function
@@ -1012,9 +1526,12 @@ function setup() {
     createCanvas(windowWidth, windowHeight);
 
     cmdprompt = new CommandPalette();
-
+    push();
+    textSize(50);
     commandPaletteInput = createInput('');
-    commandPaletteInput.position(10, windowHeight - 190);
+    commandPaletteInput.size(windowWidth - 20);
+    commandPaletteInput.position(10, 80);
+    pop();
     // Listen for the 'keydown' event
     commandPaletteInput.elt.addEventListener('keydown', function(e) {
         // Check if the Enter key was pressed
@@ -1033,191 +1550,309 @@ function setup() {
     // button = createButton('Add Node');
     // button.position(input.x + input.width, 10);
     // button.mousePressed(addNode);
-
-    // Add buttons to load different demos
-    // mvcButton = createButton('Load MVC Sample');
-    // mvcButton.position(input.x + input.width, 40);
-    // mvcButton.mousePressed(loadMVCSample);
-
-    // fluxButton = createButton('Load Flux Sample');
-    // fluxButton.position(input.x + input.width, 70);
-    // fluxButton.mousePressed(loadFluxSample);
-
-    // fluxAjaxButton = createButton('Load Ajax Flux Sample');
-    // fluxAjaxButton.position(input.x + input.width, 130);
-    // fluxAjaxButton.mousePressed(loadAjaxFluxSample);
-
-    // emptyButton = createButton('Load Empty Graph');
-    // emptyButton.position(input.x + input.width, 100);
-    // emptyButton.mousePressed(loadEmptyGraph);
 }
 
-function loadMVCSample() {
-    store.mode = 'mvc';
-    store.nodes = [
-        { id: 0, x: 125, y: 200, shape: 'triangle', label: 'View' },
-        { id: 1, x: 300, y: 50, shape: 'ellipse', label: 'Controller' },
-        { id: 2, x: 500, y: 200, shape: 'rect', label: 'Model' }
-    ];
-    store.edges = [
-        // view -> controller
-        { from: 0, to: 1, color: 'red', fromAnchor: { x: 0, y: 30 }, toAnchor: { x: 0, y: 30 } },
-        // controller -> model
-        { from: 1, to: 2, color: 'red', fromAnchor: { x: 0, y: 30 }, toAnchor: { x: 0, y: 30 } },
-        // model -> controller
-        { from: 2, to: 1, color: 'blue', fromAnchor: { x: 0, y: 0 }, toAnchor: { x: 0, y: 0 } },
-        // controller -> view
-        { from: 1, to: 0, color: 'blue', fromAnchor: { x: 0, y: 0 }, toAnchor: { x: 0, y: 0 } }
-    ];
-    store.eventFlow = [
-        {from: 0, to: 1}, // view -> controller
-        {from: 1, to: 2}, // controller -> model
-        {from: 2, to: 1}, // model -> controller
-        {from: 1, to: 0}, // controller -> view
-    ]
-}
-
-function loadFluxSample() {
-    store.mode = 'flux';
-    store.nodes = [
-        { id: 0, x: 125, y: 200, shape: 'triangle', label: 'Component' },
-        { id: 1, x: 300, y: 50, shape: 'ellipse', label: 'Action' },
-        { id: 2, x: 475, y: 50, shape: 'ellipse', label: 'Mutation' },
-        { id: 3, x: 500, y: 200, shape: 'rect', label: 'State' }
-    ];
-    store.edges = [
-        // component -> action
-        { 
-            from: 0, to: 1, 
-            color: 'red', 
-            fromAnchor: { x: 0, y: 30 }, 
-            toAnchor: { x: 0, y: 30 } 
-        },
-        // action -> mutation
-        {
-            from: 1, to: 2,
-            color: 'red',
-            fromAnchor: { x: 0, y: 30 },
-            toAnchor: { x: 0, y: 30 }
-        },
-        // mutation -> state
-        {
-            from: 2, to: 3,
-            color: 'red',
-            fromAnchor: { x: 0, y: 30 },
-            toAnchor: { x: 0, y: 30 }
-        },
-        // state -> component
-        {
-            from: 3, to: 0,
-            color: 'blue',
-            fromAnchor: { x: 0, y: 0 },
-            toAnchor: { x: 0, y: 0 }
-        }
-    ];
-    store.eventFlow = [
-        {from: 0, to: 1}, // component -> action
-        {from: 1, to: 2}, // action -> mutation
-        {from: 2, to: 3}, // mutation -> state
-        {from: 3, to: 0}, // state -> component
-    ]
+class FluxExampleGraph extends Graph {
+    constructor(options){
+        super(options)
+        this.nodes = [
+            { id: 0, x: 125, y: 200, shape: 'triangle', label: 'Component' },
+            { id: 1, x: 300, y: 50, shape: 'ellipse', label: 'Action' },
+            { id: 2, x: 475, y: 50, shape: 'ellipse', label: 'Mutation' },
+            { id: 3, x: 500, y: 200, shape: 'rect', label: 'State' }
+        ];
+        this.edges = [
+            // component -> action
+            { 
+                from: 0, to: 1, 
+                color: 'red', 
+                fromAnchor: { x: 0, y: 30 }, 
+                toAnchor: { x: 0, y: 30 } 
+            },
+            // action -> mutation
+            {
+                from: 1, to: 2,
+                color: 'red',
+                fromAnchor: { x: 0, y: 30 },
+                toAnchor: { x: 0, y: 30 }
+            },
+            // mutation -> state
+            {
+                from: 2, to: 3,
+                color: 'red',
+                fromAnchor: { x: 0, y: 30 },
+                toAnchor: { x: 0, y: 30 }
+            },
+            // state -> component
+            {
+                from: 3, to: 0,
+                color: 'blue',
+                fromAnchor: { x: 0, y: 0 },
+                toAnchor: { x: 0, y: 0 }
+            }
+        ];
+        this.eventFlow = [
+            {from: 0, to: 1}, // component -> action
+            {from: 1, to: 2}, // action -> mutation
+            {from: 2, to: 3}, // mutation -> state
+            {from: 3, to: 0}, // state -> component
+        ]
+    }
 }
 
 // simulate an ajax await'd action
-function loadAjaxFluxSample(){
-    store.mode = 'ajaxFlux';
-    // c -> a -> ajax -> a -> m -> s -> c
-    store.eventFlow = [
-        { from: 0, to: [1], delay: 0 }, // component -> action
-        // note this one splits into two!!!
-        { from: 1, to: [4, 2], delay: 0 }, // action -> ajax, action -> mutation (fork)
-        { from: 2, to: [3], delay: 0 }, // mutation -> state
-        { from: 3, to: [0], delay: 0 }, // state -> component (optimistic update)
-        { from: 4, to: [1], delay: 1000 }, // ajax -> action (after 1000ms delay)
-        { from: 1, to: [2], delay: 0 }, // action -> mutation
-        { from: 2, to: [3], delay: 0 }, // mutation -> state
-        { from: 3, to: [0], delay: 0 } // state -> component
-    ];
-    store.nodes = [
-        { id: 0, x: 125, y: 200, shape: 'triangle', label: 'Component' },
-        { id: 1, x: 370, y: 50, shape: 'ellipse', label: 'Action' },
-        { id: 2, x: 650, y: 110, shape: 'ellipse', label: 'Mutation' },
-        { id: 3, x: 424, y: 315, shape: 'ellipse', label: 'State' },
-        { id: 4, x: 582, y: -71, shape: 'ellipse', label: 'Ajax' },
-    ];
-    store.edges = [
-        // Component -{Dispatches}-> Action
-        { 
-            from: 0, to: 1, color: 'red', 
-            label: 'Dispatches',
-            fromAnchor: { x: 0, y: 30 }, 
-            toAnchor: { x: 0, y: 30 } 
-        },
-        // Action -{Requests}-> Ajax
-        { 
-            from: 1, to: 4, color: 'red', 
-            label: 'Requests',
-            fromAnchor: { x: 0, y: 30 }, 
-            toAnchor: { x: 0, y: 30 } 
-        },
-        // Ajax -{Responds}-> Action
-        {
-            from: 4, to: 1, color: 'blue',
-            label: 'Responds',
-            fromAnchor: { x: -30, y: 0 },
-            toAnchor: { x: -30, y: 0 }
-        },
-        // Action -{Commits}-> Mutation
-        { 
-            from: 1, to: 2, color: 'red', 
-            label: 'Commits',
-            fromAnchor: { x: 0, y: 30 }, 
-            toAnchor: { x: 0, y: 30 },
-        },
-        // Mutation -{Mutates}-> State
-        {   
-            from: 2, to: 3, color: 'red', 
-            label: 'Mutates',
-            fromAnchor: { x: 0, y: 30 }, 
-            toAnchor: { x: 0, y: 30 },
-        },
-        // State -{Updates}-> Component
-        {   
-            from: 3, to: 0, color: 'red',
-            label: 'Updates', 
-            fromAnchor: { x: 0, y: 30 }, 
-            toAnchor: { x: 0, y: 30 },
-        }
-    ];
+class FluxAjaxExampleGraph extends Graph {
+    constructor(options){
+        super(options)
+        // c -> a -> ajax -> a -> m -> s -> c
+        this.eventFlow = [
+            { from: 0, to: [1], delay: 0 }, // component -> action
+            // note this one splits into two!!!
+            { from: 1, to: [4, 2], delay: 0 }, // action -> ajax, action -> mutation (fork)
+            { from: 2, to: [3], delay: 0 }, // mutation -> state
+            { from: 3, to: [0], delay: 0 }, // state -> component (optimistic update)
+            { from: 4, to: [1], delay: 1000 }, // ajax -> action (after 1000ms delay)
+            { from: 1, to: [2], delay: 0 }, // action -> mutation
+            { from: 2, to: [3], delay: 0 }, // mutation -> state
+            { from: 3, to: [0], delay: 0 } // state -> component
+        ];
+        this.nodes = [
+            { id: 0, x: 125, y: 200, shape: 'triangle', label: 'Component' },
+            { id: 1, x: 370, y: 50, shape: 'ellipse', label: 'Action' },
+            { id: 2, x: 650, y: 110, shape: 'ellipse', label: 'Mutation' },
+            { id: 3, x: 424, y: 315, shape: 'ellipse', label: 'State' },
+            { id: 4, x: 582, y: -71, shape: 'ellipse', label: 'Ajax' },
+        ];
+        this.edges = [
+            // Component -{Dispatches}-> Action
+            { 
+                from: 0, to: 1, color: 'red', 
+                label: 'Dispatches',
+                fromAnchor: { x: 0, y: 30 }, 
+                toAnchor: { x: 0, y: 30 } 
+            },
+            // Action -{Requests}-> Ajax
+            { 
+                from: 1, to: 4, color: 'red', 
+                label: 'Requests',
+                fromAnchor: { x: 0, y: 30 }, 
+                toAnchor: { x: 0, y: 30 } 
+            },
+            // Ajax -{Responds}-> Action
+            {
+                from: 4, to: 1, color: 'blue',
+                label: 'Responds',
+                fromAnchor: { x: -30, y: 0 },
+                toAnchor: { x: -30, y: 0 }
+            },
+            // Action -{Commits}-> Mutation
+            { 
+                from: 1, to: 2, color: 'red', 
+                label: 'Commits',
+                fromAnchor: { x: 0, y: 30 }, 
+                toAnchor: { x: 0, y: 30 },
+            },
+            // Mutation -{Mutates}-> State
+            {   
+                from: 2, to: 3, color: 'red', 
+                label: 'Mutates',
+                fromAnchor: { x: 0, y: 30 }, 
+                toAnchor: { x: 0, y: 30 },
+            },
+            // State -{Updates}-> Component
+            {   
+                from: 3, to: 0, color: 'red',
+                label: 'Updates', 
+                fromAnchor: { x: 0, y: 30 }, 
+                toAnchor: { x: 0, y: 30 },
+            }
+        ];
+    }
+    
 }
 
-function loadEmptyGraph() {
-    store.mode = 'empty';
-    store.nodes = [];
-    store.edges = [];
+class EmptyGraph extends Graph {
+    constructor(options){
+        super(options)
+        this.nodes = [];
+        this.edges = [];
+    }
+}
+
+// todo: make a multi-select version
+class SelectList {
+    selectedOptionIndex = -1;
+    selectionOffset = 0;
+    maxVisibleOptionsCount = 10;
+    constructor(){
+        
+    }
+    get filteredOptions(){
+        return this?.onGetFilteredOptionsCallback?.() ?? [];
+    }
+    get allOptions(){
+        return this?.onGetAllOptionsCallback?.() ?? [];
+    }
+    bindGetFilteredOptions(callback){
+        this.onGetFilteredOptionsCallback = callback;
+    }
+    bindGetAllOptions(callback){
+        this.onGetAllOptionsCallback = callback;
+    }
+    bindOnEnterPressed(callback){
+        this.onEnterPressedCallback = callback
+    }
+    bindOnEscapePressed(callback){
+        this.onEscapePressedCallback = callback
+    }
+    flagOptionSelected(index){
+
+    }
+    handleInput(event){
+        switch(event.keyCode){
+            // NEED TO THINK ABOUT HOW TAB SHOULD WORK...
+            // case 9:
+            //     // if they pressed tab, select the first suggestion (if any)
+            //     if(this.selectedOptionIndex === -1 && this.filteredOptions.length){
+            //         // update the command buffer
+            //         store.commandBuffer = {
+            //             name: this.filteredOptions?.[0]?.name
+            //         };
+            //         return true;
+            //     }
+            //     break;
+            case 40:
+                return this.onPressDown(event)
+                break;
+            case 38:
+                return this.onPressUp(event);
+                break;
+            case 27:
+                //this.selectedSuggestionIndex = -1;
+                return this.onEscapePressedCallback();
+            case 13:
+                this.selectedSuggestionIndex = -1;
+                return this.onEnterPressedCallback()
+            
+        }
+    }
+    onPressUp(event){
+        // up arrow was pressed
+        // select the previous suggestion (if any)
+        // if(this.filteredOptions.length){
+        //     if(this.selectedOptionIndex === null){
+        //         this.selectedOptionIndex = this.filteredOptions.length - 1;
+        //     }
+        //     else if(this.selectedOptionIndex > 0){
+        //         this.selectedOptionIndex--;
+        //     }
+        //     else{
+        //         // loop back to the last suggestion
+        //         this.selectedOptionIndex = this.filteredOptions.length - 1;
+        //     }
+        //     return true;
+        // }
+        // console.warn('UP was pressed', {
+        //     currentCMDName: this.name,
+        //     currentStepConfig: this.config.steps[this.currentStepIndex]
+        // })
+        if(this.selectedOptionIndex === null){
+            // NOOP for now
+            //this.selectedOptionIndex = this.allOptions.length - 1;
+        }else if(this.selectedOptionIndex > 0){
+            // still results above the selected one, go to it
+            this.selectedOptionIndex--;
+        }else{
+            // loop back to the last suggestion
+            this.selectedOptionIndex = this.allOptions.length - 1;
+            // if the suggestionOffset is greater than zero, decrement it
+            if(this.suggestionOffset > 0){
+                this.suggestionOffset--;
+            }else{
+                // calculate the offset required to show the last result in
+                // the last spot of the limited view
+                // NOTE: if the current list is under the max visible count, this will be negative, so we need to only use it if it's positive
+                if(this.allOptions.length > this.maxVisibleOptionsCount){
+                    this.suggestionOffset = this.allOptions.length - this.maxVisibleOptionsCount;
+                }
+            }
+        }
+    }
+    onPressDown(event){
+        // down arrow was pressed
+        // select the next suggestion (if any)
+        // if(this.filteredOptions.length){
+        //     if(this.selectedOptionIndex === null){
+        //         this.selectedOptionIndex = 0;
+        //     }
+        //     else if(this.selectedOptionIndex < this.filteredOptions.length - 1){
+        //         this.selectedOptionIndex++;
+        //     }
+        //     else{
+        //         // loop back to the first suggestion
+        //         this.selectedOptionIndex = 0;
+        //         this.suggestionOffset = 0;
+        //     }
+        //     return true;
+        // }
+        // return false;
+        // console.warn('DOWN was pressed', {
+        //     currentCMDName: this.name,
+        //     currentStepConfig: this.config.steps[this.currentStepIndex],
+        //     currentSuggestionsLength: this.currentSuggestions.length
+        // })
+        if(this.selectedOptionIndex === null){
+            // start with the first, topmost one
+            this.selectedOptionIndex = 0;
+        }else if(this.selectedOptionIndex < this.currentSuggestions.length - 1){
+            this.selectedOptionIndex++;
+            // if we've gone out over this.maxVisibleOptionsCount, 
+            // increment the offset and reset the selectedOptionIndex
+            if(this.selectedOptionIndex >= this.maxVisibleOptionsCount){
+                this.suggestionOffset++;
+                this.selectedOptionIndex = 0;
+            }
+        }else{
+            // loop back to the first suggestion
+            this.selectedOptionIndex = 0;
+            this.suggestionOffset = 0;
+        }
+        console.warn('selectedOptionIndex',this.selectedOptionIndex)
+    }
 }
 
 // check closest node to mouse position
+// todo: move this into Graph class
 function dragNode() {
+    if(!store.currentGraph){
+        return;
+    }
     // Adjust mouse position for pan and zoom
     let adjustedMouseX = (mouseX - panX) / zoom;
     let adjustedMouseY = (mouseY - panY) / zoom;
     let mousePos = createVector(adjustedMouseX, adjustedMouseY);
 
     let closestNode = null;
-    store.nodes.forEach((node, i) => {
+    store.currentGraph.nodes.forEach((node, i) => {
         let d = dist(mousePos.x, mousePos.y, node.x, node.y);
         if (closestNode === null && d < 50) {
             closestNode = i;
         }
     });
-    selectedNode = closestNode;
+    store.currentGraph.selectedNodes[0] = closestNode;
 }
 
 function stopDragging() {
-    selectedNode = null;
+    if(!store.currentGraph){
+        return;
+    }
+    store.currentGraph.selectedNodes = [];
 }
 
+// TODO: map this to an ObservedTextInputField
+// so our graph can properly kick events into the correct graph assigned to the text input
+// TODO: allow graphs to continue executing in the background in a headless mode
+// TODO: a process manager for showing which graphs are currently running
 function handleInput() {
     if (keyCode === ENTER) {
         addNode();
@@ -1240,9 +1875,17 @@ function handleInput() {
     store.lastReceived = Date.now();
 }
 
+// TODO: refactor addNode to be a method on the Graph class
 function addNode() {
     let nodeType = input.value().toLowerCase();
-    if (['view', 'controller', 'model', 'action', 'mutation', 'store', 'dispatch', 'mutate', 'state'].includes(nodeType)) {
+    if ([
+        'view', 
+        'controller', 
+        'model', 
+        'action', 
+        'mutation', 
+        'state'
+    ].includes(nodeType)) {
         store.nodes.push(createNewNode(nodeType));
     } else {
         store.nodes.push(createErrorNode());
@@ -1268,35 +1911,6 @@ function createNewNode(type) {
 
 function createErrorNode() {
     return { id: store.nodes.length, x: 100, y: 100, shape: 'errorRect', label: 'Invalid Node Type' };
-}
-
-function drawNode(node){
-
-    if (store.nodes.indexOf(node) === selectedNode) {
-        fill(255, 0, 0); // red for selected node
-    } else {
-        fill(100 + (node.type === 'rect' ? 0 : 50)); // original fill color
-    }
-    
-    let nodeValue = node.id === 0 
-        ? store.viewValue 
-        : node.id === 1 
-            ? '' 
-            : store.modelValue;
-            
-    let otherNodeValue = node.id === 0 
-        ? store.modelValueFromView 
-        : node.id === 1 
-            ? '' 
-            : store.viewValue;
-
-    if(node.shape === 'errorRect') {
-        drawErrorNode(node);
-    } else {
-        drawShape(node.x, node.y, node.shape, nodeValue, otherNodeValue);
-    }
-
-    drawLabel(node.x, node.y, node.label);
 }
 
 function drawErrorNode(node) {
@@ -1344,24 +1958,24 @@ function drawLabel(x, y, label) {
     text(label, x, y + 70);
 }
 
-function drawLines() {
-    store.edges.forEach((edge) => {
-        let currentNode = store.nodes[edge.from];
-        let nextNode = store.nodes[edge.to];
-        stroke(edge.color);
-        line(
-            currentNode.x + edge.fromAnchor.x, 
-            currentNode.y + edge.fromAnchor.y, 
-            nextNode.x + edge.toAnchor.x, 
-            nextNode.y + edge.toAnchor.y
-        );
-        if(edge.label){
-            let halfX = (currentNode.x + nextNode.x) / 2;
-            let halfY = (currentNode.y + nextNode.y) / 2;
-            drawLabel(halfX, halfY, edge.label)
-        }
-    });
-}
+// function drawLines() {
+//     store.edges.forEach((edge) => {
+//         let currentNode = store.nodes[edge.from];
+//         let nextNode = store.nodes[edge.to];
+//         stroke(edge.color);
+//         line(
+//             currentNode.x + edge.fromAnchor.x, 
+//             currentNode.y + edge.fromAnchor.y, 
+//             nextNode.x + edge.toAnchor.x, 
+//             nextNode.y + edge.toAnchor.y
+//         );
+//         if(edge.label){
+//             let halfX = (currentNode.x + nextNode.x) / 2;
+//             let halfY = (currentNode.y + nextNode.y) / 2;
+//             drawLabel(halfX, halfY, edge.label)
+//         }
+//     });
+// }
 
 
 function nodesForFlowIndex(flowIndex){
