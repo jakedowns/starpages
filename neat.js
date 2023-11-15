@@ -1,3 +1,28 @@
+/*
+| Step Number | Refactoring Step |
+|-------------|------------------|
+| 1 | Modularize the Code |
+| 2 | Use Constants |
+| 3 | Improve Naming Conventions |
+| 4 | Add Comments |
+| 5 | Implement an Entity Component System (ECS) |
+| 6 | Implement Computed Properties |
+| 7 | Implement a Virtual DOM |
+| 8 | Implement a Cache for Nodes |
+| 9 | Implement a Cachebuster Timestamp |
+| 10 | Optimize Loops |
+| 11 | Use Web Workers for Long-Running Tasks |
+| 12 | Use WASM for Performance-Critical Tasks |
+| 13 | Use a Functional Programming Style |
+| 14 | Use Switch Statements and Constants for Exhaustive Pattern Matching |
+| 15 | Use Mixins and Higher-Order Functions for Extensibility |
+| 16 | Add Unit Tests |
+| 17 | Use a Linter |
+| 18 | Use a Code Formatter |
+| 19 | Implement an Interactive Graph Viewer |
+| 20 | Synchronize the Graph Viewer with a Video Player |
+*/
+
 // Define the initial state of the store
 let store = {
     mode: 'mvc', // default mode
