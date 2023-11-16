@@ -598,13 +598,13 @@ class Command {
         return new Command(this.name, this.options);
     }
     execute(){
-        // console.warn('executing command, has wizard, has callback?',
-        // {
-        //     name: this.name,
-        //     hasWizard: this.options.wizardConfig ? true : false,
-        //     hasCallback: this.options.callback ? true : false,
-        //     options: Object.keys(this.options)
-        // })
+        console.warn('Command.execute:',
+        {
+            name: this.name,
+            hasWizard: this.options.wizardConfig ? true : false,
+            hasCallback: this.options.callback ? true : false,
+            options: Object.keys(this.options)
+        })
         if(this.options.wizardConfig){
             // the constructor validates the wizardConfig for us
             this.wizard = new WizardController(this.options.wizardConfig);
@@ -619,6 +619,29 @@ class Command {
     updateFromBuffer(){
         // update the current command based on the command buffer
         this.name = store.commandBuffer.name;
+    }
+}
+
+class ShowNewToastCommand extends Command {
+    constructor(){
+        const wizardConfig = new WizardConfig("Show New Toast Wizard");
+        wizardConfig.steps = [{
+            question: "What is the message of the toast?",
+            answerStorageKey: "message",
+            // todo: min / max length
+            answerValidationRules: 'required:string'
+        }]
+        wizardConfig.finalCallback = function(wizardInstance){
+            toastManager.showToast(
+                wizardInstance.stepResponses[0].input,
+                {pinned: false}
+            );
+            commandPaletteInput.value('');
+            new HideCommandPaletteCommand().execute();
+        }
+        super("Show New Toast",{
+            wizardConfig
+        })
     }
 }
 
@@ -1078,20 +1101,96 @@ function isEmptyOrUndefined(thing){
     return typeof thing === 'undefined' || thing === null || thing?.trim?.() === '' ? true : false;
 }
 
+class ToastNotification {
+    message = ''
+    options = {}
+    constructor(message, options){
+        this.options = options ?? {}
+        this.message = message;
+        if(!options?.pinned){
+            this.sent_at = Date.now();
+            this.leaveTime = this.sent_at + 3000;
+            this.destroyTime = this.leaveTime + 1000;
+            this.leaveTimer = setTimeout(()=>{
+                this.leave();
+            },this.leaveTime - this.sent_at)
+            this.destroyTimer = setTimeout(()=>{
+                this.destroy();
+            },this.destroyTime - this.sent_at)
+        }
+    }
+    leave(){
+        this.state = 'leaving';
+    }
+    destroy(){
+        this.state = 'destroyed';
+        this.options.manager.destroyToast(this);
+    }
+    // drawToast renderToast
+    // TODO: levels (info, warn, error, success)
+    draw(index){
+        if(this.state === 'destroyed'){
+            return;
+        }
+        let offsetY = 30 * index;
+        let leavingAlpha = this.state === 'leaving' 
+            ? (255 - ((Date.now() - this.leaveTime) / (this.destroyTime - this.leaveTime)) * 255)
+            : 255;
+        leavingAlpha = Math.floor(leavingAlpha);
+        stroke(0)
+        fill(255)
+        alpha(leavingAlpha)
+        const tBoxW = 300;
+        rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100);
+        fill(0)
+        alpha(leavingAlpha)
+        textAlign(LEFT,TOP);
+        text(this.message, windowWidth - 10 - tBoxW + 10, offsetY + 30);
+        alpha(255);
+    }
+}
+class ToastNotificationManager {
+    toasts = []
+    constructor(){
+
+    }
+    showToast(message, options){
+        options = options ?? {}
+        let {pinned} = options;
+        let toast = new ToastNotification(message, {pinned, manager: this});
+        this.toasts.push(toast);
+    }
+    destroyToast(toast){
+        this.toasts = this.toasts.filter((t)=>{
+            return t !== toast;
+        })
+    }
+    draw(){
+        this.toasts.forEach((toast,index)=>{
+            toast.draw(index);
+        })
+    }
+}
+
 class SetMaxSuggestionsCommand extends Command {
     constructor(){
-        super("Set Max Suggestions")
-        this.wizardConfig = new WizardConfig("Set Max Suggestions Wizard")
-        this.wizardConfig.steps = [
+        const wizardConfig = new WizardConfig("Set Max Suggestions Wizard");
+        wizardConfig.steps = [
             {
                 question: "How many suggestions would you like to see per page?",
                 description: "Please answer in a number between 1 and 100",
                 answerValidationRules: "required:number:range[1-100]",
             }
-        ]
-        this.wizardConfig.finalCallback = function(wizardInstance){
+        ];
+        wizardConfig.finalCallback = function(wizardInstance){
             store.maxVisibleOptionsCount = parseInt(wizardInstance.stepResponses[0].input);
+            commandPaletteInput.value('');
+            new HideCommandPaletteCommand().execute();
+            toastManager.showToast(`Set Max Suggestions: ${store.maxVisibleOptionsCount}`);
         }
+        super("Set Max Suggestions",{
+            wizardConfig
+        })
     }
 }
 
@@ -1131,6 +1230,10 @@ class CommandPalette {
     }
 
     addDefaultCommands(){
+        this.availableCommands.push(new ShowNewToastCommand());
+        // TODO: ShowPinnedToast
+        this.availableCommands.push(new Command("New REPL"))
+        this.availableCommands.push(new Command("New Sandbox"))
         this.availableCommands.push(new SetMaxSuggestionsCommand());
         this.availableCommands.push(new Command("Help",{
             wizardConfig: new WizardConfig("Help Wizard",{
@@ -1238,6 +1341,7 @@ class CommandPalette {
                             t:this,
                             wizardInstance
                         });
+                        toastManager.showToast(`Loaded Graph: ${wizardInstance.stepResponses[0].selectedSuggestionValue}`);
                         let prevStepResponse = wizardInstance.stepResponses[0];
                         // it's loading by name / label here instead of value?
                         console.warn("its loading by name instead of value?",
@@ -1420,11 +1524,12 @@ class CommandPalette {
 
             this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex].clone();
         }
-        console.log('CMD enter was pressed', {
+        console.log('CommandPalette.OnPressEnter', {
             currentCMDName: this.currentCommand.name,
             selectedSuggIdx: this.selectedSuggestionIndex,
             filteredCommandsLength: this.filteredCommands.length,
-            currentCMD: this.currentCommand
+            currentCMD: this.currentCommand,
+            currentCMDOptions: this.currentCommand.options,
         })
         // enter was pressed
         // execute the current command
@@ -1697,7 +1802,12 @@ function draw() {
     // display the current wizard (if any)
     store.activeWizard?.onDraw?.();
 
+    // render toast notifications
+    toastManager.draw();
+
     renderDebugUI();
+
+    
 }
 
 function renderDebugUI(){
@@ -1854,13 +1964,15 @@ function ensureHeadTag(){
 }
 
 let commandPaletteInput = null;
+let toastManager = null;
 
 // Define the setup function
 function setup() {
     ensureHeadTag();
     createCanvas(windowWidth, windowHeight);
-
+    
     cmdprompt = new CommandPalette();
+    toastManager = new ToastNotificationManager();
     push();
     textSize(50);
     commandPaletteInput = createInput('');
