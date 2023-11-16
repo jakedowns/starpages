@@ -117,7 +117,7 @@ document.addEventListener('keydown', function(event) {
 
 const MODES = {
     SELECT: 'select',
-    MOVE: 'moveNode',
+    PAN: 'pan',
     ADD_NODE: 'addNode',
     ADD_EDGE: 'addEdge',
     DELETE: 'delete',
@@ -156,7 +156,7 @@ class StatusLight {
 
 // Define the initial state of the store
 let store = {
-    interactionMode: MODES.MOVE,
+    interactionMode: MODES.PAN,
 
     // viewValue: '',
     // controllerValue: '',
@@ -359,7 +359,11 @@ class WizardController {
         if(!cStep.required){
             suggestions.push({
                 name:'Cancel',
-                value: 'cancel'
+                value: 'cancel',
+                OnSelect: ()=>{
+                    console.warn('cancel wizard')
+                    this.end();
+                }
             })
         }
         store.all_valid_suggestions_length = suggestions.length;
@@ -398,7 +402,7 @@ class WizardController {
         this.currentStepIndex = stepIndex;
         this.shownSteps.push(this.currentStepIndex);
         // drawSuggestions automatically updates based on the current step
-        this.currentStep?.onStepLoaded?.call(this);
+        this.currentStep?.onStepLoaded?.call(this,this);
         
     }
     /** @return bool - did we click a _visible_ suggestion rect? */
@@ -424,12 +428,15 @@ class WizardController {
                 value: this.allValidSuggestions[this.selectedSuggestionIndex]?.value,
                 label: this.allValidSuggestions[this.selectedSuggestionIndex]?.label
             })
+
+            const selectedSuggestion = this.allValidSuggestions[this.selectedSuggestionIndex];
+
             this.stepResponses[this.currentStepIndex] = {
                 input: commandPaletteInput.value(),
-                selectedSuggestionIndex: this.selectionOffset + this.selectedSuggestionIndex,
-                selectedSuggestionValue: 
-                    this.allValidSuggestions[this.selectedSuggestionIndex]?.value
-                    ?? this.allValidSuggestions[this.selectedSuggestionIndex]?.label
+                selectedSuggestionIndex: this.selectedSuggestionIndex,
+                selectedSuggestionValueOrLabel: 
+                    selectedSuggestion?.value
+                    ?? selectedSuggestion?.label
             }
 
             console.warn('recorded step response', {
@@ -452,19 +459,24 @@ class WizardController {
                 this.steps[this.currentStepIndex],
                 this.stepResponses);
 
-            console.warn('validation response', {
-                validatorResponse
-            })
+            // console.warn('validation response', {
+            //     validatorResponse
+            // })
 
             if(!validatorResponse?.valid){
                 console.error('validation failed',validatorResponse);
                 return;
             }
+
+            // if the selected suggestion had an execute function, call it
+            if(selectedSuggestion?.OnSelect){
+                selectedSuggestion.OnSelect.call(this,this);
+            }
         }
 
         // unload the current step
         if(this.currentStep?.onStepUnload){
-            this.currentStep.onStepUnload.call(this);
+            this.currentStep.onStepUnload.call(this, this);
         }
 
         // reset the selected suggestion index between steps
@@ -483,7 +495,8 @@ class WizardController {
         store.activeWizard = null;
         console.warn("WizardController end, finalCallback Defined?",{
             config: this.config,
-            finalCallback: this.config.finalCallback ? true : false
+            finalCallback: this.config.finalCallback ? true : false,
+            fcbString: this.config.finalCallback.toString()
         })
         if(this.config.finalCallback){
             this.config.finalCallback.call(this,this);
@@ -513,7 +526,9 @@ class WizardController {
         let offsetY = 30;
         fill(255)
         textAlign(LEFT,TOP);
+        textStyle(BOLD)
         text(`${questionTitle}`, 20, offsetY + 20);
+        textStyle(NORMAL)
         text(`${question}`, 20, offsetY + 50);
     }
     OnPressEscape(event){
@@ -533,9 +548,9 @@ class WizardController {
         this.tryCompleteStep();
     }
     handleWizardInput(event){
-        console.warn('Wizard:handleWizardInput',{
-            wsl: this.wizardSuggestionList
-        });
+        // console.warn('Wizard:handleWizardInput',{
+        //     wsl: this.wizardSuggestionList
+        // });
         switch(event.keyCode){
             case 13:
                 // validate the current response to the current step
@@ -563,7 +578,7 @@ class WizardController {
                 break;
             default:
                 // update the current response to the current step
-                this.wizardSuggestionList?.OnInput?.call(this.wizardSuggestionList,event);
+                //this.wizardSuggestionList?.OnInput?.call(this.wizardSuggestionList,event);
         }
     }
     validateResponseForStep(stepIndex,step,responseArray){
@@ -623,7 +638,14 @@ class Command {
     name = 'default command';
     constructor(name, options){
         this.name = name ?? this.name;
-        this.options = options ?? {};
+        this.setOptions(options ?? {});
+    }
+    setOptions(options){
+        this.options = options
+        // remap "finalCallback" to this.options.wizardConfig.finalCallback
+        if(this.options?.wizardConfig?.finalCallback){
+            this.finalCallback = this.options.wizardConfig.finalCallback.bind(this);
+        }
     }
     clone(){
         // return a cloned instance of this command
@@ -642,6 +664,7 @@ class Command {
             name: this.name,
             hasWizard: this.wizardConfig ? true : false,
             hasCallback: this.options.callback ? true : false,
+            hasExecuteFn: this.execute ? true : false,
             options: Object.keys(this.options)
         })
         if(this.options.wizardConfig){
@@ -651,6 +674,9 @@ class Command {
         }
         if(this.options.callback){
             this.options.callback.call(this);
+        }
+        if(this.options.execute){
+            this.options.execute.call(this);
         }
         // reset command buffer
         store.commandBuffer = {};
@@ -669,32 +695,34 @@ class Config
     steps = [{
         notice: "Default Wizard Config Step"
     }]
-    finalCallback = function(wizardInstance){
+    finalCallback(wizardInstance){
         console.warn("Default Wizard Config Final Callback \n"+
         "override this in your Custom Config class extended definition",
         {wizardInstance});
     }
 }
 
+// TODO: nest these into a New Game... Parent Wizard
+
 class FlashCardGameWizardConfig
 extends Config
 {
-    name = "Flash Card Game Wizard"
+    name = "New Flash Card Game..."
 }
 class MatchingCardGameWizardConfig
 extends Config
 {
-    name = "Matching Card Game Wizard"
+    name = "New Matching Card Game..."
 }
 class KlondikeSolitaireGameWizardConfig
 extends Config
 {
-    name = "Klondike Solitaire Game Wizard"
+    name = "New Klondike Solitaire Game..."
 }
 class Match3GameWizardConfig
 extends Config
 {
-    name = "Match 3 Game Wizard"
+    name = "New Match 3 Game..."
 }
 class ChatRoomWizardConfig
 extends Config
@@ -794,6 +822,63 @@ extends Config
     name = "Messenger Window Wizard"
 }
 
+class AddGraphNodeWizardConfig
+extends Config
+{
+    name = "Add Graph Node..."
+    steps = [
+        // {
+        //     question: "what type of node would you like to add?",
+        //     suggestions: [
+        //         {
+        //             name: "Rect",
+        //             value: "rect"
+        //         }
+        //     ]
+        // },
+        {
+            question: "what is the name of the node?",
+            answerStorageKey: "name",
+
+            subQuestions: [
+                {
+                    question: "what type of node?",
+                    answerDefaultValue: "rect",
+                    suggestions: [
+                        {
+                            name: "Rect", value: "rect"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+    // overload the default finalCallback
+    finalCallback(wizardInstance){
+        console.warn('AddGraphNodeWizardConfig finalCallback')
+        
+        new HideCommandPaletteCommand().execute();
+
+        if(!store.currentGraph){
+            store.currentGraph = new Graph();
+        }
+        const id = store.currentGraph.nodes.length;
+        store.currentGraph.addNode({
+            id,
+            name: wizardInstance?.stepResponses?.[0]?.input,
+            x: (id % Math.floor(windowWidth / 200)) * 200,
+            y: Math.floor(id / Math.floor(windowWidth / 200)) * 100,
+            width: 200,
+            height: 100,
+            shape: 'rect',
+            graph: store.currentGraph // todo: just store ID
+        })
+    }
+}
+
+class AddGraphNodeCommand
+extends DefaultSuggestionDecorator(Command, new AddGraphNodeWizardConfig()){}
+
 class NewFlashCardGame
 extends DefaultSuggestionDecorator(Command, new FlashCardGameWizardConfig()) {}
 
@@ -814,7 +899,7 @@ extends DefaultSuggestionDecorator(Command, new LoadMessengerWindowWizardConfig(
 
 class NewToastWizardConfig
 extends Config {
-    name = "New Toast Wizard"
+    name = "New Toast"
     steps = [{
         question: "What is the message of the toast?",
         answerStorageKey: "message",
@@ -857,6 +942,10 @@ class HideCommandPaletteCommand extends Command {
     }
     execute(){
         super.execute();
+
+        // clear the command buffer
+        store.commandBuffer = {name:''};
+        commandPaletteInput.value('');
 
         // Hide CMD Prompt
         store.commandPaletteVisible = false;
@@ -902,9 +991,34 @@ function loadGraph(name){
 }
 
 class GraphNode {
+    observedInputs = []
     constructor(options){
         this.options = options ?? {}
         this.graph = options.graph ?? null;
+    }
+    addObservedInput(input){
+        this.observedInputs.push(input);
+        input.myIDX = this.observedInputs.length - 1;
+        input.input((event)=>{
+            this.OnObservedInputChanged(event, input.myIDX);
+        });
+    }
+    OnObservedInputChanged(event, inputIndex){
+        const input = this.observedInputs[inputIndex]
+        let inputValue = input.value();
+        let _event = { 
+            id: store.eventId++, 
+            value: inputValue, 
+            progress: 0, 
+            flowIndex: 0, // replaces stage
+        };
+        if (inputValue.length < store.viewValue.length) {
+            _event.key = 'backspace';
+        } else {
+            _event.key = event.key; //inputValue.slice(-1);
+        }
+        // send event up to parent graph to manage it's event flow
+        this.graph.events.push(_event);
     }
     // renderNode
     drawNode(){
@@ -920,6 +1034,10 @@ class GraphNode {
         } else {
             fill(100 + (this.options.type === 'rect' ? 0 : 50)); // original fill color
         }
+
+        this.observedInputs.forEach((input)=>{
+            input.position(this.options.x, this.options.y + 20);
+        })
 
         stroke("purple");
 
@@ -1012,6 +1130,9 @@ class Graph {
     loadGraphFromJSON(json){
         console.error('NotImplemented')
     }
+    // OnNodeEventEmitted(event){
+
+    // }
     OnMousePressed(event){
         // Adjust mouse position for pan and zoom
         let adjustedMouseX = (mouseX - panX) / zoom;
@@ -1142,6 +1263,9 @@ class Graph {
             );
         });
     }
+    addNode(nodeOpts){
+        this.nodes.push(new GraphNode(nodeOpts))
+    }
 }
 
 class MVCExampleGraph extends Graph {
@@ -1187,68 +1311,74 @@ class WizardConfig {
 }
 
 class TodoWizardConfig extends WizardConfig {
+    steps = [
+        {
+            questionTitle: "What?",
+            question: "What is the name of the todo?",
+            answerStorageKey: "name",
+            // todo: minlength / maxlength
+            answerValidationRules: 'required:string',
+            answerPlaceholder: "Enter a name for the todo",
+            // NOTE: actions get converted to suggestions
+            // Actions and Suggestions are both "Selectable"
+            // and call OnSelect when the user selects them
+            // suggestions have an api where execute is called when they are selected
+            actions:[
+                {
+                    value: 'save',
+                    label: 'Save',
+                    // OnSelect
+                    OnSelect: function(){
+                        console.log('TODO: actions > Save > execute');
+                    }
+                }
+            ],
+            onStepLoaded: function(){
+                console.warn('TodoWizardConfig Step Loaded',{t:this})
+            },
+            onStepUnload: function(){
+                console.warn('TodoWizardConfig Step Unloaded',{t:this})
+            }
+        },
+    ]
+    
     constructor(name){
         super(name)
-
-        this.steps = [
-            {
-                questionTitle: "What?",
-                question: "What is the name of the todo?",
-                answerStorageKey: "name",
-                // todo: minlength / maxlength
-                answerValidationRules: 'required:string',
-                answerPlaceholder: "Enter a name for the todo",
-                actions:[
-                    {
-                        value: 'save',
-                        label: 'Save',
-                    }
-                ],
-                onStepLoaded: function(){
-                    console.warn('TodoWizardConfig Step Loaded',{t:this})
-                },
-                onStepUnload: function(){
-                    console.warn('TodoWizardConfig Step Unloaded',{t:this})
-                }
-            },
-        ]
 
         this.config = this.config ?? {}
         // this is called when the wizard is completed
         // and it's time to store the results
-        this.finalCallback = function(wizardInstance){
-            console.warn('TodoWizardConfig Final Callback',{wizardInstance});
 
-            // clear the command buffer
-            store.commandBuffer = {name:''};
-            commandPaletteInput.value('');
-
-            // if no active graph, add a new graph
-            if(!store.currentGraph){
-                loadGraph("empty");
-            }
-
-            // 1. push the todo into the current graph as a node at the current level
-            // todo: make a TodoNode
-            store.currentGraph.nodes.push(new GraphNode({
-                id: store.currentGraph.nodes.length,
-                name: wizardInstance?.stepResponses?.[0]?.input,
-                x: 100,
-                y: 100,
-                width: 200,
-                height: 100,
-                shape: 'rect',
-                graph: store.currentGraph // todo: just store ID
-            }))
-
-            new HideCommandPaletteCommand().execute();
-        }
         // we configure this callback to be called when the final output node (a todo instance) is toggled
         // we might want to move this into the class Todo class which should extend Node as it's a special type of a node in a graph
         this.todoOnToggledCallback = function(next, prev){
             console.warn('todo on toggled callback',{next,prev})
             console.warn('todo update storage')
         }
+    }
+
+    finalCallback(wizardInstance) {
+        console.warn('TodoWizardConfig Final Callback',{wizardInstance});
+
+        // if no active graph, add a new graph
+        if(!store.currentGraph){
+            loadGraph("empty");
+        }
+
+        // 1. push the todo into the current graph as a node at the current level
+        // todo: make a TodoNode
+        store.currentGraph.addNode({
+            id: store.currentGraph.nodes.length,
+            name: wizardInstance?.stepResponses?.[0]?.input,
+            x: 100,
+            y: 100,
+            width: 200,
+            height: 100,
+            shape: 'rect',
+            graph: store.currentGraph // todo: just store ID
+        })
+
+        new HideCommandPaletteCommand().execute();
     }
 }
 class RepeatingTodoWizardConfig extends TodoWizardConfig {
@@ -1295,9 +1425,30 @@ class RepeatingTodoWizardConfig extends TodoWizardConfig {
     }
 }
 class TimerWizardConfig extends WizardConfig {
-    constructor(name){
-        super(name)
-    }
+    steps = [
+        {
+            question: "What is the name of the timer?",
+            subQuestions: [
+                {
+                    question: "What is the duration",
+                    suggestions: [
+                        {
+                            name: "1 Minute",
+                            value: "1m"
+                        },
+                        {
+                            name: "5 Minutes",
+                            value: "5m"
+                        },
+                        {
+                            name: "Custom",
+                            inputType: "number"
+                        }
+                    ]
+                }
+            ]
+        },
+    ]
 }
 
 class CommandWizardConfig extends WizardConfig {
@@ -1373,7 +1524,8 @@ class ToastNotification {
         stroke(0, 0, 0, leavingAlpha); 
         fill(25, 25, 25, leavingAlpha);
         const tBoxW = 300;
-        rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100);
+        const cornerRadius = 20;
+        rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
         fill(255, 255, 255, leavingAlpha);
         textAlign(LEFT,TOP);
         text(this.message, windowWidth - 10 - tBoxW + 10, offsetY + 30);
@@ -1431,21 +1583,25 @@ class SetMaxSuggestionsCommand
 extends DefaultSuggestionDecorator(Command, new SetMaxSuggestionsCommandWizardConfig()) {}
 
 
-class SaveStateToLocalStorageWizardConfig 
-extends Config {
-    name = "Save State To Local Storage"
+class SaveStateToLocalStorageWizardConfig extends Config {
 
+    name = "Save State To Local Storage"
     steps = [
         {
             questionTitle: "Saving",
             question: "Saving State To Local Storage...",
-            onStepLoaded: function(){
+            onStepLoaded: function(wizardInstance){
                 console.warn('Save State to Local Storage Here..')
+                // then proceed when ready...
+                setTimeout(()=>{
+                    wizardInstance.tryCompleteStep();
+                },1000);
             }
         }
     ]
 
     finalCallback(wizardInstance){
+        console.warn('Save State To Local Storage: Final Callback');
         toastManager.showSuccess(`Saved State To Local Storage`);
     }
 }
@@ -1466,6 +1622,43 @@ class LoadStateFromLocalStorageWizardConfig extends Config {
 }
 class LoadStateFromLocalStorage 
 extends DefaultSuggestionDecorator(Command, new LoadStateFromLocalStorageWizardConfig()){}
+
+// Mode Switching Commands
+class ModeSwitch_SELECT 
+extends DefaultSuggestionDecorator(Command, {
+    name: "Select Mode",
+    OnSelect(){
+        new SwitchModeCommand(MODES.SELECT).execute();
+    }
+}){}
+class ModeSwitch_ADD_NODE
+extends DefaultSuggestionDecorator(Command, {
+    name: "Add Node Mode",
+    OnSelect(){
+        new SwitchModeCommand(MODES.ADD_NODE).execute();
+    }
+}){}
+class ModeSwitch_ADD_EDGE
+extends DefaultSuggestionDecorator(Command, {
+    name: "Add Edge Mode",
+    execute: function(){
+        new SwitchModeCommand(MODES.ADD_EDGE).execute();
+    }
+}){}
+class ModeSwitch_PAN
+extends DefaultSuggestionDecorator(Command, {
+    name: "Pan Mode",
+    execute: function(){
+        new SwitchModeCommand(MODES.PAN).execute();
+    }
+}){}
+class ModeSwitch_DELETE
+extends DefaultSuggestionDecorator(Command,{
+    name: "Delete Mode",
+    callback: function(){
+        new SwitchModeCommand(MODES.DELETE).execute();
+    }
+}){}
 
 class CommandPalette {
     // the current "Command" being constructed
@@ -1625,14 +1818,14 @@ class CommandPalette {
                             t:this,
                             wizardInstance
                         });
-                        toastManager.showToast(`Loaded Graph: ${wizardInstance.stepResponses[0].selectedSuggestionValue}`);
+                        toastManager.showToast(`Loaded Graph: ${wizardInstance.stepResponses[0].selectedSuggestionValueOrLabel}`);
                         let prevStepResponse = wizardInstance.stepResponses[0];
                         // it's loading by name / label here instead of value?
                         console.warn("its loading by name instead of value?",
                         {
                             prevStepResponse,
                         })
-                        loadGraph(prevStepResponse.selectedSuggestionValue)
+                        loadGraph(prevStepResponse.selectedSuggestionValueOrLabel)
                         // close the command palette
                         new HideCommandPaletteCommand().execute();
                     },
@@ -1668,40 +1861,18 @@ class CommandPalette {
         this.availableCommands.push(new ShowCommandPaletteCommand());
         this.availableCommands.push(new HideCommandPaletteCommand());
         this.availableCommands.push(new ToggleCommandPaletteCommand());
-
-        // Mode Switching Commands
-        this.availableCommands.push(new Command('switch to Select Mode'));
-        this.availableCommands.push(new Command('switch to Add Node Mode',{
-            execute: function(){
-                console.warn('switch to Add Node Mode...')
-                // it's funny should the params go in the constructor
-                // or be passed to the executor?
-                // maybe both?
-                new SwitchModeCommand(MODES.ADD_NODE).execute();
-            }
-        }));
-        this.availableCommands.push(new Command('switch to Add Edge Mode'));
-        this.availableCommands.push(new Command('switch to Move Mode',{
-            callback: function(){
-                store.interactionMode = MODES.MOVE;
-            }
-        }));
-        this.availableCommands.push(new Command('switch to Delete Mode',{
-            callback: function(){
-                store.interactionMode = MODES.DELETE;
-                new HideCommandPaletteCommand().execute();
-            }
-        }));
     }
 
     renderCommandPrompt(){
         const cmdpPosY = 0;
         fill(0,0,0,200)
+        strokeWeight(0)
         stroke("white")
         rect(0, cmdpPosY, windowWidth, windowHeight);
 
         // draw a large text input in the command palette
         fill(0,0,0,200)
+        strokeWeight(0)
         stroke("black")
         rect(10, cmdpPosY + 10, windowWidth - 20, 100);
         fill("black")
@@ -1865,6 +2036,8 @@ class CommandPalette {
     }
     
 
+    // fires on input changed in the command palette...
+    // when no wizard is active
     filterCommands(){
         // filter the list of available commands based on the current command buffer
         this.filteredCommands = this.availableCommands.filter(command => {
@@ -1915,7 +2088,9 @@ class CommandPalette {
             _curSelIndex !== null 
             && _curSelIndex >= this.filteredCommands.length
         ){
-            this.selectedSuggestionIndex = null;
+            // set to first available suggestion
+            this.selectedSuggestionIndex = 0;
+            this.commandSuggestionList.selectionOffset = 0;
         }
 
         const stillOutOfBounds = boundsCheck(
@@ -2266,6 +2441,7 @@ function setup() {
     createCanvas(windowWidth, windowHeight);
     
     cmdprompt = new CommandPalette();
+    
     toastManager = new ToastNotificationManager();
     push();
     textSize(50);
@@ -2273,7 +2449,9 @@ function setup() {
     commandPaletteInput.elt.style.backgroundColor = 'black';
     commandPaletteInput.elt.style.color = 'white';
     commandPaletteInput.size(windowWidth - 20);
-    commandPaletteInput.position(10, 100);
+    commandPaletteInput.position(10, 130);
+    // focus the command palette input
+    commandPaletteInput.elt.focus();
     pop();
     // Listen for the 'keydown' event
     commandPaletteInput.elt.addEventListener('keydown', function(e) {
@@ -2283,21 +2461,12 @@ function setup() {
             cmdprompt.onCommandPaletteInput(e);
         // }
     });
-
-    // old input
-
-    // input = createInput('');
-    // input.position(10, 10);
-    // input.input(handleInput);
-
-    // button = createButton('Add Node');
-    // button.position(input.x + input.width, 10);
-    // button.mousePressed(addNode);
 }
 
 class FluxExampleGraph extends Graph {
     constructor(options){
         super(options)
+
         this.nodes = [
             { id: 0, x: 125, y: 200, shape: 'triangle', label: 'Component' },
             { id: 1, x: 300, y: 50, shape: 'ellipse', label: 'Action' },
@@ -2307,6 +2476,23 @@ class FluxExampleGraph extends Graph {
         this.nodes.forEach((_n,index)=>{
             _n.graph = this;
             this.nodes[index] = new GraphNode(_n);
+
+            // hard-coded data binding example,
+            // let's assume there's one input field defined in the Component node
+            // so we'll pretend we sniffed it out
+            // in the future we'll move this code
+            // to the higher-level Graph class
+            // so all Graphs can take advantage of the dynamic instantiation
+            // of observed fields
+            // used when viewing model versions of our Living Graphs / Graph Snapshots / Graph Traversal Debugger / REPL, thing...
+            // Codename Status Trees
+            if(_n.id === 0){
+                const input = createInput('');
+                // TODO: move position when the node moves / when we pan
+                // account for pan and zoom
+                input.position(_n.x + 10, _n.y + 10);
+                this.nodes[index].addObservedInput(input);
+            }
         })
         this.edges = [
             // component -> action
@@ -2476,9 +2662,10 @@ class SuggestionList {
                 console.warn('suggestion is null?',{suggestion,i})
                 continue;
             }
-            let x = 10;
+            let suggestionWidth = windowWidth * .66;
+            let x = ( windowWidth / 2 ) - (suggestionWidth/2);
             let y = 10 + (i * 50);
-            let w = 200;
+            let w = suggestionWidth;
             let h = 50;
             let label = suggestion.name;
             let selected = this.selectedOptionIndex === i;
@@ -2690,27 +2877,27 @@ function stopDragging() {
 // so our graph can properly kick events into the correct graph assigned to the text input
 // TODO: allow graphs to continue executing in the background in a headless mode
 // TODO: a process manager for showing which graphs are currently running
-function handleInput() {
-    if (keyCode === ENTER) {
-        addNode();
-        return;
-    }
-    let inputValue = input.value();
-    let event = { 
-        id: store.eventId++, 
-        value: inputValue, 
-        progress: 0, 
-        flowIndex: 0, // replaces stage
-    };
-    if (inputValue.length < store.viewValue.length) {
-        event.key = 'backspace';
-    } else {
-        event.key = inputValue.slice(-1);
-    }
-    store.events.push(event);
-    store.viewValue = inputValue; // Change inputValue to event.key
-    store.lastReceived = Date.now();
-}
+// function handleInput() {
+//     if (keyCode === ENTER) {
+//         addNode();
+//         return;
+//     }
+//     let inputValue = input.value();
+//     let event = { 
+//         id: store.eventId++, 
+//         value: inputValue, 
+//         progress: 0, 
+//         flowIndex: 0, // replaces stage
+//     };
+//     if (event.keyCode === BACKSPACE) {
+//         event.key = 'backspace';
+//     } else {
+//         event.key = inputValue.slice(-1);
+//     }
+//     store.events.push(event);
+//     store.viewValue = inputValue; // Change inputValue to event.key
+//     store.lastReceived = Date.now();
+// }
 
 // TODO: refactor addNode to be a method on the Graph class
 function addNode() {
