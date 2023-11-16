@@ -24,6 +24,38 @@ progress and todos
     - [ ] need to refactor suggestion code so we can loop through them with the keyboard shortcuts (effectively stepping an offset value)
 */
 
+let defaultSuggestedCommands = []
+const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
+    if(!wizardConfigInstance || !wizardConfigInstance?.name){
+        console.error({
+            command,
+            wizardConfigInstance
+        })
+        throw new Error("Bad usage of DefaultSuggestionDecorator, wizardConfigInstance must be defined and have a name")
+    }
+    // singleton
+    let s = new command(wizardConfigInstance.name, {
+        wizardConfig: wizardConfigInstance
+    });
+    // console.log('instance of ',{
+    //     command, 
+    //     wizardConfigInstance, 
+    //     singleton: s
+    // })
+    // early registration before instance is created
+    defaultSuggestedCommands.push(s);
+    let index = defaultSuggestedCommands.length - 1;
+    // console.warn(
+    //     'DefaultSuggestedCommandsArrayLen:',
+    //     defaultSuggestedCommands.length
+    // )
+    return function(...args){
+        // hot-swap when the instance is created
+        defaultSuggestedCommands[index] = new command(...args);
+        return defaultSuggestedCommands[index];
+    }
+}
+
 class Argument {
     constructor({
         name, 
@@ -597,11 +629,18 @@ class Command {
         // return a cloned instance of this command
         return new Command(this.name, this.options);
     }
+    /**
+     * @returns WizardConfig? - the command's optional wizard config
+     * @nullable - returns null if no wizard config is defined
+     */
+    get wizardConfig(){
+        return this?.options?.wizardConfig;
+    }
     execute(){
         console.warn('Command.execute:',
         {
             name: this.name,
-            hasWizard: this.options.wizardConfig ? true : false,
+            hasWizard: this.wizardConfig ? true : false,
             hasCallback: this.options.callback ? true : false,
             options: Object.keys(this.options)
         })
@@ -622,28 +661,178 @@ class Command {
     }
 }
 
-class ShowNewToastCommand extends Command {
-    constructor(){
-        const wizardConfig = new WizardConfig("Show New Toast Wizard");
-        wizardConfig.steps = [{
-            question: "What is the message of the toast?",
-            answerStorageKey: "message",
-            // todo: min / max length
-            answerValidationRules: 'required:string'
-        }]
-        wizardConfig.finalCallback = function(wizardInstance){
-            toastManager.showToast(
-                wizardInstance.stepResponses[0].input,
-                {pinned: false}
-            );
-            commandPaletteInput.value('');
-            new HideCommandPaletteCommand().execute();
-        }
-        super("Show New Toast",{
-            wizardConfig
-        })
+class Config
+// extends DynamicThingDecorator(DynamicThing)
+{
+    // TODO: add validation for required fields that
+    // all Instances of "Config" must have
+    steps = [{
+        notice: "Default Wizard Config Step"
+    }]
+    finalCallback = function(wizardInstance){
+        console.warn("Default Wizard Config Final Callback \n"+
+        "override this in your Custom Config class extended definition",
+        {wizardInstance});
     }
 }
+
+class FlashCardGameWizardConfig
+extends Config
+{
+    name = "Flash Card Game Wizard"
+}
+class MatchingCardGameWizardConfig
+extends Config
+{
+    name = "Matching Card Game Wizard"
+}
+class KlondikeSolitaireGameWizardConfig
+extends Config
+{
+    name = "Klondike Solitaire Game Wizard"
+}
+class Match3GameWizardConfig
+extends Config
+{
+    name = "Match 3 Game Wizard"
+}
+class ChatRoomWizardConfig
+extends Config
+{
+    name = "Load Chat Room"
+    steps = [
+        {
+            question: "What is the name of the chat room?",
+        },
+        {
+            question: "What is the description of the chat room?",
+        },
+        {
+            question: "What is the password of the chat room?",
+        },
+        {
+            question: "What is the maximum number of users allowed in the chat room?",
+        }
+    ]
+}
+class LoadMessengerWindowWizardConfig
+extends Config 
+{
+    name = "Open Messenger Window"
+    steps = [
+        {
+            display: "MOST_RECENT_MESSENGER_WINDOW" 
+            // TODO: read from user preferences
+        }
+    ]
+}
+class NewQuizWizardConfig
+extends Config
+{
+    name = "New Quiz..."
+    steps = [
+        {
+            question: "What is the name of the quiz?",
+        },
+        {
+            question: "What is the description of the quiz?",
+            skippable: true,
+            required: false,
+            optional: true,
+        },
+        {
+            question: "What are the questions of the quiz?",
+            repeatable: true, // Add another question...
+            answerStorageKey: "questions",
+            subSteps: [
+                {
+                    question: "What is the question?",
+                    answerStorageKey: "question",
+                },
+                {
+                    question: "What is the answer?",
+                    answerStorageKey: "answer",
+                },
+                {
+                    question: "Is an answer required?",
+                    answerStorageKey: "required",
+                },
+                {
+                    question: "Is it multiple choice?",
+                    answerStorageKey: "multipleChoice",
+                },
+                {
+                    conditional: "multipleChoice",
+                    questionIfTrue: "What are the other choices?",
+                    repeatable: true, // Add another choice
+                    maxRepeats: 3, // 3 + 1 = 4 choices
+                    subSteps: [
+                        {
+                            question: "What is the choice?",
+                            answerStorageKey: "choice",
+                        }
+                    ]
+                },
+                {
+                    conditional: "multipleChoice",
+                    questionIfTrue: "Fixed display order or random?",
+                    answerStorageKey: "randomizeChoices",
+                },
+                {
+                    conditional: "multipleChoice && randomizeChoices",
+                    questionIfTrue: "What is the desired order?",
+                    answerType: "sortedList",
+                    sortedListOf: "choices",
+                }
+            ]
+        }
+    ]
+}
+class MessengerWindowWizardConfig
+extends Config
+{
+    name = "Messenger Window Wizard"
+}
+
+class NewFlashCardGame
+extends DefaultSuggestionDecorator(Command, new FlashCardGameWizardConfig()) {}
+
+class NewMatchingCardGame
+extends DefaultSuggestionDecorator(Command, new MatchingCardGameWizardConfig()){}
+
+class NewKlondikeSolitaireGame
+extends DefaultSuggestionDecorator(Command, new KlondikeSolitaireGameWizardConfig()){}
+
+class NewMatch3Game
+extends DefaultSuggestionDecorator(Command, new Match3GameWizardConfig()){}
+
+class NewChatRoom
+extends DefaultSuggestionDecorator(Command, new ChatRoomWizardConfig()){}
+
+class LoadMessengerWindowCommand
+extends DefaultSuggestionDecorator(Command, new LoadMessengerWindowWizardConfig()){}
+
+class NewToastWizardConfig
+extends Config {
+    name = "New Toast Wizard"
+    steps = [{
+        question: "What is the message of the toast?",
+        answerStorageKey: "message",
+        // todo: min / max length
+        answerValidationRules: 'required:string'
+    }]
+    finalCallback(wizardInstance){
+        toastManager.showToast(
+            wizardInstance.stepResponses[0].input,
+            {pinned: false}
+        );
+        commandPaletteInput.value('');
+        new HideCommandPaletteCommand().execute();
+    }
+}
+
+class ShowNewToastCommand 
+extends DefaultSuggestionDecorator(Command, new NewToastWizardConfig()){}
 
 // Define the ShowCommandPaletteCommand class
 class ShowCommandPaletteCommand extends Command {
@@ -731,6 +920,8 @@ class GraphNode {
         } else {
             fill(100 + (this.options.type === 'rect' ? 0 : 50)); // original fill color
         }
+
+        stroke("purple");
 
         let node = this.options;
         node.label = node?.label ?? node?.name;
@@ -1194,8 +1385,15 @@ class ToastNotificationManager {
     constructor(){
 
     }
+    showSuccess(message, options){
+        this.showToast(message, {
+            ...options,
+            level: 'success'
+        })
+    }
     showToast(message, options){
         options = options ?? {}
+        options.level = options.level ?? 'info'; // DEFAULT_TOAST_LEVEL = 'info'
         let {pinned} = options;
         let toast = new ToastNotification(message, {pinned, manager: this});
         this.toasts.push(toast);
@@ -1212,27 +1410,62 @@ class ToastNotificationManager {
     }
 }
 
-class SetMaxSuggestionsCommand extends Command {
-    constructor(){
-        const wizardConfig = new WizardConfig("Set Max Suggestions Wizard");
-        wizardConfig.steps = [
-            {
-                question: "How many suggestions would you like to see per page?",
-                description: "Please answer in a number between 1 and 100",
-                answerValidationRules: "required:number:range[1-100]",
-            }
-        ];
-        wizardConfig.finalCallback = function(wizardInstance){
-            store.maxVisibleOptionsCount = parseInt(wizardInstance.stepResponses[0].input);
-            commandPaletteInput.value('');
-            new HideCommandPaletteCommand().execute();
-            toastManager.showToast(`Set Max Suggestions: ${store.maxVisibleOptionsCount}`);
+class SetMaxSuggestionsCommandWizardConfig extends Config {
+    name = "Set Max Visible Suggestions"
+    steps = [
+        {
+            question: "How many suggestions would you like to see per page?",
+            description: "Please answer in a number between 1 and 100",
+            answerValidationRules: "required:number:range[1-100]",
         }
-        super("Set Max Suggestions",{
-            wizardConfig
-        })
+    ]
+    finalCallback(wizardInstance){
+        store.maxVisibleOptionsCount = parseInt(wizardInstance.stepResponses[0].input);
+        commandPaletteInput.value('');
+        new HideCommandPaletteCommand().execute();
+        toastManager.showToast(`Set Max Suggestions: ${store.maxVisibleOptionsCount}`);
     }
 }
+
+class SetMaxSuggestionsCommand 
+extends DefaultSuggestionDecorator(Command, new SetMaxSuggestionsCommandWizardConfig()) {}
+
+
+class SaveStateToLocalStorageWizardConfig 
+extends Config {
+    name = "Save State To Local Storage"
+
+    steps = [
+        {
+            questionTitle: "Saving",
+            question: "Saving State To Local Storage...",
+            onStepLoaded: function(){
+                console.warn('Save State to Local Storage Here..')
+            }
+        }
+    ]
+
+    finalCallback(wizardInstance){
+        toastManager.showSuccess(`Saved State To Local Storage`);
+    }
+}
+// TODO: bind this command to happen on all mutations
+class SaveStateToLocalStorage 
+extends DefaultSuggestionDecorator(Command, new SaveStateToLocalStorageWizardConfig()) 
+{}
+class LoadStateFromLocalStorageWizardConfig extends Config {
+    name = "Load State From Local Storage"
+    steps = [
+        {
+            notice: "Loading State From Local Storage..."
+        }
+    ]
+    finalCallback(wizardInstance){
+        toastManager.showSuccess(`Loaded State From Local Storage`);
+    }
+}
+class LoadStateFromLocalStorage 
+extends DefaultSuggestionDecorator(Command, new LoadStateFromLocalStorageWizardConfig()){}
 
 class CommandPalette {
     // the current "Command" being constructed
@@ -1270,6 +1503,9 @@ class CommandPalette {
     }
 
     addDefaultCommands(){
+        defaultSuggestedCommands.forEach((cmd)=>{
+            this.availableCommands.push(cmd);
+        })
         this.availableCommands.push(new Command("Start Pomodoro",{
             execute: function(){
                 console.warn("starting pomodoro...");
@@ -1279,7 +1515,6 @@ class CommandPalette {
                 },1000)
             }
         }))
-        this.availableCommands.push(new ShowNewToastCommand());
         // TODO: ShowPinnedToast
         this.availableCommands.push(new Command("New REPL"))
         this.availableCommands.push(new Command("New Sandbox"))
