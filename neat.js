@@ -103,19 +103,21 @@ class StatusLight {
     x = 0;
     y = 0;
     r = 10;
+    s = 3;
     c = 'red';
-    constructor({x,y,r,c}){
+    constructor({x,y,r,c,s}){
         this.x = x;
         this.y = y;
         this.r = r;
         this.c = c;
+        this.s = s;
     }
     draw(){
         fill(this.c);
         circle(this.x,this.y,this.r);
-        stroke(0);
+        strokeWeight(this.s);
+        stroke(this.s);
         fill(255);
-        strokeWeight(5);
         text(this.name,this.x+this.r+5,this.y-this.r);
     }
 }
@@ -124,11 +126,12 @@ class StatusLight {
 let store = {
     interactionMode: MODES.MOVE,
 
-    viewValue: '',
-    controllerValue: '',
-    modelValue: '',
-    modelValueFromView: '',
-    eventId: 0,
+    // viewValue: '',
+    // controllerValue: '',
+    // modelValue: '',
+    // modelValueFromView: '',
+    // eventId: 0,
+
     lastReceived: Date.now(),
     
     // moved to currentGraph
@@ -159,16 +162,18 @@ let store = {
     status_lights: {
         rendererStarted: new StatusLight({
             name: 'rendererStarted',
-            x: 10,
-            y: 10,
-            r: 30,
+            x: 30,
+            y: 30,
+            r: 15,
+            s: 3,
             c: 'red'
         }),
         rendererHasOptionsToRender: new StatusLight({
             name: 'rendererHasOptionsToRender',
             x: 60,
-            y: 10,
-            r: 30,
+            y: 30,
+            r: 15,
+            s: 3,
             c: 'red'
         }),
     }
@@ -292,10 +297,9 @@ class WizardController {
     get currentStep(){
         return this?.steps?.[this?.currentStepIndex] ?? null;
     }
-    
     // all valid suggestions
     get allValidSuggestions(){
-        console.warn('get allValidSuggestions')
+        //console.warn('get allValidSuggestions')
         const cStep = this.currentStep;
         //console.warn('allValidSuggestions? cStep',{cStep})
         let suggestions = [
@@ -309,15 +313,15 @@ class WizardController {
         }
         if(cStep.actions?.length){
             cStep.actions.forEach((action)=>{
-                console.log('converting action to suggestion',{action})
+                //console.log('converting action to suggestion',{action})
                 suggestions.push({
                     name: action.label,
                     value: action.value
                 })
-                console.warn('inserted suggestion',{
-                    key: suggestions.length-1,
-                    value: suggestions.at(-1)
-                })
+                // console.warn('inserted suggestion',{
+                //     key: suggestions.length-1,
+                //     value: suggestions.at(-1)
+                // })
             })
         }
         if(!cStep.required){
@@ -347,7 +351,7 @@ class WizardController {
             //     len: this.visibleSuggestions.length,
             //     len2: _this.visibleSuggestions.length
             // })
-            return this.visibleSuggestions;
+            return this.allValidSuggestions;
         })
         this.wizardSuggestionList.bindGetAllOptions(()=>{
             return this.allValidSuggestions;
@@ -464,17 +468,20 @@ class WizardController {
         this.wizardSuggestionList.draw();
     }
     drawCurrentStep(){
-        let questionTitle = this.config.steps[this.currentStepIndex]?.questionTitle ?? 'Question';
-        let question = this.config.steps[this.currentStepIndex].question;
+        const cStep = this.currentStep;
+        const questionTitle = cStep?.questionTitle ?? 'Question';
+        const question = cStep.question;
         // todo cache interpreted string that replaces {prevResp} with the previous response
         // console.warn('displaying wizard step question',{
         //     currentStepIndex:this.currentStepIndex,
         //     question
         // });
         // render the question
+        let offsetY = 30;
+        fill(255)
         textAlign(LEFT,TOP);
-        text(`${questionTitle}`, 20, 20);
-        text(`${question}`, 20, 50);
+        text(`${questionTitle}`, 20, offsetY + 20);
+        text(`${question}`, 20, offsetY + 50);
     }
     OnPressEscape(event){
         if(confirm('Are you sure?')){
@@ -492,12 +499,6 @@ class WizardController {
         })
         this.tryCompleteStep();
     }
-    // OnPressUp(event){
-        
-    // }
-    // OnPressDown(event){
-        
-    // }
     handleWizardInput(event){
         console.warn('Wizard:handleWizardInput');
         switch(event.keyCode){
@@ -528,7 +529,6 @@ class WizardController {
             default:
                 // update the current response to the current step
                 this.wizardSuggestionList?.OnInput?.call(this.wizardSuggestionList,event);
-                this.OnInput.call(this,event);
         }
     }
     validateResponseForStep(stepIndex,step,responseArray){
@@ -962,8 +962,13 @@ class CommandPalette {
     // the list of contextually recommended commands
     filteredCommands = []; 
 
-    selectedSuggestionIndex = null;
-    selectionOffset = 0;
+    //selectedSuggestionIndex = null;
+    get selectedSuggestionIndex(){
+        return this.commandSuggestionList.selectedOptionIndex;
+    }
+    set selectedSuggestionIndex(value){
+        this.commandSuggestionList.selectedOptionIndex = value;
+    }
     
     constructor(){
         this.commandSuggestionList = new SuggestionList();
@@ -1202,17 +1207,17 @@ class CommandPalette {
             this.currentCommand.updateFromBuffer();
         }
 
-        console.warn(
-            'OnCommandPaletteInput, buffer is now:',
-            {
-                currentCommand: JSON.parse(JSON.stringify(this.currentCommand))
-            }
-        )
+        // console.warn(
+        //     'OnCommandPaletteInput, buffer is now:',
+        //     {
+        //         currentCommand: JSON.parse(JSON.stringify(this.currentCommand))
+        //     }
+        // )
 
         // filter the list of available commands
         this.filterCommands();
 
-        console.warn('sanity check filtered count: ',this.filteredCommands.length);
+        //console.warn('sanity check filtered count: ',this.filteredCommands.length);
 
         // if the cmd palette is not visible, show it
         if(!store.commandPaletteVisible){
@@ -1321,7 +1326,7 @@ class CommandPalette {
                 .includes(store.commandBuffer?.name?.toLowerCase());
         });
 
-        console.warn('!!! FilteredCommands count:', this.filteredCommands.length);
+        //console.warn('!!! FilteredCommands count:', this.filteredCommands.length);
 
         const _curSelIndex = this.selectedSuggestionIndex;
 
@@ -1362,13 +1367,13 @@ class CommandPalette {
             throw new Error('selected suggestion index is still out of bounds. bounds check failed');
         }
 
-        console.warn('Bounds Check Applied to ', {
+        // console.warn('Bounds Check Applied to ', {
 
-            _curSelIndex,
-            vs: this.selectedSuggestionIndex,
+        //     _curSelIndex,
+        //     vs: this.selectedSuggestionIndex,
 
-            filteredLengthCurrently: this.filteredCommands.length,
-        } );
+        //     filteredLengthCurrently: this.filteredCommands.length,
+        // } );
     }
 }
 
@@ -1586,12 +1591,12 @@ function renderDebugUI(){
 // Define the drawCommandPalette function
 function drawCommandPalette(){
     const cmdpPosY = 0;
-    fill("blue")
+    fill(20)
     stroke("white")
     rect(0, cmdpPosY, windowWidth, windowHeight);
 
     // draw a large text input in the command palette
-    fill("white")
+    fill(30)
     stroke("black")
     rect(10, cmdpPosY + 10, windowWidth - 20, 100);
     fill("black")
@@ -1716,8 +1721,10 @@ function setup() {
     push();
     textSize(50);
     commandPaletteInput = createInput('');
+    commandPaletteInput.elt.style.backgroundColor = 'black';
+    commandPaletteInput.elt.style.color = 'white';
     commandPaletteInput.size(windowWidth - 20);
-    commandPaletteInput.position(10, 80);
+    commandPaletteInput.position(10, 100);
     pop();
     // Listen for the 'keydown' event
     commandPaletteInput.elt.addEventListener('keydown', function(e) {
@@ -1898,6 +1905,12 @@ class SuggestionList {
         //     allOptionsLength: this.allOptions.length,
         //     selectedOptionIDX: this.selectedOptionIndex,
         // })
+        if(
+            !this.filteredOptions
+            || !this.filteredOptions?.length
+        ){
+            return output;
+        }
         for(let i = 0; i < this.maxVisibleOptionsCount 
             && i < this.filteredOptions.length; i++) {
             let suggestion = this.filteredOptions[i];
@@ -1949,10 +1962,10 @@ class SuggestionList {
 
     }
     handleInput(event){
-        console.warn('suggestion list handleInput',{
-            keyCode: event.keyCode,
-            event
-        })
+        // console.warn('suggestion list handleInput',{
+        //     keyCode: event.keyCode,
+        //     event
+        // })
         switch(event.keyCode){
             // NEED TO THINK ABOUT HOW TAB SHOULD WORK...
             // case 9:
@@ -1973,13 +1986,13 @@ class SuggestionList {
                 return this.onEscapePressedCallback();
             case 13:
                 let result = this.onEnterPressedCallback()
-                this.selectedOptionIndex = -1;
+                //this.selectedOptionIndex = -1;
                 return result;
             default:
-                console.warn('input fell through SuggestionsList.handleInput',{
-                    keyCode: event.keyCode,
-                    event
-                })
+                // console.warn('input fell through SuggestionsList.handleInput',{
+                //     keyCode: event.keyCode,
+                //     event
+                // })
                 break;
         }
     }
@@ -2041,7 +2054,7 @@ class SuggestionList {
             this.selectedOptionIndex = 0;
             this.selectionOffset = 0;
         }
-        console.warn('selectedOptionIndex',this.selectedOptionIndex)
+        //console.warn('selectedOptionIndex',this.selectedOptionIndex)
     }
     draw(){
         this.drawSuggestedOptions();
@@ -2051,8 +2064,8 @@ class SuggestionList {
         store.status_lights.rendererStarted.c = "green";
         
         if(!this.visibleSuggestions?.length){
-            this.logSelf();
-            throw new Error("visibleSuggestions is empty!")
+            //this.logSelf();
+            //throw new Error("visibleSuggestions is empty!")
             store.status_lights.rendererHasOptionsToRender.c = "red";
             return;
         }
@@ -2089,11 +2102,11 @@ class SuggestionList {
     renderSuggestionOption(x,y,w,h,label,selected){
         strokeWeight(selected ? 3 : 1);
         // draw box
-        fill(selected ? "rgb(255,255,0)" : 255)
+        fill(selected ? "purple" : color(20))
         rect(x,y,w,h);
         strokeWeight(1);
         // draw label
-        fill(0)
+        fill(200)
         textAlign(CENTER,CENTER);
         text(label, x + (w/2), y + (h/2));
     }
