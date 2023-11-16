@@ -705,7 +705,7 @@ function loadGraph(name){
             store.currentGraph = new FluxExampleGraph();
             break;
         case 'ajaxFlux':
-            store.currentGraph = new AjaxFluxExampleGraph();
+            store.currentGraph = new FluxAjaxExampleGraph();
             break;
         default:
             console.warn('unknown graph type',name);
@@ -762,6 +762,47 @@ class Edge {
 
 class TodoNode extends GraphNode {
 
+}
+
+class GraphSnapshot {
+    graph = null;
+    constructor(graph){
+        this.graph = graph
+    }
+
+    grabSnapshot(){
+        // render the graph to a canvas
+        // return the canvas as a base64 encoded string
+        this.result = canvas.elt.toDataURL();
+        return this.result;
+    }
+}
+
+// NOTE: you must have an active graph selected for this to work
+// TODO: render graphs to an offline canvas so we can
+// regenerate these in the background
+// TODO: allow setting override icons for commands
+// TODO: display command icons in the command palette
+// TODO: when i type "load graph..."
+//       i need a way to suggest the available graphs
+//       BEFORE you enter into the wizard
+//       it's like i need to peek into the suggestion's first step's suggestions and display them...
+class SetCommandIconCommand extends Command {
+    constructor(){
+        if(!store.currentGraph){
+            console.error('no current graph, cannot set command icon');
+            return;
+        }
+        super("Set Command Icon")
+        this.snapshotGrabber = new GraphSnapshot(store.currentGraph);
+    }
+    execute(){
+        if(!this.snapshotGrabber){
+            console.error('no snapshot grabber, cannot set command icon');
+            return;
+        }
+        super.execute();
+    }
 }
 
 // an instance of a graph
@@ -1137,13 +1178,11 @@ class ToastNotification {
             ? (255 - ((Date.now() - this.leaveTime) / (this.destroyTime - this.leaveTime)) * 255)
             : 255;
         leavingAlpha = Math.floor(leavingAlpha);
-        stroke(0)
-        fill(255)
-        alpha(leavingAlpha)
+        stroke(0, 0, 0, leavingAlpha); 
+        fill(25, 25, 25, leavingAlpha);
         const tBoxW = 300;
         rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100);
-        fill(0)
-        alpha(leavingAlpha)
+        fill(255, 255, 255, leavingAlpha);
         textAlign(LEFT,TOP);
         text(this.message, windowWidth - 10 - tBoxW + 10, offsetY + 30);
         alpha(255);
@@ -1387,7 +1426,15 @@ class CommandPalette {
 
         // Mode Switching Commands
         this.availableCommands.push(new Command('switch to Select Mode'));
-        this.availableCommands.push(new Command('switch to Add Node Mode'));
+        this.availableCommands.push(new Command('switch to Add Node Mode',{
+            execute: function(){
+                console.warn('switch to Add Node Mode...')
+                // it's funny should the params go in the constructor
+                // or be passed to the executor?
+                // maybe both?
+                new SwitchModeCommand(MODES.ADD_NODE).execute();
+            }
+        }));
         this.availableCommands.push(new Command('switch to Add Edge Mode'));
         this.availableCommands.push(new Command('switch to Move Mode',{
             callback: function(){
@@ -1400,6 +1447,25 @@ class CommandPalette {
                 new HideCommandPaletteCommand().execute();
             }
         }));
+    }
+
+    renderCommandPrompt(){
+        const cmdpPosY = 0;
+        fill(0,0,0,20)
+        stroke("white")
+        rect(0, cmdpPosY, windowWidth, windowHeight);
+
+        // draw a large text input in the command palette
+        fill(0,0,0,30)
+        stroke("black")
+        rect(10, cmdpPosY + 10, windowWidth - 20, 100);
+        fill("black")
+
+        // if there's no wizard active,
+        // fallback to our default command suggestion list
+        if(!store.activeWizard){
+            cmdprompt.renderSuggestedCommands();
+        }
     }
 
     renderSuggestedCommands(){
@@ -1796,7 +1862,7 @@ function draw() {
 
     // if the command palette is visible, draw it
     if(store.commandPaletteVisible){
-        drawCommandPalette();
+        cmdprompt.renderCommandPrompt();
     }
 
     // display the current wizard (if any)
@@ -1839,26 +1905,6 @@ function renderDebugUI(){
         `interaction mode: ${store.interactionMode}`, 
         windowWidth - 20, 
         windowHeight - 30);
-}
-
-// Define the drawCommandPalette function
-function drawCommandPalette(){
-    const cmdpPosY = 0;
-    fill(20)
-    stroke("white")
-    rect(0, cmdpPosY, windowWidth, windowHeight);
-
-    // draw a large text input in the command palette
-    fill(30)
-    stroke("black")
-    rect(10, cmdpPosY + 10, windowWidth - 20, 100);
-    fill("black")
-
-    // if there's no wizard active,
-    // fallback to our default command suggestion list
-    if(!store.activeWizard){
-        cmdprompt.renderSuggestedCommands();
-    }
 }
 
 let modeSwitcherButtons = {};
