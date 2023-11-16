@@ -717,6 +717,7 @@ class GraphNode {
         this.options = options ?? {}
         this.graph = options.graph ?? null;
     }
+    // renderNode
     drawNode(){
         if(!this.graph){
             if(!this.warned){
@@ -1269,6 +1270,15 @@ class CommandPalette {
     }
 
     addDefaultCommands(){
+        this.availableCommands.push(new Command("Start Pomodoro",{
+            execute: function(){
+                console.warn("starting pomodoro...");
+                setTimeout(()=>{
+                    alert('DONE!');
+
+                },1000)
+            }
+        }))
         this.availableCommands.push(new ShowNewToastCommand());
         // TODO: ShowPinnedToast
         this.availableCommands.push(new Command("New REPL"))
@@ -1451,12 +1461,12 @@ class CommandPalette {
 
     renderCommandPrompt(){
         const cmdpPosY = 0;
-        fill(0,0,0,20)
+        fill(0,0,0,200)
         stroke("white")
         rect(0, cmdpPosY, windowWidth, windowHeight);
 
         // draw a large text input in the command palette
-        fill(0,0,0,30)
+        fill(0,0,0,200)
         stroke("black")
         rect(10, cmdpPosY + 10, windowWidth - 20, 100);
         fill("black")
@@ -1844,7 +1854,10 @@ function draw() {
     translate(panX, panY);
     scale(zoom);
 
-    if(store.currentGraph && !store.commandPaletteVisible){
+    if(
+        store.currentGraph 
+        //&& !store.commandPaletteVisible
+    ){
         store.currentGraph.renderGraph();
     }
     
