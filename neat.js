@@ -155,7 +155,7 @@ let store = {
 
     currentGraph: null,
 
-    // TODO: move
+    maxVisibleOptionsCount: 10,
 
     dynamicStuff: {},
 
@@ -385,18 +385,19 @@ class WizardController {
             // });
             console.warn('recording ',{
                 cSI: this.currentStepIndex,
-                offset: this.selectionOffset,
-                visibleLength: this.visibleSuggestions.length,
+                offset: this.wizardSuggestionList.selectionOffset,
+                //visibleLength: this.visibleSuggestions.length,
+                allLength: this.allValidSuggestions.length,
                 selectedSuggestionIndex: this.selectedSuggestionIndex,
-                value: this.visibleSuggestions[this.selectedSuggestionIndex]?.value,
-                label: this.visibleSuggestions[this.selectedSuggestionIndex]?.label
+                value: this.allValidSuggestions[this.selectedSuggestionIndex]?.value,
+                label: this.allValidSuggestions[this.selectedSuggestionIndex]?.label
             })
             this.stepResponses[this.currentStepIndex] = {
                 input: commandPaletteInput.value(),
                 selectedSuggestionIndex: this.selectionOffset + this.selectedSuggestionIndex,
                 selectedSuggestionValue: 
-                    this.visibleSuggestions[this.selectedSuggestionIndex]?.value
-                    ?? this.visibleSuggestions[this.selectedSuggestionIndex]?.label
+                    this.allValidSuggestions[this.selectedSuggestionIndex]?.value
+                    ?? this.allValidSuggestions[this.selectedSuggestionIndex]?.label
             }
 
             console.warn('recorded step response', {
@@ -456,7 +457,7 @@ class WizardController {
             this.config.finalCallback.call(this,this);
         }
         // free the wizardSelectList
-        this.wizardSuggestionList?.destroy()
+        //this.wizardSuggestionList?.destroy()
         this.wizardSuggestionList = null;
     }
     onDraw(){
@@ -500,7 +501,9 @@ class WizardController {
         this.tryCompleteStep();
     }
     handleWizardInput(event){
-        console.warn('Wizard:handleWizardInput');
+        console.warn('Wizard:handleWizardInput',{
+            wsl: this.wizardSuggestionList
+        });
         switch(event.keyCode){
             case 13:
                 // validate the current response to the current step
@@ -590,6 +593,10 @@ class Command {
         this.name = name ?? this.name;
         this.options = options ?? {};
     }
+    clone(){
+        // return a cloned instance of this command
+        return new Command(this.name, this.options);
+    }
     execute(){
         // console.warn('executing command, has wizard, has callback?',
         // {
@@ -659,6 +666,7 @@ class ToggleCommandPaletteCommand extends Command {
 
 function loadGraph(name){
     // TODO: destruct any current graph
+    console.warn('loadGraph',{name})
     switch(name){
         case 'empty':
             store.currentGraph = new Graph();
@@ -686,30 +694,39 @@ class GraphNode {
         this.options = options ?? {}
         this.graph = options.graph ?? null;
     }
-    drawNode(node){
-
-        if (this.nodes.indexOf(node) === this.selectedNode) {
+    drawNode(){
+        if(!this.graph){
+            if(!this.warned){
+                this.warned=true;
+                console.warn('cant draw node, no graph',{t:this})
+            }
+            return;
+        }
+        if (this.graph.selectedNodeIDs.indexOf(this.options.id) > -1) {
             fill(255, 0, 0); // red for selected node
         } else {
-            fill(100 + (node.type === 'rect' ? 0 : 50)); // original fill color
+            fill(100 + (this.options.type === 'rect' ? 0 : 50)); // original fill color
         }
+
+        let node = this.options;
+        node.label = node?.label ?? node?.name;
         
-        let nodeValue = node.id === 0 
-            ? store.viewValue 
-            : node.id === 1 
-                ? '' 
-                : store.modelValue;
+        // let nodeValue = node.id === 0 
+        //     ? store.viewValue 
+        //     : node.id === 1 
+        //         ? '' 
+        //         : store.modelValue;
                 
-        let otherNodeValue = node.id === 0 
-            ? store.modelValueFromView 
-            : node.id === 1 
-                ? '' 
-                : store.viewValue;
+        // let otherNodeValue = node.id === 0 
+        //     ? store.modelValueFromView 
+        //     : node.id === 1 
+        //         ? '' 
+        //         : store.viewValue;
     
         if(node.shape === 'errorRect') {
             drawErrorNode(node);
         } else {
-            drawShape(node.x, node.y, node.shape, nodeValue, otherNodeValue);
+            drawShape(node.x, node.y, node.shape);
         }
     
         drawLabel(node.x, node.y, node.label);
@@ -730,7 +747,7 @@ class Graph {
     edges = []
     eventFlow = []
     events = []
-    selectedNodes = []
+    selectedNodeIDs = []
 
     constructor(options){
         this.options = options ?? {}
@@ -739,7 +756,62 @@ class Graph {
     loadGraphFromJSON(json){
         console.error('NotImplemented')
     }
+    OnMousePressed(event){
+        // Adjust mouse position for pan and zoom
+        let adjustedMouseX = (mouseX - panX) / zoom;
+        let adjustedMouseY = (mouseY - panY) / zoom;
+        let mousePos = createVector(adjustedMouseX, adjustedMouseY);
+
+        let closestNode = null;
+        let closestDistance = Infinity;
+        this.nodes.forEach((node, i) => {
+            let _node = node;
+            if(!node){
+                console.error('bad node?', node, i)
+                return;
+            }
+            if(node.options){
+                node = node.options;
+            }
+            if(isEmptyOrUndefined(node.x)||isEmptyOrUndefined(node.y)){
+                console.error('bad node position?', node, i)
+                return;
+            }
+            if(Number.isNaN(node.x) || Number.isNaN(node.y)){
+                console.error('bad node position?', node, i)
+                return;
+            }
+            if(Number.isNaN(mousePos.x) || Number.isNaN(mousePos.y)){
+                console.error('bad mouse position?', mousePos)
+                return;
+            }
+            let d = dist(mousePos.x, mousePos.y, node.x, node.y);
+            if (closestNode === null && d < 50) {
+                closestNode = _node.id;
+            }
+        });
+        if(closestNode){
+            this.selectedNodeIDs[0] = closestNode.id;
+        }
+    }
+    OnMouseDragged(event){
+        if(this.selectedNodeIDs.length){
+            this.selectedNodeIDs.forEach((id)=>{
+                this.nodes[id].x += mouseX - pmouseX;
+                this.nodes[id].y += mouseY - pmouseY;
+            })
+        }
+        
+    }
     renderGraph(){
+
+        if(this.selectedNodeIDs.length){
+            this.selectedNodeIDs.forEach((id)=>{
+                this.nodes[id].x += (mouseX - panX) / zoom;
+                this.nodes[id].y += (mouseY - panY) / zoom;
+            })
+        }
+
         // when we render a graph, we only the top level of subgraphs for each node
         // to prevent needing to recursively render the entire graph at all times
 
@@ -759,8 +831,53 @@ class Graph {
     drawLines(){
         this.edges.forEach((edge) => {
             let currentNode = this.nodes[edge.from];
+            // if(!currentNode){
+            //     console.error('drawLines: no currentNode',edge.from,this.nodes.length)
+            //     return;
+            // }
+            if(currentNode.options){
+                currentNode = currentNode.options;
+            }
             let nextNode = this.nodes[edge.to];
+            if(nextNode.options){
+                nextNode = nextNode.options;
+            }
+            // if(!nextNode){
+            //     console.error('drawLines: no nextNode',edge.to,this.nodes.length)
+            //     return;
+            // }
             stroke(edge.color);
+
+            // sensible defaults?
+            // if(
+            //     !edge.fromAnchor 
+            //     || Number.isNaN(edge.fromAnchor.x)
+            //     || Number.isNaN(edge.fromAnchor.y)
+            // ){
+            //     edge.fromAnchor = {x:0,y:0};
+            // }
+            // if(
+            //     !edge.toAnchor 
+            //     || Number.isNaN(edge.toAnchor.x)
+            //     || Number.isNaN(edge.toAnchor.y)
+            // ){
+            //     edge.toAnchor = {x:0,y:0};
+            // }
+            // if(Number.isNaN(currentNode.x) || Number.isNaN(currentNode.y)){
+            //     console.error('Bad value',{currentNode})
+            //     return;
+            // }
+            // if(Number.isNaN(nextNode.x) || Number.isNaN(nextNode.y)){
+            //     console.error('Bad value',{nextNode})
+            //     return;
+            // }
+
+            // console.warn('drawing edge line',{
+            //     edge,
+            //     currentNode,
+            //     nextNode
+            // })
+
             line(
                 currentNode.x + edge.fromAnchor.x, 
                 currentNode.y + edge.fromAnchor.y, 
@@ -790,6 +907,12 @@ class MVCExampleGraph extends Graph {
             // controller -> view
             { from: 1, to: 0, color: 'blue', fromAnchor: { x: 0, y: 0 }, toAnchor: { x: 0, y: 0 } }
         ];
+        this.nodes.forEach((_n,index)=>{
+            this.nodes[index] = new GraphNode({
+                ..._n,
+                graph: this
+            });
+        })
         this.eventFlow = [
             {from: 0, to: 1}, // view -> controller
             {from: 1, to: 2}, // controller -> model
@@ -852,7 +975,8 @@ class TodoWizardConfig extends WizardConfig {
             // 1. push the todo into the current graph as a node at the current level
             // todo: make a TodoNode
             store.currentGraph.nodes.push(new GraphNode({
-                name: wizardInstance.stepResponses[0].input,
+                id: store.currentGraph.nodes.length,
+                name: wizardInstance?.stepResponses?.[0]?.input,
                 x: 100,
                 y: 100,
                 width: 200,
@@ -951,7 +1075,24 @@ class CommandWizardConfig extends WizardConfig {
 }
 
 function isEmptyOrUndefined(thing){
-    return typeof thing === 'undefined' || thing === null || thing?.trim() === '' ? true : false;
+    return typeof thing === 'undefined' || thing === null || thing?.trim?.() === '' ? true : false;
+}
+
+class SetMaxSuggestionsCommand extends Command {
+    constructor(){
+        super("Set Max Suggestions")
+        this.wizardConfig = new WizardConfig("Set Max Suggestions Wizard")
+        this.wizardConfig.steps = [
+            {
+                question: "How many suggestions would you like to see per page?",
+                description: "Please answer in a number between 1 and 100",
+                answerValidationRules: "required:number:range[1-100]",
+            }
+        ]
+        this.wizardConfig.finalCallback = function(wizardInstance){
+            store.maxVisibleOptionsCount = parseInt(wizardInstance.stepResponses[0].input);
+        }
+    }
 }
 
 class CommandPalette {
@@ -990,6 +1131,7 @@ class CommandPalette {
     }
 
     addDefaultCommands(){
+        this.availableCommands.push(new SetMaxSuggestionsCommand());
         this.availableCommands.push(new Command("Help",{
             wizardConfig: new WizardConfig("Help Wizard",{
                 steps: [
@@ -1227,7 +1369,7 @@ class CommandPalette {
         // if there's an active wizard, we need to handle the input differently
         if(store.activeWizard){
             store.activeWizard.handleWizardInput(event);
-            //return;
+            return;
         }
 
         try{
@@ -1276,7 +1418,7 @@ class CommandPalette {
             && this.selectedSuggestionIndex < this.filteredCommands.length
         ){
 
-            this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex];
+            this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex].clone();
         }
         console.log('CMD enter was pressed', {
             currentCMDName: this.currentCommand.name,
@@ -1360,7 +1502,9 @@ class CommandPalette {
             this.selectedSuggestionIndex = null;
         }
 
-        const stillOutOfBounds = boundsCheck(_curSelIndex, this.filteredCommands.length);
+        const stillOutOfBounds = boundsCheck(
+            this.selectedSuggestionIndex, 
+            this.filteredCommands.length);
 
         // assert we clipped the OOB stuff
         if(wasOutOfBounds && stillOutOfBounds){
@@ -1384,17 +1528,17 @@ let panY = 0;
 let panningBG = false;
 let dragStartX = 0;
 let dragStartY = 0;
-let selectedNode = null;
 
 // Define the mouseDragged function
-function mouseDragged(){
-    if(selectedNode === null){
+function mouseDragged(event){
+    let blockPan = false;
+    if(store.currentGraph){
+        store.currentGraph.OnMouseDragged(event);
+        blockPan = store.currentGraph.selectedNodeIDs.length > 0;
+    }
+    if(!blockPan){
         panX += mouseX - pmouseX;
         panY += mouseY - pmouseY;
-    }else{
-        // TODO: bring back node dragging
-        // store.nodes[selectedNode].x += mouseX - pmouseX;
-        // store.nodes[selectedNode].y += mouseY - pmouseY;
     }
 }
 
@@ -1408,8 +1552,14 @@ function mousePressed(){
         return;
     }
 
-    dragNode(); // maybe select a node
-    if (selectedNode === null) {
+    // maybe select a node
+    if(store.currentGraph && store.currentGraph.OnMousePressed){
+        store.currentGraph.OnMousePressed();
+    }
+    if (
+        store.currentGraph 
+        && !store.currentGraph.selectedNodeIDs.length
+    ) {
         panningBG = true;
         dragStartX = mouseX;
         dragStartY = mouseY;
@@ -1526,15 +1676,8 @@ function draw() {
     if(store.currentGraph && !store.commandPaletteVisible){
         store.currentGraph.renderGraph();
     }
-
-    if (selectedNode !== null) {
-        // TODO: bring back dragging nodes
-        // let selectedNode = store.currentGraph.seletedNodes?.[0]
-        // if(selectedNode){
-        //   store.currentGraph.nodes[selectedNode].x = (mouseX - panX) / zoom;
-        //   store.currentGraph.nodes[selectedNode].y = (mouseY - panY) / zoom;
-        // }
-    } else if (panningBG) {
+    
+    if (panningBG) {
         panX += mouseX - dragStartX;
         panY += mouseY - dragStartY;
         dragStartX = mouseX;
@@ -1755,6 +1898,10 @@ class FluxExampleGraph extends Graph {
             { id: 2, x: 475, y: 50, shape: 'ellipse', label: 'Mutation' },
             { id: 3, x: 500, y: 200, shape: 'rect', label: 'State' }
         ];
+        this.nodes.forEach((_n,index)=>{
+            _n.graph = this;
+            this.nodes[index] = new GraphNode(_n);
+        })
         this.edges = [
             // component -> action
             { 
@@ -1877,12 +2024,17 @@ class EmptyGraph extends Graph {
 class SuggestionList {
     selectedOptionIndex = -1;
     selectionOffset = 0;
-    maxVisibleOptionsCount = 5;
+    //maxVisibleOptionsCount = 5;
+    get maxVisibleOptionsCount(){
+        return store.maxVisibleOptionsCount;
+    }
     constructor(){
         
     }
     logSelf(){
-        console.warn({
+        console.warn(
+            "SuggestionList:LogSelf",
+            {
             SuggestionList: this,
             vizSuggestions: this.visibleSuggestions,
             allOptionsLength: this.allOptions.length,
@@ -1985,7 +2137,7 @@ class SuggestionList {
             case 27:
                 return this.onEscapePressedCallback();
             case 13:
-                let result = this.onEnterPressedCallback()
+                let result = this.OnPressEnter(event);// this.onEnterPressedCallback()
                 //this.selectedOptionIndex = -1;
                 return result;
             default:
@@ -1997,12 +2149,12 @@ class SuggestionList {
         }
     }
     onPressUp(event){
-        console.warn({
-            selectedOptionIndex: this.selectedOptionIndex,
-            allOptionsLength: this.allOptions.length,
-            maxVisibleOptionsCount: this.maxVisibleOptionsCount,
-            selectionOffset: this.selectionOffset
-        })
+        // console.warn('SuggestionList.onPressUp',{
+        //     selectedOptionIndex: this.selectedOptionIndex,
+        //     allOptionsLength: this.allOptions.length,
+        //     maxVisibleOptionsCount: this.maxVisibleOptionsCount,
+        //     selectionOffset: this.selectionOffset
+        // })
         // up arrow was pressed
         if(this.selectedOptionIndex === -1){
             // NOOP for now
@@ -2032,12 +2184,12 @@ class SuggestionList {
         }
     }
     onPressDown(event){
-        console.warn({
-            selectedOptionIndex: this.selectedOptionIndex,
-            allOptionsLength: this.allOptions.length,
-            maxVisibleOptionsCount: this.maxVisibleOptionsCount,
-            selectionOffset: this.selectionOffset
-        })
+        // console.warn('SuggestionList.onPressDown',{
+        //     selectedOptionIndex: this.selectedOptionIndex,
+        //     allOptionsLength: this.allOptions.length,
+        //     maxVisibleOptionsCount: this.maxVisibleOptionsCount,
+        //     selectionOffset: this.selectionOffset
+        // })
         if(this.selectedOptionIndex === null){
             // start with the first, topmost one
             this.selectedOptionIndex = 0;
@@ -2056,6 +2208,15 @@ class SuggestionList {
         }
         //console.warn('selectedOptionIndex',this.selectedOptionIndex)
     }
+    OnPressEnter(event){
+        console.warn('SuggestionList:OnPressEnter');
+        event.preventDefault();
+
+        this.onEnterPressedCallback();
+
+        // we handled it
+        return true;
+    }
     draw(){
         this.drawSuggestedOptions();
     }
@@ -2070,7 +2231,7 @@ class SuggestionList {
             return;
         }
         store.status_lights.rendererHasOptionsToRender.c = "green";
-        const offsetY = 100;
+        const offsetY = 150;
         // render the list of the top maxVisibleOptionsCount suggestions
         this.visibleSuggestions.forEach((suggestion, i) => {
             const {x,y,w,h,label,selected} = suggestion;
@@ -2112,32 +2273,11 @@ class SuggestionList {
     }
 }
 
-// check closest node to mouse position
-// todo: move this into Graph class
-function dragNode() {
-    if(!store.currentGraph){
-        return;
-    }
-    // Adjust mouse position for pan and zoom
-    let adjustedMouseX = (mouseX - panX) / zoom;
-    let adjustedMouseY = (mouseY - panY) / zoom;
-    let mousePos = createVector(adjustedMouseX, adjustedMouseY);
-
-    let closestNode = null;
-    store.currentGraph.nodes.forEach((node, i) => {
-        let d = dist(mousePos.x, mousePos.y, node.x, node.y);
-        if (closestNode === null && d < 50) {
-            closestNode = i;
-        }
-    });
-    store.currentGraph.selectedNodes[0] = closestNode;
-}
-
 function stopDragging() {
     if(!store.currentGraph){
         return;
     }
-    store.currentGraph.selectedNodes = [];
+    store.currentGraph.selectedNodeIDs = [];
 }
 
 // TODO: map this to an ObservedTextInputField
@@ -2211,8 +2351,8 @@ function drawErrorNode(node) {
     text('Invalid node type specified', node.x, node.y);
 }
 
-function drawShape(x, y, type, nodeValue, otherNodeValue) {
-    const shapeMatchesOppositeEnd = nodeValue === otherNodeValue;
+function drawShape(x, y, type) {
+    const shapeMatchesOppositeEnd = true; //nodeValue === otherNodeValue;
     let borderColor = (Date.now() - store.lastReceived < 300) 
         // yellow (recently changed)
         ? color(255, 255, 0) 
@@ -2234,13 +2374,13 @@ function drawShape(x, y, type, nodeValue, otherNodeValue) {
         default:
             triangle(x - 40, y + 40, x + 40, y + 40, x, y - 40);
     }
-    fill(0);
-    textAlign(CENTER, CENTER);
-    text(nodeValue, x, y);
-    if(type === 'triangle'){
-        fill(0, 0, 255);
-        text(otherNodeValue, x, y + 20);
-    }
+    // fill(0);
+    // textAlign(CENTER, CENTER);
+    //text(nodeValue, x, y);
+    // if(type === 'triangle'){
+    //     fill(0, 0, 255);
+    //     text(otherNodeValue, x, y + 20);
+    // }
 }
 
 function drawLabel(x, y, label) {
