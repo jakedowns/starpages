@@ -98,6 +98,28 @@ const SAMPLE_GRAPHS = {
     AJAX_FLUX: 'ajaxFlux',
 }
 
+// indicator LED
+class StatusLight {
+    x = 0;
+    y = 0;
+    r = 10;
+    c = 'red';
+    constructor({x,y,r,c}){
+        this.x = x;
+        this.y = y;
+        this.r = r;
+        this.c = c;
+    }
+    draw(){
+        fill(this.c);
+        circle(this.x,this.y,this.r);
+        stroke(0);
+        fill(255);
+        strokeWeight(5);
+        text(this.name,this.x+this.r+5,this.y-this.r);
+    }
+}
+
 // Define the initial state of the store
 let store = {
     interactionMode: MODES.MOVE,
@@ -131,15 +153,139 @@ let store = {
     currentGraph: null,
 
     // TODO: move
+
+    dynamicStuff: {},
+
+    status_lights: {
+        rendererStarted: new StatusLight({
+            name: 'rendererStarted',
+            x: 10,
+            y: 10,
+            r: 30,
+            c: 'red'
+        }),
+        rendererHasOptionsToRender: new StatusLight({
+            name: 'rendererHasOptionsToRender',
+            x: 60,
+            y: 10,
+            r: 30,
+            c: 'red'
+        }),
+    }
 };
+
+
+
+class DynamicThing {
+    constructor(options){
+        this.options = options ?? {}
+        // todo: mixin for default options to extend here
+    }
+}
+
+class ToggleableThing extends DynamicThing {
+    toggleState = false; // off by default
+}
+
+// # I want this tool to feel as expressive as typing in Cursor with Co-Pilot
+class TestStep extends DynamicThing {
+    // options:
+    // one-time check condition
+    // vs. waitUntilTrue condition
+
+    // defaults:
+    // continue on failure: true (don't fail others by default)
+    // sometimes errors are so bad as to be "Fatal" in those cases, we might
+    // want to allow a test to halt the entire test suite to save time and fallout
+
+    // multi-user session testing
+    // automated tests for multi-user sessions via highly-opinionated callback hooks
+    // plus, a robust api for lower-level integration into the tooling
+
+    /** @parameter Async : boolean - whether the step can be queued to run asynchronously */
+
+    // cypress: is async by default, which is neat, but can be confusing
+
+
+
+}
+
+class TestConfigration extends DynamicThing {
+    // TestSteps can be flagged as parallel to be eligible for parallel execution
+    steps = []
+}
+
+// Debug Decorator
+function DebugDecorator(target) {
+}
+
+// 
+
+
+// History Decorator
+function UndoRedoDecorator(target) {
+    return function(...args) {
+        //console.warn('UndoRedoDecorator', {target, args})
+        const d = new target(...args);
+        d.undoStack = [];
+        d.currentState = {};
+        d.undoStackX = 0;
+        d.recordStep = function(state){
+            // if our head (undoStackX) is not at the end of the undoStack
+            // then we need to remove everything after the head
+            if(this.undoStackX < this.undoStack.length - 1){
+                this.undoStack = this.undoStack.slice(0,this.undoStackX+1);
+            }
+
+            this.undoStack.push(JSON.parse(JSON.stringify(this.currentState)));
+            this.currentState = state;
+            d.undoStackX = this.undoStack.length - 1;
+        }
+        d.undo = function(){
+            // bounds check
+            if(this.undoStackX > 0){
+                this.undoStackX--;
+                this.currentState = this.undoStack[this.undoStackX];
+            }
+        }
+        d.redo = function(){
+            // bounds check
+            if(this.undoStackX < this.undoStack.length - 1){
+                this.undoStackX++;
+                this.currentState = this.undoStack[this.undoStackX];
+            }
+        }
+        return d;
+    }
+}
+
+class Refactor extends UndoRedoDecorator(DynamicThing) {
+    name = "Refactor"
+    // pieces to consider
+    parts = []
+    // our change history
+    changes = []
+    // an interface to a test runner
+    automatedTestRunner = null
+    // Mixin Methods:
+    // - addPart // define things that will be important
+    // - removePart // remove from consideration
+    // - runTests // run tests on the parts
+    // - setTestConfiguration() // override the current configuration table with new values
+}
 
 class WizardController {
     name = 'default wizard';
     currentStepIndex = 0;
     stepResponses = [];
     shownSteps = [];
-    selectedSuggestionIndex = 0;
     wizardSuggestionList = null;
+    get selectedSuggestionIndex(){
+        return this?.wizardSuggestionList?.selectedOptionIndex;
+    }
+    set selectedSuggestionIndex(value){
+        this.wizardSuggestionList.selectedOptionIndex = value;
+    }
     get steps(){
         return this?.config?.steps ?? [];
     }
@@ -147,34 +293,11 @@ class WizardController {
         return this?.steps?.[this?.currentStepIndex] ?? null;
     }
     
-    // get currentSuggestions(){
-    //     return [...this?.config?.steps?.[this?.currentStepIndex]?.suggestions ?? []]
-    // }
-    // visually limited cursor view into the current suggestions
-    get visibleSuggestions(){
-        let output = [];
-        let i = this.suggestionOffset;
-        if(!this.wizardSuggestionList){
-            return [];
-        }
-        for(i; i < this.wizardSuggestionList.maxVisibleOptionsCount && i < this.activeSuggestions.length; i++) {
-            let suggestion = this.activeSuggestions[i];
-            let x = 10;
-            let y = 10 + (i * 50);
-            let w = 200;
-            let h = 50;
-            let label = suggestion.name;
-            let selected = this.selectedSuggestionIndex === i;
-            output.push({
-                x,y,w,h,label,selected
-            })
-        }
-        return output;
-    }
     // all valid suggestions
     get allValidSuggestions(){
+        console.warn('get allValidSuggestions')
         const cStep = this.currentStep;
-        //console.warn('activeSuggestions? cStep',{cStep})
+        //console.warn('allValidSuggestions? cStep',{cStep})
         let suggestions = [
             ...(cStep?.suggestions ?? [])
         ];
@@ -203,6 +326,7 @@ class WizardController {
                 value: 'cancel'
             })
         }
+        store.all_valid_suggestions_length = suggestions.length;
 
         return suggestions;
     }
@@ -217,7 +341,12 @@ class WizardController {
         this.wizardSuggestionList = new SuggestionList();
         this.wizardSuggestionList.bindOnEnterPressed(this.OnPressEnter.bind(this));
         this.wizardSuggestionList.bindOnEscapePressed(this.OnPressEscape.bind(this));
+        let _this = this;
         this.wizardSuggestionList.bindGetFilteredOptions(()=>{
+            // console.warn('bound get filtered WizardController',{
+            //     len: this.visibleSuggestions.length,
+            //     len2: _this.visibleSuggestions.length
+            // })
             return this.visibleSuggestions;
         })
         this.wizardSuggestionList.bindGetAllOptions(()=>{
@@ -252,7 +381,7 @@ class WizardController {
             // });
             console.warn('recording ',{
                 cSI: this.currentStepIndex,
-                offset: this.suggestionOffset,
+                offset: this.selectionOffset,
                 visibleLength: this.visibleSuggestions.length,
                 selectedSuggestionIndex: this.selectedSuggestionIndex,
                 value: this.visibleSuggestions[this.selectedSuggestionIndex]?.value,
@@ -260,7 +389,7 @@ class WizardController {
             })
             this.stepResponses[this.currentStepIndex] = {
                 input: commandPaletteInput.value(),
-                selectedSuggestionIndex: this.suggestionOffset + this.selectedSuggestionIndex,
+                selectedSuggestionIndex: this.selectionOffset + this.selectedSuggestionIndex,
                 selectedSuggestionValue: 
                     this.visibleSuggestions[this.selectedSuggestionIndex]?.value
                     ?? this.visibleSuggestions[this.selectedSuggestionIndex]?.label
@@ -303,7 +432,7 @@ class WizardController {
 
         // reset the selected suggestion index between steps
         this.selectedSuggestionIndex = null;
-        this.suggestionOffset = 0;
+        this.selectionOffset = 0;
         
         // if we completed it, and it was the last step,
         // end the wizard
@@ -327,11 +456,12 @@ class WizardController {
         this.wizardSuggestionList = null;
     }
     onDraw(){
-        if(!store.activeWizard){
+        if(!store.activeWizard || store.activeWizard !== this){
+            console.warn('wizard is not active, skip onDraw')
             return;
         }
         this.drawCurrentStep();
-        this.drawSuggestedCommands();
+        this.wizardSuggestionList.draw();
     }
     drawCurrentStep(){
         let questionTitle = this.config.steps[this.currentStepIndex]?.questionTitle ?? 'Question';
@@ -346,36 +476,6 @@ class WizardController {
         text(`${questionTitle}`, 20, 20);
         text(`${question}`, 20, 50);
     }
-    drawSuggestedCommands(){
-        
-        if(!this.visibleSuggestions?.length){
-            return;
-        }
-        const offsetY = 100;
-        // render the list of the top maxVisibleOptionsCount suggestions
-        this.visibleSuggestions.forEach((suggestion, i) => {
-            const {x,y,w,h,label,selected} = suggestion;
-            this.renderSuggestedCommand(
-                x,
-                offsetY+y,
-                w,
-                h,
-                label,
-                selected
-            );
-        })
-    }
-    renderSuggestedCommand(x,y,w,h,label,selected){
-        strokeWeight(selected ? 3 : 1);
-        // draw box
-        fill(selected ? "rgb(255,255,0)" : 255)
-        rect(x,y,w,h);
-        strokeWeight(1);
-        // draw label
-        fill(0)
-        textAlign(CENTER,CENTER);
-        text(label, x + (w/2), y + (h/2));
-    }
     OnPressEscape(event){
         if(confirm('Are you sure?')){
             this.end();
@@ -386,7 +486,7 @@ class WizardController {
         // validate the current response to the current step
         // if it's valid, store it
         // if it's invalid, show an error message
-        console.warn('enter was pressed', {
+        console.warn('WZD enter was pressed', {
             currentCMDName: this.name,
             currentStepConfig: this.config.steps[this.currentStepIndex]
         })
@@ -578,12 +678,6 @@ function loadGraph(name){
             break;
         default:
             console.warn('unknown graph type',name);
-    }
-}
-
-class SuggestionList {
-    constructor(){
-
     }
 }
 
@@ -869,13 +963,25 @@ class CommandPalette {
     filteredCommands = []; 
 
     selectedSuggestionIndex = null;
-    suggestionOffset = 0;
+    selectionOffset = 0;
     
     constructor(){
-        this.commandSelectList = new SelectList();
-        this.commandSelectList.bindOnEnterPressed(this.OnPressEnter.bind(this));
-        this.commandSelectList.bindOnEscapePressed(this.OnPressEscape.bind(this));
+        this.commandSuggestionList = new SuggestionList();
         this.addDefaultCommands();
+        this.commandSuggestionList.bindOnEnterPressed(this.OnPressEnter.bind(this));
+        this.commandSuggestionList.bindOnEscapePressed(this.OnPressEscape.bind(this));
+        let _this = this;
+        this.commandSuggestionList.bindGetFilteredOptions(()=>{
+            // console.warn('bound get filtered CMDP',{
+            //     len: this.filteredCommands.length,
+            //     len2: _this.filteredCommands.length
+            // })
+            return this.filteredCommands;
+        })
+        this.commandSuggestionList.bindGetAllOptions(()=>{
+            return this.availableCommands;
+        })
+        
     }
 
     addDefaultCommands(){
@@ -1046,6 +1152,12 @@ class CommandPalette {
     }
 
     renderSuggestedCommands(){
+        /* pass the drawing responsibility on to the SuggestionList class instance */
+        this.commandSuggestionList.draw();
+    }
+
+    /*
+    renderSuggestedCommands(){
         const offsetY = 100;
         const limit = 10;
         // render the list of the top LIMIT suggestions
@@ -1071,24 +1183,13 @@ class CommandPalette {
         textAlign(CENTER,CENTER);
         text(label, x + (w/2), y + (h/2));
     }
+    */
 
+    // onCommandPaletteInput -> filterCommands
+
+    // TODO: need to trigger on backspace TOO!
     onCommandPaletteInput(event){
         //console.log({event});
-
-        // if the cmd palette is not visible, show it
-        if(!store.commandPaletteVisible){
-            new ShowCommandPaletteCommand().execute();
-        }
-
-        // if there's an active wizard, we need to handle the input differently
-        if(store.activeWizard){
-            store.activeWizard.handleWizardInput(event);
-            return;
-        }
-
-        if(this.commandSelectList.handleInput(event)){
-            return;
-        }
 
         //console.warn('onCommandPaletteInput',{event})
         // update the command buffer
@@ -1100,8 +1201,37 @@ class CommandPalette {
         }else{
             this.currentCommand.updateFromBuffer();
         }
+
+        console.warn(
+            'OnCommandPaletteInput, buffer is now:',
+            {
+                currentCommand: JSON.parse(JSON.stringify(this.currentCommand))
+            }
+        )
+
         // filter the list of available commands
         this.filterCommands();
+
+        console.warn('sanity check filtered count: ',this.filteredCommands.length);
+
+        // if the cmd palette is not visible, show it
+        if(!store.commandPaletteVisible){
+            new ShowCommandPaletteCommand().execute();
+        }
+
+        // if there's an active wizard, we need to handle the input differently
+        if(store.activeWizard){
+            store.activeWizard.handleWizardInput(event);
+            //return;
+        }
+
+        try{
+            this.commandSuggestionList.handleInput(event)
+        }catch(e){
+            console.error(e)
+        }
+
+        
         // console.log({
         //     cb:store.commandBuffer,
         //     fc:cmdprompt.filteredCommands
@@ -1143,12 +1273,16 @@ class CommandPalette {
 
             this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex];
         }
-        console.log('enter was pressed', {
-            currentCMDName: this.currentCommand.name
+        console.log('CMD enter was pressed', {
+            currentCMDName: this.currentCommand.name,
+            selectedSuggIdx: this.selectedSuggestionIndex,
+            filteredCommandsLength: this.filteredCommands.length,
+            currentCMD: this.currentCommand
         })
         // enter was pressed
         // execute the current command
         this.currentCommand.execute();
+        // TODO: step the undo/redo history
         // reset the command buffer
         store.commandBuffer = {
             name: ''
@@ -1187,12 +1321,54 @@ class CommandPalette {
                 .includes(store.commandBuffer?.name?.toLowerCase());
         });
 
-        //
+        console.warn('!!! FilteredCommands count:', this.filteredCommands.length);
+
+        const _curSelIndex = this.selectedSuggestionIndex;
+
+        function boundsCheck(index, length){
+            // we had selected an index higher than the new length
+            return (
+                index !== null 
+                && index >= length
+            ) 
+            ||
+            // no longer any valid options 
+            (
+                !length
+                && index !== null
+            )
+        }
+        const wasOutOfBounds = boundsCheck(
+            // NOTE: make sure this accounts for the new "offset" of the SuggestionList
+            _curSelIndex, 
+            this.filteredCommands.length
+            );
 
         // clear the selected suggestion index if it's out of bounds
         if(!this.filteredCommands.length){
             this.selectedSuggestionIndex = null;
         }
+        else if(
+            _curSelIndex !== null 
+            && _curSelIndex >= this.filteredCommands.length
+        ){
+            this.selectedSuggestionIndex = null;
+        }
+
+        const stillOutOfBounds = boundsCheck(_curSelIndex, this.filteredCommands.length);
+
+        // assert we clipped the OOB stuff
+        if(wasOutOfBounds && stillOutOfBounds){
+            throw new Error('selected suggestion index is still out of bounds. bounds check failed');
+        }
+
+        console.warn('Bounds Check Applied to ', {
+
+            _curSelIndex,
+            vs: this.selectedSuggestionIndex,
+
+            filteredLengthCurrently: this.filteredCommands.length,
+        } );
     }
 }
 
@@ -1370,15 +1546,24 @@ function draw() {
         drawCommandPalette();
     }
 
-    if(store.activeWizard){
-        // display the current step
-        store.activeWizard.onDraw();
-    }
+    // display the current wizard (if any)
+    store.activeWizard?.onDraw?.();
 
     renderDebugUI();
 }
 
 function renderDebugUI(){
+    if(store.debugUI_DISABLED){
+        return;
+    }
+
+    if(store.status_lights.rendererStarted){
+        store.status_lights.rendererStarted.draw();
+    }
+    if(store.status_lights.rendererHasOptionsToRender){
+        store.status_lights.rendererHasOptionsToRender.draw();
+    }
+
     // Check if the text color is blending with the background color
     // If so, change the fill color
     fill(255, 255, 255);
@@ -1411,6 +1596,8 @@ function drawCommandPalette(){
     rect(10, cmdpPosY + 10, windowWidth - 20, 100);
     fill("black")
 
+    // if there's no wizard active,
+    // fallback to our default command suggestion list
     if(!store.activeWizard){
         cmdprompt.renderSuggestedCommands();
     }
@@ -1680,18 +1867,71 @@ class EmptyGraph extends Graph {
 }
 
 // todo: make a multi-select version
-class SelectList {
+class SuggestionList {
     selectedOptionIndex = -1;
     selectionOffset = 0;
-    maxVisibleOptionsCount = 10;
+    maxVisibleOptionsCount = 5;
     constructor(){
         
     }
-    get filteredOptions(){
-        return this?.onGetFilteredOptionsCallback?.() ?? [];
+    logSelf(){
+        console.warn({
+            SuggestionList: this,
+            vizSuggestions: this.visibleSuggestions,
+            allOptionsLength: this.allOptions.length,
+            selectionOffset: this.selectionOffset,
+            selectedOptionIndex: this.selectedOptionIndex,
+            maxVisibleOptionsCount: this.maxVisibleOptionsCount,
+        })
     }
+    // get visibleSuggestions(){
+    //     store.debug_latest_visible_suggestions_length = this.filteredOptions.length;
+    //     return this.filteredOptions;
+    // }
+    // visually limited cursor view into the current suggestions
+    get visibleSuggestions(){
+        let output = [];
+        let v = this.selectionOffset;
+        // console.warn({
+        //     'visible suggestions i:':i,
+        //     maxVisibleOptionsCount: this.maxVisibleOptionsCount,
+        //     allOptionsLength: this.allOptions.length,
+        //     selectedOptionIDX: this.selectedOptionIndex,
+        // })
+        for(let i = 0; i < this.maxVisibleOptionsCount 
+            && i < this.filteredOptions.length; i++) {
+            let suggestion = this.filteredOptions[i];
+            if(!suggestion){
+                console.warn('suggestion is null?',{suggestion,i})
+                continue;
+            }
+            let x = 10;
+            let y = 10 + (i * 50);
+            let w = 200;
+            let h = 50;
+            let label = suggestion.name;
+            let selected = this.selectedOptionIndex === i;
+            output.push({
+                x,y,w,h,label,selected
+            })
+        }
+        //store.debug_vizSugLen = output.length;
+        return output;
+    }
+    get filteredOptions(){
+        if(!this.onGetFilteredOptionsCallback){
+            throw new Error("callback never bound. must call bindGetFilteredOptions(callback)")
+        }
+        return this.onGetFilteredOptionsCallback();
+    }
+    // set filteredOptions(value){
+    //     this.onSetFilteredOptionsCallback(value);
+    // }
     get allOptions(){
-        return this?.onGetAllOptionsCallback?.() ?? [];
+        if(!this.onGetAllOptionsCallback){
+            throw new Error("callback never bound. must call bindGetAllOptions(callback)")
+        }
+        return this.onGetAllOptionsCallback();
     }
     bindGetFilteredOptions(callback){
         this.onGetFilteredOptionsCallback = callback;
@@ -1709,6 +1949,10 @@ class SelectList {
 
     }
     handleInput(event){
+        console.warn('suggestion list handleInput',{
+            keyCode: event.keyCode,
+            event
+        })
         switch(event.keyCode){
             // NEED TO THINK ABOUT HOW TAB SHOULD WORK...
             // case 9:
@@ -1723,101 +1967,135 @@ class SelectList {
             //     break;
             case 40:
                 return this.onPressDown(event)
-                break;
             case 38:
                 return this.onPressUp(event);
-                break;
             case 27:
-                //this.selectedSuggestionIndex = -1;
                 return this.onEscapePressedCallback();
             case 13:
-                this.selectedSuggestionIndex = -1;
-                return this.onEnterPressedCallback()
-            
+                let result = this.onEnterPressedCallback()
+                this.selectedOptionIndex = -1;
+                return result;
+            default:
+                console.warn('input fell through SuggestionsList.handleInput',{
+                    keyCode: event.keyCode,
+                    event
+                })
+                break;
         }
     }
     onPressUp(event){
+        console.warn({
+            selectedOptionIndex: this.selectedOptionIndex,
+            allOptionsLength: this.allOptions.length,
+            maxVisibleOptionsCount: this.maxVisibleOptionsCount,
+            selectionOffset: this.selectionOffset
+        })
         // up arrow was pressed
-        // select the previous suggestion (if any)
-        // if(this.filteredOptions.length){
-        //     if(this.selectedOptionIndex === null){
-        //         this.selectedOptionIndex = this.filteredOptions.length - 1;
-        //     }
-        //     else if(this.selectedOptionIndex > 0){
-        //         this.selectedOptionIndex--;
-        //     }
-        //     else{
-        //         // loop back to the last suggestion
-        //         this.selectedOptionIndex = this.filteredOptions.length - 1;
-        //     }
-        //     return true;
-        // }
-        // console.warn('UP was pressed', {
-        //     currentCMDName: this.name,
-        //     currentStepConfig: this.config.steps[this.currentStepIndex]
-        // })
-        if(this.selectedOptionIndex === null){
+        if(this.selectedOptionIndex === -1){
             // NOOP for now
             //this.selectedOptionIndex = this.allOptions.length - 1;
+            // TODO: dig into command history once we're storing it
         }else if(this.selectedOptionIndex > 0){
             // still results above the selected one, go to it
             this.selectedOptionIndex--;
         }else{
             // loop back to the last suggestion
             this.selectedOptionIndex = this.allOptions.length - 1;
-            // if the suggestionOffset is greater than zero, decrement it
-            if(this.suggestionOffset > 0){
-                this.suggestionOffset--;
-            }else{
-                // calculate the offset required to show the last result in
-                // the last spot of the limited view
-                // NOTE: if the current list is under the max visible count, this will be negative, so we need to only use it if it's positive
-                if(this.allOptions.length > this.maxVisibleOptionsCount){
-                    this.suggestionOffset = this.allOptions.length - this.maxVisibleOptionsCount;
-                }
+            // if the selectionOffset is greater than zero, decrement it
+            if(this.selectionOffset > 0){
+                this.selectionOffset--;
+                this.selectedOptionIndex = this.allOptions.length > this.maxVisibleOptionsCount ?
+                    this.maxVisibleOptionsCount - 1
+                    : this.allOptions.length - 1;
             }
+            // else{
+            //     // calculate the offset required to show the last result in
+            //     // the last spot of the limited view
+            //     // NOTE: if the current list is under the max visible count, this will be negative, so we need to only use it if it's positive
+            //     if(this.allOptions.length > this.maxVisibleOptionsCount){
+            //         this.selectionOffset = this.allOptions.length - this.maxVisibleOptionsCount;
+            //     }
+            // }
         }
     }
     onPressDown(event){
-        // down arrow was pressed
-        // select the next suggestion (if any)
-        // if(this.filteredOptions.length){
-        //     if(this.selectedOptionIndex === null){
-        //         this.selectedOptionIndex = 0;
-        //     }
-        //     else if(this.selectedOptionIndex < this.filteredOptions.length - 1){
-        //         this.selectedOptionIndex++;
-        //     }
-        //     else{
-        //         // loop back to the first suggestion
-        //         this.selectedOptionIndex = 0;
-        //         this.suggestionOffset = 0;
-        //     }
-        //     return true;
-        // }
-        // return false;
-        // console.warn('DOWN was pressed', {
-        //     currentCMDName: this.name,
-        //     currentStepConfig: this.config.steps[this.currentStepIndex],
-        //     currentSuggestionsLength: this.currentSuggestions.length
-        // })
+        console.warn({
+            selectedOptionIndex: this.selectedOptionIndex,
+            allOptionsLength: this.allOptions.length,
+            maxVisibleOptionsCount: this.maxVisibleOptionsCount,
+            selectionOffset: this.selectionOffset
+        })
         if(this.selectedOptionIndex === null){
             // start with the first, topmost one
             this.selectedOptionIndex = 0;
-        }else if(this.selectedOptionIndex < this.currentSuggestions.length - 1){
+        }else if(this.selectedOptionIndex < this.allOptions.length - 1){
             this.selectedOptionIndex++;
             // if we've gone out over this.maxVisibleOptionsCount, 
             // increment the offset and reset the selectedOptionIndex
             if(this.selectedOptionIndex >= this.maxVisibleOptionsCount){
-                this.suggestionOffset++;
+                this.selectionOffset++;
                 this.selectedOptionIndex = 0;
             }
         }else{
             // loop back to the first suggestion
             this.selectedOptionIndex = 0;
-            this.suggestionOffset = 0;
+            this.selectionOffset = 0;
         }
         console.warn('selectedOptionIndex',this.selectedOptionIndex)
+    }
+    draw(){
+        this.drawSuggestedOptions();
+    }
+    drawSuggestedOptions(){
+
+        store.status_lights.rendererStarted.c = "green";
+        
+        if(!this.visibleSuggestions?.length){
+            this.logSelf();
+            throw new Error("visibleSuggestions is empty!")
+            store.status_lights.rendererHasOptionsToRender.c = "red";
+            return;
+        }
+        store.status_lights.rendererHasOptionsToRender.c = "green";
+        const offsetY = 100;
+        // render the list of the top maxVisibleOptionsCount suggestions
+        this.visibleSuggestions.forEach((suggestion, i) => {
+            const {x,y,w,h,label,selected} = suggestion;
+            if(
+                x === undefined 
+                || y === undefined 
+                || w === undefined 
+                || h === undefined
+            ){
+                    console.warn({
+                        vizSuggestions: this.visibleSuggestions,
+                        suggestion
+                    })
+                throw new Error("BAD VALUES!");
+            }
+            // console.warn('visibleSuggestion',{
+            //     x,y,w,h,label,selected,suggestion
+            // })
+            this.renderSuggestionOption(
+                x,
+                offsetY+y,
+                w,
+                h,
+                label,
+                selected
+            );
+        })
+    }
+    renderSuggestionOption(x,y,w,h,label,selected){
+        strokeWeight(selected ? 3 : 1);
+        // draw box
+        fill(selected ? "rgb(255,255,0)" : 255)
+        rect(x,y,w,h);
+        strokeWeight(1);
+        // draw label
+        fill(0)
+        textAlign(CENTER,CENTER);
+        text(label, x + (w/2), y + (h/2));
     }
 }
 
@@ -2024,4 +2302,102 @@ function drawEventAt(x,y,event){
     text(event.key === 'backspace' ? '←' : event.key, x, y);
 }
 
+class StateMachine {
+    constructor() {
+        // Initialize the state
+        this.state = {};
+    }
 
+    // Method to get the current state
+    getState() {
+        return this.state;
+    }
+
+    // Method to set a new state
+    setState(newState) {
+        this.state = newState;
+    }
+
+    // Method to reset the state
+    resetState() {
+        this.state = {};
+    }
+}
+
+class VirtualMachine extends StateMachine {
+    constructor() {
+        super();
+        // Initialize the memory
+        this.memory = new Map();
+        // Initialize the internal clock
+        this.clock = 0;
+    }
+
+    // Method to get the current time
+    getTime() {
+        return this.clock;
+    }
+
+    // Method to set the time
+    setTime(newTime) {
+        this.clock = newTime;
+    }
+
+    // Method to increment the time
+    tick() {
+        this.clock++;
+    }
+
+    // Method to get a value from memory
+    getFromMemory(key) {
+        return this.memory.get(key);
+    }
+
+    // Method to set a value in memory
+    setInMemory(key, value) {
+        this.memory.set(key, value);
+    }
+
+    // Method to reset the memory
+    resetMemory() {
+        this.memory = new Map();
+    }
+}
+
+class REPL extends VirtualMachine {
+    constructor() {
+        super();
+        // Initialize the sandbox
+        this.sandbox = {};
+    }
+
+    // Method to evaluate a string of code within the sandbox
+    evaluate(code) {
+        // Use a try-catch block to handle errors
+        try {
+            // Use the Function constructor to create a new function with the code
+            // The sandbox is passed as an argument to provide a controlled environment
+            let func = new Function('sandbox', `with(sandbox) { ${code} }`);
+            // Call the function with the sandbox as the argument
+            let result = func(this.sandbox);
+            // Return the result of the evaluation
+            return result;
+        } catch (error) {
+            // If an error occurs during evaluation, log it and return undefined
+            console.error('Error during evaluation:', error);
+            return undefined;
+        }
+    }
+
+    // Method to reset the sandbox to an empty state
+    resetSandbox() {
+        this.sandbox = {};
+    }
+
+    // Method to pause the sandbox
+    // This is a placeholder as JavaScript doesn't support pausing execution
+    // You might replace this with code to set a "paused" state and check it in your evaluate method
+    pauseSandbox() {
+        console.warn('Pause functionality is not supported in JavaScript');
+    }
+}
