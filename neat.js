@@ -8,6 +8,7 @@
     TODO: get system headless server version talking to client version
     TODO: get server sending text, email, sms, apn, web push notifications, etc
 */
+// Singletons
 let gherkinRunnerWidget = null;
 let toastManager = null;
 
@@ -85,8 +86,115 @@ const root = rootManager; // alias
 const manager = rootManager; // alias
 // construct our root system and attach our root manager
 
+// more singletons
 let system;
 let rootSystem; // alias
+
+// Automatically registers Command classes with the
+// Default Command Prompt Suggestions
+let defaultSuggestedCommands = []
+const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
+    if(!wizardConfigInstance || !wizardConfigInstance?.name){
+        console.error({
+            command,
+            wizardConfigInstance
+        })
+        throw new Error("Bad usage of DefaultSuggestionDecorator, wizardConfigInstance must be defined and have a name")
+    }
+    // singleton
+    let s = new command(wizardConfigInstance.name, {
+        wizardConfig: wizardConfigInstance
+    });
+    // console.log('instance of ',{
+    //     command, 
+    //     wizardConfigInstance, 
+    //     singleton: s
+    // })
+    // early registration before instance is created
+    defaultSuggestedCommands.push(s);
+    let index = defaultSuggestedCommands.length - 1;
+    // console.warn(
+    //     'DefaultSuggestedCommandsArrayLen:',
+    //     defaultSuggestedCommands.length
+    // )
+    return function(...args){
+        // hot-swap when the instance is created
+        defaultSuggestedCommands[index] = new command(...args);
+        return defaultSuggestedCommands[index];
+    }
+}
+
+class Config
+// extends DynamicThingDecorator(DynamicThing)
+{
+    // TODO: add validation for required fields that
+    // all Instances of "Config" must have
+    steps = [{
+        notice: "Default Wizard Config Step"
+    }]
+    finalCallback(wizardInstance){
+        console.warn("Default Wizard Config Final Callback \n"+
+        "override this in your Custom Config class extended definition",
+        {wizardInstance});
+    }
+}
+
+// Define the Command class
+class Command {
+    name = 'default command';
+    constructor(name, options){
+        this.name = name ?? this.name;
+        this.setOptions(options ?? {});
+    }
+    setOptions(options){
+        this.options = options
+        // remap "finalCallback" to this.options.wizardConfig.finalCallback
+        if(this.options?.wizardConfig?.finalCallback){
+            this.finalCallback = this.options.wizardConfig.finalCallback.bind(this);
+        }
+    }
+    clone(){
+        // return a cloned instance of this command
+        return new Command(this.name, this.options);
+    }
+    /**
+     * @returns WizardConfig? - the command's optional wizard config
+     * @nullable - returns null if no wizard config is defined
+     */
+    get wizardConfig(){
+        return this?.options?.wizardConfig;
+    }
+    execute(){
+        console.warn('Command.execute:',
+        {
+            name: this.name,
+            hasWizard: this.wizardConfig ? true : false,
+            hasCallback: this.options.callback ? true : false,
+            hasExecuteFn: this.execute ? true : false,
+            options: Object.keys(this.options),
+            _options: this.options
+        })
+        if(this.options.wizardConfig){
+            // the constructor validates the wizardConfig for us
+            this.wizard = new WizardController(this.options.wizardConfig);
+            this.wizard.start();
+        }
+        if(this.options.callback){
+            this.options.callback.call(this);
+        }
+        if(this.options.execute){
+            this.options.execute.call(this);
+        }
+        // reset command buffer
+        store.commandBuffer = {};
+    }
+    updateFromBuffer(){
+        // update the current command based on the command buffer
+        this.name = store.commandBuffer.name;
+    }
+}
+
+// BeginRegion: Gherkin
 let gherkinStudio;
 
 /*
@@ -162,6 +270,9 @@ class GherkinSequenceValidator {
     sequence = null;
     constructor(sequence){
         this.sequence = sequence
+    }
+    get steps(){
+        return this.sequence;
     }
     validateSequence(sequence){
         // reset: clear validation errors
@@ -250,15 +361,6 @@ function getTestGherkinSequence(){
         Then("I should be logged in")
     ])
 }
-class WidgetView {
-    // display a clock, or a weather widget, or a todo list
-    // the clam's your oyster!
-    constructor(name,options){
-    }
-    render(){
-        console.warn("render WidgetView here");
-    }
-}
 class GherkinRunner {
     // a cucumber-like interface for running a Gherkin Feature Definition and exposing results to be hooked up to a visual display
     currentStepIndex = 0;
@@ -278,7 +380,7 @@ class GherkinRunner {
         this.validator = new GherkinSequenceValidator(this.sequence);
         let isValid = this.validator.validateSequence();
         if(!isValid){
-            system.panic('invalid sequence! '+this.validator.validationErrors.join(","));
+            system.panic('GRunner:validateSeq invalid sequence! '+this.validator.validationErrors.join(","));
         }else{
             //toastManager.showToast('Sequence is valid!');
         }
@@ -331,7 +433,9 @@ class GherkinRunner {
         return this;
     }
 }
+// EndRegion: Gherkin
 
+// BeginRegion: Widgets
 // is this the root?
 class Component {
     constructor(name){
@@ -350,6 +454,176 @@ class Widget extends UndoRedoComponent {
         // should we decorate this class with any functionality?
     }
 }
+class WidgetView {
+    // display a clock, or a weather widget, or a todo list
+    // the clam's your oyster!
+    constructor(name,options){
+    }
+    render(){
+        console.warn("render WidgetView here");
+    }
+}
+
+class FeatureDescription {
+
+}
+
+// BeginRegion: Tables / Nested Tables
+class TableCell {
+    observers = []
+    value(value){
+        if(typeof value === 'undefined'){
+            return this._value;
+        }
+        this._value = value;
+        return value;
+    }
+}
+
+class TableColumn {
+    cellids = []
+    name = null
+    constructor({name}){
+        this.name = name;
+    }
+}
+
+class TableRow {
+    cellids = []
+    name = null
+    constructor({name}){
+        this.name = name;
+    }
+}
+
+class Table {
+    row_names = []
+    column_names = []
+    rows = []
+    columns = []
+    cells = []
+    updateCell({row,column,value}){
+        let cellsIndex = row * this.columns.length + column;
+        if(!this.cells[cellsIndex]){
+            // system.panic("Table.updateCell: cell does not exist at row,column: " + row + "," + column);
+            // return;
+            this.cells[cellsIndex] = new TableCell();
+        }
+        this.cells[cellsIndex].value(value);
+    }
+    addRow(rowOpts){
+        rowOpts.at = rowOpts.at ?? this.rows.length;
+        const row = new TableRow(rowOpts)
+        this.rows.splice(rowOpts.at,0,row);
+        insertRowNameAt(rowOpts.name,at);
+    }
+    insertRowNameAt(name,at){
+        this.row_names.splice(at,0,name);
+    }
+    removeRowNameAt(at){
+        this.row_names.splice(at,1);
+    }
+    addColumn(columnOpts){
+        columnOpts.at = columnOpts.at ?? this.columns.length;
+        let column = new TableColumn(columnOpts);
+        this.columns.splice(columnOpts.at,0,column);
+        insertColumnNameAt(columnOpts.name,at);
+    }
+    insertColumnNameAt(name,at){
+        this.column_names.splice(at,0,name);
+    }
+    removeColumnNameAt(at){
+        this.column_names.splice(at,1);
+    }
+}
+
+class ViewTab {
+    contents = null
+}
+
+class TabbedView {
+    // ViewTab[]
+    tabs = [] 
+}
+
+class TableView {
+    table = null
+}
+
+class CreateRootTestTableCommand extends Command {
+    name = "Create Root Test Table"
+    execute(){
+    }
+}
+
+class NewTableWizardConfig extends Config {
+    name = "New Table..."
+    steps = [
+        // { question: "What is the name of the table" },
+        // { question: "How Many Rows?", answerDefaultValue = 3 },
+        // { question: "How Many Columns?", answerDefaultValue = 3 },
+    ]
+    finalCallback(wiz){
+        store.tables.push(new Table({
+            rowNames: ["Row 1", "Row 2", "Row 3"],
+            columnNames: ["Column A", "Column B", "Column C"],
+            cellValues: [
+                ["A1","B1","C1"],
+                ["A2","B2","C2"],
+                ["A3","B3","C3"],
+            ]
+        }))
+    }
+}
+class NewTableCommand
+extends DefaultSuggestionDecorator(Command, new NewTableWizardConfig()) {}
+
+class OpenTableViewerCommand {}
+class TableWidget extends Widget {
+    tableIndex = null;
+    constructor({tableIndex}){
+        this.tableIndex = tableIndex;
+    }
+    get table(){
+        return store.tables[this.tableIndex];
+    }
+}
+
+// NOTE: we pre-process these
+// and convert them to GherkinFeature objects
+// filled with an Object of keyed GherkinScenario objects
+// which in turn are filled with GherkinStep objects
+class FeatureTestTables extends FeatureDescription {
+    background = [
+        // alias "given a fresh system" ~ "given a fresh root system"
+        "given a fresh, pre-booted sandboxed system instance"
+    ]
+    scenarios = {
+        "system creates a table at boot": [
+            // alias "given a fresh system" ~ "given a fresh root system"
+            "given a fresh sandbox instance", 
+            "when the system boots",
+            "and i access rootTestTable",
+            "then i see the table exists",
+            "and the table contains 3 rows",
+            "and the table contains 3 columns",
+            "and the table contains 9 cells",
+        ],
+        "user can create a table": [
+            "given a fresh start",
+            "when i create a table",
+            "then i see a new table with 9 empty cells across 3 rows and 3 columns",
+        ],
+        "user can save a table": [],
+        "user can load a table": [],
+        "user can delete a table": [],
+        "user can name a table": [],
+        "user can rename a table": []
+    }
+}
+// EndRegion: Tables / Nested Tables
+
+
 class ClockWidget extends Widget {}
 class GraphWidget extends Widget {}
 
@@ -483,38 +757,6 @@ progress and todos
     - [ ] need to refactor suggestion code so we can loop through them with the keyboard shortcuts (effectively stepping an offset value)
 */
 
-let defaultSuggestedCommands = []
-const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
-    if(!wizardConfigInstance || !wizardConfigInstance?.name){
-        console.error({
-            command,
-            wizardConfigInstance
-        })
-        throw new Error("Bad usage of DefaultSuggestionDecorator, wizardConfigInstance must be defined and have a name")
-    }
-    // singleton
-    let s = new command(wizardConfigInstance.name, {
-        wizardConfig: wizardConfigInstance
-    });
-    // console.log('instance of ',{
-    //     command, 
-    //     wizardConfigInstance, 
-    //     singleton: s
-    // })
-    // early registration before instance is created
-    defaultSuggestedCommands.push(s);
-    let index = defaultSuggestedCommands.length - 1;
-    // console.warn(
-    //     'DefaultSuggestedCommandsArrayLen:',
-    //     defaultSuggestedCommands.length
-    // )
-    return function(...args){
-        // hot-swap when the instance is created
-        defaultSuggestedCommands[index] = new command(...args);
-        return defaultSuggestedCommands[index];
-    }
-}
-
 class Argument {
     constructor({
         name, 
@@ -642,7 +884,8 @@ let store = {
     // user defined commands
     // todo: load these from local storage / remote storage
     // todo: cache these to local storage / remote storage
-    customCommands: {},
+    customCommandFactories: {},
+    customCommandInstances: {},
 
     currentGraph: null,
 
@@ -667,10 +910,12 @@ let store = {
             s: 3,
             c: 'red'
         }),
-    }
+    },
+
+    tables: []
 };
 
-
+console.warn('TODO: 1 store per sandbox');
 
 class DynamicThing {
     constructor(options){
@@ -961,7 +1206,7 @@ class WizardController {
             // console.warn('need to take things off this value',{
             //     takeThingsOffThisValue
             // });
-            console.warn('recording ',{
+            console.warn('about to record step response...',{
                 cSI: this.currentStepIndex,
                 offset: this.wizardSuggestionList.selectionOffset,
                 //visibleLength: this.visibleSuggestions.length,
@@ -972,6 +1217,22 @@ class WizardController {
             })
 
             const selectedSuggestion = this.allValidSuggestions[this.selectedSuggestionIndex];
+            if(!selectedSuggestion){
+                console.warn('no selected suggestion?')
+            }
+
+            if(selectedSuggestion?.value === 'skip'){
+                console.warn('SKIPPING!')
+                this.switchToStep(this.currentStepIndex+1);
+                return;
+            }
+            if(selectedSuggestion?.value === 'cancel'){
+                console.warn('CANCELING!')
+                this.end();
+                return;
+            }
+
+            
 
             this.stepResponses[this.currentStepIndex] = {
                 input: commandPaletteInput.value(),
@@ -1009,6 +1270,8 @@ class WizardController {
                 console.error('validation failed',validatorResponse);
                 return;
             }
+
+            
 
             // if the selected suggestion had an execute function, call it
             if(selectedSuggestion?.OnSelect){
@@ -1198,76 +1461,6 @@ class WizardController {
             return {valid:false, errors};
         }
         return {valid:true};
-    }
-}
-
-// Define the Command class
-class Command {
-    name = 'default command';
-    constructor(name, options){
-        this.name = name ?? this.name;
-        this.setOptions(options ?? {});
-    }
-    setOptions(options){
-        this.options = options
-        // remap "finalCallback" to this.options.wizardConfig.finalCallback
-        if(this.options?.wizardConfig?.finalCallback){
-            this.finalCallback = this.options.wizardConfig.finalCallback.bind(this);
-        }
-    }
-    clone(){
-        // return a cloned instance of this command
-        return new Command(this.name, this.options);
-    }
-    /**
-     * @returns WizardConfig? - the command's optional wizard config
-     * @nullable - returns null if no wizard config is defined
-     */
-    get wizardConfig(){
-        return this?.options?.wizardConfig;
-    }
-    execute(){
-        console.warn('Command.execute:',
-        {
-            name: this.name,
-            hasWizard: this.wizardConfig ? true : false,
-            hasCallback: this.options.callback ? true : false,
-            hasExecuteFn: this.execute ? true : false,
-            options: Object.keys(this.options),
-            _options: this.options
-        })
-        if(this.options.wizardConfig){
-            // the constructor validates the wizardConfig for us
-            this.wizard = new WizardController(this.options.wizardConfig);
-            this.wizard.start();
-        }
-        if(this.options.callback){
-            this.options.callback.call(this);
-        }
-        if(this.options.execute){
-            this.options.execute.call(this);
-        }
-        // reset command buffer
-        store.commandBuffer = {};
-    }
-    updateFromBuffer(){
-        // update the current command based on the command buffer
-        this.name = store.commandBuffer.name;
-    }
-}
-
-class Config
-// extends DynamicThingDecorator(DynamicThing)
-{
-    // TODO: add validation for required fields that
-    // all Instances of "Config" must have
-    steps = [{
-        notice: "Default Wizard Config Step"
-    }]
-    finalCallback(wizardInstance){
-        console.warn("Default Wizard Config Final Callback \n"+
-        "override this in your Custom Config class extended definition",
-        {wizardInstance});
     }
 }
 
@@ -1471,14 +1664,118 @@ class RunGherkinCommandWizardConfig extends Config {
             //     return Math.floor(this.steps.filter((step)=>step.status !== 'pending').length / this.steps.filter((step)=>step.status !== 'pending').length * 100);
             // }
             onStepLoaded(wizardInstance){
-                console.warn('Running Gherkin Test Suite: onStepLoaded')
-                console.warn('Running via GherkinRunnerWidget...');
+                console.warn('Gherkin Test Suite: onStepLoaded')
+                console.warn('Loading Sequence via GherkinRunnerWidget...');
                 gherkinRunnerWidget.loadSequence(getTestGherkinSequence());
+                console.warn('Running Test via widget');
                 gherkinRunnerWidget.run();
             }
         }
     ]
 }
+
+/** 
+ * this is a dynamic, user-configurable command that can be created at runtime
+*/
+class CustomCommandFactory {
+    name = "My Custom Command Factory"
+    // the configuration of the command
+    options = {}
+    _id = null;
+    constructor(options){
+        this.options = options ?? {};
+    }
+    get id(){
+        // if(this._id === null){
+        //     this._id = this.generateID();
+        // }
+        return this.options?.id;
+    }
+    execute(){
+        console.warn('OnCustomCommandFactoryExecute')
+        if(this.options?.execute){
+            this.options.execute.call(this);
+        }
+    }
+}
+
+class CommandStepConfig {
+
+}
+
+class CommandStep {
+
+}
+
+class NewCommandWizardConfig
+extends Config {
+    name = "New Command..."
+    steps = [
+        {
+            question: "What is the name of the command?",
+            onStepCompleted(wizardInstance){
+                console.warn('onStepCompleted',{wizardInstance, latestResponse: wizardInstance?.latestResponse})
+                const latestResponse = wizardInstance?.latestResponse;
+                console.warn('user completed step 1. reply: ' + latestResponse)
+
+                // TODO: if boolean "Default Suggested Command" is true,
+                // we need to decorate the command with the default suggested command decorator
+                const myNewCommandID = performance.now() + Math.random();
+                const myCustomCommandClassFactory = new CustomCommandFactory({
+                    id: myNewCommandID,
+                })
+                wizardInstance.currentCommandID = myNewCommandID;
+                store.customCommandFactories[myNewCommandID] = myCustomCommandClassFactory;
+                toastManager.showToast(`Created Custom Command Factory: ${myNewCommandID}`, {pinned: false});
+            }
+        },
+        {
+            question: "What is the description of the command?",
+            answerStorageKey: "description",
+            answerValidationRules: "required:string",
+            onStepCompleted(wizardInstance){
+                const myNewCommandID = wizardInstance.currentCommandID;
+                const myCustomCommandClassFactory = store.customCommandFactories[myNewCommandID];
+                myCustomCommandClassFactory.options.description = wizardInstance?.latestResponse;
+            }
+        },{
+            question: "What are the steps of the command?",
+            answerStorageKey: "steps",
+            answerStorageType: "CommandStep[]",
+            onStepLoaded(wizardInstance){
+                console.warn('What are the steps of the command? onStepLoaded')
+            },
+            onStepUnload(wizardInstance){
+                console.warn('What are the steps of the command? onStepUnload')
+            },
+            // TODO:
+            // beforeValidate
+            // || afterValidate
+            // || extendValidator
+            // || customValidator
+            onStepSubmitted(wizardInstance){
+                console.warn('What are the steps of the command? onStepSubmitted')
+                // Let's mock the user making a selection since we don't have the UI for it yet
+                wizardInstance.stepResponses[wizardInstance.currentStepIndex] = {
+                }
+
+                // returning false here flags as a validation error
+                // returning true here allows the step to complete
+                const steps = wizardInstance?.latestResponse;
+                // using Dispatch:Action, Commit:Mutation, etc... for setting / getting state
+                // dynamically at runtime inside the System
+                console.warn('TODO: need to define UI for specifying Steps of a Command')
+                const stepsAreValid = steps?.length > 0; // todo validate steps
+                return stepsAreValid;
+            }
+        }
+    ]
+    finalCallback(wizardInstance){
+        console.warn('NewCommandWizardConfig finalCallback')
+    }
+}
+class NewCommandCommand
+extends DefaultSuggestionDecorator(Command, new NewCommandWizardConfig()){}
 
 class RunGherkinCommand
 extends DefaultSuggestionDecorator(Command, new RunGherkinCommandWizardConfig()){}
@@ -1666,6 +1963,161 @@ function loadGraph(name){
     }
 }
 
+class CustomFn {
+    _str = ""
+    result;
+    constructor(str){
+        this._str = str;
+    }
+    execute(){
+        let output;
+        try {
+            output = eval(this._str);
+        }catch(e){
+            //system.panic(e)
+            output = e;
+        }
+        this.result = output;
+        return output;
+    }
+}
+
+// backing types
+// note this can be nested
+class StepAction {
+    steps = []
+    results = []
+    constuctor(name){
+        this.name = name
+    }
+    setSteps(steps){
+        // TODO: validate them
+        this.steps = steps;
+    }
+    execute(){
+        if(this.customExecute){
+            return this.customExecute.execute(this);
+        }
+        let results = [];
+        this.steps.forEach((step)=>{
+            if(step?.execute){
+                results.push(step.execute());
+                return;
+            }
+            results.push(step);
+        })
+        this.results = results;
+        return results;
+    }
+    defineCustomEvaluation(str){
+        this.fnStr = str;
+        this.customExecute = new CustomFn(str);
+    }
+    addStep(step){
+        steps.push(step)
+    }
+    replaceStep(stepIndex, step){
+        steps[stepIndex] = step;
+    }
+    nullStep(stepIndex){
+        steps[stepIndex] = null;
+    }
+    serializeStepsRecursive(steps){
+        return steps.map((step)=>{
+            if(step?.serialize){
+                return step.serialize();
+            }
+            // it's a literal value
+            return step;
+        })
+    }
+    serialize(){
+        // TODO: be sure to include sub-steps
+        let output = {
+            // what type to hydrate as on load
+            __type: 'StepAction',
+            steps: this.serializeStepsRecursive(this.steps)
+        }
+        return output;
+    }
+    // warning this may have unintended consequences
+    // if you rely on the position of steps
+    // use this only if needed
+    // removeStep(stepIndex){
+    //     steps.splice(stepIndex,1);
+    // }
+}
+
+class StepActionFactory {
+    hydrateFromPlainObject(options){
+        let root = new StepAction(options);
+        // TODO: recursively hydrate sub-steps
+        return root;
+    }
+}
+
+class DispatchAction extends StepAction {
+    store = null;
+    actionKey = null; // "DoRemotePostAsync"
+    execute(){
+
+    }
+}
+
+class Mutate extends StepAction {
+    store = null;
+    lookupKey = null; // thing[0].ok['but']?.really
+    nextValue = null; // place to store the nextValue
+    execute(){
+
+    }
+}
+
+const CMD_ACTIONS = {
+    DispatchAction,
+    Mutate,
+}
+
+class CommandStepAction {
+    get actionType(){
+        return this.options?.actionType
+    }
+    constructor(options){
+        this.options = options ?? {}
+        console.warn('Command Step Action created');
+    }
+}
+
+/**
+ * This is a class that produces an instance of a CommandStepAction
+ */
+class CommandStepActionFactory {
+    createAction(options){
+        // new DispatchAction()
+        // || new Mutate()
+        return new CMD_ACTIONS[options.actionType](options)
+    }
+}
+
+/**
+ * @TODO
+ * this should be a class for browsing through a collection of graphs
+ * showing their cached icons / names / last modified status,
+ * and allowing you to load them / duplicate them / delete them / rename them / etc...
+ */
+class GraphBrowser {
+    // requires a Sandboxed System for loading graphs into
+    currentSandbox = null;
+    currentSystem = null;
+    //currentSystemManager = null; currentSystem.manager
+    addGraph(){
+    }
+    renameGraph(graphID, newName){
+    }
+    deleteGraph(graphID){
+    }
+}
+
 class GraphNode {
     observedInputs = []
     constructor(options){
@@ -1688,13 +2140,13 @@ class GraphNode {
             progress: 0, 
             flowIndex: 0, // replaces stage
         };
-        if (inputValue.length < store.viewValue.length) {
+        if (event.keyCode === 8) {
             _event.key = 'backspace';
         } else {
             _event.key = event.key; //inputValue.slice(-1);
         }
         // send event up to parent graph to manage it's event flow
-        this.graph.events.push(_event);
+        this.graph.events.push(new GraphEvent(_event));
     }
     // renderNode
     drawNode(){
@@ -1872,8 +2324,8 @@ class Graph {
         this.drawLines();
         // draw events next
         this.events.forEach((event, i) => {
-            updateEvent(event);
-            drawEvent(event);
+            event.update();
+            event.drawEvent();
         });
         // draw nodes on top
         this.nodes.forEach((node, i) => {
@@ -1953,6 +2405,13 @@ class MVCExampleGraph extends Graph {
             { id: 1, x: 300, y: 50, shape: 'ellipse', label: 'Controller' },
             { id: 2, x: 500, y: 200, shape: 'rect', label: 'Model' }
         ];
+        // hydrate nodes as instances
+        this.nodes.forEach((_n,index)=>{
+            this.nodes[index] = new GraphNode({
+                ..._n,
+                graph: this
+            });
+        })
         this.edges = [
             // view -> controller
             { from: 0, to: 1, color: 'red', fromAnchor: { x: 0, y: 30 }, toAnchor: { x: 0, y: 30 } },
@@ -1963,12 +2422,6 @@ class MVCExampleGraph extends Graph {
             // controller -> view
             { from: 1, to: 0, color: 'blue', fromAnchor: { x: 0, y: 0 }, toAnchor: { x: 0, y: 0 } }
         ];
-        this.nodes.forEach((_n,index)=>{
-            this.nodes[index] = new GraphNode({
-                ..._n,
-                graph: this
-            });
-        })
         this.eventFlow = [
             {from: 0, to: 1}, // view -> controller
             {from: 1, to: 2}, // controller -> model
@@ -2170,7 +2623,7 @@ class TimerWizardConfig extends WizardConfig {
 }
 
 class CommandWizardConfig extends WizardConfig {
-    name = 'CommandWizardConfig'
+    name = 'New Command'
     constructor(name){
         super(name ?? this.name)
 
@@ -2326,7 +2779,7 @@ class SaveStateToLocalStorageWizardConfig extends Config {
 
                 // then proceed when ready...
                 // setTimeout(()=>{
-                //     wizardInstance.tryCompleteStep();
+                    wizardInstance.tryCompleteStep();
                 // },1000);
             }
         }
@@ -3194,6 +3647,105 @@ function renderDebugUI(){
 
 let modeSwitcherButtons = {};
 
+class GraphEvent {
+    flowIndex = null
+    timerId = null
+    stage = null
+    positions = []
+
+    constructor(options){
+        this.options = options ?? {}
+    }
+
+    get parentGraph () {
+        return this.options.parentGraph;
+    }
+
+    update(){
+        this.progress += 0.02;
+        if (this.progress > 1) {
+            this.progress = 0;
+            if (this.flowIndex + 1 < this.parentGraph.eventFlow.length) {
+                this.flowIndex++;
+            } else {
+                let index = this.parentGraph.events.indexOf(event);
+                if (index > -1) {
+                    store.events.splice(index, 1);
+                    return;
+                }
+            }
+            let stage = this.parentGraph.eventFlow[this.flowIndex];
+            let delay = stage.delay || 0;
+            if(!this.timerId){
+                this.timerId = setTimeout(() => {
+                    if (Array.isArray(stage.to)) {
+                        // If there's a fork, create new events for each target node
+                        stage.to.forEach(to => {
+                            let newEvent = { ...event, stage: { from: stage.from, to: to } };
+                            // todo: add a Graph@addEvent method
+                            this.parentGraph.events.push(new GraphEvent(newEvent));
+                        });
+                    } else {
+                        // If there's no fork, just update the stage of the current event
+                        this.stage = stage;
+                    }
+                    this.timerId = null;
+                }, delay);
+            }
+        }
+    }
+
+    getEventPositions(){
+        if(!this){
+            throw new Error('event no longer exists');
+        }
+        if(this.flowIndex === null || this.flowIndex === undefined){
+            console.warn('event has no flowIndex?',{event});
+            return [[0,0]];
+        }
+        let {fromNode,toNodes} = nodesForFlowIndex(this.flowIndex);
+        if(!fromNode || !toNodes?.length){
+            console.warn('event stage has no from/to nodes?',{event})
+            return [[0,0]];
+        }
+    
+        let positions = toNodes.map(toNode => {
+            let edgeFrom = store.edges.find(edge => edge.from === fromNode.id && edge.to === toNode.id);
+            let edgeTo = store.edges.find(edge => edge.to === toNode.id && edge.from === fromNode.id);
+            let x1 = fromNode.x + (edgeFrom ? edgeFrom.fromAnchor.x : 0);
+            let y1 = fromNode.y + (edgeFrom ? edgeFrom.fromAnchor.y : 0);
+            let x2 = toNode.x + (edgeTo ? edgeTo.toAnchor.x : 0);
+            let y2 = toNode.y + (edgeTo ? edgeTo.toAnchor.y : 0);
+            let x = map(this.progress, 0, 1, x1, x2);
+            let y = map(this.progress, 0, 1, y1, y2);
+            return [x, y];
+        });
+    
+        return positions;
+    }
+
+    drawEvent() {
+        // the event can split into multiple events at runtime 
+        // when reaching certain points in the graph
+        // TODO: really it should spwan a new event
+        // we'll get back to that as our refactor continues...
+        this.positions = this.getEventPositions(); 
+        for(var i=0;i<this.positions.length;i++){
+            let [x,y] = this.positions[i];
+            this.drawEventAt(x,y,event);
+        }
+    }
+    
+    drawEventAt(x,y,event){
+        console.warn('drawEventAt',{x,y,event})
+        debugger;
+        fill(event.key === 'backspace' ? color(255,0,0) : 255); // Change 0 to 255
+        ellipse(x, y, 30, 30);
+        fill(event.key === 'backspace' ? color(255,255,255) : 0);
+        text(event.key === 'backspace' ? '←' : event.key, x, y);
+    }
+}
+
 function drawModeSwitcher(){
     let i = 0;
     Object.entries(MODES).forEach(([key,value], index)=>{
@@ -3220,70 +3772,6 @@ function drawModeSwitcherBox(x,y,w,h,label,selected){
     fill(0)
     textAlign(CENTER,CENTER);
     text(label, x + (w/2), y + (h/2));
-}
-
-// Define the updateEvent function
-function updateEvent(event) {
-    event.progress += 0.02;
-    if (event.progress > 1) {
-        event.progress = 0;
-        if (event.flowIndex + 1 < store.eventFlow.length) {
-            event.flowIndex++;
-        } else {
-            let index = store.events.indexOf(event);
-            if (index > -1) {
-                store.events.splice(index, 1);
-                return;
-            }
-        }
-        let stage = store.eventFlow[event.flowIndex];
-        let delay = stage.delay || 0;
-        if(!event.timerId){
-            event.timerId = setTimeout(() => {
-                if (Array.isArray(stage.to)) {
-                    // If there's a fork, create new events for each target node
-                    stage.to.forEach(to => {
-                        let newEvent = { ...event, stage: { from: stage.from, to: to } };
-                        store.events.push(newEvent);
-                    });
-                } else {
-                    // If there's no fork, just update the stage of the current event
-                    event.stage = stage;
-                }
-                event.timerId = null;
-            }, delay);
-        }
-    }
-}
-
-// Define the getEventPositions function
-function getEventPositions(event) {
-    if(!event){
-        throw new Error('event not given');
-    }
-    if(event.flowIndex === null || event.flowIndex === undefined){
-        console.warn('event has no flowIndex?',{event});
-        return [[0,0]];
-    }
-    let {fromNode,toNodes} = nodesForFlowIndex(event.flowIndex);
-    if(!fromNode || !toNodes?.length){
-        console.warn('event stage has no from/to nodes?',{event})
-        return [[0,0]];
-    }
-
-    let positions = toNodes.map(toNode => {
-        let edgeFrom = store.edges.find(edge => edge.from === fromNode.id && edge.to === toNode.id);
-        let edgeTo = store.edges.find(edge => edge.to === toNode.id && edge.from === fromNode.id);
-        let x1 = fromNode.x + (edgeFrom ? edgeFrom.fromAnchor.x : 0);
-        let y1 = fromNode.y + (edgeFrom ? edgeFrom.fromAnchor.y : 0);
-        let x2 = toNode.x + (edgeTo ? edgeTo.toAnchor.x : 0);
-        let y2 = toNode.y + (edgeTo ? edgeTo.toAnchor.y : 0);
-        let x = map(event.progress, 0, 1, x1, x2);
-        let y = map(event.progress, 0, 1, y1, y2);
-        return [x, y];
-    });
-
-    return positions;
 }
 
 // Define the ensureHeadTag function
@@ -3343,6 +3831,7 @@ class FluxExampleGraph extends Graph {
             { id: 2, x: 475, y: 50, shape: 'ellipse', label: 'Mutation' },
             { id: 3, x: 500, y: 200, shape: 'rect', label: 'State' }
         ];
+        // hydrate the nodes
         this.nodes.forEach((_n,index)=>{
             _n.graph = this;
             this.nodes[index] = new GraphNode(_n);
@@ -3426,6 +3915,13 @@ class FluxAjaxExampleGraph extends Graph {
             { id: 3, x: 424, y: 315, shape: 'ellipse', label: 'State' },
             { id: 4, x: 582, y: -71, shape: 'ellipse', label: 'Ajax' },
         ];
+        // hydrate nodes as instances
+        this.nodes.forEach((_n,index)=>{
+            this.nodes[index] = new GraphNode({
+                ..._n,
+                graph: this
+            });
+        })
         this.edges = [
             // Component -{Dispatches}-> Action
             { 
@@ -3900,22 +4396,6 @@ function nodesForFlowIndex(flowIndex){
         toNodes.push(toNode);
     })
     return {fromNode, toNodes};
-}
-
-
-function drawEvent(event) {
-    let positions = getEventPositions(event);
-    for(var i=0;i<positions.length;i++){
-        let [x,y] = positions[i];
-        drawEventAt(x,y,event);
-    }
-}
-
-function drawEventAt(x,y,event){
-    fill(event.key === 'backspace' ? color(255,0,0) : 255); // Change 0 to 255
-    ellipse(x, y, 30, 30);
-    fill(event.key === 'backspace' ? color(255,255,255) : 0);
-    text(event.key === 'backspace' ? '←' : event.key, x, y);
 }
 
 class StateMachine {
