@@ -1,3 +1,462 @@
+/*  
+    Free Palestine
+    End Imperilism
+    Land Back
+    Reparations Now
+    ---
+    TODO: allow system to run headless in node.js env
+    TODO: get system headless server version talking to client version
+    TODO: get server sending text, email, sms, apn, web push notifications, etc
+*/
+let gherkinRunnerWidget = null;
+let toastManager = null;
+
+/*
+    Given *required (at least one Given)
+    When *required (at least one When immediately after at least one Given)
+    Then *required (at least one, immediately after at least one When)
+*/
+class SystemManager {
+    constructor(){
+        this._panic = false;
+    }
+    boot(){
+        // the outer-system manages the sub-systems and resources
+        this.systems = []
+        const mainSystem = new System(this);
+        this.systems.push(mainSystem);
+    }
+    panic(message){
+        this._panic = true;
+        console.error(message);
+        // show a toast
+        toastManager.showToast(message, {
+            pinned: true, 
+            // TODO: changing level to error could 
+            // flip pinned to true by default if we want
+            // users could opt-out of a error toast auto-pinning
+            // via a config option...
+            level:TOAST_LEVELS.ERROR
+        });
+    }
+    // get panic(){
+    //     return this._panic;
+    // }
+}
+class System {
+    /** 
+     * @TODO `@DecoratorManagedObject`
+     * > default to outer system time unless
+     *   we've performed some action that has 
+     *   de-synchronized this object's inner clock
+     *   clock states are resolved up the chain to the base
+     *   object in the system so that
+     *   groups of items can all share a custom-controllable clock
+     *   this is part of how our REPL and time-stepping debugger are able to work
+     *   it's also the fundamental mechanism for our versioning system and our
+     *   ability to "rewind" the system to a previous state (built-in undo/redo)
+     *   you can skip past granular changes to previous milestones or checkpoints
+     *   you can name or tag checkpoints
+     *   you can attempt to merge checkpoints
+     *   you can cherry pick changes between checkpoints
+     *   it'll be cool once the gui is wired up, and you see me
+     *   zoom out of a graph to view the meta-graph controlling it,
+     *   then slice and dice it's flow tree with all kinds of plugins and add ons
+     *   then zoom back in, encounter an error,
+     *   zoom side-by-side
+     *   step through the flow
+     *   work backwards from the error
+     *   find the error in the flow
+     *   correct it, see an instantly passing test that triggers a cascade of related test runs
+     *   then watch them ripple from yellow back to green as the system autonomously accepts and distributes the verified changes
+     *   to the appropriate subsystems...
+     */
+    innerClockTime = -1; 
+    constructor(manager){
+        this.manager = manager;
+    }
+    panic(message){
+        this.manager.panic(message);
+    }
+}
+const rootSystemManager = new SystemManager();
+const rootManager = rootSystemManager; // alias
+const root = rootManager; // alias
+const manager = rootManager; // alias
+// construct our root system and attach our root manager
+
+let system;
+let rootSystem; // alias
+let gherkinStudio;
+
+/*
+    Given I am on the Login Page
+    When I submit valid credentials
+    Then I should be logged in
+*/
+let previousStep; 
+class GherkinStep {
+    constructor(type, name, options){
+        this.type = type;
+        this.name = name;
+        this.options = options;
+        previousStep = this; // todo maybe use a long history
+    }
+}
+// record the previously constructed step
+// so we can refer back to it's type
+// so we know how to properly instantiate
+// AndGiven, AndThen, AndWhen, etc implicitly
+
+function Scenario(){
+    return new GherkinStep('Scenario', ...arguments);
+}
+function Feature(){
+    return new GherkinStep('Feature', ...arguments);
+}
+function Given(){
+    return new GherkinStep('Given', ...arguments);
+}
+function When(){
+    return new GherkinStep('When', ...arguments);
+}
+function Then(){
+    return new GherkinStep('Then', ...arguments);
+}
+function And(){
+    // was the previously added step a Given, When, or Then?
+    switch(previousStep.type){
+        case 'Given':
+            return new GherkinStep('Given', ...arguments);
+        case 'When':
+            return new GherkinStep('When', ...arguments);
+        case 'Then':
+            return new GherkinStep('Then', ...arguments);
+        default:
+            system.panic("invalid previous step type",previousStep.type);
+            break;
+    }
+}
+class BDDTest {
+    results = []
+    requirements = [
+        Given("I am a BDDTest"),
+        When("I perform an action"),
+        Then("I expect valid results")
+    ]
+    passed = null;
+    executed = false;
+}
+class AuthRequirements extends BDDTest {
+    requirements = [
+        Given("I am on the Login Page"),
+        When("I submit valid credentials"),
+        Then("I should be logged in")
+    ]
+}
+class AndGiven extends GherkinStep {}
+class AndWhen extends GherkinStep {}
+class AndThen extends GherkinStep {}
+class GherkinSequenceValidator {
+    validationErrors = []
+    sequence = null;
+    constructor(sequence){
+        this.sequence = sequence
+    }
+    validateSequence(sequence){
+        // reset: clear validation errors
+        this.validationErrors = [];
+        console.warn('validateSequence',{
+            sequence,
+            thisSequence: this.sequence
+        })
+        this.sequence = sequence ?? this.sequence;
+        if(!this.sequence){
+            system.panic("GherkinSequenceValidator.validateSequence requires a sequence to validate")
+        }
+        this.sequence.forEach((step,index)=>{
+            this.checkStepIsValid(step,this.sequence,index)
+        })
+        return this.validationErrors.length === 0;
+    }
+    // TODO: maybe better as:
+    // Feature: ""
+    // Scenarios: {
+    //    scenarioNameOne: Steps[], 
+    //    scenarioNameTwo: Steps[], 
+    //    scenarioNameThree: Steps[]
+    //}
+    checkStepIsValid(step,steps,index){
+        let prevStep = steps[index-1];
+        let prevDifferentStep = this.closestPreviousDifferentStep(steps,index);
+        
+        // walk backwards until we find a step of a different type
+        switch(step.type){
+            case 'Feature':
+                return prevStep == null;
+            case 'Scenario':
+                return prevStep == 'Feature' || prevStep == 'Then';
+            case 'Given':
+                // if the previousDifferentStep is null || Given, it's valid
+                return prevStep == null || prevStep?.type === 'Given';
+            case 'When':
+                return prevStep?.type == 'Given' || prevStep?.type == 'When';
+            case 'Then':
+                return prevStep?.type == 'When' || prevStep?.type == 'Then';
+            default:
+                system.panic(`Invalid Step Type In GherkinSequence:\n ${step.type} after a ${prevStep?.type ?? 'null'} at index ${index}`)
+                break;
+        }
+    }
+    closestPreviousDifferentStep(steps,index){
+        if(!steps[index-1]){
+            return null;
+        }
+        let prevStep = steps[index-1];
+        let step = steps[index]
+        if(prevStep.type !== step.type){
+            return prevStep;
+        }
+        return this.closestPreviousDifferentStep(steps,index-1);
+    }
+    
+}
+class GherkinSequence {
+    steps = [];
+    constructor(steps){
+        // validate sequence 
+        // as it's constructed
+        steps.forEach((step)=>{
+            this.addStep(step);
+        })
+    }
+    addStep(step){
+        let seqNext = [...this.steps,step];
+        let validator = new GherkinSequenceValidator(seqNext);
+        let isValid = validator.validateSequence();
+        if(!isValid){
+            system.panic("addStep: invalid sequence: " + validator.validationErrors.join(","));
+        }
+        this.steps.push(step);
+        return this;
+    }
+}
+function getTestGherkinSequence(){
+    return new GherkinSequence([
+        Feature("Login"),
+        Scenario("Login with valid credentials"),
+        Given("I am on the Login Page"),
+        When("I submit valid credentials"),
+        Then("I should be logged in")
+    ])
+}
+class WidgetView {
+    // display a clock, or a weather widget, or a todo list
+    // the clam's your oyster!
+    constructor(name,options){
+    }
+    render(){
+        console.warn("render WidgetView here");
+    }
+}
+class GherkinRunner {
+    // a cucumber-like interface for running a Gherkin Feature Definition and exposing results to be hooked up to a visual display
+    currentStepIndex = 0;
+    results = []
+    sequence = null;
+    constructor(){
+    }
+    reset(){
+        this.currentStepIndex = 0;
+        this.results = []
+        this.sequence = null;
+    }
+    validateSequence(){
+        if(!this.sequence || !this.sequence.instanceOf(GherkinSequence)){
+            system.panic("GherkinRunner.sequence must be an instance of a GherkinSequence object")
+        }
+        this.validator = new GherkinSequenceValidator(this.sequence);
+        let isValid = this.validator.validateSequence();
+        if(!isValid){
+            system.panic('invalid sequence! '+this.validator.validationErrors.join(","));
+        }else{
+            //toastManager.showToast('Sequence is valid!');
+        }
+        this.validator = null;
+    }
+    loadSequence(sequence){
+        let valid = this.validateSequence(sequence);
+        // if(!valid){
+            // return; // ? should we load invalid sequences?
+        // }
+        this.sequence = sequence;
+    }
+    async run(){
+        return new Promise((resolve, reject)=>{
+            if(!this.sequence){
+                system.panic("GherkinRunner.sequence must be set before running...")
+            }
+            if(!this.sequence.instanceOf(GherkinSequence)){
+                system.panic("GherkinRunner.sequence must be an instance of a GherkinSequence object")
+            }
+            if(!this.sequence?.steps?.length){
+                console.warn(this.sequence);
+                system.panic("GherkinRunner.sequence must have steps")
+            }
+            this.sequence.steps.forEach(async (step,index)=>{
+                try{
+                    await this.runStep(step,index);
+                }catch(e){
+                    // assume required unless flagged
+                    if(!step.isOptional){
+                        reject(e);
+                    }else{
+                        console.warn("Optional Step Failed",e);
+                        resolve("Optional Step Failed");
+                    }
+                }
+            })
+            resolve();
+        })
+    }
+    async runStep(step,index){
+        this.currentStepIndex = index;
+        const messages = [], errors = [];
+        let valid = await step.validate();
+        this.results[this.currentStepIndex] = {
+            valid,
+            errors,
+            messages
+        }
+        return this;
+    }
+}
+
+// is this the root?
+class Component {
+    constructor(name){
+        // TODO: GUIDv4
+        this.id = performance.now() + Math.random();
+        this.name = name;
+    }
+}
+class UndoRedoComponent extends Component {
+    // maybe better as a decorator?
+}
+class Widget extends UndoRedoComponent {
+    constructor(name){
+        super(name);
+
+        // should we decorate this class with any functionality?
+    }
+}
+class ClockWidget extends Widget {}
+class GraphWidget extends Widget {}
+
+// In the future the GherkinRunnerWidget will
+// ask you which Feature(s)/Tags you want to run
+// for now, let's just make one command that runs one feature
+// then make it dynamic later
+class GherkinRunnerWidget extends Widget {
+    name = "Gherkin Runner Widget"
+    constructor(sequence){
+        super("Gherkin Runner Widget")
+        this.gherkinRunner = new GherkinRunner(sequence);
+    }
+    loadSequence(sequence){
+        // loads and validates the sequence
+        this.gherkinRunner.loadSequence(sequence);
+    }
+    async run(){
+        await this.gherkinRunner.run();
+    }
+    // render the widget
+    render(){
+        // rounded rect with status lights in rows and columns
+        // each status light is a circle with a label
+        // each status light is a different color
+        // each status light represents the status of a passing or 
+        // failing part of the current feature run
+        let x = 0;
+        let y = 0;
+        let widgetWidth = 300
+        let widgetHeight = 300
+        this.gherkinRunner.results.forEach((result,index)=>{
+            // remember to increment x and y
+            // and fit the lights into the widget
+            fill(result.color);
+            circle(x,y,10);
+            x += 20;
+            if(x > widgetWidth){
+                x = 0;
+                y += 20;
+            }
+        })
+        super.render();
+    }
+}
+
+
+ClockDecorator = function(target) {
+    class Clock {
+        timeMultiplier = 1.0;
+        multiplierSetAt = null;
+
+        timePaused = false;
+        pausedAtTime = null;
+        
+        constructor(){
+
+        }
+        pauseTime(){
+            this.timePaused = true;
+            this.pausedAtTime = performance.now();
+        }
+        setTimeMultiplier(multiplier){
+            this.timeMultiplier = multiplier;
+            this.multiplierSetAt = performance.now();
+        }
+        resumeTime(){
+            this.resumedAt = performance.now();
+        }
+    }
+    return function(...args) {
+        const d = new target(...args);
+        d.clock = new Clock();
+        
+        Object.defineProperty(d, 'getTime', {
+            get: function() {
+                if(d.timeMultiplier !== 1){
+                    d.overrideTime = (performance.now() - d.multiplierSetAt) * d.timeMultiplier;
+                    return d.overrideTime;
+                }
+                if(d.timePaused){
+                    return d.pausedAtTime;
+                }
+                return Date.now();
+            },
+            set: function(){
+                if(d.timePaused){
+                    system.warn("skipping forward, then re-pausing...");
+                }
+                console.warn('todo write clock desync tracking logic')
+            }
+        });
+        return d;
+    }
+}
+
+const TOAST_LEVELS = {
+    INFO: 'info',
+    SUCCESS: 'success',
+    WARNING: 'warning',
+    ERROR: 'error'
+}
+
+
+
+
+
 /*
 progress and todos
 11.15.23: need to add arguments to commands
@@ -224,6 +683,85 @@ class ToggleableThing extends DynamicThing {
     toggleState = false; // off by default
 }
 
+class AST {
+    cursor = {x:0,y:0};
+    root = [];
+    setCursor(x,y){
+        cursor = {x,y};
+    }
+    getClosestNode(treeLevel){
+        let minDist = Math.Infinity;
+        let closestNode = null;
+        for(let candidate of treeLevel){
+            if(Array.isArray(candidate)){
+                // keep digging
+                // TODO: improve search
+                // by killing branches with
+                // consistently increasing distances
+                let result = this.getClosestNode(candidate);
+                if(result.minDist < minDist){
+                    minDist = result.minDist;
+                    closestNode = result.closestNode;
+                }
+            }else{
+                // base case!
+                let d = this.getDistanceToNode(candidate);
+                if(d < minDist){
+                    minDist = d;
+                    closestNode = node;
+                }
+            }
+        }
+        return {
+            minDist,
+            closestNode
+        }
+    }
+    // aka getDistanceToCursor
+    getDistanceToNode(node){
+        return dist(node.x,node.y,cursor.x,cursor.y);
+    }
+    getNodeAtCursor(){
+        let parent = this.getParentForCursor(cursor);
+    }
+    parseCursor(cursorString){
+        return {
+            // Total Depth within the AST
+            // 0 for root level nodes
+            x: cursor.split('.')[0],
+            // Immediate Depth with the parent Node (if any)
+            y: cursor.split('.')[1]
+        }
+    }
+    getParentForCursor(cursor){
+
+    }
+    addNodeAtCursor(cursor, node){
+    }
+}
+
+/* Note: due to Gherkin syntax parsing requirements:
+
+    givens CAN be chained onto other givens
+    givens CAN also be chained onto whens
+    but givens CANNOT be chained onto thens
+*/
+class GherkinBusinessReq {
+    name = "GherkinBusinessReq"
+    // givens = []
+    // whens = []
+    // thens = []
+    ast = []
+
+    addGiven(given){
+    }
+    addThen(then){
+    }
+    addWhen(when){
+        this.ast.addNodeAtCursor(when);
+    }
+}
+
 // # I want this tool to feel as expressive as typing in Cursor with Co-Pilot
 class TestStep extends DynamicThing {
     // options:
@@ -327,7 +865,11 @@ class WizardController {
         return this?.config?.steps ?? [];
     }
     get currentStep(){
-        return this?.steps?.[this?.currentStepIndex] ?? null;
+        let step = this?.steps?.[this?.currentStepIndex] ?? null;
+        if(!step.repeatCount){
+            step.repeatCount = 0;
+        }
+        return step;
     }
     // all valid suggestions
     get allValidSuggestions(){
@@ -479,9 +1021,29 @@ class WizardController {
             this.currentStep.onStepUnload.call(this, this);
         }
 
+        // TODO: make a global cmdprompt.reset() function
+        // and a default onStepCompleted -> cmdprompt.reset() call
+        // can opt out with wizardConfig.dontResetInputBetweenSteps = true
+        if(!this.dontResetInputBetweenSteps){
+            commandPaletteInput.value("")
+            store.commandBuffer = {name: commandPaletteInput.value()}
+        }
+
+        // if there's a onStepCompleted function, call it
+        if(this?.onStepCompleted){
+            this.onStepCompleted.call(this,this);
+        }
+
         // reset the selected suggestion index between steps
         this.selectedSuggestionIndex = null;
         this.selectionOffset = 0;
+
+        // if the current step is set to repeatWhile, repeat it
+        if(this.currentStep?.repeatWhile){
+            // todo: note if we add Undo, we need to decrement this count
+            this.currentStep.repeatCount++;
+            return;
+        }
         
         // if we completed it, and it was the last step,
         // end the wizard
@@ -522,6 +1084,12 @@ class WizardController {
         //     currentStepIndex:this.currentStepIndex,
         //     question
         // });
+
+        // render the name of the current command in the top right
+        textAlign(RIGHT,TOP);
+        textStyle(BOLD)
+        text(`${this.name}`, windowWidth - 20, 20);
+
         // render the question
         let offsetY = 30;
         fill(255)
@@ -665,7 +1233,8 @@ class Command {
             hasWizard: this.wizardConfig ? true : false,
             hasCallback: this.options.callback ? true : false,
             hasExecuteFn: this.execute ? true : false,
-            options: Object.keys(this.options)
+            options: Object.keys(this.options),
+            _options: this.options
         })
         if(this.options.wizardConfig){
             // the constructor validates the wizardConfig for us
@@ -704,6 +1273,7 @@ class Config
 
 // TODO: nest these into a New Game... Parent Wizard
 
+/*
 class FlashCardGameWizardConfig
 extends Config
 {
@@ -821,11 +1391,17 @@ extends Config
 {
     name = "Messenger Window Wizard"
 }
+*/
 
 class AddGraphNodeWizardConfig
 extends Config
 {
     name = "Add Graph Node..."
+    altnames = [
+        "New Graph Node...",
+        "New Node...",
+        "New..." // our default NEW
+    ]
     steps = [
         // {
         //     question: "what type of node would you like to add?",
@@ -876,9 +1452,41 @@ extends Config
     }
 }
 
+// should we extend WizardConfig?
+class RunGherkinCommandWizardConfig extends Config {
+    name = "Run Gherkin Feature Test"
+    steps = [
+        {
+            questionTitle: "Running Gherkin Test Suite...",
+            // todo: support dynamic getters for fields
+            // maybe via a WizardConfigStep class
+            question: "Number of Steps: 0 | Pending: 0 | Passing: 0 | Failing: 0 | Skipped: 0 | Overall Progress: 0% | Current Scenario Progress: 0%",
+            // reRenderQuestion(){
+            //     this.question = `Number of Steps: ${this.steps.length} | Pending: ${this.steps.filter((step)=>step.status === 'pending').length} | Passing: ${this.steps.filter((step)=>step.status === 'passing').length} | Failing: ${this.steps.filter((step)=>step.status === 'failing').length} | Skipped: ${this.steps.filter((step)=>step.status === 'skipped').length} | Overall Progress: ${this.getOverallProgress()}% | Current Scenario Progress: ${this.getCurrentScenarioProgress()}%`
+            // },
+            // getOverallProgress(){
+            //     return Math.floor(this.steps.filter((step)=>step.status !== 'pending').length / this.steps.length * 100);
+            // },
+            // getCurrentScenarioProgress(){
+            //     return Math.floor(this.steps.filter((step)=>step.status !== 'pending').length / this.steps.filter((step)=>step.status !== 'pending').length * 100);
+            // }
+            onStepLoaded(wizardInstance){
+                console.warn('Running Gherkin Test Suite: onStepLoaded')
+                console.warn('Running via GherkinRunnerWidget...');
+                gherkinRunnerWidget.loadSequence(getTestGherkinSequence());
+                gherkinRunnerWidget.run();
+            }
+        }
+    ]
+}
+
+class RunGherkinCommand
+extends DefaultSuggestionDecorator(Command, new RunGherkinCommandWizardConfig()){}
+
 class AddGraphNodeCommand
 extends DefaultSuggestionDecorator(Command, new AddGraphNodeWizardConfig()){}
 
+/*
 class NewFlashCardGame
 extends DefaultSuggestionDecorator(Command, new FlashCardGameWizardConfig()) {}
 
@@ -896,6 +1504,74 @@ extends DefaultSuggestionDecorator(Command, new ChatRoomWizardConfig()){}
 
 class LoadMessengerWindowCommand
 extends DefaultSuggestionDecorator(Command, new LoadMessengerWindowWizardConfig()){}
+*/
+
+class GPTChatSessionWizardConfig
+extends Config {
+    // should probably proxy back to a protected server
+    // for now, we'll call openai directly from the browser
+    api_key = "" // requested at runtime and only stored in memory for the life of the tab session
+    name = "New GPT Chat Session..."
+    storageFields = [
+        {
+            name: "chatHistory",
+            type: "array",
+            arrayOf: "string"
+        }
+    ]
+    requiredObservedInputs = [
+        {
+            name: "prompt",
+            type: "string",
+            displayAs: "textarea"
+        }
+    ]
+    // onStepCompleted(wizardInstance){
+    //     // TODO: make a global cmdprompt.reset() function
+    //     // and a default onStepCompleted -> cmdprompt.reset() call
+    //     // can opt out with wizardConfig.dontResetInputBetweenSteps = true
+    //     commandPaletteInput.value("")
+    //     commandBuffer = {name: commandPaletteInput.value()}
+    // }
+    steps = [
+        // {
+        //     question: "What is the name of the chat session?",
+        //     answerPlaceholder: "My Chat Session",
+        //     answerStorageKey: "name",
+        //     answerStorageType: "string",
+        //     answerValidationRules: "required:string",
+        //     displayObservedInputs: []
+        // },
+        {
+            repeatWhile: true, // let the code flag when the loop ends
+            question: "What is your prompt?",
+            answerStorageKey: "prompt",
+            displayObservedInputs: ["prompt"],
+            onStepCompleted(wizardInstance){
+                //wizardInstance.latestResponse
+
+                const cStep = wizardInstance?.currentStep;
+                if(!cStep){
+                    system.panic("no current step in onStepCompleted callback in GPTChatSessionWizardConfig");
+                }
+
+                // release infinite loop
+                if(!cStep?.iterations){
+                    cStep.iterations = 0
+                }
+                cStep.iterations++;
+                if(cStep.iterations > cStep.maxIterations){
+                    cStep.repeatWhile = false;
+                }else{
+                    // noop; continue
+                }
+            }
+        }
+    ]
+}
+
+class StartChatGPTSessionCommand
+extends DefaultSuggestionDecorator(Command, new GPTChatSessionWizardConfig()){}
 
 class NewToastWizardConfig
 extends Config {
@@ -1302,6 +1978,17 @@ class MVCExampleGraph extends Graph {
     }
 }
 
+class TodoConfig {
+    name = 'TodoConfig'
+    steps = []
+    constructor(name){
+        this.name = name ?? this.name
+    }
+    setOnToggledCallback(callback){
+        this.onToggleCallback = callback
+    }
+}
+
 class WizardConfig {
     name = 'WizardConfig'
     steps = []
@@ -1311,6 +1998,7 @@ class WizardConfig {
 }
 
 class TodoWizardConfig extends WizardConfig {
+    name = "New Todo..."
     steps = [
         {
             questionTitle: "What?",
@@ -1351,10 +2039,39 @@ class TodoWizardConfig extends WizardConfig {
 
         // we configure this callback to be called when the final output node (a todo instance) is toggled
         // we might want to move this into the class Todo class which should extend Node as it's a special type of a node in a graph
-        this.todoOnToggledCallback = function(next, prev){
-            console.warn('todo on toggled callback',{next,prev})
-            console.warn('todo update storage')
-        }
+        this.todoConfig = new TodoConfig();
+
+        // === REMEMBER OUR GOAL ===
+        //   We're practicing writing code that looks as much like
+        //   plain english business / behavior rules as possible
+        // === REMEMBER OUR GOAL ===
+
+        // ~~~ NOTE ~~~
+        // setOnToggledCallback registers a callback function within the Todo class that _would_ be instantiated IF/WHEN the user
+        // decides to spawn one
+        // because of the dynamic nature of the system,
+        // we have to map a lot of callbacks for different event lifecycle hooks
+        // rather than having one top-down proceedural function that does everything
+        // instead, we have a graph of interconnected Commands
+        // that each have their own lifecycle hooks
+        // and all operate within a Sandbox|System in a SystemManager
+        // ~~~~~~~~~~~
+        // * Turing Complete / Von Neumann Architecture
+        
+        this.todoConfig.setOnToggledCallback((todo,testRunner)=>{
+            // we toss expectations between contexts
+            // so we can centralize expectations in a big switch
+            // table for speed and ease of maintenance
+            let expected_status = null;
+            if(testRunner){
+                expected_status = testRunner.getExpectation(todo)
+            }
+            // what does the system do when the Todo is toggled?
+            // how do we assert that the system did what it was supposed to?
+            if(testRunner && todo.completed !== expected_status){
+                testRunner.panic("Todo toggle action fired, but the status did not change")
+            }
+        });
     }
 
     finalCallback(wizardInstance) {
@@ -1382,6 +2099,7 @@ class TodoWizardConfig extends WizardConfig {
     }
 }
 class RepeatingTodoWizardConfig extends TodoWizardConfig {
+    name = "New Repeating Todo..."
     constructor(name){
         super(name)
         this.steps.push({
@@ -1582,20 +2300,34 @@ class SetMaxSuggestionsCommandWizardConfig extends Config {
 class SetMaxSuggestionsCommand 
 extends DefaultSuggestionDecorator(Command, new SetMaxSuggestionsCommandWizardConfig()) {}
 
-
+const TAGS = {
+    RUNS_ON_STARTUP: 'runs_on_startup',
+}
 class SaveStateToLocalStorageWizardConfig extends Config {
 
     name = "Save State To Local Storage"
+    tags = [TAGS.RUNS_ON_STARTUP]
+    // possible to flag a command 
+    // as a higher level to be given priority in the boot sequence
+    // by default, the boot loader tries to execute all registered boot commands in as parallel a fashion as possible, by using a job queue and a dynamically instanced pool of queue workers
+    // which, dynamically scale up both local and remote workers as a commands compute requirements increase
+    startupImportanceLevel = 0
     steps = [
         {
             questionTitle: "Saving",
             question: "Saving State To Local Storage...",
-            onStepLoaded: function(wizardInstance){
-                console.warn('Save State to Local Storage Here..')
+            onStepLoaded: async function(wizardInstance){
+                console.warn('Literally writing state to local storage as json now..')
+
+                console.warn('Extend any class objects that appear in our store to have a callback available to a function that allows them to override their default stringified version. OnSerialization(value) or something like that...')
+
+                const stringifiedState = JSON.stringify(store);
+                localStorage.setItem('state',stringifiedState);
+
                 // then proceed when ready...
-                setTimeout(()=>{
-                    wizardInstance.tryCompleteStep();
-                },1000);
+                // setTimeout(()=>{
+                //     wizardInstance.tryCompleteStep();
+                // },1000);
             }
         }
     ]
@@ -1605,6 +2337,22 @@ class SaveStateToLocalStorageWizardConfig extends Config {
         toastManager.showSuccess(`Saved State To Local Storage`);
     }
 }
+
+class NewTodoCommand
+extends DefaultSuggestionDecorator(Command, new TodoWizardConfig()){}
+
+class NewRepeatingTodoCommand
+extends DefaultSuggestionDecorator(Command, new RepeatingTodoWizardConfig()){}
+
+function hydrateStore(store){
+    // need to make sure all the objects in the store are instances of
+    // their desired classes
+    // if they are plain objects, we hydrate them by passing them as configuration
+    // into their respective constructor
+    // based on a mapping between a typeName and a typeConstructor
+    console.warn('In Progress: hydrate store', {store})
+}
+
 // TODO: bind this command to happen on all mutations
 class SaveStateToLocalStorage 
 extends DefaultSuggestionDecorator(Command, new SaveStateToLocalStorageWizardConfig()) 
@@ -1613,7 +2361,24 @@ class LoadStateFromLocalStorageWizardConfig extends Config {
     name = "Load State From Local Storage"
     steps = [
         {
-            notice: "Loading State From Local Storage..."
+            notice: "Loading State From Local Storage...",
+            // need to standardize: [OnSelected, onStepLoaded, execute, callback, finalCallback]
+            // we could replace with Promise[when,then,catch,finally]
+            onStepLoaded: function(wizardInstance){
+                console.warn('Literally Loading State from Local Storage...')
+                const stringifiedState = localStorage.getItem('state');
+                let parsedState = null;
+                try {
+                    parsedState = JSON.parse(stringifiedState);
+                }catch(e){
+                    console.error('Failed to parse state from local storage',{e,stringifiedState});
+                }
+                parsedState = parsedState ?? {};
+                // TODO: need a replaceStore or replaceState that can do a deep merge
+                // For Now, let's see what happens
+                store = parsedState;
+                hydrateStore(store);
+            }
         }
     ]
     finalCallback(wizardInstance){
@@ -1659,6 +2424,71 @@ extends DefaultSuggestionDecorator(Command,{
         new SwitchModeCommand(MODES.DELETE).execute();
     }
 }){}
+
+const TYPENAME_TO_CONSTRUCTOR_MAP = {
+    // Graph related
+    Graph,
+    GraphNode,
+    Edge,
+    AddGraphNodeWizardConfig,
+    AddGraphNodeCommand,
+
+    // // Household
+    // Chore,
+    // Bill,
+
+    // // Family
+    // Pickup,
+    // Dropoff,
+    // Appointment,
+
+    // // Work
+    // Meeting,
+    // Task,
+    // Project,
+    // Coworker,
+
+    // Todo related
+    TodoNode,
+    TodoWizardConfig,
+    NewTodoCommand,
+    RepeatingTodoWizardConfig,
+    NewRepeatingTodoCommand,
+
+    // Command related
+    Command,
+    CommandWizardConfig,
+    ShowNewToastCommand,
+    StartChatGPTSessionCommand,
+    ShowCommandPaletteCommand,
+    HideCommandPaletteCommand,
+    ToggleCommandPaletteCommand,
+    // LoadMessengerWindowCommand,
+    SetCommandIconCommand,
+
+    // Config related
+    Config,
+    WizardConfig,
+    SetMaxSuggestionsCommandWizardConfig,
+    SaveStateToLocalStorageWizardConfig,
+    LoadStateFromLocalStorageWizardConfig,
+    NewToastWizardConfig,
+
+    // Mode related
+    ModeSwitch_SELECT,
+    ModeSwitch_ADD_NODE,
+    ModeSwitch_ADD_EDGE,
+    ModeSwitch_PAN,
+    ModeSwitch_DELETE,
+
+    // State related
+    SaveStateToLocalStorage,
+    LoadStateFromLocalStorage,
+
+    // Timer related
+    TimerWizardConfig,
+};
+
 
 class CommandPalette {
     // the current "Command" being constructed
@@ -1735,27 +2565,21 @@ class CommandPalette {
                 ]
             })
         }))
-        this.availableCommands.push(new Command("New Todo",{
-            wizardConfig: new TodoWizardConfig("New Todo Wizard")
-        }))
-        this.availableCommands.push(new Command("New Repeating Todo",{
-            wizardConfig: new RepeatingTodoWizardConfig("New Repeating Todo Wizard")
-        }))
-        this.availableCommands.push(new Command("New Timer",{
-            wizardConfig: new TimerWizardConfig("New Timer Wizard")
-        }))
-        this.availableCommands.push(new Command("New Error",{}))
-        this.availableCommands.push(new Command("New Graph",{}))
-        this.availableCommands.push(new Command("New Node Type",{}))
-        this.availableCommands.push(new Command("New Requirement",{}))
-        this.availableCommands.push(new Command("New Enum",{}))
-        this.availableCommands.push(new Command("New Action",{}))
-        this.availableCommands.push(new Command("New Event Type",{}))
-        this.availableCommands.push(new Command("New Storage Field",{}))
-        this.availableCommands.push(new Command("New Class",{}))
-        this.availableCommands.push(new Command("New Command",{
-            wizardConfig: new CommandWizardConfig("New Command Wizard")
-        }));
+        // this.availableCommands.push(new Command("New Timer",{
+        //     wizardConfig: new TimerWizardConfig("New Timer Wizard")
+        // }))
+        // this.availableCommands.push(new Command("New Error",{}))
+        // this.availableCommands.push(new Command("New Graph",{}))
+        // this.availableCommands.push(new Command("New Node Type",{}))
+        // this.availableCommands.push(new Command("New Requirement",{}))
+        // this.availableCommands.push(new Command("New Enum",{}))
+        // this.availableCommands.push(new Command("New Action",{}))
+        // this.availableCommands.push(new Command("New Event Type",{}))
+        // this.availableCommands.push(new Command("New Storage Field",{}))
+        // this.availableCommands.push(new Command("New Class",{}))
+        // this.availableCommands.push(new Command("New Command",{
+        //     wizardConfig: new CommandWizardConfig("New Command Wizard")
+        // }));
 
         // List Self Tests
         this.availableCommands.push(new Command("List Self Tests",{
@@ -2040,6 +2864,7 @@ class CommandPalette {
     // when no wizard is active
     filterCommands(){
         // filter the list of available commands based on the current command buffer
+        let recommended_order = [];
         this.filteredCommands = this.availableCommands.filter(command => {
             if(!command){
                 return false;
@@ -2053,9 +2878,39 @@ class CommandPalette {
             }
             let compare = command?.name ? command.name.toLowerCase() 
                 : (command?.label?.toLowerCase() ?? '');
-            return compare
+
+            let match1 = compare
                 .includes(store.commandBuffer?.name?.toLowerCase());
+
+            let compare2 = !command?.altnames ? '' : command.altnames.join(' ').toLowerCase();
+            let match2 = compare2
+                .includes(store.commandBuffer?.name?.toLowerCase());
+            
+            // we'll add more match in the future,
+            // let's count the number of matches as a rudimentary ranking system
+            let matches = 0;
+            if(match1){
+                matches++;
+            }
+            if(match2){
+                matches++;
+            }
+            if(matches){
+                recommended_order.push({
+                    command,
+                    matches
+                })
+            }
+
+            return 
         });
+
+        let filteredCommandsSorted = recommended_order.sort((a,b)=>{
+            return b.matches - a.matches;
+        }).map((item)=>{
+            return item.command;
+        })
+        this.filteredCommands = filteredCommandsSorted;
 
         //console.warn('!!! FilteredCommands count:', this.filteredCommands.length);
 
@@ -2278,6 +3133,13 @@ function draw() {
         dragStartY = mouseY;
     }
 
+    if(gherkinRunnerWidget && gherkinRunnerWidget.draw){
+        gherkinRunnerWidget.draw();
+    }
+    if(gherkinStudio && gherkinStudio.draw){
+        gherkinStudio.draw();
+    }
+
     pop();
 
     
@@ -2433,16 +3295,24 @@ function ensureHeadTag(){
 }
 
 let commandPaletteInput = null;
-let toastManager = null;
+
 
 // Define the setup function
 function setup() {
     ensureHeadTag();
     createCanvas(windowWidth, windowHeight);
     
+    // singletons
     cmdprompt = new CommandPalette();
-    
     toastManager = new ToastNotificationManager();
+
+    // boot the root system manager & root system
+    manager.boot();
+    rootSystem = system = manager.systems[0];
+    let testSeq = getTestGherkinSequence();
+    // bootstrap our self-test
+    gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
+
     push();
     textSize(50);
     commandPaletteInput = createInput('');
