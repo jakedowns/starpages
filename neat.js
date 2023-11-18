@@ -446,7 +446,14 @@ class AuthRequirements extends BDDTest {
 class AndGiven extends GherkinStep {}
 class AndWhen extends GherkinStep {}
 class AndThen extends GherkinStep {}
+
+
+
+
+
+
 class GherkinSequenceExecutor {
+    /** @property sequence GherkinSequence */
     sequence = null;
 
     constructor(sequence){
@@ -456,14 +463,14 @@ class GherkinSequenceExecutor {
     preFlightCheck(){
         if(this.sequence === null){
             // TODO: maybe panic the testRunner instead of the whole system
-            system.panic("FeatureTestRun.executeScenario: no sequence provided");
+            system.panic("GSeqExecutor.preFlightCheck: no sequence provided");
             return false;
         }
         if(!this.sequence.isValid){
             system.dump({
-                sequence: this.sequence,
+                invalidSequence: this.sequence,
             })
-            system.panic("FeatureTestRun.executeScenario: invalid sequence provided");
+            system.panic("GSeqExecutor.preFlightCheck: invalid sequence provided");
             return false;
         }
         return true;
@@ -471,15 +478,29 @@ class GherkinSequenceExecutor {
 
     // aka executeSequence
     execute(seq){
+        console.warn('GherkinSequenceExecutor.execute',{
+            incomingSeq:seq, 
+            thisSequence: this.sequence
+        })
         this.sequence = seq ?? this.sequence;
         let preflightResult = this.preFlightCheck();
         if(!preflightResult){
             system.panic("FeatureTestRun.executeScenario: preflight check failed");
             return;
         }
+        // TODO use GherkinTestRun container class / DTO
+        // for now: plain object, keyed by scenario name
+        this.featureScenarioResults = {};
+        if(!this.sequence.scenarios?.length){
+            system.panic(`GherkinSequenceExecutor.execute: no scenarios found in sequence: ${this.sequence.name}`)
+        }
         this.sequence.scenarios.forEach((scenario,index)=>{
-            this.executeScenario(scenario,index);
+            this.featureScenarioResults[scenario.name] = this.executeScenario(scenario,index);
         });
+        console.warn('GSExecutor.execute: returning featureScenarioResults',{
+            featureScenarioResults: this.featureScenarioResults
+        })
+        return this.featureScenarioResults;
     }
 
     // tryExecuteScenario
@@ -489,6 +510,13 @@ class GherkinSequenceExecutor {
         //     system.panic("FeatureTestRun.executeScenario: preflight check failed");
         //     return;
         // }
+        // console.warn('executingScenario',{
+        //     scenario,
+        //     steps: scenario?.steps ?? 'missing!',
+        // })
+        if(!scenario?.steps?.length){
+            system.panic(`GherkinSequenceExecutor.executeScenario: no steps found in scenario: ${scenario.name}`)
+        }
         let results = [];
         // try {
             //results = scenario.execute();
@@ -521,6 +549,7 @@ class GherkinSequenceExecutor {
     
     // tryExecuteScenarioStep
     executeScenarioStep(step){
+        console.warn('TODO! executeScenarioStep',{step})
     }
 }
 class GherkinSequenceValidator {
@@ -531,7 +560,7 @@ class GherkinSequenceValidator {
         //console.warn('GherkinSequenceValidator:ctor',{sequence})
     }
     get steps(){
-        return this.sequence;
+        return this.sequence?.steps ?? [];
     }
     validateSequence(sequence){
         console.warn('validateSequence',{
@@ -554,6 +583,9 @@ class GherkinSequenceValidator {
             system.dump({tooShortSeq:this.sequence});
             system.panic("GherkinSequenceValidator.validateSequence requires a GherkinSequence with at least one step in the .steps array")
         }
+        console.warn("checking sequence:",{
+            seq: this.sequence,
+        })
         this.sequence.steps.forEach((step,index)=>{
             this.checkStepIsValid(step,this.sequence,index)
         })
@@ -569,14 +601,16 @@ class GherkinSequenceValidator {
     //    scenarioNameTwo: Steps[], 
     //    scenarioNameThree: Steps[]
     //}
-    checkStepIsValid(step,steps,index){
-        let prevStep = steps[index-1];
+    checkStepIsValid(step,sequence,index){
+        let steps = sequence.steps;
+        let prevStep = sequence.steps[parseInt(index)-1];
+        // console.log("checkStepIsValid",{step,steps,index,prevStep})
         if(!prevStep){
             // first step must be a Feature
             if(step.__type !== GHERKIN_AST_TOKENS.FEATURE){
-                this.validationErrors.push(`First Step Must Be A Feature: ${step.type} at index ${index}`);
+                this.validationErrors.push(`First Step Must Be A Feature. \nGot step.__type: ${step.__type} @ index ${index}`);
                 system.dump({step,steps,index})
-                system.panic(`First Step Must Be A Feature: ${step.type} at index ${index}`);
+                system.panic(`First Step Must Be A Feature. \n Got: step.__type ${step.__type} @ index ${index}`);
             }
             // valid opening step
             return true;
@@ -616,7 +650,7 @@ class GherkinSequenceValidator {
         }
         let prevStep = steps[index-1];
         let step = steps[index]
-        if(prevStep.type !== step.type){
+        if(prevStep.__type !== step.__type){
             return prevStep;
         }
         return this.closestPreviousDifferentStep(steps,index-1);
@@ -626,6 +660,61 @@ class GherkinSequenceValidator {
 class GherkinSequence {
     steps = [];
     isValid = false
+    get scenarios(){
+        let scenarioSteps = [];
+        let scenarios = [];
+        let currentScenarioName = null;
+        const maybeFlush = ()=>{
+            if(scenarioSteps.length > 0){
+                // system.panic(`GherkinSequence.scenarios: invalid sequence, SCENARIO without an END_SCENARIO`)
+                // reset
+                scenarios.push({
+                    name: currentScenarioName,
+                    steps: scenarioSteps
+                });
+                scenarioSteps = [];
+            }
+        }
+        this.steps.forEach((step, index) => {
+            // todo: make a switch()
+            if(step.__type === GHERKIN_AST_TOKENS.FEATURE){
+                // continue
+            }else if(step.__type === GHERKIN_AST_TOKENS.SCENARIO){
+                
+
+                maybeFlush();
+
+                // record the name
+                currentScenarioName = step.value;
+                
+                // don't push the Scenario Opening token, it's implied
+                // and doesn't map to anything executable downstream
+                //scenarioSteps.push(step);
+            }
+            // else if(step.__type === GHERKIN_AST_TOKENS.END_SCENARIO){
+            //     if(scenarioSteps.length === 0){
+            //         throw new Error("GherkinSequence.scenarios: invalid sequence, END_SCENARIO without a SCENARIO");
+            //     }else if(scenarioSteps.length < 3){
+            //         throw new Error("GherkinSequence.scenarios: invalid sequence, SCENARIO with less than 3 steps");
+            //     }else{
+            //         scenarioSteps.push(step);
+            //         scenarios.push({
+            //             name: currentScenarioName,
+            //             steps: scenarioSteps
+            //         });
+            //         // reset
+            //         scenarioSteps = [];
+            //     }
+            // }
+            else if(currentScenarioName){
+                scenarioSteps.push(step);
+            }
+        });
+        // if we had a scenario that didn't end, flush it
+        maybeFlush();
+
+        return scenarios;
+    }
     constructor(steps){
         if(!steps || !steps?.length){
             return;
@@ -637,16 +726,18 @@ class GherkinSequence {
         })
     }
     addStep(step){
-        const seqNext = [
-            ...this.steps,
-            step
-        ];
+        // NOTE: for now, just let it go, we'll validate it later
+        // console.warn('GherkinSequence.addStep',{step})
+        // const seqNext = [
+        //     ...this.steps,
+        //     step
+        // ];
         // should we normalize passing to the constructor over the method?
-        const validator = new GherkinSequenceValidator(seqNext);
-        const isValid = validator.validateSequence();
-        if(!isValid){
-            system.panic("addStep: invalid sequence: " + validator.validationErrors.join(","));
-        }
+        // const validator = new GherkinSequenceValidator(seqNext);
+        // const isValid = validator.validateSequence();
+        // if(!isValid){
+        //     system.panic("addStep: invalid sequence: " + validator.validationErrors.join(","));
+        // }
         this.steps.push(step);
         return this;
     }
@@ -672,6 +763,7 @@ class GherkinRunner {
         this.results = []
         this.sequence = null;
     }
+    // TODO: rename to validateFeatureDefinition
     validateSequence(seq){
         this.sequence = seq ?? this.sequence;
         if(!this.sequence || !(this.sequence instanceof GherkinSequence)){
@@ -1413,7 +1505,8 @@ class GherkinParserTransitionMatrix {
 // aka FeatureDefinitionToSequenceParser
 class GFDParser {
     // array of messages about our parsing work
-    output = []
+    /** GherkinSequence */
+    output = null
     // our instance of a FeatureDescription class
     // which we parse into executable GherkinSequence
     definition = null
@@ -1505,7 +1598,8 @@ class GFDParser {
         let scenarioCount = 0;
         Object.keys(this.definition.scenarios).forEach((scenarioKey)=>{
             scenarioCount++;
-            console.warn(`Parsing FeatDesc Scenario: ${scenarioCount} ${scenarioKey}`)
+            
+            //console.warn(`Parsing FeatDesc Scenario: ${scenarioCount} ${scenarioKey}`)
 
             const steps = this.definition.scenarios[scenarioKey];
 
@@ -1539,6 +1633,7 @@ class GFDParser {
                             index
                         }
                     })
+                    //system.warn(`parsing Scenario Definition Steps: ${stepKey}`,{wrappedValues})
                     tokenDefinitions.push(
                         ...wrappedValues
                     );
@@ -1600,57 +1695,6 @@ class GFDParser {
                 "Then can be followed by additional Thens or a new Scenario",
             ];
 
-            // Refactored into a TruthTable :D
-            // // if(
-            // //     prevStepType === null 
-            // //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.FEATURE
-            // // ){
-            // //     // put the parser StateMachine in a fatal error state
-            // //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
-            // //     system.panic("GFDParser: first token must be a Feature");
-            // // }
-            // // if(
-            // //     prevStepType === GHERKIN_AST_TOKENS.FEATURE 
-            // //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.SCENARIO
-            // // ){
-            // //     // put the parser StateMachine in a fatal error state
-            // //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
-            // //     system.panic("GFDParser: second token must be a Scenario");
-            // // }
-            // if(
-            //     prevStepType === GHERKIN_AST_TOKENS.SCENARIO 
-            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.GIVEN
-            // ){
-            //     // put the parser StateMachine in a fatal error state
-            //     this.throwFatalError("GFDParser: third token must be a Given");
-            // }
-            // if(
-            //     prevStepType === GHERKIN_AST_TOKENS.GIVEN
-            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.GIVEN
-            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.WHEN
-            // ){
-            //     // put the parser StateMachine in a fatal error state
-            //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
-            //     system.panic("GFDParser: fourth token must be a Given or When");
-            // }
-            // if(
-            //     prevStepType === GHERKIN_AST_TOKENS.WHEN
-            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.WHEN
-            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.THEN
-            // ){
-            //     // put the parser StateMachine in a fatal error state
-            //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
-            //     system.panic("GFDParser: fifth token must be a When or Then");
-            // }
-            // if(
-            //     prevStepType === GHERKIN_AST_TOKENS.THEN
-            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.THEN
-            // ){
-            //     // put the parser StateMachine in a fatal error state
-            //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
-            //     system.panic("GFDParser: sixth token must be a Then");
-            // }
-
             if(!tokenDef.__type){
                 this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
                 system.dump({tokenDef})
@@ -1676,7 +1720,7 @@ class GFDParser {
         }
 
         // End of Parsing
-        if(!this.output.length){
+        if(!this.output.steps.length){
             system.panic("GFDParser: output is empty")
         }
         return this.output;
@@ -2461,11 +2505,244 @@ class CustomCommandFactory {
 }
 
 class CommandStepConfig {
-
+    constructor(config){
+    }
 }
 
 class CommandStep {
 
+}
+
+/*
+    @CustomCommandFactory
+            |
+            input: @CustomCommandConfig
+            |
+            process: function() {
+                return new this.CustomCommandInstance();
+            }
+            |
+            output: @CustomCommandInstance
+        
+        defintion:
+            /** config: JSONOfCustomCommandFactory *-/
+            constructor(config){
+                if(!(config instanceof JSONOfCustomCommandFactory)){
+                    system.panic(`CustomCommandFactory: config must be a JSONOfCustomCommandFactory`);
+                }
+            }
+            
+            get CustomCommandInstance(){
+                // return a new instance of the CustomCommand
+                return this.CustomCommandFactoryInstance.new();
+            }
+*/
+
+/* the literal class that manages taking JsonOf... objects and turning them into instances */
+class CustomCommandFactoryFactory {
+    factory = null
+    get Factory(){
+        return factory;
+    }
+    constructor(){
+        this.factory = new CustomCommandFactory();
+    }
+}
+/* 
+    takes String or Object, maintains an Object 
+    @throwable parseError - flag is set when JSON parsing fails
+*/
+class JSON_Of_CustomCommandFactory {
+    value = {}
+    constructor(string_or_object){
+        // if we're given an object, don't parse it
+        if(typeof string_or_object === 'object'){
+            this.value = string_or_object;
+            return;
+        }
+        try{
+            this.value = JSON.parse(string);
+        }catch(e){
+            this.value = {}; //undefined;
+            this.parseError = e;
+        }
+    }
+}
+// an example JSON definition of a CustomCommandFactory
+// this is used downstream to run a self test
+// to make sure that custom command factory instances 
+// are properly hydrating
+const exampleJSONOfCustomCommandFactory = {
+    __type: "CustomCommandFactory",
+    // define a simple command that prints a Hello World toast
+    customCommandConfig: {
+        __type: "CustomCommandConfig",
+        __extends: "Config",
+        execution_steps: [
+            {
+                // fields can be strings, arrays, or objects of lazily evaluated getter fn
+                __type: "CommandStepConfig",
+                // no return
+                __returnType: "void", 
+                
+
+                // array of required global state keys
+                // will panic if any are missing after a default retry/wait period
+                using: ["toastManager"],
+                
+                __calls: "toastManager.showToast", 
+                
+                // what the command will be called for the user to search for it
+                name: "Print Hello World",
+
+                // further searchable text / accessibility text information for the user
+                description: "Prints a Hello World toast",
+                
+            }
+        ]
+    }
+}
+
+/*
+    Feature     
+*/
+
+/*
+
+    Feature     Custom Commands 
+    
+    SubFeature  can hydrate from JSON to real executable commands
+
+    Scenario    Jakes first custom command 
+                    just shows a toast that says "Hello World!"
+
+    Given       a CommandPrompt (valid instance of the Command Prompt)
+    
+    When        the user types "jake"... (assumption, into the first and only active input)
+
+                # Validate that the command appears as a suggestion in the command palette
+    Then        the user sees a suggested auto-complete of "Jakes first custom command"
+
+*/
+autorunFeatureTests.push(new FeatureTest({
+    /*
+        custom command factory is a special type of command factory
+        it has a user-defined (or system generated) serializable JSON format
+
+        + the factory itself is just a thin wrapper around 
+          "the class" that can take care of meta-operations 
+          when the class being defined is: 
+
+            instantiated, 
+            processing global operations, 
+            triggering lifecycle methods, etc...
+        
+        + the first way to invoke a command, is via the command prompt, 
+            so by default, we register all custom commands to the command prompt
+            
+            >   in the future, we can add other ways to invoke commands, 
+                like via a menu, or a button, etc...
+            
+            >   we can also add other ways to define commands, like via the gui, then saved to the storage system
+                or via a command line interface, copy/paste bulk import, file upload, etc...
+
+            >   we can also add other ways to serialize commands, like as a binary, or as a compressed string, etc...
+        
+        + the second way to invoke a command, is via a test runner,
+           by default (unless the command is flagged as "not testable") 
+           all commands in the system are testable and tested
+           auto-tested based on their configured test schedule
+           carry their test validation status and a pointer to the validator that validated them
+           and a pointer to the validation run, for further tracing of the validation run when failures occur
+
+        + the third way to invoke a command is via a custom command runner
+            > commands can refer to other commands,
+            > runtimes use singleton factories for commands to ensure that they are only instantiated once
+            > you have to opt-in to having multiple, separate instances of commands executing in parallel
+            > commands can be flagged as "parallel" to be eligible for parallel execution (or maybe opt-out, havent'd decided yet)
+
+    */
+    name: "CustomCommandFactory",
+    description: "CustomCommandFactory",
+    scenarios: {
+        "custom commands > appear in cmd pallete": {
+            // we parse this downstream 
+            // to await a valid instance of the CommandPrompt 
+            // in the global state of the current system sandbox
+            given: "CommandPrompt",
+            // note: we don't specify which input here,
+            // since, contextually, there is only one main input for the user to type into
+            // in "the CommandPrompt" context
+            when:  `the user types "jake"`,
+            then:  `the user sees SuggestedCommand "Jakes first custom command" in the SuggestionList`,
+        },
+        "custom commands > can hydrate from JSON to real executable commands": {
+            given: `CommandPrompt`,
+            when: `the user executes "Jakes first custom command"`,
+            then: `a Toast appears that says "Hello World!"`,
+        }
+    }
+}))
+
+
+const iJSON_CCF = new JSON_Of_CustomCommandFactory(exampleJSONOfCustomCommandFactory);
+console.warn('json of custom command factory',{
+    exampleJSONOfCustomCommandFactory,
+    iJSON_CCF
+})
+
+// class CustomCommandFactory {
+//     name = "CustomCommandFactoryInstance"
+//     config = null
+//     // input is a JSONOfCustomCommandFactory
+//     constructor(config){
+//         this.config = config;
+//     }
+// }
+// here we introduce a custom command as though it is one
+// the user previously built and serialized to disk
+// let imagine hydrated this from a JSON string...
+store.customCommandFactories["myFirstCustomCommand"] = {
+    // the class to instantiate @runtime / @hydrate / @execute / @deserialize
+    __type: "CustomCommandFactory", 
+    // the configuration of the command
+    customCommandConfig: {
+        __type: "CustomCommandConfig",
+        __extends: "Config",
+
+        // config fields
+        name: "Jakes First Custom Command!",
+        description: "This is a custom command that Jake made!",
+        created_at: new Date().toISOString(),
+        // TODO: created_by_user_id
+        created_by: "Jake",
+
+        steps: [
+            {
+                __type: "CommandStepConfig",
+
+                name: "Custom Command Step Config",
+
+                // the question to ask the user
+                question: "which numbers would you like to add?",
+
+                /* 
+                    @property answerDefinitions CommandStepConfig[]
+                    
+                    @property answerDefinition
+                */
+                answerDefinitions: [
+                    // "new connect the dots",
+                    // "new scenario",
+                    // "new GWT step",
+                    // "new feature",
+                    // "new stepDefinition",
+                    // "new stepMapping",
+
+                ]
+            }
+        ]
+    }
 }
 
 class NewCommandWizardConfig
@@ -3548,6 +3825,7 @@ class ToastNotificationManager {
         })
     }
     showToast(message, options){
+        console.warn('showToast',{message,options})
         options = options ?? {}
         options.level = options.level ?? 'info'; // DEFAULT_TOAST_LEVEL = 'info'
         let {pinned} = options;
@@ -4651,6 +4929,7 @@ function setup() {
     // TODO: parallelize with Promise.all([])
     autorunFeatureTestResults.length = 0; // reset results
     autorunFeatureTests.forEach((featDescClass)=>{
+        console.warn('SelfTest === autorun',{featDescClass})
         // TODO: see about passing objects instead of class instances
         const parser = new GFDParser(new featDescClass());
         const gherkinSeq = parser.parse();
