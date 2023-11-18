@@ -93,7 +93,7 @@ class GherkinScenarioOutline {}
     the dummy / serialized / dehydrated / human readable version of a Feature Test 
     think of it like a FeatureTestConfigObject or a ScriptableObject / DataObject
 */
-class FeatureDescription {
+class FeatureTest {
     config = {}
     parseError = null;
     get name() {
@@ -107,12 +107,17 @@ class FeatureDescription {
     }
     // todo: validate config
     setConfig(string_or_object){
+        if(!string_or_object){
+            system.panic("FeatureTest.setConfig: no config provided")
+            this.config = {};
+            return;
+        }
         // if we're given an object, don't parse it
         if(typeof string_or_object === 'object'){
             this.config = string_or_object;
         }else{
             try{
-                this.config = JSON.parse(string);
+                this.config = JSON.parse(string_or_object);
             }catch(e){
                 this.config = {}; //undefined;
                 this.parseError = e;
@@ -187,7 +192,8 @@ class SystemManager {
         this._panic = true;
         console.error(message);
         // show a toast
-        toastManager.showToast(message, {
+        toastManager = system.get('toastManager');
+        toastManager?.showToast(message, {
             //pinned: true, 
             // TODO: changing level to error could 
             // flip pinned to true by default if we want
@@ -202,7 +208,8 @@ class SystemManager {
     warn(message){
         console.warn(...arguments);
         // show a toast
-        toastManager.showToast(message, {
+        toastManager = system.get('toastManager');
+        toastManager?.showToast(message, {
             //pinned: true, 
             level:TOAST_LEVELS.WARNING
         });
@@ -327,8 +334,8 @@ const selfTestFeatureInstances = []
 const AutorunningSelfTest = function(baseClass, options){
     // options: {name, description, tags, etc}
     let myID = performance.now() + Math.random();
-    defaultFeatureDescriptions.push(myID);
-    let myIDX = defaultFeatureDescriptions.length - 1;
+    defaultFeatureTests.push(myID);
+    let myIDX = defaultFeatureTests.length - 1;
 
     // this executes when the ExtendingClass is instantiated
     return function(){
@@ -521,6 +528,8 @@ class AndThen extends GherkinStep {}
 class GherkinSequenceExecutor {
     /** @property sequence GherkinSequence */
     sequence = null;
+    currentScenarioIndex = 0;
+    currentScenarioKey = null;
 
     constructor(sequence){
         this.sequence = sequence;
@@ -561,6 +570,8 @@ class GherkinSequenceExecutor {
             system.panic(`GherkinSequenceExecutor.execute: no scenarios found in sequence: ${this.sequence.name}`)
         }
         this.sequence.scenarios.forEach((scenario,index)=>{
+            this.currentScenarioIndex = index;
+            this.currentScenarioKey = scenario.name;
             this.featureScenarioResults[scenario.name] = this.executeScenario(scenario,index);
         });
         console.warn('GSExecutor.execute: returning featureScenarioResults',{
@@ -615,7 +626,7 @@ class GherkinSequenceExecutor {
     
     // tryExecuteScenarioStep
     executeScenarioStep(step){
-        console.warn('TODO! executeScenarioStep',{step})
+        console.warn(`TODO! executeScenarioStep ${this.currentScenarioKey} > [${step.type.startsWith('g') ? 'G' : (step.type.startsWith('w') ? 'W' : 'T')}]: ${step.value}`,{step})
     }
 }
 class GherkinSequenceValidator {
@@ -1043,11 +1054,23 @@ class TableWidget extends Widget {
     }
 }
 
+const SelfTest = function(baseClass){
+    const extendedClassInstance = new baseClass(...arguments);
+    console.warn('todo: register this class as something to run @selfTest time', {baseClass})
+
+    return function(){
+        // adjust our eagerly instanced class with any additional "construction-time" arguments
+        // IF a reconstruct method is defined (some base classes have default implementations)
+        extendedClassInstance?.reconstruct?.(...arguments);
+        return extendedClassInstance;
+    };
+}
+
 // NOTE: we pre-process these
 // and convert them to GherkinFeature objects
 // filled with an Object of keyed GherkinScenario objects
 // which in turn are filled with GherkinStep objects
-class FeatureTestTables extends FeatureDescription {
+class FeatureTestTables extends SelfTest(FeatureTest) {
     background = [
         // alias "given a fresh system" ~ "given a fresh root system"
         "given a fresh, pre-booted sandboxed system instance"
@@ -1523,6 +1546,9 @@ class GherkinParserTransitionMatrix {
     get matrix(){
         return this?.tt?.pairs ?? [];
     }
+    /**
+     * 
+     */
     constructor(){
         // TODO: nestable state machines
         this.tt = new TruthTable();
@@ -1573,7 +1599,7 @@ class GFDParser {
     // array of messages about our parsing work
     /** GherkinSequence */
     output = null
-    // our instance of a FeatureDescription class
+    // our instance of a FeatureTest class
     // which we parse into executable GherkinSequence
     definition = null
 
@@ -1585,10 +1611,10 @@ class GFDParser {
             constructorName: definition?.constructor?.name,
             definition
         })
-        // if (!(definition instanceof FeatureDescription)) {
+        // if (!(definition instanceof FeatureTest)) {
         //     throw new Error(
         //         "GFDParser: " +
-        //         "definition must be an instance of FeatureDescription" +
+        //         "definition must be an instance of FeatureTest" +
         //         "got: " + (definition?.constructor?.name ?? 'undefined')
         //     );
         // }
@@ -1717,7 +1743,7 @@ class GFDParser {
                     );
                 }
             })
-            console.warn('just pushed',{tokenDefinitions})
+            //console.warn('just pushed',{tokenDefinitions})
 
             // push a close_scenario token
             // tokenDefinitions.push({
@@ -2726,45 +2752,48 @@ const ExampleCustomCommandFactory = {
     Then        the user sees a suggested auto-complete of "Jakes first custom command"
 
 */
+/*
+    custom command factory is a special type of command factory
+    it has a user-defined (or system generated) serializable JSON format
+
+    + the factory itself is just a thin wrapper around 
+      "the class" that can take care of meta-operations 
+      when the class being defined is: 
+
+        instantiated, 
+        processing global operations, 
+        triggering lifecycle methods, etc...
+    
+    + the first way to invoke a command, is via the command prompt, 
+        so by default, we register all custom commands to the command prompt
+        
+        >   in the future, we can add other ways to invoke commands, 
+            like via a menu, or a button, etc...
+        
+        >   we can also add other ways to define commands, like via the gui, then saved to the storage system
+            or via a command line interface, copy/paste bulk import, file upload, etc...
+
+        >   we can also add other ways to serialize commands, like as a binary, or as a compressed string, etc...
+    
+    + the second way to invoke a command, is via a test runner,
+       by default (unless the command is flagged as "not testable") 
+       all commands in the system are testable and tested
+       auto-tested based on their configured test schedule
+       carry their test validation status and a pointer to the validator that validated them
+       and a pointer to the validation run, for further tracing of the validation run when failures occur
+
+    + the third way to invoke a command is via a custom command runner
+        > commands can refer to other commands,
+        > runtimes use singleton factories for commands to ensure that they are only instantiated once
+        > you have to opt-in to having multiple, separate instances of commands executing in parallel
+        > commands can be flagged as "parallel" to be eligible for parallel execution (or maybe opt-out, havent'd decided yet)
+
+*/
 const EXAMPLE_FEATURE_TEST_OBJ = {
-    /*
-        custom command factory is a special type of command factory
-        it has a user-defined (or system generated) serializable JSON format
-
-        + the factory itself is just a thin wrapper around 
-          "the class" that can take care of meta-operations 
-          when the class being defined is: 
-
-            instantiated, 
-            processing global operations, 
-            triggering lifecycle methods, etc...
-        
-        + the first way to invoke a command, is via the command prompt, 
-            so by default, we register all custom commands to the command prompt
-            
-            >   in the future, we can add other ways to invoke commands, 
-                like via a menu, or a button, etc...
-            
-            >   we can also add other ways to define commands, like via the gui, then saved to the storage system
-                or via a command line interface, copy/paste bulk import, file upload, etc...
-
-            >   we can also add other ways to serialize commands, like as a binary, or as a compressed string, etc...
-        
-        + the second way to invoke a command, is via a test runner,
-           by default (unless the command is flagged as "not testable") 
-           all commands in the system are testable and tested
-           auto-tested based on their configured test schedule
-           carry their test validation status and a pointer to the validator that validated them
-           and a pointer to the validation run, for further tracing of the validation run when failures occur
-
-        + the third way to invoke a command is via a custom command runner
-            > commands can refer to other commands,
-            > runtimes use singleton factories for commands to ensure that they are only instantiated once
-            > you have to opt-in to having multiple, separate instances of commands executing in parallel
-            > commands can be flagged as "parallel" to be eligible for parallel execution (or maybe opt-out, havent'd decided yet)
-
-    */
-    name: "CustomCommandFactory",
+   __type: "FeatureTest",
+   name: "CustomCommandFactory Feature File",
+   // the type we're defining / testing
+   __targetType: "CustomCommandFactory",
     // constructor arguments for the CustomCommandFactory
     constructorArgs: [{
         description: "CustomCommandFactory",
@@ -2788,14 +2817,6 @@ const EXAMPLE_FEATURE_TEST_OBJ = {
         }
     }]
 }
-// Instead of FeatureTest, just use FeatureDescription for now
-// -- we can add a FeatureTest class later if we need it
-// class FeatureTest {
-//     config = {}
-//     constructor(config){
-//         this.config = config;
-//     }
-// }
 // make sure we can pass a real, in-memory JS obj
 autorunFeatureTests.push(EXAMPLE_FEATURE_TEST_OBJ)
 // or a stringified JSON obj, that will be converted to a real JS obj on the fly
@@ -3867,10 +3888,10 @@ class ToastNotification {
 
 
 // Toasts Feature Feature Description Definition (Serializable to JSON)
-class FeatureDescription_ToastsFeature 
+class FeatureTest_ToastsFeature 
 // TODO: enforce that it contains only literals
 // maintains serializability
-extends FeatureDescription {
+extends FeatureTest {
     name = "Toasts Feature"
     scenarios = {
         "Show Toast": {
@@ -3899,10 +3920,10 @@ extends FeatureDescription {
     }
 }
 
-autorunFeatureTests.push(FeatureDescription_ToastsFeature);
+autorunFeatureTests.push(FeatureTest_ToastsFeature);
 
-class FeatureDescription_ToastLevels
-extends FeatureDescription {
+class FeatureTest_ToastLevels
+extends FeatureTest {
     name = "Toasts with Levels Feature"
     scenarios = {
         __type: "ScenarioOutline",
@@ -3916,12 +3937,14 @@ extends FeatureDescription {
     }
 }
 
+autorunFeatureTestResults.push(FeatureTest_ToastLevels);
+
 // AutorunningSelfTest pre-registers the feature definition
 // to make sure it runs on startup
-// class FeatureDescription_Toasts
+// class FeatureTest_Toasts
 // extends AutorunningSelfTest(
 //     FeatureTest, 
-//     ToastFeatureDescription
+//     ToastFeatureTest
 // ) {}
 
 class ToastNotificationManager {
@@ -5022,7 +5045,7 @@ function ensureHeadTag(){
 
 let commandPaletteInput = null;
 
-const CustomFeatureDescriptionDecorator = (BaseClass, definition) => {
+const CustomFeatureTestDecorator = (BaseClass, definition) => {
     i = null;
     // set the constructor to a dynamic name :D
     var Constructor = new Function("return function " + definition.name + "() { };")();
@@ -5035,7 +5058,9 @@ const CustomFeatureDescriptionDecorator = (BaseClass, definition) => {
 }
 
 const BUILT_IN_FACTORIES = {
-    "CustomCommandFactory": CustomCommandFactory
+    "CustomCommandFactory": CustomCommandFactory,
+    // TODO: normalize or rename FeatureDescrtiption -> FeatureTest 
+    "FeatureTest": FeatureTest,
 }
 
 
@@ -5063,6 +5088,24 @@ function setup() {
     // TODO: parallelize with Promise.all([])
     autorunFeatureTestResults.length = 0; // reset results
     autorunFeatureTests.forEach((featDescClassOrDefinition)=>{
+        console.warn(
+            "Self Test definition shape:",
+            typeof featDescClassOrDefinition === 'function' 
+                ? "class" //featDescClassOrDefinition
+                : typeof featDescClassOrDefinition === 'string'
+                    ? "string" //featDescClassOrDefinition
+                    : "object" //Object.keys(featDescClassOrDefinition)
+        )
+        // decode string json to js object that we can build an instance from
+        if(typeof featDescClassOrDefinition === 'string'){
+            try{
+                featDescClassOrDefinition = JSON.parse(featDescClassOrDefinition);
+            }catch(e){
+                console.error('failed to parse self test definition as JSON',{
+                    featDescClassOrDefinition
+                })
+            }
+        }
         console.warn('Autorunning Self Registered Feature Test Now... (TODO: parallelize)',{
             featDescClassOrDefinition
         })
@@ -5071,16 +5114,16 @@ function setup() {
         // we need to hydrate an instance using the provided definition
         let featDescClassToInstance = featDescClassOrDefinition;
         let instance = null;
-        if(typeof featDescClassOrDefinition !== 'function'){
-            // // // rename variable locally for clear code
-            // const featDef = featDescClassOrDefinition;
+        if(typeof featDescClassOrDefinition === 'object'){
+            // rename variable locally for clear code
+            const featDef = featDescClassOrDefinition;
             // console.warn('we recognize a definition instead of a class, instancing class now...')
             // // return something we can call "new" on that we don't need to pass any arguments to
             // // just in case we were passed "just a class" reference with no arguments
             // // that way all code below this point can just assume we are being passed a plain class reference
             // // that doesn't accept any arguments,
             // // but when our special class is instantiated, it will be hydrated with the pre-provided definition
-            // //featDescClassToInstance = CustomFeatureDescriptionDecorator(FeatureDescription, featDescClassOrDefinition);
+            // //featDescClassToInstance = CustomFeatureTestDecorator(FeatureTest, featDescClassOrDefinition);
 
             // // TODO: this could just be a string-key lookup into a map
             // if(!BUILT_IN_FACTORIES[featDef.name]){
@@ -5103,10 +5146,28 @@ function setup() {
             // console.warn("NEW FD instance: ",{instance})
             // // now we convert it to the type that GFDParser expects...
             // instance = 
-        }else{
-            instance = new featDescClassToInstance();
-            debugger;
-        }
+            let {
+                __type,
+                __targetType,
+                name,
+                constructorArgs
+            } = featDef;
+            if(!name){
+                system.panic("missing name for "+featDef.name)
+            }
+            // we're probably instantiating a FeatureTest right now...
+            console.warn('attempting to generate instance',{
+                __type,
+            })
+            // making sure to forward the pre-defined constructor args...
+            instance = new BUILT_IN_FACTORIES[__type](...constructorArgs);
+
+        }else if(typeof featDescClassOrDefinition === 'function'){
+            instance = new featDescClassToInstance({
+                name: featDescClassToInstance.name,
+                scenarios: featDescClassToInstance.scenarios
+            });
+        }else if(typeof featDescClassOrDefinition === 'string'){
 
         // TODO: see about passing objects instead of class instances
         const parser = new GFDParser(instance);
