@@ -11,12 +11,26 @@
     Taggable, Flaggable, Commentable, Annotatable,
     ---
 */
+// AutorunFeatureTests
+const autorunFeatureTestResults = [];
+const autorunFeatureTests = [];
+
 const HALT_ON_PANIC = 1; // enable to halt the system on panic
 const SHOW_DEV_WARNINGS = 1;
 const MAX_SUGGESTED_SCENARIOS_PER_FEATURE = 3;
 // Singletons
 let gherkinRunnerWidget = null;
 let toastManager = null;
+
+// Store >
+//          CustomCommands{} a hash table keyed by custom command name (unique id)
+//          CustomCommandFactories{} a hash table keyed by custom command name (unique id) of 
+//              factory functions that return a new instance of the command
+
+//system.store = store;
+
+// like laravel's singleton provider: app()->singleton('toastManager', function(){ return new ToastManager(); }
+// if the system doesn't have a cached instance of the requested class, it will create one, cache it, and return it
 
 // used by StateMachine to define valid state transitions
 // @see canTransition()
@@ -80,11 +94,30 @@ class GherkinScenarioOutline {}
     think of it like a FeatureTestConfigObject or a ScriptableObject / DataObject
 */
 class FeatureDescription {
-    name = "Feature Description"
-    scenarios = []
-    background = []
-    constructor(){
-
+    config = {}
+    parseError = null;
+    get name() {
+        return this?.config?.name ?? `Unconfigured` + this.constructor.name;
+    }
+    get scenarios() {
+        return this?.config?.scenarios ?? {};
+    }
+    constructor(config){
+        this.setConfig(config);
+    }
+    // todo: validate config
+    setConfig(string_or_object){
+        // if we're given an object, don't parse it
+        if(typeof string_or_object === 'object'){
+            this.config = string_or_object;
+        }else{
+            try{
+                this.config = JSON.parse(string);
+            }catch(e){
+                this.config = {}; //undefined;
+                this.parseError = e;
+            }
+        }
     }
 }
 
@@ -205,8 +238,41 @@ class SystemManager {
 class System {
     tag = "";
     innerClockTime = -1; 
+    // separate from our "serializable" state,
+    // we keep _instances_ of our defined state types here
+    // factories, which we don't serialize, but do cache, are also stored here
+    // outside of the store, to distinguish them from the state and reduce circular references
+    singletons = {};
+    singletonFactories = {};
     constructor(manager){
         this.manager = manager;
+    }
+    get(singletonName){
+        return this.singletons[singletonName] ?? null;
+    }
+    lazySingleton(name, factory){
+        if(typeof factory !== 'undefined'){
+            this.singletonFactories[name] = factory;
+        }else{
+            if(this.singletons[name]){
+                return this.singletons[name];
+            }else{
+                if(!this.singletonFactories[name]){
+                    this.panic("System.lazySingleton: no factory defined for singleton named: " + name);
+                }
+                this.singletons[name] = new this.singletonesFactories[name]();
+                return this.singletons[name];
+            }
+        }
+    }
+    singleton(name, instance){
+        if(typeof instance === 'undefined'){
+            return this.singletons[name];
+        }
+        if(!this.singletons[name]){
+            this.singletons[name] = instance;
+        }
+        console.warn('assiging System singleton',{name,instance})
     }
     panic(message){
         this.manager.panic(this.tag + ": " + message);
@@ -1514,7 +1580,7 @@ class GFDParser {
     parserStateMachine = null
 
     constructor(definition){
-        console.warn('what is definition?',{
+        console.warn('GFDParser: constructor(definition)?',{
             type: typeof definition,
             constructorName: definition?.constructor?.name,
             definition
@@ -1526,6 +1592,12 @@ class GFDParser {
         //         "got: " + (definition?.constructor?.name ?? 'undefined')
         //     );
         // }
+
+        if(!definition?.scenarios || !Object.keys(definition?.scenarios).length){
+            system.dump({"GFDParser:ctor(definition)":definition})
+            system.panic("GFDParser: no scenarios provided")
+        }
+
         this.definition = definition;
     }
 
@@ -1560,9 +1632,15 @@ class GFDParser {
             system.panic("GFDParser: no definition provided")
         }
 
+        if(!this.definition?.scenarios){
+            //system.debug({CHECK_DEF:this.definition})
+            system.dump({scenariolessDefinition:this.definition})
+            system.panic("GFDParser: no scenarios provided at all!")
+        }
+
         // Definition must have at least one Feature > Scenario at parse time
-        if(!Object.keys(this.definition?.scenarios)?.length){
-            system.panic("GFDParser: no scenarios provided")
+        if(!Object.keys(this.definition?.scenarios ?? {})?.length){
+            system.panic("GFDParser: empty scenarios object provided")
         }
         
         let truthMatrix = new GherkinParserTransitionMatrix().matrix;
@@ -2479,31 +2557,6 @@ class RunGherkinCommandWizardConfig extends Config {
     ]
 }
 
-/** 
- * this is a dynamic, user-configurable command that can be created at runtime
-*/
-class CustomCommandFactory {
-    name = "My Custom Command Factory"
-    // the configuration of the command
-    options = {}
-    _id = null;
-    constructor(options){
-        this.options = options ?? {};
-    }
-    get id(){
-        // if(this._id === null){
-        //     this._id = this.generateID();
-        // }
-        return this.options?.id;
-    }
-    execute(){
-        console.warn('OnCustomCommandFactoryExecute')
-        if(this.options?.execute){
-            this.options.execute.call(this);
-        }
-    }
-}
-
 class CommandStepConfig {
     constructor(config){
     }
@@ -2538,6 +2591,26 @@ class CommandStep {
             }
 */
 
+/*
+CustomCommandFactoryFactory -> generates instances of Custom Command Factories
+            Custom Command Factories -> generate instances of Custom Commands
+
+CommandPalette offers Registration Method for Custom Command Factories, so that, Custom Commands can be found by name/description metatags, and instantiated on demand
+
+When a CommandSuggestion is selected, the appropriate Custom Command Factory is instantiated
+            or we call a singleton factory to get a fresh instance of the Custom Command
+            and the command is executed
+    In different CommandFlow or ControlFlow Scenarios,
+            CommandFactories can be passed around as references, by simply passing the CommandFactory ID
+            Then, when you finally _do_ need an instance of the command (if ever)
+                you can have the system invoke you a fresh instance by ID
+            The nice thing is, with this extensible system
+                the factories can be stored in pre-configured ways
+                so that multiple consumers can use the same factory
+                rather than instantiating multiple copies of the same command
+                wasting resources
+*/
+
 /* the literal class that manages taking JsonOf... objects and turning them into instances */
 class CustomCommandFactoryFactory {
     factory = null
@@ -2552,32 +2625,61 @@ class CustomCommandFactoryFactory {
     takes String or Object, maintains an Object 
     @throwable parseError - flag is set when JSON parsing fails
 */
-class JSON_Of_CustomCommandFactory {
+class CustomCommandFactory {
     value = {}
     constructor(string_or_object){
+        if(!string_or_object){
+            system.panic(`CustomCommandFactory: string_or_object must be defined`)
+        }
         // if we're given an object, don't parse it
         if(typeof string_or_object === 'object'){
             this.value = string_or_object;
-            return;
+        }else{
+            try{
+                this.value = JSON.parse(string);
+            }catch(e){
+                this.value = {}; //undefined;
+                this.parseError = e;
+            }
         }
-        try{
-            this.value = JSON.parse(string);
-        }catch(e){
-            this.value = {}; //undefined;
-            this.parseError = e;
-        }
+        console.warn('set CustomCommandFactory value: ', {value:this.value})
     }
+    get name (){
+        return this?.value?.name ?? "Custom Command with no name";
+    }
+    // name = "My Custom Command Factory"
+    // // the configuration of the command
+    // options = {}
+    // _id = null;
+    // constructor(options){
+    //     this.options = options ?? {};
+    // }
+    // get id(){
+    //     // if(this._id === null){
+    //     //     this._id = this.generateID();
+    //     // }
+    //     return this.options?.id;
+    // }
+    // execute(){
+    //     console.warn('OnCustomCommandFactoryExecute')
+    //     if(this.options?.execute){
+    //         this.options.execute.call(this);
+    //     }
+    // }
 }
 // an example JSON definition of a CustomCommandFactory
 // this is used downstream to run a self test
 // to make sure that custom command factory instances 
 // are properly hydrating
-const exampleJSONOfCustomCommandFactory = {
+// NOTE: jake's hello world command actually calls and references this command for its one and only execution step
+const ExampleCustomCommandFactory = {
     __type: "CustomCommandFactory",
+    name: "Example Hello World Command Factory",
     // define a simple command that prints a Hello World toast
     customCommandConfig: {
         __type: "CustomCommandConfig",
         __extends: "Config",
+        name: "Example Hello World Command",
         execution_steps: [
             {
                 // fields can be strings, arrays, or objects of lazily evaluated getter fn
@@ -2624,7 +2726,7 @@ const exampleJSONOfCustomCommandFactory = {
     Then        the user sees a suggested auto-complete of "Jakes first custom command"
 
 */
-autorunFeatureTests.push(new FeatureTest({
+const EXAMPLE_FEATURE_TEST_OBJ = {
     /*
         custom command factory is a special type of command factory
         it has a user-defined (or system generated) serializable JSON format
@@ -2663,42 +2765,51 @@ autorunFeatureTests.push(new FeatureTest({
 
     */
     name: "CustomCommandFactory",
-    description: "CustomCommandFactory",
-    scenarios: {
-        "custom commands > appear in cmd pallete": {
-            // we parse this downstream 
-            // to await a valid instance of the CommandPrompt 
-            // in the global state of the current system sandbox
-            given: "CommandPrompt",
-            // note: we don't specify which input here,
-            // since, contextually, there is only one main input for the user to type into
-            // in "the CommandPrompt" context
-            when:  `the user types "jake"`,
-            then:  `the user sees SuggestedCommand "Jakes first custom command" in the SuggestionList`,
-        },
-        "custom commands > can hydrate from JSON to real executable commands": {
-            given: `CommandPrompt`,
-            when: `the user executes "Jakes first custom command"`,
-            then: `a Toast appears that says "Hello World!"`,
+    // constructor arguments for the CustomCommandFactory
+    constructorArgs: [{
+        description: "CustomCommandFactory",
+        scenarios: {
+            "custom commands > appear in cmd pallete": {
+                // we parse this downstream 
+                // to await a valid instance of the CommandPrompt 
+                // in the global state of the current system sandbox
+                given: "CommandPrompt",
+                // note: we don't specify which input here,
+                // since, contextually, there is only one main input for the user to type into
+                // in "the CommandPrompt" context
+                when:  `the user types "jake"`,
+                then:  `the user sees SuggestedCommand "Jakes first custom command" in the SuggestionList`,
+            },
+            "custom commands > can hydrate from JSON to real executable commands": {
+                given: `CommandPrompt`,
+                when: `the user executes "Jakes first custom command"`,
+                then: `a Toast appears that says "Hello World!"`,
+            }
         }
-    }
-}))
-
-
-const iJSON_CCF = new JSON_Of_CustomCommandFactory(exampleJSONOfCustomCommandFactory);
-console.warn('json of custom command factory',{
-    exampleJSONOfCustomCommandFactory,
-    iJSON_CCF
-})
-
-// class CustomCommandFactory {
-//     name = "CustomCommandFactoryInstance"
-//     config = null
-//     // input is a JSONOfCustomCommandFactory
+    }]
+}
+// Instead of FeatureTest, just use FeatureDescription for now
+// -- we can add a FeatureTest class later if we need it
+// class FeatureTest {
+//     config = {}
 //     constructor(config){
 //         this.config = config;
 //     }
 // }
+// make sure we can pass a real, in-memory JS obj
+autorunFeatureTests.push(EXAMPLE_FEATURE_TEST_OBJ)
+// or a stringified JSON obj, that will be converted to a real JS obj on the fly
+autorunFeatureTests.push(JSON.stringify(EXAMPLE_FEATURE_TEST_OBJ))
+// ^^^ both should pass if the system is working correctly
+// we should have a way to tag them with different test run names like
+// "FeatureTest:CustomCommandFactory" or "FeatureTest:CustomCommandFactory:JSON"
+
+const exampleCustomCommandFactory = new CustomCommandFactory(ExampleCustomCommandFactory);
+console.warn('json of custom command factory',{
+    ExampleCustomCommandFactory,
+    exampleCustomCommandFactory
+})
+
 // here we introduce a custom command as though it is one
 // the user previously built and serialized to disk
 // let imagine hydrated this from a JSON string...
@@ -3001,6 +3112,7 @@ function loadGraph(name){
     }
 }
 
+// executable javascript strings for custom functions
 class CustomFn {
     _str = ""
     result;
@@ -3742,8 +3854,7 @@ class ToastNotification {
     }
 }
 
-const autorunFeatureTestResults = [];
-const autorunFeatureTests = [];
+
 // const Decorate_Autorun = function(baseClass){
     
 //     return function(){
@@ -3753,7 +3864,7 @@ const autorunFeatureTests = [];
 // }
 
 
-class FeatureTest {}
+
 
 // Toasts Feature Feature Description Definition (Serializable to JSON)
 class FeatureDescription_ToastsFeature 
@@ -4911,6 +5022,22 @@ function ensureHeadTag(){
 
 let commandPaletteInput = null;
 
+const CustomFeatureDescriptionDecorator = (BaseClass, definition) => {
+    i = null;
+    // set the constructor to a dynamic name :D
+    var Constructor = new Function("return function " + definition.name + "() { };")();
+    // this is kind of like Class.bind to bind some arguments
+    // to a class we want to instantiate later
+    return function(){
+        this.i = new Constructor(definition);
+        return this.i;
+    }
+}
+
+const BUILT_IN_FACTORIES = {
+    "CustomCommandFactory": CustomCommandFactory
+}
+
 
 // Define the setup function
 function setup() {
@@ -4918,20 +5045,71 @@ function setup() {
     createCanvas(windowWidth, windowHeight);
     
     // singletons
-    cmdprompt = new CommandPalette();
-    toastManager = new ToastNotificationManager();
+    // cmdprompt = new CommandPalette();
+    // toastManager = new ToastNotificationManager();
 
     // boot the root system manager & root system
     manager.boot();
     rootSystem = system = manager.systems[0];
+    // register our singletons with the root system instance
+    // system.singleton('toastManager',toastManager);
+    // system.singleton('cmdprompt', cmdprompt);
+
+    // will be instantiated upon first access attempt via system.get('toastManager')
+    system.lazySingleton('toastManager', ToastNotificationManager);
+    system.lazySingleton('cmdprompt', CommandPalette);
     
     /// === region: Self Test Mode ===
     // TODO: parallelize with Promise.all([])
     autorunFeatureTestResults.length = 0; // reset results
-    autorunFeatureTests.forEach((featDescClass)=>{
-        console.warn('SelfTest === autorun',{featDescClass})
+    autorunFeatureTests.forEach((featDescClassOrDefinition)=>{
+        console.warn('Autorunning Self Registered Feature Test Now... (TODO: parallelize)',{
+            featDescClassOrDefinition
+        })
+
+        // if featDescClassOrDefinition is not a constuctor, 
+        // we need to hydrate an instance using the provided definition
+        let featDescClassToInstance = featDescClassOrDefinition;
+        let instance = null;
+        if(typeof featDescClassOrDefinition !== 'function'){
+            // // // rename variable locally for clear code
+            // const featDef = featDescClassOrDefinition;
+            // console.warn('we recognize a definition instead of a class, instancing class now...')
+            // // return something we can call "new" on that we don't need to pass any arguments to
+            // // just in case we were passed "just a class" reference with no arguments
+            // // that way all code below this point can just assume we are being passed a plain class reference
+            // // that doesn't accept any arguments,
+            // // but when our special class is instantiated, it will be hydrated with the pre-provided definition
+            // //featDescClassToInstance = CustomFeatureDescriptionDecorator(FeatureDescription, featDescClassOrDefinition);
+
+            // // TODO: this could just be a string-key lookup into a map
+            // if(!BUILT_IN_FACTORIES[featDef.name]){
+            //     system.panic("unrecognized definition "+featDef.name)
+            // }
+            // system.success('class resolved:', {
+            //     name: featDef.name,
+            //     classRef: BUILT_IN_FACTORIES[featDef.name],
+            //     featDef
+            // });
+            // // don't instantiate it yet, just return the reference to the class that WOULD be instantiated...
+
+            // featDescClassToInstance = BUILT_IN_FACTORIES[featDef.name];
+            // if(!featDef.config?.constructorArgs){
+            //     // if none, request they add an empty array?
+            //     system.panic("missing config.constructorArgs for "+featDef.name)
+            // }
+            // let _instance = new featDescClassToInstance(featDef?.config?.constructorArgs);
+            // // instance.value[0].scenarios
+            // console.warn("NEW FD instance: ",{instance})
+            // // now we convert it to the type that GFDParser expects...
+            // instance = 
+        }else{
+            instance = new featDescClassToInstance();
+            debugger;
+        }
+
         // TODO: see about passing objects instead of class instances
-        const parser = new GFDParser(new featDescClass());
+        const parser = new GFDParser(instance);
         const gherkinSeq = parser.parse();
         const executor = new GherkinSequenceExecutor(gherkinSeq);
         autorunFeatureTestResults.push(executor.execute());
