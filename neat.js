@@ -7,10 +7,133 @@
     TODO: allow system to run headless in node.js env
     TODO: get system headless server version talking to client version
     TODO: get server sending text, email, sms, apn, web push notifications, etc
+    ---
+    Taggable, Flaggable, Commentable, Annotatable,
+    ---
 */
+const HALT_ON_PANIC = 1; // enable to halt the system on panic
+const SHOW_DEV_WARNINGS = 1;
+const MAX_SUGGESTED_SCENARIOS_PER_FEATURE = 3;
 // Singletons
 let gherkinRunnerWidget = null;
 let toastManager = null;
+
+// used by StateMachine to define valid state transitions
+// @see canTransition()
+// undefined transitions are blocked in StateMachine by default
+class TruthTable {
+    pairs = []
+    bulkAllow(arr){ arr.forEach(([a,b])=>{this.allow(a,b)}) }
+    allow(a,b){ this.addDefinition(a,b,true); }
+    block(a,b){ this.addDefinition(a,b,false); }
+    addDefinition(a,b,validityBool){
+        if(!this.pairs[a]){
+            this.pairs[a] = []
+        }
+        this.pairs[a][b] = validityBool
+    }
+    checkValidity(a,b){
+        return ( 
+            this.pairs[a] 
+            && this.pairs[a][b] 
+        ) 
+        ? this.pairs[a][b] 
+        : false;
+    }
+}
+class GherkinScenarioOutlineExample {}
+class GherkinScenarioOutlineExamples {}
+class GherkinScenarioOutline {}
+
+/**
+    @class Feature Test
+    this is the instance of a feature test 
+    it is instantiated by the Test Runner
+    it is provided with dehydrated / human readable Feature Description
+    
+    * Feature Descriptions can be created / built / imported at runtime
+    * Feature Descriptions are pre-processed and converted to GherkinSequence objects
+        
+        All GherkinSequence objects represent ONE Feature
+
+            All Features must contain at least 1 Scenario
+
+                It is recommended that a Feature 
+                doesn't contain more than 3 Scenarios
+
+                All Scenarios must contain at least 3 Steps:
+  
+                - First step must be a Given, 
+                    followed by 0 or more Givens (via AndGiven)
+
+                - Next step must be a When, 
+                    followed by 0 or more Whens (via AndWhen)
+
+                - Next step must be a Then, 
+                    followed by 0 or more Thens (via AndThen)
+
+                - Nothing other than the beginning of a new Scenario 
+                    can follow a Then
+*/
+/* 
+    the dummy / serialized / dehydrated / human readable version of a Feature Test 
+    think of it like a FeatureTestConfigObject or a ScriptableObject / DataObject
+*/
+class FeatureDescription {
+    name = "Feature Description"
+    scenarios = []
+    background = []
+    constructor(){
+
+    }
+}
+
+// this class not only holds the results of a GherkinSequence run
+// it also handles the logic for running the sequence to capture the results
+// todo: maybe extract the sequence execution logic to a separate class
+// and leave this class as just FeatureTestRunResults
+class FeatureTestRun {
+    // output, successes, errors, info messages, etc
+    background_results = []
+    scenario_results = []
+
+    // for targeting the test runner that instantiated this test
+    // for passing messages up to the host
+    // without panicking the entire system
+    // tho a system.eventBus could come in handy...
+    testRunnerID = null; 
+    sequence = null;
+
+    // get passing(){
+    //     // find first error in results, if any, return false
+    //     // todo: didError bool flag would saving re-counting
+    //     return this.results.findIndex((result)=>{
+    //         return result.error;
+    //     }) === -1;
+    // }
+    
+    constructor({testRunnerID}){
+        this.testRunnerID = testRunnerID;
+        // if we need to validate the sequence,
+        // 1. can we call our TestRunner
+        // 2. can we assume the TestRunner will pre-validate the sequence before trying to instantiate it as a FeatureTest?
+        // 3. should we rename this to FeatureTestRun ?    
+    }
+    loadSequence(sequence){
+        this.sequence = sequence;
+    }
+    executeSequence(seq){
+        this.sequence = seq ?? this.sequence;
+        return new GherkinSequenceExecutor(this.sequence).execute();
+    }
+}
+
+const TOAST_LEVELS = {
+    INFO: 'info',
+    SUCCESS: 'success',
+    WARNING: 'warning',
+    ERROR: 'error'
+}
 
 /*
     Given *required (at least one Given)
@@ -32,52 +155,89 @@ class SystemManager {
         console.error(message);
         // show a toast
         toastManager.showToast(message, {
-            pinned: true, 
+            //pinned: true, 
             // TODO: changing level to error could 
             // flip pinned to true by default if we want
             // users could opt-out of a error toast auto-pinning
             // via a config option...
             level:TOAST_LEVELS.ERROR
         });
+        if(HALT_ON_PANIC){
+            throw new Error(message);
+        }
     }
-    // get panic(){
-    //     return this._panic;
-    // }
+    warn(message){
+        console.warn(...arguments);
+        // show a toast
+        toastManager.showToast(message, {
+            //pinned: true, 
+            level:TOAST_LEVELS.WARNING
+        });
+    }
 }
+/** 
+ * @TODO `@DecoratorManagedObject`
+ * > default to outer system time unless
+ *   we've performed some action that has 
+ *   de-synchronized this object's inner clock
+ *   clock states are resolved up the chain to the base
+ *   object in the system so that
+ *   groups of items can all share a custom-controllable clock
+ *   this is part of how our REPL and time-stepping debugger are able to work
+ *   it's also the fundamental mechanism for our versioning system and our
+ *   ability to "rewind" the system to a previous state (built-in undo/redo)
+ *   you can skip past granular changes to previous milestones or checkpoints
+ *   you can name or tag checkpoints
+ *   you can attempt to merge checkpoints
+ *   you can cherry pick changes between checkpoints
+ *   it'll be cool once the gui is wired up, and you see me
+ *   zoom out of a graph to view the meta-graph controlling it,
+ *   then slice and dice it's flow tree with all kinds of plugins and add ons
+ *   then zoom back in, encounter an error,
+ *   zoom side-by-side
+ *   step through the flow
+ *   work backwards from the error
+ *   find the error in the flow
+ *   correct it, see an instantly passing test that triggers a cascade of related test runs
+ *   then watch them ripple from yellow back to green as the system autonomously accepts and distributes the verified changes
+ *   to the appropriate subsystems...
+ */
 class System {
-    /** 
-     * @TODO `@DecoratorManagedObject`
-     * > default to outer system time unless
-     *   we've performed some action that has 
-     *   de-synchronized this object's inner clock
-     *   clock states are resolved up the chain to the base
-     *   object in the system so that
-     *   groups of items can all share a custom-controllable clock
-     *   this is part of how our REPL and time-stepping debugger are able to work
-     *   it's also the fundamental mechanism for our versioning system and our
-     *   ability to "rewind" the system to a previous state (built-in undo/redo)
-     *   you can skip past granular changes to previous milestones or checkpoints
-     *   you can name or tag checkpoints
-     *   you can attempt to merge checkpoints
-     *   you can cherry pick changes between checkpoints
-     *   it'll be cool once the gui is wired up, and you see me
-     *   zoom out of a graph to view the meta-graph controlling it,
-     *   then slice and dice it's flow tree with all kinds of plugins and add ons
-     *   then zoom back in, encounter an error,
-     *   zoom side-by-side
-     *   step through the flow
-     *   work backwards from the error
-     *   find the error in the flow
-     *   correct it, see an instantly passing test that triggers a cascade of related test runs
-     *   then watch them ripple from yellow back to green as the system autonomously accepts and distributes the verified changes
-     *   to the appropriate subsystems...
-     */
+    tag = "";
     innerClockTime = -1; 
     constructor(manager){
         this.manager = manager;
     }
     panic(message){
-        this.manager.panic(message);
+        this.manager.panic(this.tag + ": " + message);
+    }
+    warn(){
+        this.manager.warn(this.tag + ": ", ...arguments);
+    }
+    print(){
+        console.log(this.tag + ": " + JSON.stringify([...arguments],{
+            depth: 3
+        },2));
+    }
+    dump(){
+        console.warn(this.tag + ": ", ...arguments);
+    }
+    debug(){
+        system.dump(this.tag + ": ", [...arguments]);
+        debugger;
+    }
+    setTag(tag){
+        this.tag = tag;
+    }
+    clearTag(){ this.tag = ""; }
+    success(message){
+        // log a message with a dark green background, and light green text and a green checkmark emoji
+        console.log('%c '+ this.tag + ": " + message+' ✅','background: #222; color: #bada55');
+        // dump any additional arguments after 0: message
+        this.dump(...arguments);
+    }
+    get time(){
+        // returns either passthrough time or modified time
     }
 }
 const rootSystemManager = new SystemManager();
@@ -89,6 +249,27 @@ const manager = rootManager; // alias
 // more singletons
 let system;
 let rootSystem; // alias
+
+// Array of tests that will run during self-test mode
+// (when enabled) while the system is booting
+// aka SelfTestDescriptions
+const selfTestFeatureClasses = []
+const selfTestFeatureInstances = []
+// Decorator that pre-registers our classes so
+// we can "tag" them and run them automatically during self-test mode
+// without having to specify them in a config file or elsewhere
+const AutorunningSelfTest = function(baseClass, options){
+    // options: {name, description, tags, etc}
+    let myID = performance.now() + Math.random();
+    defaultFeatureDescriptions.push(myID);
+    let myIDX = defaultFeatureDescriptions.length - 1;
+
+    // this executes when the ExtendingClass is instantiated
+    return function(){
+        const extendedClassInstance = new baseClass(...arguments);
+        return extendedClassInstance;
+    }
+}
 
 // Automatically registers Command classes with the
 // Default Command Prompt Suggestions
@@ -265,30 +446,121 @@ class AuthRequirements extends BDDTest {
 class AndGiven extends GherkinStep {}
 class AndWhen extends GherkinStep {}
 class AndThen extends GherkinStep {}
+class GherkinSequenceExecutor {
+    sequence = null;
+
+    constructor(sequence){
+        this.sequence = sequence;
+    }
+
+    preFlightCheck(){
+        if(this.sequence === null){
+            // TODO: maybe panic the testRunner instead of the whole system
+            system.panic("FeatureTestRun.executeScenario: no sequence provided");
+            return false;
+        }
+        if(!this.sequence.isValid){
+            system.dump({
+                sequence: this.sequence,
+            })
+            system.panic("FeatureTestRun.executeScenario: invalid sequence provided");
+            return false;
+        }
+        return true;
+    }
+
+    // aka executeSequence
+    execute(seq){
+        this.sequence = seq ?? this.sequence;
+        let preflightResult = this.preFlightCheck();
+        if(!preflightResult){
+            system.panic("FeatureTestRun.executeScenario: preflight check failed");
+            return;
+        }
+        this.sequence.scenarios.forEach((scenario,index)=>{
+            this.executeScenario(scenario,index);
+        });
+    }
+
+    // tryExecuteScenario
+    executeScenario(scenario,index){
+        // let preflightResult = this.preFlightCheck();
+        // if(!preflightResult){
+        //     system.panic("FeatureTestRun.executeScenario: preflight check failed");
+        //     return;
+        // }
+        let results = [];
+        // try {
+            //results = scenario.execute();
+            scenario.steps.forEach((step,index)=>{
+                try{
+                    results.push(this.executeScenarioStep(step,index));
+                }catch(error){
+                    results.push({
+                        step,
+                        index,
+                        error
+                    })
+                }
+            })
+        // }catch(erro){
+        //     results.push({
+        //         scenario,
+        //         index,
+        //         error
+        //     })
+        // }
+        // this.scenario_results[index] = results;
+        return results;
+    }
+
+    // tryExecuteFeature // ?
+    // tryExecuteScenarioOutline
+        // tryExecuteScenarioOutlineExample
+            // tryExecuteScenarioStepWithExample
+    
+    // tryExecuteScenarioStep
+    executeScenarioStep(step){
+    }
+}
 class GherkinSequenceValidator {
     validationErrors = []
     sequence = null;
     constructor(sequence){
         this.sequence = sequence
+        //console.warn('GherkinSequenceValidator:ctor',{sequence})
     }
     get steps(){
         return this.sequence;
     }
     validateSequence(sequence){
+        console.warn('validateSequence',{
+            prevSeq: this.sequence,
+            incomingSeq: sequence
+        })
         // reset: clear validation errors
         this.validationErrors = [];
-        console.warn('validateSequence',{
-            sequence,
-            thisSequence: this.sequence
-        })
+        
         this.sequence = sequence ?? this.sequence;
         if(!this.sequence){
+            console.error('validateSequence: no valid seq provided',{
+                sequence,
+                thisSequence: this.sequence
+            })
             system.panic("GherkinSequenceValidator.validateSequence requires a sequence to validate")
         }
-        this.sequence.forEach((step,index)=>{
+        if(!this.sequence?.steps?.length){
+            // seq cannot be empty
+            system.dump({tooShortSeq:this.sequence});
+            system.panic("GherkinSequenceValidator.validateSequence requires a GherkinSequence with at least one step in the .steps array")
+        }
+        this.sequence.steps.forEach((step,index)=>{
             this.checkStepIsValid(step,this.sequence,index)
         })
-        return this.validationErrors.length === 0;
+        this.sequence.isValid = this.validationErrors.length === 0;
+        this.sequence.latestValidator = this;
+        this.sequence.latestValidationErrors = this.validationErrors;
+        return this.sequence.isValid;
     }
     // TODO: maybe better as:
     // Feature: ""
@@ -299,25 +571,44 @@ class GherkinSequenceValidator {
     //}
     checkStepIsValid(step,steps,index){
         let prevStep = steps[index-1];
-        let prevDifferentStep = this.closestPreviousDifferentStep(steps,index);
+        if(!prevStep){
+            // first step must be a Feature
+            if(step.__type !== GHERKIN_AST_TOKENS.FEATURE){
+                this.validationErrors.push(`First Step Must Be A Feature: ${step.type} at index ${index}`);
+                system.dump({step,steps,index})
+                system.panic(`First Step Must Be A Feature: ${step.type} at index ${index}`);
+            }
+            // valid opening step
+            return true;
+        }
         
-        // walk backwards until we find a step of a different type
-        switch(step.type){
-            case 'Feature':
-                return prevStep == null;
-            case 'Scenario':
-                return prevStep == 'Feature' || prevStep == 'Then';
-            case 'Given':
+        // walk backwards until we find a step of a different type ?
+        // don't even need to, can just check prev step if any
+        //let prevDifferentStep = this.closestPreviousDifferentStep(steps,index);
+        let valid = false;
+        switch(step.__type){
+            case GHERKIN_AST_TOKENS.FEATURE:
+                valid = prevStep == null;
+                break;
+            case GHERKIN_AST_TOKENS.SCENARIO:
+                valid = prevStep == 'Feature' || prevStep == 'Then';
+                break;
+            case GHERKIN_AST_TOKENS.GIVEN:
                 // if the previousDifferentStep is null || Given, it's valid
-                return prevStep == null || prevStep?.type === 'Given';
-            case 'When':
-                return prevStep?.type == 'Given' || prevStep?.type == 'When';
-            case 'Then':
-                return prevStep?.type == 'When' || prevStep?.type == 'Then';
+                valid = prevStep == null || prevStep?.type === 'Given';
+                break;
+            case GHERKIN_AST_TOKENS.WHEN:
+                valid = prevStep?.type == 'Given' || prevStep?.type == 'When';
+                break;
+            case GHERKIN_AST_TOKENS.THEN:
+                valid = prevStep?.type == 'When' || prevStep?.type == 'Then';
+                break;
             default:
-                system.panic(`Invalid Step Type In GherkinSequence:\n ${step.type} after a ${prevStep?.type ?? 'null'} at index ${index}`)
+                system.dump({step});
+                system.panic(`Invalid Step Type In GherkinSequence:\n ${step.__type} after a ${prevStep?.__type ?? 'null'} at index ${index}`)
                 break;
         }
+        return valid;
     }
     closestPreviousDifferentStep(steps,index){
         if(!steps[index-1]){
@@ -334,7 +625,11 @@ class GherkinSequenceValidator {
 }
 class GherkinSequence {
     steps = [];
+    isValid = false
     constructor(steps){
+        if(!steps || !steps?.length){
+            return;
+        }
         // validate sequence 
         // as it's constructed
         steps.forEach((step)=>{
@@ -342,9 +637,13 @@ class GherkinSequence {
         })
     }
     addStep(step){
-        let seqNext = [...this.steps,step];
-        let validator = new GherkinSequenceValidator(seqNext);
-        let isValid = validator.validateSequence();
+        const seqNext = [
+            ...this.steps,
+            step
+        ];
+        // should we normalize passing to the constructor over the method?
+        const validator = new GherkinSequenceValidator(seqNext);
+        const isValid = validator.validateSequence();
         if(!isValid){
             system.panic("addStep: invalid sequence: " + validator.validationErrors.join(","));
         }
@@ -373,8 +672,9 @@ class GherkinRunner {
         this.results = []
         this.sequence = null;
     }
-    validateSequence(){
-        if(!this.sequence || !this.sequence.instanceOf(GherkinSequence)){
+    validateSequence(seq){
+        this.sequence = seq ?? this.sequence;
+        if(!this.sequence || !(this.sequence instanceof GherkinSequence)){
             system.panic("GherkinRunner.sequence must be an instance of a GherkinSequence object")
         }
         this.validator = new GherkinSequenceValidator(this.sequence);
@@ -398,7 +698,7 @@ class GherkinRunner {
             if(!this.sequence){
                 system.panic("GherkinRunner.sequence must be set before running...")
             }
-            if(!this.sequence.instanceOf(GherkinSequence)){
+            if(!(this.sequence instanceof GherkinSequence)){
                 system.panic("GherkinRunner.sequence must be an instance of a GherkinSequence object")
             }
             if(!this.sequence?.steps?.length){
@@ -462,10 +762,6 @@ class WidgetView {
     render(){
         console.warn("render WidgetView here");
     }
-}
-
-class FeatureDescription {
-
 }
 
 // BeginRegion: Tables / Nested Tables
@@ -646,6 +942,7 @@ class GherkinRunnerWidget extends Widget {
     }
     // render the widget
     render(){
+        console.warn('GherkinRunnerWidget.render');
         // rounded rect with status lights in rows and columns
         // each status light is a circle with a label
         // each status light is a different color
@@ -720,12 +1017,7 @@ ClockDecorator = function(target) {
     }
 }
 
-const TOAST_LEVELS = {
-    INFO: 'info',
-    SUCCESS: 'success',
-    WARNING: 'warning',
-    ERROR: 'error'
-}
+
 
 
 
@@ -855,9 +1147,37 @@ class StatusLight {
     }
 }
 
+// TODO: extend Renderable
+class WidgetDashboard {
+    widgetIDs = []
+    registerWidget(widgetID){
+        this.widgetIDs.push(widgetID);
+    }
+    deRegisterWidget(widgetID){
+        this.widgetIDs.splice(this.widgetIDs.indexOf(widgetID),1);
+    }
+    render(){
+        console.warn('WidgetDashboard.render widget count:'+this.widgetIDs.length);
+        this.widgetIDs.forEach((widgetID)=>{
+            if(!store.widgets[widgetID]){
+                system.warn('WidgetDashboard.render: widget not found',widgetID)
+                return;
+            }
+            store.widgets[widgetID].render();
+        });
+    }
+}
+
 // Define the initial state of the store
 let store = {
     interactionMode: MODES.PAN,
+
+    // note you need to instantiate a widget dashboard
+    // a context where widgets are rendered
+    widgets: {},
+    // for now, one dashboard per system
+    // next up: multi-pages of dashboards
+    widgetDashboard: null,
 
     // viewValue: '',
     // controllerValue: '',
@@ -1006,6 +1326,447 @@ class GherkinBusinessReq {
         this.ast.addNodeAtCursor(when);
     }
 }
+
+/* used by our parser to build the AST */
+const GHERKIN_AST_TOKENS = {
+    FEATURE: 'Feature',
+    SCENARIO: 'Scenario',
+    STEP: 'Step',
+    GIVEN: 'Given',
+    WHEN: 'When',
+    THEN: 'Then',
+    // AND: 'And',
+    // BUT: 'But', -- our implementation doesn't 
+    BACKGROUND: 'Background',
+    EXAMPLES: 'Examples',
+    OUTLINE: 'Outline',
+    END_FEATURE: 'EndOfFeature',
+    END_SCENARIO: 'EndOfScenario',
+    // STEP: 'Step',
+    BACKGROUND_STEP: 'BackgroundStep',
+    SCENARIO_OUTLINE: 'ScenarioOutline',
+    EXAMPLE_ROW: 'ExampleRow',
+    TAG: 'Tag',
+    COMMENT: 'Comment',
+    BLANK: 'Blank'
+};
+
+/**
+ * Rules for valid state transitions that 
+ * a Gherkin parser can make when parsing
+ * a Valid Gherkin Feature Definition
+ * in a particular JSON format as
+ * described here:
+ * @see FeatureDefinition
+ * @see GFDParser
+ */
+class GherkinParserTransitionMatrix {
+    tt = null
+    get matrix(){
+        return this?.tt?.pairs ?? [];
+    }
+    constructor(){
+        // TODO: nestable state machines
+        this.tt = new TruthTable();
+        const S = GFDParser.PARSER_STATES;
+        // these are all the valid state transitions
+        /**
+         * START  
+         |   └── FEATURE  
+         |       └── SCENARIO  
+         |           └── GIVEN  
+         |               ├── GIVEN (optional)  
+         |               └── WHEN  
+         |                   ├── WHEN (optional)  
+         |                   └── THEN  
+         |                       ├── THEN (optional)  
+         |                       └── SCENARIO (optional)
+         */
+        this.tt.bulkAllow([
+            // start -> feature
+            [S.START, S.FEATURE],
+                // feature -> scenario
+                [S.FEATURE, S.SCENARIO],
+                    // scenario -> given
+                    [S.SCENARIO, S.GIVEN],
+                        // *opt* given -> given
+                        [S.GIVEN, S.GIVEN],
+                            // *req* given -> when
+                            [S.GIVEN, S.WHEN],
+                        // *req* when -> then
+                        [S.WHEN, S.THEN],
+                            // *opt* when -> when
+                            [S.WHEN, S.WHEN],
+                        // *opt* then -> then
+                        [S.THEN, S.THEN],
+                        // *opt* then -> scenario
+                        [S.THEN, S.SCENARIO], 
+        ])
+    }
+}
+
+// a factory that takes in a Gherkin definition class
+// and parses it out into an AST
+// which is then converted to an executable sequence
+// handles validation along the way
+// tracking syntax errors and warnings/suggestions
+// aka FeatureDefinitionToSequenceParser
+class GFDParser {
+    // array of messages about our parsing work
+    output = []
+    // our instance of a FeatureDescription class
+    // which we parse into executable GherkinSequence
+    definition = null
+
+    parserStateMachine = null
+
+    constructor(definition){
+        console.warn('what is definition?',{
+            type: typeof definition,
+            constructorName: definition?.constructor?.name,
+            definition
+        })
+        // if (!(definition instanceof FeatureDescription)) {
+        //     throw new Error(
+        //         "GFDParser: " +
+        //         "definition must be an instance of FeatureDescription" +
+        //         "got: " + (definition?.constructor?.name ?? 'undefined')
+        //     );
+        // }
+        this.definition = definition;
+    }
+
+    // states:
+    // - start (no tokens read yet)
+    // - parsingFeature - feature open token read, but no scenarios yet
+    // - parsingScenario - in a feature > scenario, but not in a step
+    // - parsingStep - in a feature > scenario > step
+    
+    // -- TODO: add And, Scenario Outline, Example, Tag, Comment, Blank
+    
+    // - fatalErrorState - encountered a fatal error
+    static PARSER_STATES = {
+        START: 'Start',
+        FEATURE: GHERKIN_AST_TOKENS.FEATURE,
+        SCENARIO: GHERKIN_AST_TOKENS.SCENARIO,
+        GIVEN: GHERKIN_AST_TOKENS.GIVEN,
+        WHEN: GHERKIN_AST_TOKENS.WHEN,
+        THEN: GHERKIN_AST_TOKENS.THEN,
+        FATAL_ERROR_STATE: 'Fatal Error State',
+    }
+
+    throwFatalError(message){
+        // put the parser in a fatal state
+        this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
+        // panic the system
+        system.panic(message);
+    }
+
+    parse(){
+        if(!this.definition){
+            system.panic("GFDParser: no definition provided")
+        }
+
+        // Definition must have at least one Feature > Scenario at parse time
+        if(!Object.keys(this.definition?.scenarios)?.length){
+            system.panic("GFDParser: no scenarios provided")
+        }
+        
+        let truthMatrix = new GherkinParserTransitionMatrix().matrix;
+
+        this.parserStateMachine = new StateMachine({
+            states: GFDParser.PARSER_STATES,
+            
+            defaultStateID: GFDParser.PARSER_STATES.START,
+
+            transitionMatrix: truthMatrix
+        })
+
+        this.parserStateMachine.debugPrintCoverage();
+
+        // Begin Parsing
+        const tokenDefinitions = [];
+        tokenDefinitions.push({
+            __type: GHERKIN_AST_TOKENS.FEATURE,
+            value: this.definition?.name ?? 'Unnamed Feature',
+            index: 0
+        })
+
+        if(this.definition?.name){
+            console.warn(`Parsing Feature Description name: ${this.definition.name}`)
+        }
+
+        if(this.definition?.background){
+            console.warn('TODO: implement background parsing');
+        }
+
+        
+        // we loop through this.definition.scenarios
+        let scenarioCount = 0;
+        Object.keys(this.definition.scenarios).forEach((scenarioKey)=>{
+            scenarioCount++;
+            console.warn(`Parsing FeatDesc Scenario: ${scenarioCount} ${scenarioKey}`)
+
+            const steps = this.definition.scenarios[scenarioKey];
+
+            // push a open_scenario token
+            tokenDefinitions.push({
+                __type: GHERKIN_AST_TOKENS.SCENARIO,
+                value: scenarioKey,
+                index: scenarioCount
+            })
+
+            const stepKeys = [
+                GHERKIN_AST_TOKENS.GIVEN,
+                GHERKIN_AST_TOKENS.WHEN,
+                GHERKIN_AST_TOKENS.THEN
+            ];
+            stepKeys.forEach((stepKey)=>{
+                // GIVEN, WHEN, THEN
+                let checkStep = getMatchingKeyValueCaseInsensitive(steps,stepKey);
+                if(!checkStep){
+                    system.panic(`GFDParser: scenario must have a "${checkStep}"`);
+                }else{
+                    // if it's an array, add them all, flatten
+                    // else add the single step as a string
+                    const values = Array.isArray(checkStep) 
+                    ? checkStep 
+                    : [checkStep];
+                    const wrappedValues = values.map((value,index)=>{
+                        return {
+                            __type: stepKey,
+                            value,
+                            index
+                        }
+                    })
+                    tokenDefinitions.push(
+                        ...wrappedValues
+                    );
+                }
+            })
+            console.warn('just pushed',{tokenDefinitions})
+
+            // push a close_scenario token
+            // tokenDefinitions.push({
+            //     __type: GHERKIN_AST_TOKENS.END_SCENARIO,
+            //     value: scenarioKey,
+            //     index: scenarioCount
+            // })
+        })
+
+        if(SHOW_DEV_WARNINGS){
+            if(scenarioCount > MAX_SUGGESTED_SCENARIOS_PER_FEATURE){
+                system.warn(`GFDParser: ${scenarioCount}/${MAX_SUGGESTED_SCENARIOS_PER_FEATURE} too many scenarios in this feature, consider refactoring`);
+            }
+        }
+
+        // now that we have a 1-D array of tokenDefinitions, 
+        // we need to convert it to a sequence of token instances for validation and execution :D
+        system.success("GFDParser: tokenDefinitions",tokenDefinitions);
+
+        // then, our final output GherkinSequence object
+        this.output = new GherkinSequence();
+        let prevStepType = null;
+        tokenDefinitions.forEach((tokenDef)=>{
+            // if we're in a fatal error state, just continue so we can wrap up the loop
+            // todo: use a break-able loop instead
+            if(this.parserStateMachine.state === GFDParser.PARSER_STATES.FATAL_ERROR_STATE){
+                return;
+            }
+
+            /** @TODO: Nice error messages */
+            const TAG = "GFDParser: "; // namespaced reporting (used as prefix for logging)
+            system.setTag(TAG); // used for bulk logging from one source
+            // TODO: tweak these rules to use real constants like:
+            // `${FEATURE_TOKEN} must be followed by ${SCENARIO_TOKEN}`
+            // and set it up so i can define them as compactly as possible like:
+            // mustBeFollowedBy[FEATURE_TOKEN, [SCENARIO_TOKEN]]
+            // canBeFollowedBy
+            // mustPrecede
+            // mustBePrecededBy
+            // canPrecede
+            // canBePrecededBy
+
+            const RULES = [
+                // technically the requirement is that the key is set on the object
+                // hash tables don't guarantee order, so we can't rely on the order of the keys
+                "FeatureDefinitions must open with a Feature definition", 
+                "Feature must be followed by a Scenario",
+                "Scenario must be followed by a Given",
+                // NOTE: "ands" are converted to back-to-back Givens during definition -> seq parsing
+                // hence the OR here:
+                "Given must be followed by a Given or When", 
+                "When must be followed by a When or Then",
+                "Then can be followed by additional Thens or a new Scenario",
+            ];
+
+            // Refactored into a TruthTable :D
+            // // if(
+            // //     prevStepType === null 
+            // //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.FEATURE
+            // // ){
+            // //     // put the parser StateMachine in a fatal error state
+            // //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
+            // //     system.panic("GFDParser: first token must be a Feature");
+            // // }
+            // // if(
+            // //     prevStepType === GHERKIN_AST_TOKENS.FEATURE 
+            // //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.SCENARIO
+            // // ){
+            // //     // put the parser StateMachine in a fatal error state
+            // //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
+            // //     system.panic("GFDParser: second token must be a Scenario");
+            // // }
+            // if(
+            //     prevStepType === GHERKIN_AST_TOKENS.SCENARIO 
+            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.GIVEN
+            // ){
+            //     // put the parser StateMachine in a fatal error state
+            //     this.throwFatalError("GFDParser: third token must be a Given");
+            // }
+            // if(
+            //     prevStepType === GHERKIN_AST_TOKENS.GIVEN
+            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.GIVEN
+            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.WHEN
+            // ){
+            //     // put the parser StateMachine in a fatal error state
+            //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
+            //     system.panic("GFDParser: fourth token must be a Given or When");
+            // }
+            // if(
+            //     prevStepType === GHERKIN_AST_TOKENS.WHEN
+            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.WHEN
+            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.THEN
+            // ){
+            //     // put the parser StateMachine in a fatal error state
+            //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
+            //     system.panic("GFDParser: fifth token must be a When or Then");
+            // }
+            // if(
+            //     prevStepType === GHERKIN_AST_TOKENS.THEN
+            //     && tokenDef.__stepType !== GHERKIN_AST_TOKENS.THEN
+            // ){
+            //     // put the parser StateMachine in a fatal error state
+            //     this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
+            //     system.panic("GFDParser: sixth token must be a Then");
+            // }
+
+            if(!tokenDef.__type){
+                this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
+                system.dump({tokenDef})
+                system.panic("GFDParser: tokenDef.__type is undefined");
+            }else if(this.parserStateMachine.canTransition(tokenDef.__type)){
+                this.parserStateMachine.setState(tokenDef.__type);
+                // update output
+                this.output.addStep(tokenDef);
+            }else{
+                // put the parser StateMachine in a fatal error state
+                this.parserStateMachine.setState(GFDParser.PARSER_STATES.FATAL_ERROR_STATE);
+                system.panic("GFDParser: invalid transition: " + JSON.stringify(tokenDef));
+            }
+        });
+
+        // Validate sequence
+        const validator = new GherkinSequenceValidator(this.output);
+        const isValid = validator.validateSequence();
+        //this.output.isValid = isValid;
+        if(!isValid){
+            system.dump(this.definition);
+            system.panic("GFDParser: invalid sequence: " + validator.validationErrors.join(","));
+        }
+
+        // End of Parsing
+        if(!this.output.length){
+            system.panic("GFDParser: output is empty")
+        }
+        return this.output;
+    }
+}
+
+function getMatchingKeyValueCaseInsensitive(obj, key) {
+    return obj[Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase())];
+}
+
+class GherkinASTNode {
+    constructor(type, content, parent = null) {
+        this.type = type;
+        this.content = content;
+        this.parent = parent;
+        this.children = [];
+    }
+
+    addChild(node) {
+        node.parent = this;
+        this.children.push(node);
+    }
+}
+
+class GherkinASTBuilder {
+    constructor() {
+        this.tokenSequence = [];
+        this.currentIndex = 0;
+        this.currentParent = new GherkinASTNode('Root', {});
+    }
+
+    registerHarness(harness) {
+        this.harness = harness;
+    }
+
+    consume() {
+        if (this.currentIndex < this.tokenSequence.length) {
+            return this.tokenSequence[this.currentIndex++];
+        } else {
+            throw new Error("End of token sequence reached unexpectedly.");
+        }
+    }
+
+    peekAhead(tokenCount) {
+        return this.tokenSequence.slice(this.currentIndex, this.currentIndex + tokenCount);
+    }
+
+    buildAST(tokenSequence) {
+        this.tokenSequence = tokenSequence;
+        this.currentIndex = 0;
+
+        while (this.currentIndex < this.tokenSequence.length) {
+            let token = this.consume();
+            this.processToken(token);
+        }
+
+        return this.currentParent; // Return the root of the AST
+    }
+
+    processToken(token) {
+        if (!this.harness[token.type]) {
+            throw new Error(`Unsupported token type: ${token.type}`);
+        }
+
+        let node = new GherkinASTNode(token.type, token.content);
+        this.currentParent.addChild(node);
+
+        // Logic to update the current parent based on token type
+        if (
+            token.type === GHERKIN_AST_TOKENS.FEATURE 
+            || token.type === GHERKIN_AST_TOKENS.SCENARIO
+        ) {
+            this.currentParent = node;
+        } else if (
+            token.type === GHERKIN_AST_TOKENS.END_SCENARIO 
+            || token.type === GHERKIN_AST_TOKENS.END_FEATURE
+        ) {
+            if (this.currentParent.parent) {
+                this.currentParent = this.currentParent.parent;
+            } else {
+                throw new Error("Invalid document structure: No parent to return to.");
+            }
+        }
+
+        // Additional logic for other token types...
+    }
+}
+
+
+
 
 // # I want this tool to feel as expressive as typing in Cursor with Co-Pilot
 class TestStep extends DynamicThing {
@@ -2703,6 +3464,78 @@ class ToastNotification {
         alpha(255);
     }
 }
+
+const autorunFeatureTestResults = [];
+const autorunFeatureTests = [];
+// const Decorate_Autorun = function(baseClass){
+    
+//     return function(){
+//         let extended = new baseClass(...arguments);
+//         return extended;
+//     }
+// }
+
+
+class FeatureTest {}
+
+// Toasts Feature Feature Description Definition (Serializable to JSON)
+class FeatureDescription_ToastsFeature 
+// TODO: enforce that it contains only literals
+// maintains serializability
+extends FeatureDescription {
+    name = "Toasts Feature"
+    scenarios = {
+        "Show Toast": {
+            given: "A Toast Notification Manager",
+            when: "I call the ShowToast method",
+            then: [
+                "I expect a toast to appear",
+                // AND
+                "I expect the toast to disappear after 3 seconds",
+            ]
+        },
+        "Show a Pinned Toast":{
+            given: "A Toast Notification Manager",
+            when: "I call the ShowToast method with the pinned option set to true",
+            then: [
+                "I expect a toast to appear",
+                // AND
+                "I expect the toast to remain on screen until dismissed",
+            ]
+        },
+        "Dismiss a pinned toast":{
+            given: "a pinned toast message",
+            when: "I call the dismiss method on the toast",
+            then: "I expect the toast to disappear"
+        }
+    }
+}
+
+autorunFeatureTests.push(FeatureDescription_ToastsFeature);
+
+class FeatureDescription_ToastLevels
+extends FeatureDescription {
+    name = "Toasts with Levels Feature"
+    scenarios = {
+        __type: "ScenarioOutline",
+        name: "Show Toast with specified level",
+        steps: {
+            given: "A Toast Notification Manager",
+            when: "I call the ShowToast method with the level option set to {level}", // <- {level} === variable injected by Examples
+            then: "I expect a toast to appear with the {level} level"
+        },
+        examples: Object.entries(TOAST_LEVELS).map(([key, value]) => ({ level: value }))
+    }
+}
+
+// AutorunningSelfTest pre-registers the feature definition
+// to make sure it runs on startup
+// class FeatureDescription_Toasts
+// extends AutorunningSelfTest(
+//     FeatureTest, 
+//     ToastFeatureDescription
+// ) {}
+
 class ToastNotificationManager {
     toasts = []
     constructor(){
@@ -3657,9 +4490,20 @@ class GraphEvent {
         this.options = options ?? {}
     }
 
-    get parentGraph () {
-        return this.options.parentGraph;
-    }
+    // TODO: what's a way we can encapsulate the pattern
+    // of unwrapping "options" to point to getters and private-backed
+    // instance variables (internal state) ?
+    // We could do something like Object.keys(this.options).forEach(key => {
+    //     Object.defineProperty(this, key, {
+    //         get: function () { return this.options[key]; },
+    //         set: function (value) { this.options[key] = value; }
+    //     });
+    // then we wouldn't need to define these getters by hand
+    // and we could introduce meta tags for excluding certain keys
+    get key () { return this.options?.key; }
+    get keyCode () { return this.options?.keyCode; }
+    get valueAtEventSent () { return this.options?.valueAtEventSent; }
+    get parentGraph () { return this.options.parentGraph; }
 
     update(){
         this.progress += 0.02;
@@ -3679,9 +4523,13 @@ class GraphEvent {
             if(!this.timerId){
                 this.timerId = setTimeout(() => {
                     if (Array.isArray(stage.to)) {
-                        // If there's a fork, create new events for each target node
+                        // If there's a fork, 
+                        // create new events for each target node
                         stage.to.forEach(to => {
-                            let newEvent = { ...event, stage: { from: stage.from, to: to } };
+                            let newEvent = { 
+                                ...event, 
+                                stage: { from: stage.from, to: to } 
+                            };
                             // todo: add a Graph@addEvent method
                             this.parentGraph.events.push(new GraphEvent(newEvent));
                         });
@@ -3727,22 +4575,23 @@ class GraphEvent {
     drawEvent() {
         // the event can split into multiple events at runtime 
         // when reaching certain points in the graph
-        // TODO: really it should spwan a new event
+        // NOTE: actually it spawns a new event,
+        // so there should only be 1 position per event now
         // we'll get back to that as our refactor continues...
         this.positions = this.getEventPositions(); 
         for(var i=0;i<this.positions.length;i++){
             let [x,y] = this.positions[i];
-            this.drawEventAt(x,y,event);
+            this.drawEventAt(x,y);
         }
     }
     
-    drawEventAt(x,y,event){
-        console.warn('drawEventAt',{x,y,event})
+    drawEventAt(x,y){
+        console.warn('drawEventAt',{x,y})
         debugger;
-        fill(event.key === 'backspace' ? color(255,0,0) : 255); // Change 0 to 255
+        fill(this.key === 'backspace' ? color(255,0,0) : 255); // Change 0 to 255
         ellipse(x, y, 30, 30);
-        fill(event.key === 'backspace' ? color(255,255,255) : 0);
-        text(event.key === 'backspace' ? '←' : event.key, x, y);
+        fill(this.key === 'backspace' ? color(255,255,255) : 0);
+        text(this.key === 'backspace' ? '←' : this.key, x, y);
     }
 }
 
@@ -3797,9 +4646,22 @@ function setup() {
     // boot the root system manager & root system
     manager.boot();
     rootSystem = system = manager.systems[0];
-    let testSeq = getTestGherkinSequence();
-    // bootstrap our self-test
-    gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
+    
+    /// === region: Self Test Mode ===
+    // TODO: parallelize with Promise.all([])
+    autorunFeatureTestResults.length = 0; // reset results
+    autorunFeatureTests.forEach((featDescClass)=>{
+        // TODO: see about passing objects instead of class instances
+        const parser = new GFDParser(new featDescClass());
+        const gherkinSeq = parser.parse();
+        const executor = new GherkinSequenceExecutor(gherkinSeq);
+        autorunFeatureTestResults.push(executor.execute());
+    })
+    /// === endRegion: Self Test Mode ===
+
+    // let testSeq = getTestGherkinSequence();
+    // // bootstrap our self-test
+    // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
 
     push();
     textSize(50);
@@ -4399,24 +5261,86 @@ function nodesForFlowIndex(flowIndex){
 }
 
 class StateMachine {
-    constructor() {
+    currentStateID = null
+    states = {}
+    transitionMatrix = {}
+    defaultStateID = null
+    constructor({
+        states, 
+        defaultStateID, 
+        transitionMatrix
+    }) {
         // Initialize the state
-        this.state = {};
+        this.states = states;
+        this.transitionMatrix = transitionMatrix;
+        this.defaultStateID = defaultStateID;
+        this.currentStateID = defaultStateID;
     }
 
-    // Method to get the current state
-    getState() {
-        return this.state;
+    get state(){
+        return this.states[this.currentStateID]
+    }
+
+    debugPrintCoverage(){
+        let output = "";
+
+        Object.entries(this.transitionMatrix).forEach(([fromStateID, toStateIDs])=>{
+            Object.entries(toStateIDs).forEach(([toStateID, transitionAllowedBool])=>{
+                output += `${transitionAllowedBool ? 'valid':'invalid'} transition: ${fromStateID} -> ${toStateID}\n`;
+            })
+        })
+
+        system.warn(
+            'StateMachine:debugPrintCoverage output:...',
+            {
+                output: output.split("\n").join("\n\n")
+            }
+        )
     }
 
     // Method to set a new state
-    setState(newState) {
-        this.state = newState;
+    setState(newStateID) {
+        //console.warn('StateMachine:setState',{newStateID})
+        if(!this.canTransition(newStateID)){
+            system.panic(`StateMachine:setState: invalid transition! ${this.currentStateID} -> ${newStateID}`);
+            return;
+        }
+
+        // based on the "prev" (current) state ID and the "next" (new) state ID,
+        // determine which transition to attempt to run
+        // const transition = this.transitionMatrix?.[this.currentStateID]?.[newStateID];
+        // if(transition){
+        //     // nextID, prevID, nextState, prevState
+        //     transition.call(
+        //         newStateID, 
+        //         this.currentStateID, 
+        //         this.states[newStateID], 
+        //         this.state
+        //     );
+        // }
+
+        this.currentStateID = newStateID;
     }
 
-    // Method to reset the state
-    resetState() {
-        this.state = {};
+    canTransition(newStateID){
+        // aka checkValidity
+        const tx = this.transitionMatrix?.[this.currentStateID]?.[newStateID];
+        if(!tx){
+            console.warn('failed valid check', {
+                currentStateID: this.currentStateID,
+                newStateID,
+                transitionMatrix: this.transitionMatrix,
+                tx
+            })
+            this.debugPrintCoverage();
+
+            // did you forget to allow() the transition between the two states?
+            system.panic(`StateMachine:canTransition: invalid transition! ${this.currentStateID} -> ${newStateID}`);
+            return false;
+        }
+
+        //system.success(`valid transition! ${this.currentStateID} -> ${newStateID}`);
+        return true;
     }
 }
 
