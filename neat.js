@@ -55,6 +55,9 @@ class TruthTable {
         : false;
     }
 }
+class TimeManager {
+
+}
 class GherkinScenarioOutlineExample {}
 class GherkinScenarioOutlineExamples {}
 class GherkinScenarioOutline {}
@@ -192,8 +195,7 @@ class SystemManager {
         this._panic = true;
         console.error(message);
         // show a toast
-        toastManager = system.get('toastManager');
-        toastManager?.showToast(message, {
+        system.get('toastManager')?.showToast(message, {
             //pinned: true, 
             // TODO: changing level to error could 
             // flip pinned to true by default if we want
@@ -255,21 +257,32 @@ class System {
         this.manager = manager;
     }
     get(singletonName){
-        return this.singletons[singletonName] ?? null;
+        return this.lazySingleton(singletonName);
+        //return this.singletons[singletonName] ?? null;
     }
     lazySingleton(name, factory){
+        // if(name === "toastManager"){
+        //     console.warn('lazySingleton: toastManager',
+        //     {
+        //         name,
+        //         factory,
+        //         singletons: Object.keys(this.singletons),
+        //         singletonFactories: Object.keys(this.singletonFactories)
+        //     })
+        // }
+        // return the singleton instance
+        if(this.singletons[name]){
+            return this.singletons[name];
+        }
         if(typeof factory !== 'undefined'){
+            // store the factory
             this.singletonFactories[name] = factory;
         }else{
-            if(this.singletons[name]){
-                return this.singletons[name];
-            }else{
-                if(!this.singletonFactories[name]){
-                    this.panic("System.lazySingleton: no factory defined for singleton named: " + name);
-                }
-                this.singletons[name] = new this.singletonesFactories[name]();
-                return this.singletons[name];
+            if(!this.singletonFactories[name]){
+                this.panic("System.lazySingleton: no factory defined for singleton named: " + name);
             }
+            this.singletons[name] = new this.singletonFactories[name]();
+            return this.singletons[name];
         }
     }
     singleton(name, instance){
@@ -326,6 +339,7 @@ let rootSystem; // alias
 // Array of tests that will run during self-test mode
 // (when enabled) while the system is booting
 // aka SelfTestDescriptions
+// todo: merge with (replacement) autorunFeatureTests
 const selfTestFeatureClasses = []
 const selfTestFeatureInstances = []
 // Decorator that pre-registers our classes so
@@ -520,10 +534,134 @@ class AndGiven extends GherkinStep {}
 class AndWhen extends GherkinStep {}
 class AndThen extends GherkinStep {}
 
+// returns a callback function or string global keyname to a resource
+const findGWTMatch = (type, string) => {
+    const lookupTable = {
+        [GHERKIN_AST_TOKENS.GIVEN]: givenLookupTable,
+        [GHERKIN_AST_TOKENS.WHEN]: whenLookupTable,
+        [GHERKIN_AST_TOKENS.THEN]: thenLookupTable
+    };
 
+    if (!lookupTable[type]) {
+        system.panic("findGWTMatch: invalid type: " + type);
+    }
 
+    let key = Object.keys(lookupTable[type])
+        .sort((a, b) => b.length - a.length)
+        .find(key => string
+            .toLowerCase()
+            .includes(key.toLowerCase()));
+    if(key === -1){
+        system.panic("findGWTMatch: no match found for: " + string);
+    }
+    return lookupTable[type][key];
+}
 
+const forEach = (arr, callback) => {
+    for (let i = 0; i < arr.length; i++) {
+        callback(arr[i], i);
+    }
+}
 
+// takes an optionally dot-separated namespace'd path to a resource
+const dotNotationResolver = (string) => {
+
+    // if we are given an array as input,
+    // we need to parse the first part of the array from the system root
+    // IF we are in a THEN context...
+    // the rest of the array should be treated as assertion logic,
+    // for example: "not null" would assert that the first "resolved" portion of the array is not null,
+    // ~ "null" will assert that the first "resolved" portion of the array IS null
+    // ~ "undefined" will assert that the first "resolved" portion of the array IS undefined
+    // ~ "truthy" will assert that the first "resolved" portion of the array IS truthy
+
+    let tailArguments = [];
+    let assertion = null;
+    const valid_assertions = [
+        "null",
+        "not null",
+        "undefined",
+        "truthy",
+    ]
+
+    if(typeof string === 'object' && Array.isArray(string)){
+        if(!string.length){
+            system.panic("dotNotationResolver: empty array provided");
+        }
+        else if(string.length === 1){
+            // if we only have one item in the array,
+            // we can assume it's a string and try to resolve it
+            string = string[0];
+        }else if(string.length === 2){
+            // our dot-notation string thing 
+            // to check is the first item in the array
+            string = string[0];
+            // verify it's an assertion, otherwise it could be an argument to the function we're calling
+            if(valid_assertions.includes(string[1])){
+                assertion = string[1];
+            }else{
+                // assume it's just an argument to the function we're calling
+                tailArguments = string.slice(1);
+            }
+        }else{
+            // > 2 assume it's just more arguments to the function we're calling
+            string = string[0]; // fn pointer
+            tailArguments = string.slice(1);
+        }
+    }
+
+    if(!string || typeof string !== 'string'){
+        console.error({
+            thingThatWasSupposedToBeAString: string
+        })
+        system.panic("dotNotationResolver: invalid string provided: " + string);
+    }
+    let typeArray = [];
+    let parts = string.split('.');
+    let index = 0;
+    let rootPart = system.get(parts[0]);
+    let currentPart = rootPart;
+    typeArray.push(typeof rootPart);
+    forEach(parts.slice(1), (partKey)=>{
+        let part = currentPart?.[partKey];
+        if(!part){
+            console.warn("dotNotationResolver: no part found for key: " + partKey);
+        }else{
+            typeArray.push(typeof part);
+            currentPart = part;
+        }
+    })
+
+    if(assertion !== null){
+        if(assertion === "null"){
+            if(currentPart !== null){
+                system.panic("dotNotationResolver: assertion failed, expected null, got: " + currentPart + ` type: ${typeof currentPart}`);
+            }
+        }else if (assertion === "not null"){
+            if(currentPart === null){
+                system.panic("dotNotationResolver: assertion failed, expected not null, got: " + currentPart + ` type: ${typeof currentPart}`);
+            }
+        }
+    }
+
+    console.warn('dotNotationResolver',{
+        string,
+        parts,
+        // rootPart,
+        typeArray,
+        // currentPart,
+    })
+    // finally resolved:
+    return {
+        root: rootPart,
+        tail: currentPart,
+        tailArguments,
+        tailType: typeof currentPart,
+        typeArray,
+        parts,
+        inputString: string
+    };
+}
 
 class GherkinSequenceExecutor {
     /** @property sequence GherkinSequence */
@@ -535,7 +673,15 @@ class GherkinSequenceExecutor {
         this.sequence = sequence;
     }
 
+    /**
+     * 
+     * @returns 
+     */
     preFlightCheck(){
+        console.warn('GSE:preFlightCheck',{
+            sequence: this.sequence,
+            isValid: this.sequence?.isValid,
+        })
         if(this.sequence === null){
             // TODO: maybe panic the testRunner instead of the whole system
             system.panic("GSeqExecutor.preFlightCheck: no sequence provided");
@@ -548,15 +694,26 @@ class GherkinSequenceExecutor {
             system.panic("GSeqExecutor.preFlightCheck: invalid sequence provided");
             return false;
         }
+
+        // Validity is one thing,
+        // Dependencies are another,
+        // if any of our dependencies aren't ready yet
+        // we need a way to re-queue the test to try again
+        // at the end of the queue 
+        // (and use priority to bubble up any important tests)
+        console.warn('handle dependency injection checking here',{seq:this.sequence});
+        // seq.scenarios (are computed and plucked out of seq.steps)
+
+
         return true;
     }
 
     // aka executeSequence
     execute(seq){
-        console.warn('GherkinSequenceExecutor.execute',{
-            incomingSeq:seq, 
-            thisSequence: this.sequence
-        })
+        // console.info('GherkinSequenceExecutor.execute',{
+        //     incomingSeq:seq, 
+        //     thisSequence: this.sequence
+        // })
         this.sequence = seq ?? this.sequence;
         let preflightResult = this.preFlightCheck();
         if(!preflightResult){
@@ -572,25 +729,30 @@ class GherkinSequenceExecutor {
         this.sequence.scenarios.forEach((scenario,index)=>{
             this.currentScenarioIndex = index;
             this.currentScenarioKey = scenario.name;
-            this.featureScenarioResults[scenario.name] = this.executeScenario(scenario,index);
+            this.executeScenario(scenario,index);
         });
-        console.warn('GSExecutor.execute: returning featureScenarioResults',{
-            featureScenarioResults: this.featureScenarioResults
-        })
+        // console.info('GSExecutor.execute: returning featureScenarioResults',{
+        //     featureScenarioResults: this.featureScenarioResults
+        // })
         return this.featureScenarioResults;
     }
 
     // tryExecuteScenario
     executeScenario(scenario,index){
+        this.featureScenarioResults[scenario.name] = {
+            stepResults: [],
+            scratchScope: {}
+        }
         // let preflightResult = this.preFlightCheck();
         // if(!preflightResult){
         //     system.panic("FeatureTestRun.executeScenario: preflight check failed");
         //     return;
         // }
-        // console.warn('executingScenario',{
-        //     scenario,
-        //     steps: scenario?.steps ?? 'missing!',
-        // })
+        console.warn('GSE:executeScenario',{
+            scenarioName: scenario?.name ?? 'missing scenario name!',
+            scenarioSteps: scenario?.steps ?? 'steps missing!',
+            scenario,
+        })
         if(!scenario?.steps?.length){
             system.panic(`GherkinSequenceExecutor.executeScenario: no steps found in scenario: ${scenario.name}`)
         }
@@ -598,15 +760,25 @@ class GherkinSequenceExecutor {
         // try {
             //results = scenario.execute();
             scenario.steps.forEach((step,index)=>{
-                try{
-                    results.push(this.executeScenarioStep(step,index));
+                //try{
+                    results.push(
+                        this.executeScenarioStep(scenario,step,index)
+                    );
+                /*
                 }catch(error){
+                    // if !step.isOptional
+                    system.dump({
+                        panickedStep: step,
+                        panickedScenario: scenario,
+                    })
+                    system.panic(error)
                     results.push({
                         step,
                         index,
                         error
                     })
                 }
+                */
             })
         // }catch(erro){
         //     results.push({
@@ -625,8 +797,145 @@ class GherkinSequenceExecutor {
             // tryExecuteScenarioStepWithExample
     
     // tryExecuteScenarioStep
-    executeScenarioStep(step){
-        console.warn(`TODO! executeScenarioStep ${this.currentScenarioKey} > [${step.type.startsWith('g') ? 'G' : (step.type.startsWith('w') ? 'W' : 'T')}]: ${step.value}`,{step})
+    executeScenarioStep(scenario,step,index){
+        // step.__type = [Given,When,Then]
+        // switch(step.__type){
+        //     case GHERKIN_AST_TOKENS.GIVEN:
+        //         //
+        //         break;
+        //     case GHERKIN_AST_TOKENS.WHEN:
+        //         //
+        //         break;
+        //     case GHERKIN_AST_TOKENS.THEN:
+        //         //
+        //         break;
+        //     default:
+        //         console.error('GSE:executeScenarioStep: unhandled step type '+step?.__type,{step})
+        //         break;
+        // }
+        const stepCallback = findGWTMatch(step.__type, step.value);
+
+        if(Array.isArray(stepCallback)){
+            if(!stepCallback.length){
+                system.panic("GSE:executeScenarioStep: empty array passed as step callback! for step: " + step.value);
+            }
+            // ~ can be dot-separated 
+            // as long as it starts with a global singleton ~
+            // NOTE: the first [0] entry is the method pointer ("rootKey.fnName")
+            // NOTE: the second entry [1] is options obj {isOptional:bool}
+            if(!stepCallback[0]){
+                system.dump({
+                    step,
+                    stepCallback
+                })
+                system.panic("GSE:executeScenarioStep: no step callback at index 0? found for step: " + step.value);
+            }
+
+            let dotResolved = dotNotationResolver(stepCallback[0]);
+            if(dotResolved.tailType === 'function'){
+                let result = dotResolved.tail.call(
+                    dotResolved.root, 
+                    ...stepCallback.slice(1)
+                );
+                if(typeof result === 'undefined'){
+                    system.panic("GSE:executeScenarioStep: step callback returned undefined for step: " + step.value);
+                }
+                // console.warn(
+                //     'GSE:executeScenarioStep: dotNotationResolver result',{stepCallback,dotResolved,result}
+                // )
+                return result;
+            }
+
+            // stepCallback.forEach((provideMeStringName)=>{
+            //     console.warn({provideMeStringName})
+            //     let topLevelThingName = provideMeStringName.split('.')[0];
+
+            //     // if the thing is dot-separated,
+            //     // it needs to be resolved as a nested thing
+            //     // like how selectn() works
+            //     const parts = provideMeStringName.split('.');
+            //     if(parts.length > 1){
+            //         // example: toastManager.sendToast
+            //     }
+
+            //     // scratchScope is where we'll store the results of the system.get(provideMeStringName)
+            //     // so our GWT steps have rolling access to the results of the previous GWT steps
+            //     if(
+            //         !this.featureScenarioResults[scenario.name]?.scratchScope
+            //     ){
+            //         this.featureScenarioResults[scenario.name].scratchScope = {};
+            //     }
+            //     this.featureScenarioResults[scenario.name].scratchScope[topLevelThingName] = system.get(topLevelThingName);
+
+            //     // here is where we should check if the system provided the thing
+            //     // or if we need to re-queue this test for a retry
+            // })
+        }
+
+        if(!stepCallback){
+            system.panic("GSE:executeScenarioStep: no step callback found for step: " + step.value + ` type: ${step.__type}`);
+        }else if(Array.isArray(stepCallback)){
+            // console.warn('array passed as step callback',{
+            //     array: stepCallback,
+            // })
+            forEach(stepCallback,(subStep)=>{
+                // substeps can be strings, or arrays of strings
+                // any of the strings can be dot-notation
+                // if it's an array, the first string is the optionally dot-notated path to the resource, and the second element of the substep array is a magic string that triggers an assertion check on the resolved resource
+                if(
+                    typeof subStep === "object" 
+                    && Array.isArray(subStep)
+                ){
+                    // subStep is an array
+                    // first element is the string path to the resource
+                    // second element is the assertion string
+                    let dotResolved = dotNotationResolver(subStep[0]);
+                    if(dotResolved.tailType === 'function'){
+                        let result = dotResolved.tail.call(
+                            dotResolved.root, 
+                            ...subStep.slice(1)
+                        );
+                        if(typeof result === 'undefined'){
+                            system.panic("GSE:executeScenarioStep: step callback returned undefined for step: " + step.value);
+                        }
+                        // console.warn(
+                        //     'GSE:executeScenarioStep: dotNotationResolver result',{stepCallback,dotResolved,result}
+                        // )
+                        return result;
+                    }
+                }else{
+                    // let's hope it's just a string
+                    let dotResolved = dotNotationResolver(subStep);
+                    if(dotResolved.tailType === 'function'){
+                        let result = dotResolved.tail.call(
+                            dotResolved.root, 
+                            ...subStep.slice(1)
+                        );
+                        if(typeof result === 'undefined'){
+                            system.panic("GSE:executeScenarioStep: step callback returned undefined for step: " + step.value);
+                        }
+                        // console.warn(
+                        //     'GSE:executeScenarioStep: dotNotationResolver result',{stepCallback,dotResolved,result}
+                        // )
+                        return result;
+                    }
+                }
+            })
+        }else if(typeof stepCallback === 'function'){
+            return stepCallback.call(this, step);
+        }else if(typeof stepCallback === 'string'){
+            // singleton key name provided
+            return system.get(stepCallback)
+        }else if(typeof stepCallback === 'object'){
+            console.warn('GSE:executeScenarioStep: step callback is an object, assuming it is a singleton instance',stepCallback)
+            return stepCallback;
+        }else{
+            console.error("got unexpected type for step callback",{
+                typeOf: typeof stepCallback,
+                stepCallback,
+            })
+            system.panic("GSE:executeScenarioStep: step callback is not a function: " + stepCallback + ` type: ${step.__type}`);
+        }
     }
 }
 class GherkinSequenceValidator {
@@ -640,10 +949,10 @@ class GherkinSequenceValidator {
         return this.sequence?.steps ?? [];
     }
     validateSequence(sequence){
-        console.warn('validateSequence',{
-            prevSeq: this.sequence,
-            incomingSeq: sequence
-        })
+        // console.warn('validateSequence',{
+        //     prevSeq: this.sequence,
+        //     incomingSeq: sequence
+        // })
         // reset: clear validation errors
         this.validationErrors = [];
         
@@ -660,9 +969,9 @@ class GherkinSequenceValidator {
             system.dump({tooShortSeq:this.sequence});
             system.panic("GherkinSequenceValidator.validateSequence requires a GherkinSequence with at least one step in the .steps array")
         }
-        console.warn("checking sequence:",{
-            seq: this.sequence,
-        })
+        // console.warn("checking sequence:",{
+        //     seq: this.sequence,
+        // })
         this.sequence.steps.forEach((step,index)=>{
             this.checkStepIsValid(step,this.sequence,index)
         })
@@ -1056,7 +1365,7 @@ class TableWidget extends Widget {
 
 const SelfTest = function(baseClass){
     const extendedClassInstance = new baseClass(...arguments);
-    console.warn('todo: register this class as something to run @selfTest time', {baseClass})
+    // console.warn('todo: register this class as something to run @selfTest time', {baseClass})
 
     return function(){
         // adjust our eagerly instanced class with any additional "construction-time" arguments
@@ -1416,7 +1725,7 @@ let store = {
     tables: []
 };
 
-console.warn('TODO: 1 store per sandbox');
+// console.warn('TODO: 1 store per sandbox');
 
 class DynamicThing {
     constructor(options){
@@ -1606,11 +1915,12 @@ class GFDParser {
     parserStateMachine = null
 
     constructor(definition){
-        console.warn('GFDParser: constructor(definition)?',{
-            type: typeof definition,
-            constructorName: definition?.constructor?.name,
-            definition
-        })
+        // console.warn('GFDParser: constructor(definition):',{
+        //     type: typeof definition,
+        //     constructorName: definition?.constructor?.name,
+        //     definition
+        // })
+
         // if (!(definition instanceof FeatureTest)) {
         //     throw new Error(
         //         "GFDParser: " +
@@ -1679,7 +1989,7 @@ class GFDParser {
             transitionMatrix: truthMatrix
         })
 
-        this.parserStateMachine.debugPrintCoverage();
+        //this.parserStateMachine.debugPrintCoverage();
 
         // Begin Parsing
         const tokenDefinitions = [];
@@ -1690,7 +2000,11 @@ class GFDParser {
         })
 
         if(this.definition?.name){
-            console.warn(`Parsing Feature Description name: ${this.definition.name}`)
+            if(this.definition.name === "UnconfiguredFeatureTest"){
+                system.dump({definition:this.definition})
+                system.panic("GFDParser: UnconfiguredFeatureTest");
+            }
+            //console.warn(`Parsing Feature Description name: ${this.definition.name}`)
         }
 
         if(this.definition?.background){
@@ -1761,7 +2075,7 @@ class GFDParser {
 
         // now that we have a 1-D array of tokenDefinitions, 
         // we need to convert it to a sequence of token instances for validation and execution :D
-        system.success("GFDParser: tokenDefinitions",tokenDefinitions);
+        //system.success("GFDParser: Successfully generated 1-D array of TokenDefinitions tokenDefinitions",tokenDefinitions);
 
         // then, our final output GherkinSequence object
         this.output = new GherkinSequence();
@@ -2668,7 +2982,7 @@ class CustomCommandFactory {
                 this.parseError = e;
             }
         }
-        console.warn('set CustomCommandFactory value: ', {value:this.value})
+        //console.warn('set CustomCommandFactory value: ', {value:this.value})
     }
     get name (){
         return this?.value?.name ?? "Custom Command with no name";
@@ -2692,6 +3006,21 @@ class CustomCommandFactory {
     //         this.options.execute.call(this);
     //     }
     // }
+}
+class CustomCommandConfig extends Config {
+    _name = `Unnamed Custom Command`
+    __type = "CustomCommandConfig"
+    __extends = "Config"
+
+    get name(){
+        return `${this._name} Config`
+    }
+}
+class CustomCommand extends Command {
+    name = 'Unnamed Custom Command'
+    constructor(config){
+        this.name = config?.name ?? this.name;
+    }
 }
 // an example JSON definition of a CustomCommandFactory
 // this is used downstream to run a self test
@@ -2719,6 +3048,7 @@ const ExampleCustomCommandFactory = {
                 using: ["toastManager"],
                 
                 __calls: "toastManager.showToast", 
+                __args: ["Hello World!"],
                 
                 // what the command will be called for the user to search for it
                 name: "Print Hello World",
@@ -2789,6 +3119,99 @@ const ExampleCustomCommandFactory = {
         > commands can be flagged as "parallel" to be eligible for parallel execution (or maybe opt-out, havent'd decided yet)
 
 */
+// Toasts Feature Feature Description Definition (Serializable to JSON)
+class FeatureTest_ToastsFeature 
+// TODO: enforce that it contains only literals
+// maintains serializability
+extends FeatureTest {
+    name = "Toasts Feature"
+
+    // dependcy injection (single string, or array of strings)
+    // system will panic if these don't exist in the global state
+    __targetSingletonKey = "toastManager" // ""[]
+
+    scenarios = {
+        "Show Toast": {
+            given: "A Toast Notification Manager",
+            when: "I call the ShowToast method",
+            then: [
+                "I expect a toast to appear",
+                // AND
+                "I expect the toast to disappear after 3 seconds",
+            ]
+        },
+        "Show a Pinned Toast":{
+            given: "A Toast Notification Manager",
+            when: "I call the ShowToast method with the pinned option set to true",
+            then: [
+                "I expect a toast to appear",
+                // AND
+                "I expect the toast to remain on screen until dismissed",
+            ]
+        },
+        "Dismiss a pinned toast":{
+            given: "a pinned toast message",
+            when: "I call the dismiss method on the toast",
+            then: "I expect the toast to disappear"
+        }
+    }
+
+    givenMap = {
+        "A Toast Notification Manager": [
+            // system singleton keys
+            "toastManager"
+        ],
+        "a pinned toast message": [
+            // prime the system with a pinned toast
+            ["toastManager.showToast","hello world! pinned",{pinned:true}],
+        ]
+    }
+
+    whenMap = {
+        "I call the ShowToast method": [
+            // in a when context, we know to tack () on the end
+            // we assume the mapping is to a function by default
+            "toastManager.showToast"
+        ],
+        "I call the ShowToast method with the pinned option set to true": [
+            // when it's an array, we know to pass the first item as the function name and the rest as arguments
+            ["toastManager.showToast",{pinned:true}]
+        ],
+        "I call the dismiss method on the toast": [
+            "toastManager.dismissLatestToast"
+        ]
+    }
+    
+    // note: latestToast is sugar for "toastManager.toasts.at(-1)"
+    thenMap = {
+        "I expect a toast to appear": [
+            ["toastManager.latestToast", "not null"]
+        ],
+        "I expect the toast to disappear after 3 seconds": [
+            ["toastManager.latestToast", "not null"],
+            ["timeManager.stepTime", "3 seconds"],
+            ["toastManager.latestToast", "null"]
+        ],
+        "I expect the toast to remain on screen until dismissed": [
+            ["toastManager.latestToast", "not null"],
+            // ["timeManager.stepTime", "Infinity"],
+            ["timeManager.stepTime", "1 day"],
+            ["toastManager.latestToast", "not null"],
+            "toastManager.dismissLatestToast",
+            ["toastManager.latestToast", "null"]
+        ],
+        "I expect the toast to disappear": [
+            ["toastManager.latestToast", "not null"],
+            "toastManager.dismissLatestToast",
+            ["toastManager.latestToast", "null"]
+        ],
+    }
+}
+
+autorunFeatureTests.push(FeatureTest_ToastsFeature);
+
+// Our Example Custom Commands rely on the Toasts Feature being Implemented and Tested, since their hello world is based on being able to trigger a system toast
+// (this is until we have a different stdout for the system, then we can just use that) but there's no command prompt environment yet, so we're using the toast manager
 const EXAMPLE_FEATURE_TEST_OBJ = {
    __type: "FeatureTest",
    name: "CustomCommandFactory Feature File",
@@ -2796,6 +3219,7 @@ const EXAMPLE_FEATURE_TEST_OBJ = {
    __targetType: "CustomCommandFactory",
     // constructor arguments for the CustomCommandFactory
     constructorArgs: [{
+        name: "Example Hello World Command Factory",
         description: "CustomCommandFactory",
         scenarios: {
             "custom commands > appear in cmd pallete": {
@@ -2818,18 +3242,18 @@ const EXAMPLE_FEATURE_TEST_OBJ = {
     }]
 }
 // make sure we can pass a real, in-memory JS obj
-autorunFeatureTests.push(EXAMPLE_FEATURE_TEST_OBJ)
+// autorunFeatureTests.push(EXAMPLE_FEATURE_TEST_OBJ)
 // or a stringified JSON obj, that will be converted to a real JS obj on the fly
-autorunFeatureTests.push(JSON.stringify(EXAMPLE_FEATURE_TEST_OBJ))
+// autorunFeatureTests.push(JSON.stringify(EXAMPLE_FEATURE_TEST_OBJ))
 // ^^^ both should pass if the system is working correctly
 // we should have a way to tag them with different test run names like
 // "FeatureTest:CustomCommandFactory" or "FeatureTest:CustomCommandFactory:JSON"
 
 const exampleCustomCommandFactory = new CustomCommandFactory(ExampleCustomCommandFactory);
-console.warn('json of custom command factory',{
-    ExampleCustomCommandFactory,
-    exampleCustomCommandFactory
-})
+// console.warn('json of custom command factory',{
+//     ExampleCustomCommandFactory,
+//     exampleCustomCommandFactory
+// })
 
 // here we introduce a custom command as though it is one
 // the user previously built and serialized to disk
@@ -2896,7 +3320,7 @@ extends Config {
                 })
                 wizardInstance.currentCommandID = myNewCommandID;
                 store.customCommandFactories[myNewCommandID] = myCustomCommandClassFactory;
-                toastManager.showToast(`Created Custom Command Factory: ${myNewCommandID}`, {pinned: false});
+                system.get("toastManager").showToast(`Created Custom Command Factory: ${myNewCommandID}`, {pinned: false});
             }
         },
         {
@@ -3050,7 +3474,7 @@ extends Config {
         answerValidationRules: 'required:string'
     }]
     finalCallback(wizardInstance){
-        toastManager.showToast(
+        system.get("toastManager").showToast(
             wizardInstance.stepResponses[0].input,
             {pinned: false}
         );
@@ -3887,40 +4311,7 @@ class ToastNotification {
 
 
 
-// Toasts Feature Feature Description Definition (Serializable to JSON)
-class FeatureTest_ToastsFeature 
-// TODO: enforce that it contains only literals
-// maintains serializability
-extends FeatureTest {
-    name = "Toasts Feature"
-    scenarios = {
-        "Show Toast": {
-            given: "A Toast Notification Manager",
-            when: "I call the ShowToast method",
-            then: [
-                "I expect a toast to appear",
-                // AND
-                "I expect the toast to disappear after 3 seconds",
-            ]
-        },
-        "Show a Pinned Toast":{
-            given: "A Toast Notification Manager",
-            when: "I call the ShowToast method with the pinned option set to true",
-            then: [
-                "I expect a toast to appear",
-                // AND
-                "I expect the toast to remain on screen until dismissed",
-            ]
-        },
-        "Dismiss a pinned toast":{
-            given: "a pinned toast message",
-            when: "I call the dismiss method on the toast",
-            then: "I expect the toast to disappear"
-        }
-    }
-}
 
-autorunFeatureTests.push(FeatureTest_ToastsFeature);
 
 class FeatureTest_ToastLevels
 extends FeatureTest {
@@ -3947,10 +4338,19 @@ autorunFeatureTestResults.push(FeatureTest_ToastLevels);
 //     ToastFeatureTest
 // ) {}
 
+// ToastNotificationManager.toasts = ToastMessage[]
 class ToastNotificationManager {
+    /**
+     * This class is responsible for managing toast notifications.
+     * It can create, display, and destroy toast notifications.
+     * @type {ToastMessage[]}
+     */
     toasts = []
     constructor(){
 
+    }
+    get latestToast(){
+        return this.toasts.at(-1);
     }
     showSuccess(message, options){
         this.showToast(message, {
@@ -3959,12 +4359,23 @@ class ToastNotificationManager {
         })
     }
     showToast(message, options){
-        console.warn('showToast',{message,options})
+        // console.warn('showToast',{message,options})
+        // console.warn(`if we're mocking ToastNotificationManager during a test run, we should be able to configure where the toasts are "rendered"`)
         options = options ?? {}
         options.level = options.level ?? 'info'; // DEFAULT_TOAST_LEVEL = 'info'
         let {pinned} = options;
         let toast = new ToastNotification(message, {pinned, manager: this});
+        console.warn('showToast',{
+            message,
+            options,
+            _this: this,
+            this_toasts: this.toasts,
+        })
         this.toasts.push(toast);
+        // note, if we don't return anything,
+        // the step mapped to this function for automated test coverage,
+        // won't know if it should assume success or failure
+        return toast;
     }
     destroyToast(toast){
         this.toasts = this.toasts.filter((t)=>{
@@ -3991,7 +4402,7 @@ class SetMaxSuggestionsCommandWizardConfig extends Config {
         store.maxVisibleOptionsCount = parseInt(wizardInstance.stepResponses[0].input);
         commandPaletteInput.value('');
         new HideCommandPaletteCommand().execute();
-        toastManager.showToast(`Set Max Suggestions: ${store.maxVisibleOptionsCount}`);
+        system.get("toastManager").showToast(`Set Max Suggestions: ${store.maxVisibleOptionsCount}`);
     }
 }
 
@@ -4340,7 +4751,7 @@ class CommandPalette {
                             t:this,
                             wizardInstance
                         });
-                        toastManager.showToast(`Loaded Graph: ${wizardInstance.stepResponses[0].selectedSuggestionValueOrLabel}`);
+                        system.get("toastManager").showToast(`Loaded Graph: ${wizardInstance.stepResponses[0].selectedSuggestionValueOrLabel}`);
                         let prevStepResponse = wizardInstance.stepResponses[0];
                         // it's loading by name / label here instead of value?
                         console.warn("its loading by name instead of value?",
@@ -4852,7 +5263,7 @@ function draw() {
     store.activeWizard?.onDraw?.();
 
     // render toast notifications
-    toastManager.draw();
+    system.get("toastManager")?.draw();
 
     renderDebugUI();
 
@@ -4998,8 +5409,7 @@ class GraphEvent {
     }
     
     drawEventAt(x,y){
-        console.warn('drawEventAt',{x,y})
-        debugger;
+        console.warn('drawEventAt',{x,y,eventObj:this})
         fill(this.key === 'backspace' ? color(255,0,0) : 255); // Change 0 to 255
         ellipse(x, y, 30, 30);
         fill(this.key === 'backspace' ? color(255,255,255) : 0);
@@ -5063,24 +5473,131 @@ const BUILT_IN_FACTORIES = {
     "FeatureTest": FeatureTest,
 }
 
+// provides singleton at an expected key location
+// e.g. "A Toast Notification Manager" => system.get('toastManager') 
+const givenLookupTable = {}
+const mapGiven = (name, callback)=>{
+    givenLookupTable[name] = callback;
+}
+const whenLookupTable = {}
+const mapWhen = (name, callback)=>{
+    whenLookupTable[name] = callback;
+}
+const thenLookupTable = {}
+const mapThen = (name, callback)=>{
+    thenLookupTable[name] = callback;
+}
+
+const runFeatureTest = (featDescClassOrDefinition)=>{
+    const shape = typeof featDescClassOrDefinition === 'function' 
+        ? "class" //featDescClassOrDefinition
+        : typeof featDescClassOrDefinition === 'string'
+            ? "string" //featDescClassOrDefinition
+            : "object" //Object.keys(featDescClassOrDefinition)
+    //console.warn("Self Test definition shape: ", shape)
+    // decode string json to js object that we can build an instance from
+    if(typeof featDescClassOrDefinition === 'string'){
+        try{
+            featDescClassOrDefinition = JSON.parse(featDescClassOrDefinition);
+        }catch(e){
+            console.error('failed to parse self test definition as JSON',{
+                featDescClassOrDefinition
+            })
+        }
+    }
+
+    // if featDescClassOrDefinition is not a constuctor, 
+    // we need to hydrate an instance using the provided definition
+    let featDescClassToInstance = featDescClassOrDefinition;
+    let instance = null;
+    if(typeof featDescClassOrDefinition === 'object'){
+        // rename variable locally for clear code
+        const featDef = featDescClassOrDefinition;
+        let {
+            __type,
+            __targetType,
+            name,
+            constructorArgs
+        } = featDef;
+        if(!name){
+            system.panic("missing name for "+featDef.name)
+        }
+        // we're probably instantiating a FeatureTest right now...
+        console.warn('attempting to generate instance',{
+            __type,
+            __targetType,
+            args: constructorArgs
+        })
+        // making sure to forward the pre-defined constructor args...
+
+        console.warn(`should we be making ${__type} or ${__targetType}?`)
+
+        instance = new BUILT_IN_FACTORIES[__type](...constructorArgs);
+
+    }else if(typeof featDescClassOrDefinition === 'function'){
+        instance = new featDescClassToInstance({
+            name: featDescClassToInstance.name,
+            scenarios: featDescClassToInstance.scenarios
+        });
+    }else if(typeof featDescClassOrDefinition === 'string'){
+        system.panic("should've handled string decoding earlier!")
+    }else{
+        system.dump("unrecognized self test definition type: ",featDescClassOrDefinition)
+        system.panic(`unrecognized self test definition type: ${typeof featDescClassOrDefinition}`)
+    }
+
+    console.warn(
+        //'(TODO: parallelize)',
+        {
+            autoTesting: instance.constructor.name + ": " + instance.name,
+            instanceConstructorName: instance.constructor.name,
+            instanceName: instance.name,
+            instance
+        }
+    )
+
+    // register any given/when/then callbacks from the instance
+    // neat how one feature test can register multiple callbacks
+    // and then other downstream features can use them :D
+    if(instance.givenMap){
+        Object.entries(instance.givenMap).forEach(([name, callback])=>{
+            givenLookupTable[name] = callback;
+        })
+    }
+    if(instance.whenMap){
+        Object.entries(instance.whenMap).forEach(([name, callback])=>{
+            whenLookupTable[name] = callback;
+        })
+    }
+    if(instance.thenMap){
+        Object.entries(instance.thenMap).forEach(([name, callback])=>{
+            thenLookupTable[name] = callback;
+        })
+    }
+
+    // TODO: see about passing objects instead of class instances
+    const parser = new GFDParser(instance);
+    const gherkinSeq = parser.parse();
+    const executor = new GherkinSequenceExecutor(gherkinSeq,{
+        givenMap: givenLookupTable,
+        whenMap: whenLookupTable,
+        thenMap: thenLookupTable,
+    });
+    autorunFeatureTestResults.push(executor.execute());
+}
+
 
 // Define the setup function
 function setup() {
     ensureHeadTag();
     createCanvas(windowWidth, windowHeight);
-    
-    // singletons
-    // cmdprompt = new CommandPalette();
-    // toastManager = new ToastNotificationManager();
 
     // boot the root system manager & root system
     manager.boot();
     rootSystem = system = manager.systems[0];
-    // register our singletons with the root system instance
-    // system.singleton('toastManager',toastManager);
-    // system.singleton('cmdprompt', cmdprompt);
-
+    // define our lazy singletons
     // will be instantiated upon first access attempt via system.get('toastManager')
+    system.lazySingleton('timeManager', TimeManager);
     system.lazySingleton('toastManager', ToastNotificationManager);
     system.lazySingleton('cmdprompt', CommandPalette);
     
@@ -5088,92 +5605,7 @@ function setup() {
     // TODO: parallelize with Promise.all([])
     autorunFeatureTestResults.length = 0; // reset results
     autorunFeatureTests.forEach((featDescClassOrDefinition)=>{
-        console.warn(
-            "Self Test definition shape:",
-            typeof featDescClassOrDefinition === 'function' 
-                ? "class" //featDescClassOrDefinition
-                : typeof featDescClassOrDefinition === 'string'
-                    ? "string" //featDescClassOrDefinition
-                    : "object" //Object.keys(featDescClassOrDefinition)
-        )
-        // decode string json to js object that we can build an instance from
-        if(typeof featDescClassOrDefinition === 'string'){
-            try{
-                featDescClassOrDefinition = JSON.parse(featDescClassOrDefinition);
-            }catch(e){
-                console.error('failed to parse self test definition as JSON',{
-                    featDescClassOrDefinition
-                })
-            }
-        }
-        console.warn('Autorunning Self Registered Feature Test Now... (TODO: parallelize)',{
-            featDescClassOrDefinition
-        })
-
-        // if featDescClassOrDefinition is not a constuctor, 
-        // we need to hydrate an instance using the provided definition
-        let featDescClassToInstance = featDescClassOrDefinition;
-        let instance = null;
-        if(typeof featDescClassOrDefinition === 'object'){
-            // rename variable locally for clear code
-            const featDef = featDescClassOrDefinition;
-            // console.warn('we recognize a definition instead of a class, instancing class now...')
-            // // return something we can call "new" on that we don't need to pass any arguments to
-            // // just in case we were passed "just a class" reference with no arguments
-            // // that way all code below this point can just assume we are being passed a plain class reference
-            // // that doesn't accept any arguments,
-            // // but when our special class is instantiated, it will be hydrated with the pre-provided definition
-            // //featDescClassToInstance = CustomFeatureTestDecorator(FeatureTest, featDescClassOrDefinition);
-
-            // // TODO: this could just be a string-key lookup into a map
-            // if(!BUILT_IN_FACTORIES[featDef.name]){
-            //     system.panic("unrecognized definition "+featDef.name)
-            // }
-            // system.success('class resolved:', {
-            //     name: featDef.name,
-            //     classRef: BUILT_IN_FACTORIES[featDef.name],
-            //     featDef
-            // });
-            // // don't instantiate it yet, just return the reference to the class that WOULD be instantiated...
-
-            // featDescClassToInstance = BUILT_IN_FACTORIES[featDef.name];
-            // if(!featDef.config?.constructorArgs){
-            //     // if none, request they add an empty array?
-            //     system.panic("missing config.constructorArgs for "+featDef.name)
-            // }
-            // let _instance = new featDescClassToInstance(featDef?.config?.constructorArgs);
-            // // instance.value[0].scenarios
-            // console.warn("NEW FD instance: ",{instance})
-            // // now we convert it to the type that GFDParser expects...
-            // instance = 
-            let {
-                __type,
-                __targetType,
-                name,
-                constructorArgs
-            } = featDef;
-            if(!name){
-                system.panic("missing name for "+featDef.name)
-            }
-            // we're probably instantiating a FeatureTest right now...
-            console.warn('attempting to generate instance',{
-                __type,
-            })
-            // making sure to forward the pre-defined constructor args...
-            instance = new BUILT_IN_FACTORIES[__type](...constructorArgs);
-
-        }else if(typeof featDescClassOrDefinition === 'function'){
-            instance = new featDescClassToInstance({
-                name: featDescClassToInstance.name,
-                scenarios: featDescClassToInstance.scenarios
-            });
-        }else if(typeof featDescClassOrDefinition === 'string'){
-
-        // TODO: see about passing objects instead of class instances
-        const parser = new GFDParser(instance);
-        const gherkinSeq = parser.parse();
-        const executor = new GherkinSequenceExecutor(gherkinSeq);
-        autorunFeatureTestResults.push(executor.execute());
+        runFeatureTest(featDescClassOrDefinition);
     })
     /// === endRegion: Self Test Mode ===
 
@@ -5196,7 +5628,11 @@ function setup() {
         // Check if the Enter key was pressed
         // if (e.key === 'Enter') {
             // Call the onCommandPaletteInput method
-            cmdprompt.onCommandPaletteInput(e);
+            cmdprompt = system.get('cmdprompt');
+            if(!cmdprompt){
+                system.warn("cmdprompt not ready");
+            }
+            cmdprompt?.onCommandPaletteInput(e);
         // }
     });
 }
@@ -5844,13 +6280,13 @@ class StateMachine {
         // aka checkValidity
         const tx = this.transitionMatrix?.[this.currentStateID]?.[newStateID];
         if(!tx){
-            console.warn('failed valid check', {
+            console.error('FSM: canTransition: Failed valid check', {
                 currentStateID: this.currentStateID,
                 newStateID,
                 transitionMatrix: this.transitionMatrix,
                 tx
             })
-            this.debugPrintCoverage();
+            //this.debugPrintCoverage();
 
             // did you forget to allow() the transition between the two states?
             system.panic(`StateMachine:canTransition: invalid transition! ${this.currentStateID} -> ${newStateID}`);
