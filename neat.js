@@ -15,6 +15,9 @@
 const autorunFeatureTestResults = [];
 const autorunFeatureTests = [];
 
+// state hydrator / dehydrator
+/* VirtualClass - Stringified Definition of a Class Instance */
+
 const HALT_ON_PANIC = 1; // enable to halt the system on panic
 const SHOW_DEV_WARNINGS = 1;
 const MAX_SUGGESTED_SCENARIOS_PER_FEATURE = 3;
@@ -100,13 +103,74 @@ class FeatureTest {
     config = {}
     parseError = null;
     get name() {
-        return this?.config?.name ?? `Unconfigured` + this.constructor.name;
+        return this?.config?.name ?? this.constructor.name ?? 'No Feature Name Provided!';
     }
-    get scenarios() {
-        return this?.config?.scenarios ?? {};
+    // prevent namespace collision / shadowing
+    get scenarioZZZ() {
+        return this?.config?.scenarios ?? this.scenarios;
     }
     constructor(config){
-        this.setConfig(config);
+        // console.warn('FeatureTest constructing...',{
+        //     pre_defined_scenarios: this.scenarios,
+        //     scenarioZZZ: this.scenarioZZZ,
+        //     constructorArgInputConfig: config,
+        // })
+        if(typeof config === 'undefined'){
+
+        }else{
+            this.setConfig(config);
+        }
+        // TODO: waitUntilTrue...
+        const onCheck = function(){
+            if(!this.postConstructorCalled){
+                if(this.scenarioZZZ){
+                    this.postConstructor();
+                }else{
+                    // retry
+                    setTimeout(onCheck,100)
+                }
+            }
+        }
+        const check = ()=>setTimeout(onCheck,100)
+        check();
+    }
+    postConstructor(){
+        if(!this?.scenarioZZZ){
+            // don't flag as successfully post-constructed
+            // until we process some scenarioZZZ
+        }{
+            console.warn('FeatureTest.postConstructor: still no scenarioZZZ!')
+
+        }
+        this.postConstructorCalled = true;
+        console.warn("FeatureTest.postConstructor: ", {
+            // pre_DEFINED_scenarios: this.scenarios,
+            // config: this.config
+            scenarioZZZ: this.scenarioZZZ,
+        });
+        this.validateConfig();
+    }
+    validateConfig(){
+        if(!this.postConstructorCalled){
+            this.postConstructor();
+            //system.panic("FeatureTest.validateConfig: postConstructor not called yet");
+        }
+        // now that any extending classes have had a chance to define their own scenarios,
+        let scenarios = Object.entries(this.scenarioZZZ);
+        // shallow check, if the first scenario is an array instead of an object, treat the whole
+        // config as nested arrays of strings (todo: allow mix-matched scenario definition notation)
+        if(Array.isArray(scenarios[0])){
+            // if(typeof scenarios[0][0] === 'string'
+            // && Array.isArray(scenarios[0][1])){
+            //     // if the scenarios are ["scenario",[steps]], we need to reformat to scenarios:[{sgtw},{sgtw}]
+            // }
+            let parsed = FeatureTest.parseScenarioStrings(scenarios);
+            console.warn('overriding config with',{parsed,scenarios})
+            this.config = parsed;
+            // notice that we can't immediately re-validate the config
+            // but... could we?
+            //this.validateConfig();
+        }
     }
     // todo: validate config
     setConfig(string_or_object){
@@ -115,6 +179,7 @@ class FeatureTest {
             this.config = {};
             return;
         }
+        console.warn("FeatureTest.setConfig: ", {config:string_or_object});
         // if we're given an object, don't parse it
         if(typeof string_or_object === 'object'){
             this.config = string_or_object;
@@ -126,6 +191,259 @@ class FeatureTest {
                 this.parseError = e;
             }
         }
+    }
+    static normalizeScenarios(input){
+        let output = {};
+        console.warn('normalizing scenarios',{input})
+        Object.entries(input ?? {}).forEach(([scenarioName,scenarioSteps])=>{
+            if(typeof scenarioSteps[0] === "string" && Array.isArray(scenarioSteps[1])){
+                // it's a ["string", []]
+                scenarioSteps = scenarioSteps[1];
+            }
+            const parsed = FeatureTest.parseScenarioStrings(scenarioSteps);
+            console.warn('normalizeScenarios: scenario parsed to: ',{
+                scenarioName,
+                scenarioSteps,
+                parsed
+            })
+            output[scenarioName] = parsed;
+        });
+        return output;
+    }
+    static normalizeFeatureDefinition(denormalizedFeatureDefinition){
+        let normalized = {}
+        if(typeof denormalizedFeatureDefinition === 'string'){
+            // is it JSON or a solid block of Ghrekin?
+            console.warn('FeatureTest.normalizeFeatureDefinition: string input!',{
+                denormalizedFeatureDefinition
+            })
+        }
+        else if(typeof denormalizedFeatureDefinition === 'object' && Array.isArray(denormalizedFeatureDefinition)){
+            // S-expression?
+        }else if(typeof denormalizedFeatureDefinition === 'object'){
+            // could be a class or a plain object
+            normalized.name = denormalizedFeatureDefinition?.name ?? 'No Feature Name Provided';
+            normalized.scenarios = FeatureTest.normalizeScenarios(denormalizedFeatureDefinition?.scenarios ?? {});
+        }
+        return normalized;
+    }
+    static fromDenormalizedFeatureDefinition(denormalizedFeatureDefinition){
+        console.warn('creating featureTest from denormalized feature definition',{
+            denormalizedFeatureDefinition
+        })
+        // normalize our feature defintion, then instance the FeatureTest with it
+        // NOTE: the normilization process doesn't strip ToBeImplemented scenarios or steps,
+        // that way the parser and runner can still reflect their status downstream to the UI
+        // at test execution time
+        let normalizedFeatureDefition = FeatureTest.normalizeFeatureDefinition(denormalizedFeatureDefinition);
+        console.warn('normalized feature definition',{
+            normalizedFeatureDefition
+        })
+        return new FeatureTest(normalizedFeatureDefition);
+    }
+    static parseScenarioStrings(arrayOfStepStrings){
+        // if the input is ToBeImplemented, just return it untouched
+        if(arrayOfStepStrings === ToBeImplemented){
+            return arrayOfStepStrings;
+        }
+        if(!Array.isArray(arrayOfStepStrings)){
+            // system.panic("FeatureTest.parseScenarioStrings: invalid input, expected array of strings got: " + typeof arrayOfStepStrings, {
+            //     arrayOfStepStrings
+            // });
+            // if it's an object it's probably already in a good state
+            // so we can just return it
+            return arrayOfStepStrings;
+        }
+        if(typeof arrayOfStepStrings[0][0] === "string"
+            && Array.isArray(
+                arrayOfStepStrings[0][1]
+            )
+        ){
+            system.panic("need to unwrap array of step strings!",{
+                arrayOfStepStrings,
+                toJust: arrayOfStepStrings[0][1]
+            })
+            // it's a ["string", []]
+            //arrayOfStepStrings = arrayOfStepStrings[1];
+        }
+        let output = {
+            // scenarioName
+            name: null,
+            given: [],
+            when: [],
+            then: []
+        };
+        let previousTokenType = null;
+        console.warn('parseScenarioStrings',{
+            featureName: this.name,
+            arrayOfStepStrings
+        })
+        
+        // console.warn('FeatureTest.parseScenarioStrings',{scenario_name,scenario_steps})
+        // scenario_name = scenario_name.trim();
+        // output.scenarios[scenario_name] = {
+        //     given: [],
+        //     when: [],
+        //     then: []
+        // }
+        const T = GHERKIN_AST_TOKENS;
+        const to_check = {
+            f: T.FEATURE,
+            s: T.SCENARIO,
+            g: T.GIVEN,
+            w: T.WHEN,
+            t: T.THEN,
+            a: T.AND,
+            b: T.BUT,
+            e: T.EXAMPLES,
+            so: T.SCENARIO_OUTLINE,
+            bkg: T.BACKGROUND,
+        };
+        arrayOfStepStrings.forEach((line)=>{
+            let matches = {};
+            if(isEmptyOrUndefined(line)){
+                system.panic("FeatureTest.parseScenarioStrings: empty line found in scenario ",{
+                    line,
+                    typeof_line: typeof line,
+                    arrayOfStepStrings
+                });
+            }
+            line = line.trim().toLowerCase();
+            Object.entries(to_check).forEach(([key,value])=>{
+                //console.warn({value});
+                if(isEmptyOrUndefined(value)){
+                    system.dump({
+                        matches,
+                        line,
+                        to_check,
+                        key,
+                        value
+                    })
+                    system.panic("FeatureTest.parseScenarioStrings: invalid value provided for key: " + key)
+                }
+                matches[key.toLowerCase()] = line.startsWith(value.toLowerCase());
+            })
+            
+            switch(true){
+                // case matches['b']:
+                //     system.panic("FeatureTest.parseScenarioStrings: we dont allow But in this dialect of Gherkin");
+                //     break;
+                // case matches['bkg']:
+                //     if(!output.featureName){ system.panic("FeatureTest.parseScenarioStrings: Background found outside of Feature"); }
+                //     currentScenarioKey = line.replace(GHERKIN_AST_TOKENS.BACKGROUND,'').trim();
+                //     break;
+                // case matches['f']:
+                //     output.featureName = line.replace(GHERKIN_AST_TOKENS.FEATURE,'').trim();
+                //     previousTokenType = GHERKIN_AST_TOKENS.FEATURE;
+                //     break;
+                // case matches['so']:
+                //     if(!output.featureName){ system.panic("FeatureTest.parseScenarioStrings: Scenario Outline found outside of Feature"); }
+                //     currentScenarioKey = line.replace(GHERKIN_AST_TOKENS.SCENARIO_OUTLINE,'').trim();
+                //     output.scenarios[currentScenarioKey] = {
+                //         name: currentScenarioKey,
+                //         isOutline: true,
+                //         given: [],
+                //         when: [],
+                //         then: []
+                //     }
+                //     previousTokenType = GHERKIN_AST_TOKENS.SCENARIO_OUTLINE;
+                //     break;
+                // case matches['ex']:
+                //     if(!currentScenarioKey){
+                //         system.panic("FeatureTest.parseScenarioStrings: Examples found outside of Scenario Outline");
+                //     }
+                //     output.scenarios[currentScenarioKey].examples = line.replace(GHERKIN_AST_TOKENS.EXAMPLES,'').trim();
+                //     previousTokenType = GHERKIN_AST_TOKENS.EXAMPLES;
+                //     break;
+                case matches['a']:
+                    // if(!currentScenarioKey){
+                    //     system.panic("FeatureTest.parseScenarioStrings: And found outside of Scenario");
+                    // }
+                    // if(!output.scenarios[currentScenarioKey]){
+                    //     system.panic("FeatureTest.parseScenarioStrings: And found outside of Scenario");
+                    // }
+                    // "AND" it by adding it using the same type as the previous type
+                    // if the previous type is not defined, panic
+                    if (!previousTokenType) {
+                        system.panic("FeatureTest.parseScenarioStrings: And found outside of Scenario");
+                    }
+                    if(!output[previousTokenType]){
+                        output[previousTokenType] = [];
+                    }
+                    output[previousTokenType].push(line);
+                    break;
+                    
+                // case matches['s']:
+                //     if(!output.featureName){ system.panic("FeatureTest.parseScenarioStrings: Scenario found outside of Feature"); }
+                //     currentScenarioKey = line.replace(GHERKIN_AST_TOKENS.SCENARIO,'').trim();
+                //     output.scenarios[currentScenarioKey] = {
+                //         name: currentScenarioKey,
+                //         given: [],
+                //         when: [],
+                //         then: []
+                //     }
+                //     previousTokenType = GHERKIN_AST_TOKENS.SCENARIO;
+                //     break;
+                case matches['g']:
+                    // if(!currentScenarioKey){
+                    //     system.panic("FeatureTest.parseScenarioStrings: Given found outside of Scenario");
+                    // }
+                    output.given.push(line);
+                    previousTokenType = GHERKIN_AST_TOKENS.GIVEN;
+                    break;
+                case matches['w']:
+                    // if(!currentScenarioKey){
+                    //     system.panic("FeatureTest.parseScenarioStrings: When found outside of Scenario");
+                    // }
+                    output.when.push(line);
+                    previousTokenType = GHERKIN_AST_TOKENS.WHEN;
+                    break;
+                case matches['t']:
+                    // if(!currentScenarioKey){
+                    //     system.panic("FeatureTest.parseScenarioStrings: Then found outside of Scenario");
+                    // }
+                    output.then.push(line);
+                    previousTokenType = GHERKIN_AST_TOKENS.THEN;
+                    break;
+                default:
+                    system.panic("FeatureTest.parseScenarioStrings: no matching start token found: " + line);
+                    break;
+            }
+            if(previousTokenType === null){
+                system.panic("FeatureTest parseScenarioStrings: no previousTokentype?", matches);
+            }
+        })
+        
+        // console.warn("FeatureTest.parseScenarioStrings > previousTokenType",{previousTokenType})
+        
+        // console.warn("FeatureTest.parseScenarioStrings > output",{
+        //     input: arrayOfStepStrings,
+        //     output
+        // })
+        
+        return output;
+    }
+    // INPUT: ["given ... ", "when ... ", "then ... "]
+    // OUTPUT: {scenarios:{given:...,when:...,then:...}}
+    static fromArrayOfStrings(input){
+        let generatedConfig = {
+            featureName: this.name,
+        }
+        console.warn('(static)FeatureTest.fromArrayOfStrings',{
+            input
+        })
+        let parsed = FeatureTest.parseScenarioStrings(input.scenarios);
+        console.warn('(static)FeatureTest.fromArrayOfStrings',{
+            parsed
+        });
+        generatedConfig.scenarios = parsed.scenarios;
+        let createdInstance = new this(generatedConfig);
+        console.warn('(static)FeatureTest.fromArrayOfStrings',{
+            input: arr,
+            createdInstance,
+            _this:this
+        })
+        return createdInstance;
     }
 }
 
@@ -193,7 +511,9 @@ class SystemManager {
     }
     panic(message){
         this._panic = true;
-        console.error(message);
+        console.error("panic args:",{
+            args: arguments
+        });
         // show a toast
         system.get('toastManager')?.showToast(message, {
             //pinned: true, 
@@ -294,8 +614,8 @@ class System {
         }
         console.warn('assiging System singleton',{name,instance})
     }
-    panic(message){
-        this.manager.panic(this.tag + ": " + message);
+    panic(){
+        this.manager.panic(this.tag + ": ",...arguments);
     }
     warn(){
         this.manager.warn(this.tag + ": ", ...arguments);
@@ -306,7 +626,8 @@ class System {
         },2));
     }
     dump(){
-        console.warn(this.tag + ": ", ...arguments);
+        console.warn(this.tag + 
+            (this?.tag ? " " : "") + "System.Dump: ", ...arguments);
     }
     debug(){
         system.dump(this.tag + ": ", [...arguments]);
@@ -564,7 +885,11 @@ const forEach = (arr, callback) => {
 }
 
 // takes an optionally dot-separated namespace'd path to a resource
-const dotNotationResolver = (string) => {
+const dotNotationResolver = (...args) => {
+    let string = args[0];
+    // console.warn('dotNotationResolver',{
+    //     a: args,
+    // })
 
     // if we are given an array as input,
     // we need to parse the first part of the array from the system root
@@ -585,28 +910,29 @@ const dotNotationResolver = (string) => {
     ]
 
     if(typeof string === 'object' && Array.isArray(string)){
-        if(!string.length){
+        let arr = string;
+        if(!arr.length){
             system.panic("dotNotationResolver: empty array provided");
         }
-        else if(string.length === 1){
+        else if(arr.length === 1){
             // if we only have one item in the array,
             // we can assume it's a string and try to resolve it
-            string = string[0];
-        }else if(string.length === 2){
+            string = arr[0];
+        }else if(arr.length === 2){
             // our dot-notation string thing 
             // to check is the first item in the array
-            string = string[0];
+            string = arr[0];
             // verify it's an assertion, otherwise it could be an argument to the function we're calling
-            if(valid_assertions.includes(string[1])){
-                assertion = string[1];
+            if(valid_assertions.includes(arr[1])){
+                assertion = arr[1];
             }else{
                 // assume it's just an argument to the function we're calling
-                tailArguments = string.slice(1);
+                tailArguments = arr.slice(1);
             }
         }else{
             // > 2 assume it's just more arguments to the function we're calling
-            string = string[0]; // fn pointer
-            tailArguments = string.slice(1);
+            string = arr[0]; // fn pointer
+            tailArguments = arr.slice(1);
         }
     }
 
@@ -644,13 +970,14 @@ const dotNotationResolver = (string) => {
         }
     }
 
-    console.warn('dotNotationResolver',{
-        string,
-        parts,
-        // rootPart,
-        typeArray,
-        // currentPart,
-    })
+    // console.warn('dotNotationResolver',{
+    //     string,
+    //     parts,
+    //     // rootPart,
+    //     typeArray,
+    //     // currentPart,
+    // })
+
     // finally resolved:
     return {
         root: rootPart,
@@ -748,11 +1075,11 @@ class GherkinSequenceExecutor {
         //     system.panic("FeatureTestRun.executeScenario: preflight check failed");
         //     return;
         // }
-        console.warn('GSE:executeScenario',{
-            scenarioName: scenario?.name ?? 'missing scenario name!',
-            scenarioSteps: scenario?.steps ?? 'steps missing!',
-            scenario,
-        })
+        // console.warn('GSE:executeScenario',{
+        //     scenarioName: scenario?.name ?? 'missing scenario name!',
+        //     scenarioSteps: scenario?.steps ?? 'steps missing!',
+        //     scenario,
+        // })
         if(!scenario?.steps?.length){
             system.panic(`GherkinSequenceExecutor.executeScenario: no steps found in scenario: ${scenario.name}`)
         }
@@ -831,11 +1158,15 @@ class GherkinSequenceExecutor {
                 system.panic("GSE:executeScenarioStep: no step callback at index 0? found for step: " + step.value);
             }
 
+            // DOT RESOLVER: ARRAY[0]
             let dotResolved = dotNotationResolver(stepCallback[0]);
             if(dotResolved.tailType === 'function'){
                 let result = dotResolved.tail.call(
                     dotResolved.root, 
-                    ...stepCallback.slice(1)
+                    ...[
+                        ...(dotResolved?.tailArguments ?? []),
+                        ...stepCallback.slice(1),
+                    ]
                 );
                 if(typeof result === 'undefined'){
                     system.panic("GSE:executeScenarioStep: step callback returned undefined for step: " + step.value);
@@ -893,7 +1224,29 @@ class GherkinSequenceExecutor {
                     if(dotResolved.tailType === 'function'){
                         let result = dotResolved.tail.call(
                             dotResolved.root, 
-                            ...subStep.slice(1)
+                            ...[
+                                ...(dotResolved?.tailArguments ?? []),
+                                ...subStep.slice(1)
+                            ]
+                        );
+                        if(typeof result === 'undefined'){
+                            system.panic("GSE:executeScenarioStep: step callback returned undefined for step: " + step.value);
+                        }
+                        // console.warn(
+                        //     'GSE:executeScenarioStep: dotNotationResolver result',{stepCallback,dotResolved,result}
+                        // )
+                        return result;
+                    }
+                }else if(typeof subStep === 'string'){
+                    // let's hope it's just a string
+                    let dotResolved = dotNotationResolver(subStep);
+                    if(dotResolved.tailType === 'function'){
+                        let result = dotResolved.tail.call(
+                            dotResolved.root, 
+                            ...[
+                                ...(dotResolved?.tailArguments ?? []),
+                                ...subStep.slice(1)
+                            ]
                         );
                         if(typeof result === 'undefined'){
                             system.panic("GSE:executeScenarioStep: step callback returned undefined for step: " + step.value);
@@ -904,21 +1257,7 @@ class GherkinSequenceExecutor {
                         return result;
                     }
                 }else{
-                    // let's hope it's just a string
-                    let dotResolved = dotNotationResolver(subStep);
-                    if(dotResolved.tailType === 'function'){
-                        let result = dotResolved.tail.call(
-                            dotResolved.root, 
-                            ...subStep.slice(1)
-                        );
-                        if(typeof result === 'undefined'){
-                            system.panic("GSE:executeScenarioStep: step callback returned undefined for step: " + step.value);
-                        }
-                        // console.warn(
-                        //     'GSE:executeScenarioStep: dotNotationResolver result',{stepCallback,dotResolved,result}
-                        // )
-                        return result;
-                    }
+                    system.panic("GSE:executeScenarioStep: invalid substep type: " + typeof subStep + `on step ${step.value} type: ${step.__type}`);
                 }
             })
         }else if(typeof stepCallback === 'function'){
@@ -1242,6 +1581,36 @@ class WidgetView {
     }
 }
 
+class VirtualClass {
+    /* type Name for reflection & dependency injection */
+    __type = "VirtualClass" 
+    __typeName = ""
+    __constructorArgs = []
+    constructor(){
+
+    }
+}
+
+const VClass = (baseClass,config) => {
+    // the target type to be constructed when
+    // this "VirtualClass" is hydrated at runtime
+    this.__typeName = config.name;
+    return class extends baseClass {
+        __type = "VClass"
+    }
+}
+
+// Eventually DynamicThing will probably supercede VClass(VirtualClass)
+// DynamicThing being a moderately decorated VirtualClass with all the system mixins and sugar
+class SystemWindow extends VClass(VirtualClass,{
+    name: "SystemWindow",
+    constructorArgs: [],
+}) {
+    constructor(){
+        console.warn("cant wait to implement the window system!");
+    }
+}
+
 // BeginRegion: Tables / Nested Tables
 class TableCell {
     observers = []
@@ -1336,8 +1705,17 @@ class NewTableWizardConfig extends Config {
         // { question: "What is the name of the table" },
         // { question: "How Many Rows?", answerDefaultValue = 3 },
         // { question: "How Many Columns?", answerDefaultValue = 3 },
+        {
+            __type: "TabularDataEntry",
+            defaultName: "New Table",
+            defaultRows: 3,
+            defaultCols: 3
+        }
     ]
     finalCallback(wiz){
+        // todo replace sample data with
+        // wiz.answers
+        // and, move this example to a featureDescription
         store.tables.push(new Table({
             rowNames: ["Row 1", "Row 2", "Row 3"],
             columnNames: ["Column A", "Column B", "Column C"],
@@ -1352,6 +1730,10 @@ class NewTableWizardConfig extends Config {
 class NewTableCommand
 extends DefaultSuggestionDecorator(Command, new NewTableWizardConfig()) {}
 
+class GherkinTestRunResults {}
+class GherkinTestRunResultsViewer {}
+class GherkinTestRunResultsViewerWidget {}
+
 class OpenTableViewerCommand {}
 class TableWidget extends Widget {
     tableIndex = null;
@@ -1363,23 +1745,49 @@ class TableWidget extends Widget {
     }
 }
 
-const SelfTest = function(baseClass){
-    const extendedClassInstance = new baseClass(...arguments);
-    // console.warn('todo: register this class as something to run @selfTest time', {baseClass})
+// const SELF_TEST_CLASSES = {};
+// const SELF_TEST_INSTANCES = {};
+// const SELF_TEST_CLASS_ARGS = {};
+// // keyName must be unique per feature
+// const SelfTest = function(baseClass, keyName){
+//     //const extendedClassInstance = new baseClass(...arguments);
+//     // console.warn('todo: register this class as something to run @selfTest time', {baseClass})
+    
+//     // Object.defineProperties(SELF_TEST_INSTANCES,{
+//     //     [keyName]: {
+//     //         value: new baseClass(...arguments),
+//     //         writable: false,
+//     //         enumerable: true,
+//     //         configurable: false
+//     //     }
+//     // })
 
-    return function(){
-        // adjust our eagerly instanced class with any additional "construction-time" arguments
-        // IF a reconstruct method is defined (some base classes have default implementations)
-        extendedClassInstance?.reconstruct?.(...arguments);
-        return extendedClassInstance;
-    };
-}
+//     let callMeToMakeNew = function(){
+//         console.warn('instancing self-test',{
+//             keyName,
+//             stc: SELF_TEST_CLASSES[keyName],
+//             sti: SELF_TEST_INSTANCES[keyName],
+//             vsThis: this,
+//         })
+//         // adjust our eagerly instanced class with any additional "construction-time" arguments
+//         // IF a reconstruct method is defined (some base classes have default implementations)
+//         //extendedClassInstance?.reconstruct?.(...arguments);
+//         //return extendedClassInstance;
+//         SELF_TEST_INSTANCES[keyName] = new baseClass(...arguments);
+//         return SELF_TEST_INSTANCES[keyName];
+//     };
+//     SELF_TEST_CLASSES[keyName] = callMeToMakeNew;
+//     console.warn('setting SELF_TEST_CLASSES',{keyName,callMeToMakeNew})
+//     return callMeToMakeNew;
+// }
 
 // NOTE: we pre-process these
 // and convert them to GherkinFeature objects
 // filled with an Object of keyed GherkinScenario objects
 // which in turn are filled with GherkinStep objects
-class FeatureTestTables extends SelfTest(FeatureTest) {
+// class FeatureTestTables extends SelfTest(FeatureTest,"FeatureTestTables") {
+const ToBeImplemented = "To Be Implemented"
+class FeatureTestTables extends FeatureTest {
     background = [
         // alias "given a fresh system" ~ "given a fresh root system"
         "given a fresh, pre-booted sandboxed system instance"
@@ -1387,6 +1795,10 @@ class FeatureTestTables extends SelfTest(FeatureTest) {
     scenarios = {
         "system creates a table at boot": [
             // alias "given a fresh system" ~ "given a fresh root system"
+
+            // TODO: update parser to support this syntax (in addition to our other syntaxes)
+            // in this one, you don't have to key {Given,When,Then} as long as you have a "given" in the first position
+            // and the rest of the sequence evaluates to valid Gherkin
             "given a fresh sandbox instance", 
             "when the system boots",
             "and i access rootTestTable",
@@ -1400,12 +1812,15 @@ class FeatureTestTables extends SelfTest(FeatureTest) {
             "when i create a table",
             "then i see a new table with 9 empty cells across 3 rows and 3 columns",
         ],
-        "user can save a table": [],
-        "user can load a table": [],
-        "user can delete a table": [],
-        "user can name a table": [],
-        "user can rename a table": []
+        "user can save a table": ToBeImplemented,
+        "user can load a table": ToBeImplemented,
+        "user can delete a table": ToBeImplemented,
+        "user can name a table": ToBeImplemented,
+        "user can rename a table": ToBeImplemented
     }
+}
+const FEATURE_TESTS = {
+    //"FeatureTestTables": FeatureTestTables
 }
 // EndRegion: Tables / Nested Tables
 
@@ -1665,9 +2080,10 @@ let store = {
     // note you need to instantiate a widget dashboard
     // a context where widgets are rendered
     widgets: {},
+
     // for now, one dashboard per system
     // next up: multi-pages of dashboards
-    widgetDashboard: null,
+    WidgetDashboard: null,
 
     // viewValue: '',
     // controllerValue: '',
@@ -1795,11 +2211,15 @@ class AST {
     }
 }
 
-/* Note: due to Gherkin syntax parsing requirements:
+/**
+
+    Note: due to Gherkin syntax parsing requirements:
 
     givens CAN be chained onto other givens
     givens CAN also be chained onto whens
     but givens CANNOT be chained onto thens
+
+    @deprecated (for now?)
 */
 class GherkinBusinessReq {
     name = "GherkinBusinessReq"
@@ -1825,8 +2245,8 @@ const GHERKIN_AST_TOKENS = {
     GIVEN: 'Given',
     WHEN: 'When',
     THEN: 'Then',
-    // AND: 'And',
-    // BUT: 'But', -- our implementation doesn't 
+    AND: 'And',
+    BUT: 'But', // our implementation doesn't support this
     BACKGROUND: 'Background',
     EXAMPLES: 'Examples',
     OUTLINE: 'Outline',
@@ -1847,7 +2267,7 @@ const GHERKIN_AST_TOKENS = {
  * a Valid Gherkin Feature Definition
  * in a particular JSON format as
  * described here:
- * @see FeatureDefinition
+ * @see FeatureTest
  * @see GFDParser
  */
 class GherkinParserTransitionMatrix {
@@ -1928,10 +2348,31 @@ class GFDParser {
         //         "got: " + (definition?.constructor?.name ?? 'undefined')
         //     );
         // }
-
-        if(!definition?.scenarios || !Object.keys(definition?.scenarios).length){
-            system.dump({"GFDParser:ctor(definition)":definition})
-            system.panic("GFDParser: no scenarios provided")
+        if(definition?.scenarios === ToBeImplemented){
+            // no-op, let the ToBeImplemented scenario pass through
+            // even tho it should technically fail pre-validation
+        }
+        else if(definition?.scenarios){
+            // we're... good probably?
+        }
+        else if(definition?.scenarioZZZ){
+            if(!definition?.postConstructorCalled){
+                // do we waitUntilTrue here?
+                // constructors can't be async, so we'd have to wrap the GFDParser in a promise in a ParserFactory->newParserAsync()
+                //debugger;
+                // for now, just force the postConstructor to be called
+                if(!definition?.postConstructor?.call){
+                    system.panic("GFDParser: definition.postConstructor must be a function!",{badDefinition:definition})
+                }
+                definition.postConstructor();
+                if(!definition?.scenarioZZZ){
+                    system.panic("GFDParser: definition.postConstructor must provide values for get scenarioZZZ!",{badDefinition:definition})
+                }
+            }else{
+                system.panic("GFDParser: no scenarioZZZ provided!",{
+                    "GFDParser:ctor(definition) Failing Definition:":definition
+                })
+            }
         }
 
         this.definition = definition;
@@ -2008,7 +2449,10 @@ class GFDParser {
         }
 
         if(this.definition?.background){
-            console.warn('TODO: implement background parsing');
+            system.warn('TODO: implement background parsing of FeatDef: background',{
+                background: this.definition.background,
+                featTestDef: this.definition
+            });
         }
 
         
@@ -2033,11 +2477,27 @@ class GFDParser {
                 GHERKIN_AST_TOKENS.WHEN,
                 GHERKIN_AST_TOKENS.THEN
             ];
+
+            if(typeof steps === 'string'){
+                system.dump({
+                    stepsButItsAString: steps,
+                })
+                system.panic("shouldn't have a string here!");
+            }
+
+            // pre-process any steps that are in the format: "given ...", "then ...", "when..."
+            if(Array.isArray(steps)){
+                system.dump({
+                    steps
+                })
+                system.panic("GFDParser: scenario steps must be an object, not an array");       
+            }
+
             stepKeys.forEach((stepKey)=>{
                 // GIVEN, WHEN, THEN
                 let checkStep = getMatchingKeyValueCaseInsensitive(steps,stepKey);
                 if(!checkStep){
-                    system.panic(`GFDParser: scenario must have a "${checkStep}"`);
+                    system.panic(`GFDParser: scenario must have a "${stepKey}". scenarioKey: ${scenarioKey}"`);
                 }else{
                     // if it's an array, add them all, flatten
                     // else add the single step as a string
@@ -2146,7 +2606,35 @@ class GFDParser {
 }
 
 function getMatchingKeyValueCaseInsensitive(obj, key) {
-    return obj[Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase())];
+    if(Array.isArray(obj)){
+        // TODO: update parser to support this syntax (in addition to our other syntaxes)
+        // in this one, you don't have to key {Given,When,Then} as long as you have a "given" in the first position
+        // and the rest of the sequence evaluates to valid Gherkin
+        // scenarios: {"something":["given something","when i blah","then blank"]}
+        system.dump({
+            arrayShouldaBeenObj: obj,
+            key
+        })
+        system.panic("shoulda been an object");
+    }
+    if(typeof obj === 'string'){
+        system.dump({
+            stringShouldaBeenObj: obj,
+            key
+        })
+        system.panic("getMatchingKeyValueCaseInsensitive: obj is a string, not an object")
+        return null;
+    }
+    const matchedKey = Object.keys(obj)
+        .find(k => k.toLowerCase() === key.toLowerCase());
+    if (!matchedKey) {
+        system.dump({
+            keys: Object.keys(obj)
+        })
+        system.panic("getMatchingKeyValueCaseInsensitive: no matching key found for key: " + key)
+        return null;
+    }
+    return obj[matchedKey];
 }
 
 class GherkinASTNode {
@@ -3137,7 +3625,7 @@ extends FeatureTest {
             then: [
                 "I expect a toast to appear",
                 // AND
-                "I expect the toast to disappear after 3 seconds",
+                // "I expect the toast to disappear after 3 seconds",
             ]
         },
         "Show a Pinned Toast":{
@@ -3146,7 +3634,7 @@ extends FeatureTest {
             then: [
                 "I expect a toast to appear",
                 // AND
-                "I expect the toast to remain on screen until dismissed",
+                // "I expect the toast to remain on screen until dismissed",
             ]
         },
         "Dismiss a pinned toast":{
@@ -3171,13 +3659,14 @@ extends FeatureTest {
         "I call the ShowToast method": [
             // in a when context, we know to tack () on the end
             // we assume the mapping is to a function by default
-            "toastManager.showToast"
+            ["toastManager.showToast", "Hello World!"]
         ],
         "I call the ShowToast method with the pinned option set to true": [
             // when it's an array, we know to pass the first item as the function name and the rest as arguments
-            ["toastManager.showToast",{pinned:true}]
+            ["toastManager.showToast", "Hello World!", {pinned:true}]
         ],
         "I call the dismiss method on the toast": [
+            // TODO: ability to dismiss specific toast(s)
             "toastManager.dismissLatestToast"
         ]
     }
@@ -4248,7 +4737,20 @@ class CommandWizardConfig extends WizardConfig {
 }
 
 function isEmptyOrUndefined(thing){
-    return typeof thing === 'undefined' || thing === null || thing?.trim?.() === '' ? true : false;
+    // console.warn(
+    //     "isEmptyOrUndefined",
+    //     {
+    //         thing,
+    //         type: typeof thing,
+    //         len: (typeof thing === 'string' ? thing : "").trim()
+    //     }
+    // )
+    return (
+        typeof thing === 'undefined' 
+        || thing === null 
+        || !(typeof thing === 'string' ? thing : "")
+            .trim().length
+    ) ? true : false;
 }
 
 class ToastNotification {
@@ -4317,18 +4819,22 @@ class FeatureTest_ToastLevels
 extends FeatureTest {
     name = "Toasts with Levels Feature"
     scenarios = {
-        __type: "ScenarioOutline",
-        name: "Show Toast with specified level",
-        steps: {
+        "Show Toast with specified level": {
+            __type: "ScenarioOutline",
+            // name: "",
+            // steps: {
             given: "A Toast Notification Manager",
             when: "I call the ShowToast method with the level option set to {level}", // <- {level} === variable injected by Examples
-            then: "I expect a toast to appear with the {level} level"
-        },
-        examples: Object.entries(TOAST_LEVELS).map(([key, value]) => ({ level: value }))
+            then: "I expect a toast to appear with the {level} level",
+            // },
+            examples: Object.entries(TOAST_LEVELS)
+                .map(([key, value]) => ({ level: value }))
+        }
+        
     }
 }
 
-autorunFeatureTestResults.push(FeatureTest_ToastLevels);
+autorunFeatureTests.push(FeatureTest_ToastLevels);
 
 // AutorunningSelfTest pre-registers the feature definition
 // to make sure it runs on startup
@@ -4365,17 +4871,24 @@ class ToastNotificationManager {
         options.level = options.level ?? 'info'; // DEFAULT_TOAST_LEVEL = 'info'
         let {pinned} = options;
         let toast = new ToastNotification(message, {pinned, manager: this});
-        console.warn('showToast',{
-            message,
-            options,
-            _this: this,
-            this_toasts: this.toasts,
-        })
+        // console.warn('showToast',{
+        //     message,
+        //     options,
+        //     _this: this,
+        //     this_toasts: this.toasts,
+        // })
         this.toasts.push(toast);
         // note, if we don't return anything,
         // the step mapped to this function for automated test coverage,
         // won't know if it should assume success or failure
         return toast;
+    }
+    dismissLatestToast(){
+        // TODO: need to account for the fact that 
+        // they need to remain in the list to have their exit animation play
+        const popped = this.toasts.pop();
+        // TODO: support dismissing a specific toast by id
+        return popped;
     }
     destroyToast(toast){
         this.toasts = this.toasts.filter((t)=>{
@@ -4631,6 +5144,8 @@ class CommandPalette {
         this.commandSuggestionList.bindGetAllOptions(()=>{
             return this.availableCommands;
         })
+
+        
         
     }
 
@@ -4694,6 +5209,11 @@ class CommandPalette {
         this.availableCommands.push(new Command("List Self Tests",{
             callback: function(){
                 console.warn('listing self tests...')
+                system.dump({
+                    FEATURE_TESTS,
+                    autorunFeatureTests,
+                    autorunFeatureTestResults
+                })
             }
         }))
 
@@ -4794,6 +5314,8 @@ class CommandPalette {
         this.availableCommands.push(new ShowCommandPaletteCommand());
         this.availableCommands.push(new HideCommandPaletteCommand());
         this.availableCommands.push(new ToggleCommandPaletteCommand());
+
+
     }
 
     renderCommandPrompt(){
@@ -4974,6 +5496,7 @@ class CommandPalette {
     filterCommands(){
         // filter the list of available commands based on the current command buffer
         let recommended_order = [];
+        // todo: pull available commands from system-wide list
         this.filteredCommands = this.availableCommands.filter(command => {
             if(!command){
                 return false;
@@ -5242,16 +5765,12 @@ function draw() {
         dragStartY = mouseY;
     }
 
-    if(gherkinRunnerWidget && gherkinRunnerWidget.draw){
-        gherkinRunnerWidget.draw();
-    }
     if(gherkinStudio && gherkinStudio.draw){
         gherkinStudio.draw();
     }
 
     pop();
 
-    
     //drawModeSwitcher();
 
     // if the command palette is visible, draw it
@@ -5263,7 +5782,10 @@ function draw() {
     store.activeWizard?.onDraw?.();
 
     // render toast notifications
-    system.get("toastManager")?.draw();
+    system.get("toastManager")?.draw?.();
+
+    // render all widgets on the widget dashboard
+    system.get("WidgetDashboard")?.draw?.();
 
     renderDebugUI();
 
@@ -5488,62 +6010,96 @@ const mapThen = (name, callback)=>{
     thenLookupTable[name] = callback;
 }
 
-const runFeatureTest = (featDescClassOrDefinition)=>{
-    const shape = typeof featDescClassOrDefinition === 'function' 
-        ? "class" //featDescClassOrDefinition
-        : typeof featDescClassOrDefinition === 'string'
-            ? "string" //featDescClassOrDefinition
-            : "object" //Object.keys(featDescClassOrDefinition)
-    //console.warn("Self Test definition shape: ", shape)
+/**
+ * currently unclassed test runner while we do first logical pass
+ * will refactor into a class later
+ * @param {*} FeatureTestConfigOrInstance 
+ */
+const runFeatureTest = (FeatureTestConfigOrInstance)=>{
+    const shape = typeof FeatureTestConfigOrInstance === 'function' 
+        ? "class" //FeatureTestConfigOrInstance
+        : typeof FeatureTestConfigOrInstance === 'string'
+            ? "string" //FeatureTestConfigOrInstance
+            : "object" //Object.keys(FeatureTestConfigOrInstance)
+    
+    //console.warn("runFeatureTest: Input Type: ", shape)
+
+    // FIRST: do any necessary JSON parsing
+
     // decode string json to js object that we can build an instance from
-    if(typeof featDescClassOrDefinition === 'string'){
+    if(typeof FeatureTestConfigOrInstance === 'string'){
         try{
-            featDescClassOrDefinition = JSON.parse(featDescClassOrDefinition);
+            FeatureTestConfigOrInstance = JSON.parse(FeatureTestConfigOrInstance);
         }catch(e){
             console.error('failed to parse self test definition as JSON',{
-                featDescClassOrDefinition
+                FeatureTestConfigOrInstance
             })
         }
     }
+    // NOTE: we still need to do an extra step to hydrate JSON string -> obj -> class instance
 
-    // if featDescClassOrDefinition is not a constuctor, 
+    // END JSON PARSING STAGE
+
+    if(Array.isArray(FeatureTestConfigOrInstance)){
+        // if there is a non-string value in the array, panic? (What about Numbers?)
+        let covertedToFeatDef = FeatureTest.fromArrayOfStrings(FeatureTestConfigOrInstance);
+        // swap the check value to our "class-corrected" array of strings
+        // this handles munging the input from:
+        // INPUT: ["given ... ", "when ... ", "then ... "]
+        // OUTPUT: {scenarios:{given:...,when:...,then:...}}
+        FeatureTestConfigOrInstance = covertedToFeatDef;
+    }
+
+
+
+    // if FeatureTestConfigOrInstance is not a constuctor, 
     // we need to hydrate an instance using the provided definition
-    let featDescClassToInstance = featDescClassOrDefinition;
+    let featDescClassToInstance = FeatureTestConfigOrInstance;
     let instance = null;
-    if(typeof featDescClassOrDefinition === 'object'){
+    if(typeof FeatureTestConfigOrInstance === 'object'){
         // rename variable locally for clear code
-        const featDef = featDescClassOrDefinition;
+        const featDef = FeatureTestConfigOrInstance;
         let {
             __type,
             __targetType,
             name,
             constructorArgs
         } = featDef;
+        if(!constructorArgs){
+            constructorArgs = [];
+        }
         if(!name){
             system.panic("missing name for "+featDef.name)
         }
-        // we're probably instantiating a FeatureTest right now...
-        console.warn('attempting to generate instance',{
-            __type,
-            __targetType,
-            args: constructorArgs
-        })
-        // making sure to forward the pre-defined constructor args...
+        if(typeof __type === 'undefined' && Object.keys(featDef?.scenarios ?? {}).length){
+            system.dump("featDef",{featDef})
+            // it's something we can just instantiate directly
+            instance = featDef;
+        }else{   
+            // we're probably instantiating a FeatureTest right now...
+            console.warn('attempting to generate instance',{
+                __type,
+                __targetType,
+                args: constructorArgs
+            })
+            // making sure to forward the pre-defined constructor args...
+    
+            console.warn(`should we be making ${__type} or ${__targetType}?`)
+            if(BUILT_IN_FACTORIES[__type]){
+                instance = new BUILT_IN_FACTORIES[__type](...constructorArgs);
+            }
+        }
 
-        console.warn(`should we be making ${__type} or ${__targetType}?`)
-
-        instance = new BUILT_IN_FACTORIES[__type](...constructorArgs);
-
-    }else if(typeof featDescClassOrDefinition === 'function'){
+    }else if(typeof FeatureTestConfigOrInstance === 'function'){
         instance = new featDescClassToInstance({
             name: featDescClassToInstance.name,
             scenarios: featDescClassToInstance.scenarios
         });
-    }else if(typeof featDescClassOrDefinition === 'string'){
+    }else if(typeof FeatureTestConfigOrInstance === 'string'){
         system.panic("should've handled string decoding earlier!")
     }else{
-        system.dump("unrecognized self test definition type: ",featDescClassOrDefinition)
-        system.panic(`unrecognized self test definition type: ${typeof featDescClassOrDefinition}`)
+        system.dump("unrecognized self test definition type: ",FeatureTestConfigOrInstance)
+        system.panic(`unrecognized self test definition type: ${typeof FeatureTestConfigOrInstance}`)
     }
 
     console.warn(
@@ -5575,6 +6131,19 @@ const runFeatureTest = (featDescClassOrDefinition)=>{
         })
     }
 
+    // if the scenarios are in "array of strings" format,
+    // i.e, not in object format, 
+    // we need to pre-parse them using the static FeatureTest.fromArrayOfStrings method
+    let scenariosAreArrayOfStrings = typeof Object.entries(instance?.scenarios ?? {})[0][0] === 'string';
+    console.warn({
+        "imLookingForAnArrayOfStrings": instance,
+        scenariosAreArrayOfStrings,
+    })
+    if(scenariosAreArrayOfStrings){
+        instance = FeatureTest.fromDenormalizedFeatureDefinition(instance);
+    }
+
+
     // TODO: see about passing objects instead of class instances
     const parser = new GFDParser(instance);
     const gherkinSeq = parser.parse();
@@ -5595,18 +6164,39 @@ function setup() {
     // boot the root system manager & root system
     manager.boot();
     rootSystem = system = manager.systems[0];
+
     // define our lazy singletons
     // will be instantiated upon first access attempt via system.get('toastManager')
-    system.lazySingleton('timeManager', TimeManager);
-    system.lazySingleton('toastManager', ToastNotificationManager);
-    system.lazySingleton('cmdprompt', CommandPalette);
+    system.lazySingleton('timeManager',     TimeManager);
+    system.lazySingleton('toastManager',    ToastNotificationManager);
+    system.lazySingleton('cmdprompt',       CommandPalette);
+    system.lazySingleton('WidgetDashboard', WidgetDashboard);
     
     /// === region: Self Test Mode ===
     // TODO: parallelize with Promise.all([])
     autorunFeatureTestResults.length = 0; // reset results
-    autorunFeatureTests.forEach((featDescClassOrDefinition)=>{
-        runFeatureTest(featDescClassOrDefinition);
+    autorunFeatureTests.forEach((FeatureTestConfigOrInstance)=>{
+        runFeatureTest(FeatureTestConfigOrInstance);
     })
+    // a different approach
+    Object.entries(FEATURE_TESTS).forEach(([name, definition])=>{
+        console.warn('instantiating and running feature tests',{
+            name,definition
+        })
+        runFeatureTest(new FEATURE_TESTS[name]());
+    })
+    // our alternative attempt at auto-class registration using
+    // a decorator:
+    // Object.entries(SELF_TEST_CLASSES).forEach(([name, definition])=>{
+    //     console.warn('instantiating and running self test classes',{
+    //         name,
+    //         definition,
+    //         stis:Object.keys(SELF_TEST_INSTANCES),
+    //         stcs:Object.keys(SELF_TEST_CLASSES)
+    //     })
+    //     SELF_TEST_INSTANCES[name] = new SELF_TEST_CLASSES[name](SELF_TEST_CLASS_ARGS[name]);
+    //     runFeatureTest(SELF_TEST_INSTANCES[name]);
+    // });
     /// === endRegion: Self Test Mode ===
 
     // let testSeq = getTestGherkinSequence();
