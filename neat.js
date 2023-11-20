@@ -139,8 +139,8 @@ class FeatureTest {
             // don't flag as successfully post-constructed
             // until we process some scenarioZZZ
         }{
-            console.warn('FeatureTest.postConstructor: still no scenarioZZZ!')
-
+            //console.warn('FeatureTest.postConstructor: still no scenarioZZZ!')
+            return;
         }
         this.postConstructorCalled = true;
         console.warn("FeatureTest.postConstructor: ", {
@@ -159,7 +159,7 @@ class FeatureTest {
         let scenarios = Object.entries(this.scenarioZZZ);
         // shallow check, if the first scenario is an array instead of an object, treat the whole
         // config as nested arrays of strings (todo: allow mix-matched scenario definition notation)
-        if(Array.isArray(scenarios[0])){
+        if(Array.isArray(scenarios[0]) && typeof scenarios[0][0] === 'string' && Array.isArray(scenarios[0][1])){
             // if(typeof scenarios[0][0] === 'string'
             // && Array.isArray(scenarios[0][1])){
             //     // if the scenarios are ["scenario",[steps]], we need to reformat to scenarios:[{sgtw},{sgtw}]
@@ -301,6 +301,10 @@ class FeatureTest {
         };
         arrayOfStepStrings.forEach((line)=>{
             let matches = {};
+            if(Array.isArray(line) && typeof line[1] === 'object' && line[1]?.given?.length){
+                // no need to convert, it's already in a good state
+                return;
+            }
             if(isEmptyOrUndefined(line)){
                 system.panic("FeatureTest.parseScenarioStrings: empty line found in scenario ",{
                     line,
@@ -2409,14 +2413,14 @@ class GFDParser {
             system.panic("GFDParser: no definition provided")
         }
 
-        if(!this.definition?.scenarios){
+        if(!this.definition?.scenarioZZZ){
             //system.debug({CHECK_DEF:this.definition})
             system.dump({scenariolessDefinition:this.definition})
             system.panic("GFDParser: no scenarios provided at all!")
         }
 
         // Definition must have at least one Feature > Scenario at parse time
-        if(!Object.keys(this.definition?.scenarios ?? {})?.length){
+        if(!Object.keys(this.definition?.scenarioZZZ ?? {})?.length){
             system.panic("GFDParser: empty scenarios object provided")
         }
         
@@ -2456,14 +2460,14 @@ class GFDParser {
         }
 
         
-        // we loop through this.definition.scenarios
+        // we loop through this.definition.scenarioZZZ
         let scenarioCount = 0;
-        Object.keys(this.definition.scenarios).forEach((scenarioKey)=>{
+        Object.keys(this.definition.scenarioZZZ).forEach((scenarioKey)=>{
             scenarioCount++;
             
             //console.warn(`Parsing FeatDesc Scenario: ${scenarioCount} ${scenarioKey}`)
 
-            const steps = this.definition.scenarios[scenarioKey];
+            const steps = this.definition.scenarioZZZ[scenarioKey];
 
             // push a open_scenario token
             tokenDefinitions.push({
@@ -6203,6 +6207,7 @@ function setup() {
     // // bootstrap our self-test
     // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
 
+    // TODO: put this stuff in a CommandPalette.setup() callback
     push();
     textSize(50);
     commandPaletteInput = createInput('');
@@ -6225,6 +6230,10 @@ function setup() {
             cmdprompt?.onCommandPaletteInput(e);
         // }
     });
+
+    // NEW: init the widget dashboard
+    // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
+    system.get("WidgetDashboard").init();
 }
 
 class FluxExampleGraph extends Graph {
