@@ -11,6 +11,7 @@
     Taggable, Flaggable, Commentable, Annotatable,
     ---
 */
+let bgImage = null;
 // AutorunFeatureTests
 const autorunFeatureTestResults = [];
 const autorunFeatureTests = [];
@@ -24,6 +25,13 @@ const MAX_SUGGESTED_SCENARIOS_PER_FEATURE = 3;
 // Singletons
 let gherkinRunnerWidget = null;
 let toastManager = null;
+
+const tsmc_machine_states = {
+    RUNNING: "😀", 
+    IDLE: "😴",
+    DOWN: "🤕",
+    WARNINGS: "🤨"
+}
 
 // Store >
 //          CustomCommands{} a hash table keyed by custom command name (unique id)
@@ -201,11 +209,13 @@ class FeatureTest {
                 scenarioSteps = scenarioSteps[1];
             }
             const parsed = FeatureTest.parseScenarioStrings(scenarioSteps);
-            console.warn('normalizeScenarios: scenario parsed to: ',{
-                scenarioName,
-                scenarioSteps,
-                parsed
-            })
+            // if system.debug_parser
+            // if system.debug_features
+            // console.warn('normalizeScenarios: scenario parsed to: ',{
+            //     scenarioName,
+            //     scenarioSteps,
+            //     parsed
+            // })
             output[scenarioName] = parsed;
         });
         return output;
@@ -227,18 +237,19 @@ class FeatureTest {
         }
         return normalized;
     }
+
+    // normalize our feature defintion, then instance the FeatureTest with it
+    // NOTE: the normilization process doesn't strip ToBeImplemented scenarios or steps,
+    // that way the parser and runner can still reflect their status downstream to the UI
+    // at test execution time
     static fromDenormalizedFeatureDefinition(denormalizedFeatureDefinition){
-        console.warn('creating featureTest from denormalized feature definition',{
-            denormalizedFeatureDefinition
-        })
-        // normalize our feature defintion, then instance the FeatureTest with it
-        // NOTE: the normilization process doesn't strip ToBeImplemented scenarios or steps,
-        // that way the parser and runner can still reflect their status downstream to the UI
-        // at test execution time
+        // console.warn('creating featureTest from denormalized feature definition',{
+        //     denormalizedFeatureDefinition
+        // })
         let normalizedFeatureDefition = FeatureTest.normalizeFeatureDefinition(denormalizedFeatureDefinition);
-        console.warn('normalized feature definition',{
-            normalizedFeatureDefition
-        })
+        // console.warn('normalized feature definition',{
+        //     normalizedFeatureDefition
+        // })
         return new FeatureTest(normalizedFeatureDefition);
     }
     static parseScenarioStrings(arrayOfStepStrings){
@@ -274,10 +285,10 @@ class FeatureTest {
             then: []
         };
         let previousTokenType = null;
-        console.warn('parseScenarioStrings',{
-            featureName: this.name,
-            arrayOfStepStrings
-        })
+        // console.warn('parseScenarioStrings',{
+        //     featureName: this.name,
+        //     arrayOfStepStrings
+        // })
         
         // console.warn('FeatureTest.parseScenarioStrings',{scenario_name,scenario_steps})
         // scenario_name = scenario_name.trim();
@@ -515,9 +526,7 @@ class SystemManager {
     }
     panic(message){
         this._panic = true;
-        console.error("panic args:",{
-            args: arguments
-        });
+        console.error(arguments);
         // show a toast
         system.get('toastManager')?.showToast(message, {
             //pinned: true, 
@@ -647,6 +656,14 @@ class System {
         // dump any additional arguments after 0: message
         this.dump(...arguments);
     }
+    errorToast(message){
+        this.get("toastManager").showToast(message, {
+            level: "error"
+        })
+    }
+    hideCmdPrompt(){
+        new HideCmdPromptCommand().execute();
+    }
     get time(){
         // returns either passthrough time or modified time
     }
@@ -713,6 +730,11 @@ const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
     return function(...args){
         // hot-swap when the instance is created
         defaultSuggestedCommands[index] = new command(...args);
+        // TODO: call postConstructor
+        // defaultSuggestedCommands[index].postConstructor()
+        console.warn('init DefaultSuggestionDecorator',{
+            instance: defaultSuggestedCommands[index]
+        })
         return defaultSuggestedCommands[index];
     }
 }
@@ -999,6 +1021,7 @@ class GherkinSequenceExecutor {
     sequence = null;
     currentScenarioIndex = 0;
     currentScenarioKey = null;
+    scenario_results = {}
 
     constructor(sequence){
         this.sequence = sequence;
@@ -1032,7 +1055,7 @@ class GherkinSequenceExecutor {
         // we need a way to re-queue the test to try again
         // at the end of the queue 
         // (and use priority to bubble up any important tests)
-        console.warn('handle dependency injection checking here',{seq:this.sequence});
+        // console.warn('handle dependency injection checking here',{seq:this.sequence});
         // seq.scenarios (are computed and plucked out of seq.steps)
 
 
@@ -1092,25 +1115,29 @@ class GherkinSequenceExecutor {
             //results = scenario.execute();
             scenario.steps.forEach((step,index)=>{
                 //try{
-                    results.push(
-                        this.executeScenarioStep(scenario,step,index)
-                    );
+                let result = this.executeScenarioStep(scenario,step,index)
+                console.warn("stepResult:",{result})
+                results.push(result);
+                // put the results into the stepResults array
+                this.featureScenarioResults[scenario.name].stepResults[index] = results;
                 /*
                 }catch(error){
-                    // if !step.isOptional
-                    system.dump({
-                        panickedStep: step,
-                        panickedScenario: scenario,
-                    })
-                    system.panic(error)
-                    results.push({
-                        step,
-                        index,
-                        error
-                    })
+                // if !step.isOptional
+                system.dump({
+                    panickedStep: step,
+                    panickedScenario: scenario,
+                })
+                system.panic(error)
+                results.push({
+                    step,
+                    index,
+                    error
+                })
                 }
                 */
             })
+
+            
         // }catch(erro){
         //     results.push({
         //         scenario,
@@ -1144,6 +1171,19 @@ class GherkinSequenceExecutor {
         //         console.error('GSE:executeScenarioStep: unhandled step type '+step?.__type,{step})
         //         break;
         // }
+
+        if(step.__type === ToBeImplemented){
+            // Flag step result as error / failure
+            this.scenario_results[
+                this.currentScenarioIndex
+            ] = {
+                skipped: true,
+                warning: `GSE: ToBeImplemented`,
+                step: step,
+                sequence: this.sequence, // todo clone
+            }
+            return;
+        }
         const stepCallback = findGWTMatch(step.__type, step.value);
 
         if(Array.isArray(stepCallback)){
@@ -1208,7 +1248,18 @@ class GherkinSequenceExecutor {
         }
 
         if(!stepCallback){
-            system.panic("GSE:executeScenarioStep: no step callback found for step: " + step.value + ` type: ${step.__type}`);
+            system.errorToast(`GSE: Missing Step Definition:\n${step.__type}:\n${step.value}`)
+            // system.panic("GSE:executeScenarioStep: no step callback found for step: " + step.value + ` type: ${step.__type}`);
+            // Flag step result as error / failure
+            this.scenario_results[
+                this.currentScenarioIndex
+            ] = {
+                passed: false,
+                error: `GSE: Missing Step Definition:\n${step.__type}:\n${step.value}`,
+                step: step,
+                sequence: this.sequence, // todo clone
+            }
+            return;
         }else if(Array.isArray(stepCallback)){
             // console.warn('array passed as step callback',{
             //     array: stepCallback,
@@ -1349,22 +1400,28 @@ class GherkinSequenceValidator {
         // don't even need to, can just check prev step if any
         //let prevDifferentStep = this.closestPreviousDifferentStep(steps,index);
         let valid = false;
+        const T = GHERKIN_AST_TOKENS;
         switch(step.__type){
-            case GHERKIN_AST_TOKENS.FEATURE:
+            case T.FEATURE:
                 valid = prevStep == null;
                 break;
-            case GHERKIN_AST_TOKENS.SCENARIO:
-                valid = prevStep == 'Feature' || prevStep == 'Then';
+            case T.SCENARIO:
+                valid = prevStep?.type === T.FEATURE 
+                        || prevStep?.type === T.THEN
+                        || prevStep?.type === T.TO_BE_IMPLEMENTED;
                 break;
-            case GHERKIN_AST_TOKENS.GIVEN:
+            case T.GIVEN:
                 // if the previousDifferentStep is null || Given, it's valid
-                valid = prevStep == null || prevStep?.type === 'Given';
+                valid = prevStep === null || prevStep?.type === T.GIVEN;
                 break;
-            case GHERKIN_AST_TOKENS.WHEN:
-                valid = prevStep?.type == 'Given' || prevStep?.type == 'When';
+            case T.WHEN:
+                valid = prevStep?.type === T.GIVEN || prevStep?.type === T.WHEN;
                 break;
-            case GHERKIN_AST_TOKENS.THEN:
-                valid = prevStep?.type == 'When' || prevStep?.type == 'Then';
+            case T.THEN:
+                valid = prevStep?.type === T.WHEN || prevStep?.type === T.THEN;
+                break;
+            case T.TO_BE_IMPLEMENTED:
+                valid = prevStep?.type === T.SCENARIO;
                 break;
             default:
                 system.dump({step});
@@ -1569,10 +1626,81 @@ class UndoRedoComponent extends Component {
     // maybe better as a decorator?
 }
 class Widget extends UndoRedoComponent {
+    position = {x:0,y:0}
+    targetPosition = {x:0,y:0}
+    widgetSize = {width: 100, height: 100}
+    results = null
+    // backreference to rendering context
+    // set when registerWidget is called on Dashboard
+    dashboard = null
     constructor(name){
         super(name);
 
         // should we decorate this class with any functionality?
+    }
+    setTargetPosition(vector){
+        this.targetPosition.x = vector.x;
+        this.targetPosition.y = vector.y;
+        return this; // chainable
+    }
+    centerPosition(){
+        // todo move to Component or Drawable
+        // default: center with screen bounds
+        // TODO: each "system" should have screens attached
+        // the system manager should allow viewports that point to screens within various systems
+        this.position.x = innerWidth / 2;
+        this.position.y = innerHeight / 2;
+    }
+    draw(widgetID){
+        // if we've not reached our approx target position
+        // lerp towards it
+        if(
+            this.position.x !== this.targetPosition.x
+            || this.position.y !== this.targetPosition.y
+        ){
+            this.position.x = lerp(this.position.x, this.targetPosition.x, 0.1);
+            this.position.y = lerp(this.position.y, this.targetPosition.y, 0.1);
+
+            // if it's close enough in x direction, snap to end
+            if(Math.abs(this.position.x - this.targetPosition.x) < 0.1){
+                this.position.x = this.targetPosition.x;
+            }
+            // if it's close enough in y direction, snap to end
+            if(Math.abs(this.position.y - this.targetPosition.y) < 0.1){
+                this.position.y = this.targetPosition.y;
+            }
+        }
+
+        strokeWeight(1)
+        stroke("darkblue")
+        fill(0,0,0,255 * 0.5)
+        rectMode(CENTER);
+        rect(
+            this.position.x + this.widgetSize.width / 2, 
+            this.position.y + this.widgetSize.height / 2, 
+            this.widgetSize.width, 
+            this.widgetSize.height, 
+            20 // this is the radius for the rounded corners
+        );
+
+        // draw the widget's name and id when we're editing the dashboard...
+        strokeWeight(0)
+        //if(system.editingDashboard){
+            fill(255)
+            textAlign(CENTER, TOP)        
+            // widget id
+            text(
+                widgetID, 
+                this.position.x + (this.widgetSize.width / 2), 
+                this.position.y + this.widgetSize.height + 20
+            )
+            // widget name
+            text(
+                this.name, 
+                this.position.x + (this.widgetSize.width / 2), 
+                this.position.y + this.widgetSize.height + 40
+            )
+        //}
     }
 }
 class WidgetView {
@@ -1703,6 +1831,82 @@ class CreateRootTestTableCommand extends Command {
     }
 }
 
+class NewTimeToSunSetWidgetCommand extends DefaultSuggestionDecorator(Command,{
+    name: "New Time to Sunset Widget...",
+    steps: [
+        {
+            question: "Loading...",
+            toastOnSuccess: ()=>{
+                return this.name + " Widget Added!";
+            },
+            onStepLoaded: (wiz)=>{
+                console.warn('New Todo Widget: onStepLoaded', {wiz})
+                // add a new instance of the Todo Widget
+                //new NewTodoWidgetCommand().execute();
+                system.get("Dashboard")
+                .registerWidget("WidgetInstance"+performance.now(), new TimeToSunSetWidget());
+
+                // end the wizard
+                wiz.end();
+                // hide the command prompt
+                system.get("cmdprompt").hide();
+            }
+        }
+    ]
+}) {}
+
+// New Pomodoro Widget Command
+class NewPomodoroWidgetCommand extends DefaultSuggestionDecorator(Command,{
+    name: "New Pomodoro Widget",
+    steps: [
+        {
+            question: "Loading...",
+            toastOnSuccess: ()=>{
+                return this.name + " Widget Added!";
+            },
+            onStepLoaded: (wiz)=>{
+                console.warn('New Todo Widget: onStepLoaded', {wiz})
+                // add a new instance of the Todo Widget
+                //new NewTodoWidgetCommand().execute();
+                system.get("Dashboard")
+                .registerWidget("WidgetInstance"+performance.now(), new PomodoroWidget());
+
+                // end the wizard
+                wiz.end();
+                // hide the command prompt
+                system.get("cmdprompt").hide();
+            }
+        }
+    ]
+}) {
+    name = "New Todo Widget"
+}
+
+class NewTodoWidgetCommand extends DefaultSuggestionDecorator(Command,{
+    name: "New Todo Widget",
+    steps: [
+        {
+            question: "Loading...",
+            toastOnSucces: "Widget Added!",
+            onStepLoaded: (wiz)=>{
+                console.warn('New Todo Widget: onStepLoaded', {wiz})
+                // add a new instance of the Todo Widget
+                //new NewTodoWidgetCommand().execute();
+                system.get("Dashboard")
+                .registerWidget("WidgetInstance"+performance.now(), new TodoWidget());
+
+                system.get("toastManager").showToast("Todo Widget Added!")
+                // end the wizard
+                wiz.end();
+                // hide the command prompt
+                system.get("cmdprompt").hide();
+            }
+        }
+    ]
+}) {
+    name = "New Todo Widget"
+}
+
 class NewTableWizardConfig extends Config {
     name = "New Table..."
     steps = [
@@ -1737,6 +1941,182 @@ extends DefaultSuggestionDecorator(Command, new NewTableWizardConfig()) {}
 class GherkinTestRunResults {}
 class GherkinTestRunResultsViewer {}
 class GherkinTestRunResultsViewerWidget {}
+
+class TimerWidgetConfig {
+    name = "New Timer Widget"
+    steps = [
+        {
+            question: "Loading...",
+            onStepLoaded(wiz){
+                system.registerWidget(new TimerWidget())
+                system.hideCmdPrompt();
+            }
+        }
+    ]
+    finalCallback(wiz){
+
+    }
+}
+
+class NewTimerCommand 
+extends DefaultSuggestionDecorator(
+    Command,
+    TimerWidgetConfig
+){/**/}
+
+class ImageViewerWidget extends Widget {
+    widgetSize = { 
+        width: 300, 
+        height: 300 
+    }
+    src = "smile.png"
+    constructor(){
+        super(...arguments);
+
+        // cache the image to a bitmap for faster continual rendering
+        this.image = loadImage(this.src);
+    }
+    draw(){
+        super.draw(...arguments)
+        push();
+        // beginShape();
+        // fill(255, 204, 0); // Add color to the shape. Here, it's set to yellow.
+        // // Create a star shape instead of a pentagon
+        // for (let i = 0; i < 10; i++) {
+        //     let radius = i % 2 === 0 
+        //         ? this.widgetSize.width / 2 
+        //         : this.widgetSize.width / 4;
+        //     let x = radius * cos(2 * PI * i / 10 - PI / 2);
+        //     let y = radius * sin(2 * PI * i / 10 - PI / 2);
+        //     x += this.position.x + (this.widgetSize.width / 2);
+        //     y += this.position.y + (this.widgetSize.height / 2) + 10;
+        //     vertex(x, y);
+        // }
+        // endShape(CLOSE);
+        // Clip the image to the shape
+        // clip(()=>{
+            // Calculate aspect ratio
+            let aspectRatio = this.image.width / this.image.height;
+            // Calculate new width and height while maintaining aspect ratio
+            let newWidth = this.widgetSize.width;
+            let newHeight = newWidth / aspectRatio;
+            let half_width = newWidth * .5;
+            let half_height = newHeight * .5;
+            // If new height is greater than widget height, adjust width instead
+            if (newHeight > this.widgetSize.height) {
+                newHeight = this.widgetSize.height;
+                newWidth = newHeight * aspectRatio;
+            }
+            // Draw the image stretched to the new width and height
+            image(
+                this.image, 
+                this.position.x + (this.widgetSize.width - newWidth) / 2,
+                this.position.y + (this.widgetSize.height - newHeight) / 2,
+                newWidth,
+                newHeight
+            );
+            // exit clip mode p5
+        // });
+        
+        pop();
+    }
+}
+
+class NewImageViewerWidgetCommand 
+extends DefaultSuggestionDecorator(Command,{
+    name: "New Image Viewer Widget",
+    steps: [
+        {
+            question: "Loading...",
+            onStepLoaded(wiz){
+                system.hideCmdPrompt();
+            }
+        }
+    ],
+    finalCallback(wiz){
+
+    }
+}){/**/}
+
+class NewIFrameWidgetCommand extends DefaultSuggestionDecorator(Command, {
+    name: "New iFrame Widget",
+    steps: [
+        {
+            question: "Loading...",
+            toastOnSuccess: ()=>{
+                return this.name + " Widget Added!";
+            },
+            onStepLoaded: (wiz)=>{
+                console.warn('New Todo Widget: onStepLoaded', {wiz})
+                // add a new instance of the Todo Widget
+                //new NewTodoWidgetCommand().execute();
+                system.get("Dashboard")
+                .registerWidget("WidgetInstance"+performance.now(), new iFrameWidget());
+
+                // end the wizard
+                wiz.end();
+                // hide the command prompt
+                system.get("cmdprompt").hide();
+            }
+        }
+    ]
+}){}
+class iFrameWidget extends Widget {
+    constructor(url){
+        super(...arguments);
+        this.widgetSize = { width: 300, height: 150 }
+        const style = {
+            'border-radius': '20px',
+            'border': '3px solid red',
+            'position': 'fixed',
+            'top': '100px',
+            'left': '100px',
+            'z-index': '999999',
+            'display': 'block'
+        }
+        const tagAttrs = {
+            'id': 'iframe',
+            'frameborder': '0',
+            'allowfullscreen': 'true',
+            'scrolling': 'no',
+            'allow': 'autoplay; encrypted-media',
+            // 'height': `${this.widgetSize.width}px`,
+            // 'width': `${this.widgetSize.height}px`,
+            'src': url ?? 'https://google.com/webhp?igu=1',
+        }
+        console.log({tagAttrs})
+        this.iframe = createElement('iframe');
+        console.log('created iframe',{iframe:this.iframe})
+        for (let attr in tagAttrs) {
+            this.iframe.attribute(attr, tagAttrs[attr]);
+        }
+        
+        this.iframe.attribute('style',Object.keys(style).map((k)=>{
+            return `${k}:${style[k]};`
+        }).join(''));
+        // inject it into the dom
+        document.body.appendChild(this.iframe.elt);
+    }
+    draw(){
+        if(system.get("cmdprompt").visible){
+            this.iframe.hide();
+            return
+        }
+        this.iframe.show();
+        super.draw(...arguments)
+        let corrected = {
+            x: (this.position.x + (panX*zoom)) / zoom,
+            y: (this.position.y + (panY*zoom)) / zoom
+        }
+        // corrected.x *= zoom;
+        // corrected.y *= zoom;
+        this.iframe.position(corrected.x,corrected.y);
+        // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
+        // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
+        this.iframe.elt.style.transform = `scale(${zoom})`;
+    }
+}
+
 
 class OpenTableViewerCommand {}
 class TableWidget extends Widget {
@@ -1790,7 +2170,7 @@ class TableWidget extends Widget {
 // filled with an Object of keyed GherkinScenario objects
 // which in turn are filled with GherkinStep objects
 // class FeatureTestTables extends SelfTest(FeatureTest,"FeatureTestTables") {
-const ToBeImplemented = "To Be Implemented"
+
 class FeatureTestTables extends FeatureTest {
     background = [
         // alias "given a fresh system" ~ "given a fresh root system"
@@ -1824,12 +2204,255 @@ class FeatureTestTables extends FeatureTest {
     }
 }
 const FEATURE_TESTS = {
-    //"FeatureTestTables": FeatureTestTables
+    "FeatureTestTables": FeatureTestTables
 }
 // EndRegion: Tables / Nested Tables
+class Pomodoro {
+    timer = null
+    ended = false
+    endedAt = null
+    constructor(){
+        this.durationMs = 20 * 60 * 1000;
+        this.timerStartedAt = performance.now();
+        this.ticker = setInterval(()=>{
+            this.tick();
+        },1000)
+    }
+    tick(){
+        if(this.endedAt){
+            return
+        }
+        if((performance.now() - this.timerStartedAt) > this.durationMs){
+            this.end();
+        }
+    }
+    end(){
+        if(this.ticker){
+            clearInterval(this.ticker);
+            this.ticker = null;
+        }
+        this.endedAt = performance.now();
+    }
+}
+class PomodoroWidget extends Widget {
+    name = "Pomodoro Widget"
+    widgetSize = { width: 300, height: 150 }
+    pomClassInstance = null
+    constructor(){
+        super(...arguments);
+        this.pomClassInstance = new Pomodoro();
+    }
+    draw(){
+        super.draw(...arguments)
+        fill("darkblue")
+        textAlign(CENTER, CENTER);
+        text(
+            "Pomodoro Timer",
+            this.position.x + (this.widgetSize.width/2), 
+            this.position.y + 20 // + (this.dimensions.height/2)
+        )
+        if(this.pomClassInstance.endedAt){
+            const endedAtFormatted = new Date(this.pomClassInstance.endedAt).toLocaleTimeString();
+            const durFmtd = new Date(this.pomClassInstance.durationMs).toLocaleTimeString();
+            text(
+                `Pomodoro Ended!\nduration: ${durFmtd}\n at:${endedAtFormatted}`,
+                this.position.x + (this.widgetSize.width/2), 
+                this.position.y + 40 // + (this.dimensions.height/2)
+            )
+        }else{
+            const remainingMs = this.pomClassInstance.durationMs - (performance.now() - this.pomClassInstance.timerStartedAt);
+            const hours = Math.floor(remainingMs / 3600000);
+            const minutes = Math.floor((remainingMs % 3600000) / 60000);
+            const seconds = Math.floor((remainingMs % 60000) / 1000);
+            const remainingFormatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            textAlign(CENTER, TOP)
+            text(
+                `Pomodoro Running: \n${remainingFormatted} remaining`,
+                this.position.x + (this.widgetSize.width/2), 
+                this.position.y + 40 // + (this.dimensions.height/2)
+            )
+        }
+    }
+}
 
+// a little widget for drawing pixel art
+// can use the output as icons for commands and widget backgrounds, etc...
+// TODO: implement a basic file manager for saved media resources
+class PixelArtWidget extends Widget {
+}
 
-class ClockWidget extends Widget {}
+class TodoWidget extends Widget {
+    name = "Todo Widget"
+    todos = []
+    widgetSize = { width: 300, height: 150 }
+    constructor(){
+        super();
+        this.addTodo("AM: walk bear")
+        this.setTodoStatus(0,1);
+        this.addTodo("AM: feed bear")
+        this.setTodoStatus(1,1);
+        this.addTodo("eat breakfast")
+        this.setTodoStatus(2,1);
+        this.input = createInput("");
+        this.input.elt.placeholder = "Add Todo";
+        this.input.elt.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this.addTodo(this.input.value());
+                this.input.value('');
+            }
+        });
+    }
+    recalcDimensions(){
+        // based on the number of todos, let's grow up to a max height
+        // from there we'll implement a nested scrollView for scrolling the list vertically
+        // for now, just grow unbouded
+        this.widgetSize.height = 150 + (this.todos.length * 20);
+    }
+    addTodo(thing){
+        this.todos.push({value:thing, status:0});
+        this.dashboard?.reflowLayout();
+    }
+    updateTodo(id, newValue){
+        this.todos[id] = newValue;
+    }
+    toggleTodo(index){
+        this.todos[index].status = !this.todos[index].status;
+    }
+    setTodoStatus(index, status){
+        this.todos[index].status = status;
+    }
+    draw(widgetID){
+        // todo: split into super.preDraw/super.postDraw
+        super.draw(...arguments); 
+
+        this.input.position(
+            // center the input box
+            this.position.x + (panX/zoom) + (this.widgetSize.width/2) - (this.input.width/2),
+            // tuck it above the bottom of the widget
+            this.position.y + (panY/zoom) + this.widgetSize.height - 30
+        )
+        // if the command prompt is visible, hide the input since p5.js inputs are drawn over the canvas
+        if(system.get("cmdprompt").visible){
+            this.input.hide();
+        }else{
+            this.input.show();
+        }
+        
+        fill("darkblue")
+        textAlign(CENTER, CENTER);
+        text(
+            "Todos ("+this.todos.length+")",
+            this.position.x + (this.widgetSize.width/2), 
+            this.position.y + 20 // + (this.dimensions.height/2)
+        )
+
+        this.todos.forEach((todo,index)=>{
+            fill(todo.status ? "green" : "darkblue")
+            textAlign(LEFT, CENTER);
+            text(
+                (index+1)+" "+(todo.status ? '✅' : '❌')+" "+todo.value,
+                this.position.x + 20, //+ (this.dimensions.width/2), 
+                this.position.y + 60 + (index * 20)
+            )
+        })
+    }
+}
+
+class ClockWidget extends Widget {
+    name = "Clock Widget"
+    widgetSize = { width: 300, height: 150 }
+    /* 12-hr hour, mm, ss, milliseconds am/pm */
+    get dateFormatted(){
+        let date = new Date();
+        let day = date.getDay();
+        let dayName = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][day];
+        return `${dayName} ${date.getMonth()+1}/${date.getDate()}/${date.getFullYear().toString().substr(-2)}`
+    }
+    get timeFormatted(){
+        let date = new Date();
+        let hours = date.getHours();
+        let ampm = hours >= 12 ? 'pm' : 'am';
+        hours = hours % 12 || 12; 
+        let minutes = date.getMinutes().toString().padStart(2, '0');
+        let seconds = date.getSeconds().toString().padStart(2, '0');
+        let milliseconds = ""; //"." + date.getMilliseconds();
+        return `${hours}:${minutes}:${seconds}${milliseconds} ${ampm}`;
+    }
+    // format
+    get time(){
+        return Date.now();
+    }
+    draw(widgetID){
+        super.draw(...arguments); // todo: split into super.preDraw/super.postDraw
+        // just render the current time for now
+        fill("darkblue")
+        textAlign(CENTER, CENTER);
+        // font weight
+        push()
+        textFont('Georgia');
+        textSize(32);
+        textStyle(BOLD);
+        text(
+            this.dateFormatted + "\n" + this.timeFormatted, 
+            this.position.x + (this.widgetSize.width/2), 
+            this.position.y + (this.widgetSize.height/2)
+        )
+        pop()
+    }
+}
+class TimeToSunSetWidget extends ClockWidget {
+    constructor(){
+        super(...arguments)
+        // return the time to sunset based on my current location
+        // for now we'll hard code the time:
+        this.sunset_time = new Date();
+        // set to 5:18 PM for 11/20/23 in Kingsport, TN
+        this.sunset_time.setHours(17,18,0,0);
+    }
+    get dateFormatted(){
+        let timeTosunset = this.sunset_time - Date.now();
+        let hours = Math.floor(timeTosunset / (1000 * 60 * 60));
+        let minutes = Math.floor((timeTosunset % (1000 * 60 * 60)) / (1000 * 60));
+        let seconds = Math.floor((timeTosunset % (1000 * 60)) / 1000);
+        return `${hours}h ${minutes}m ${seconds}s to sunset`
+    }
+    get timeFormatted(){
+        return ''
+    }
+    draw(widgetID){
+        // todo: split into super.preDraw/super.postDraw
+        super.draw(...arguments); 
+
+        // // draw a sunset themed background gradient
+        // // from yellow to orange to red
+        // let lines = 10;
+        // let colorsToLerp = [
+        //     "black",
+        //     "purple",
+        //     "red",
+        //     "orange",
+        //     "yellow",
+        //     "blue",
+        //     "green",
+        //     "brown",
+        // ]
+        // for(let i = 0; i < lines; i++){
+        //     // divide the display by the number of lines (horizontal bands)
+        //     // draw rects to represent the gradient
+        //     let colorIndex = Math.floor((i/lines) * colorsToLerp.length);
+        //     let color = colorsToLerp[colorIndex];
+        //     strokeWeight(0)
+        //     fill(color);
+        //     rect(
+        //         this.position.x, 
+        //         this.position.y + (i * (this.widgetSize.height / lines)), 
+        //         this.widgetSize.width, 
+        //         this.widgetSize.height / lines
+        //     )
+        // } 
+    }
+
+}
 class GraphWidget extends Widget {}
 
 // In the future the GherkinRunnerWidget will
@@ -1846,33 +2469,163 @@ class GherkinRunnerWidget extends Widget {
         // loads and validates the sequence
         this.gherkinRunner.loadSequence(sequence);
     }
+    setResults(results){
+        // todo validate results
+        if(!results){
+            system.panic("Widget.setResults: results cannot be null");
+        }
+        system.warn('Widget.setResults: results',results)
+        this.results = results
+        setTimeout(()=>{
+            system.get("Dashboard").reflowLayout()
+        },100)
+    }
     async run(){
         await this.gherkinRunner.run();
     }
+    toggleRunning(){
+        this.running = !this.running;
+    }
+    recalcDimensions(){
+        this.widgetSize.width = 300;
+        this.widgetSize.height = 150 + (this.maxHeight ?? 0);
+
+    }
     // render the widget
-    render(){
-        console.warn('GherkinRunnerWidget.render');
+    draw(widgetID){
+        super.draw(widgetID);
+        let buttonSize = 30;
+        // TODO: decide if we want to coordinate from top left or center center of the widgets by convention
+        let buttonX = this.position.x + this.widgetSize.width - 40;
+        let buttonY = this.position.y + 20;
+        let triSize = 20; 
+        let half_triSize = 5;
+
+        // "run"/"pause" button
+        fill(this.running ? "yellow" : "green")
+        rect(
+            buttonX + 10, 
+            buttonY, 
+            buttonSize, 
+            buttonSize,
+            5
+        )
+        let barWidth = 5;
+        if(this.running){
+            fill("white")
+            // pause icon is two vertical bars
+            rect(
+                buttonX + 3, 
+                buttonY, 
+                barWidth, 
+                buttonSize - 6
+            )
+            rect(
+                buttonX + barWidth + 6, 
+                buttonY, 
+                barWidth, 
+                buttonSize - 6
+            )
+        }else{
+            fill("white")
+            // draw "run" icon as a right-pointing triangle
+            triangle(
+                buttonX + 3,                    buttonY - 10, 
+                buttonX + (buttonSize - 10),     buttonY, 
+                buttonX + 3,                    buttonY + (buttonSize - 20)
+            )
+            
+        }
+
+        // Widget Label: # of results
+        textAlign(CENTER, CENTER)
+        fill("darkblue")
+        text(
+            `Features: ${this.results.length}`,
+            this.position.x + (this.widgetSize.width / 2),
+            // 20px off the top edge
+            this.position.y + 20
+        )
+
+        //console.warn('GherkinRunnerWidget.draw');
         // rounded rect with status lights in rows and columns
         // each status light is a circle with a label
         // each status light is a different color
         // each status light represents the status of a passing or 
         // failing part of the current feature run
-        let x = 0;
-        let y = 0;
-        let widgetWidth = 300
-        let widgetHeight = 300
-        this.gherkinRunner.results.forEach((result,index)=>{
+        let x = this.position.x + 20;
+        let y = this.position.y + 20;
+        this.maxHeight = 0;
+        // let widgetWidth = 300
+        // let widgetHeight = 300
+        let yIncrement = 20;
+        let xIncrement = 20;
+        this.results.forEach((result,index)=>{
+            y += yIncrement
             // remember to increment x and y
             // and fit the lights into the widget
-            fill(result.color);
-            circle(x,y,10);
-            x += 20;
-            if(x > widgetWidth){
-                x = 0;
-                y += 20;
-            }
+            fill("red");
+            circle(
+                x,
+                y,
+                10
+            );
+            textAlign(LEFT, CENTER)
+            text(
+                // print Feature name
+                "[Feature] "+result.name,
+                x + 10,
+                y
+            )
+            x += xIncrement;
+            // loop over the scenario results
+            // todo: add ability to collapse features
+            Object.entries(result.results)
+            .forEach(([scenarioName, scenarioResult])=>{
+                x += xIncrement
+                y += yIncrement
+
+                textAlign(LEFT, CENTER)
+                circle(
+                    x,
+                    y,
+                    10
+                );
+                text(
+                    "[Scenario] " + scenarioName,
+                    x + 10,
+                    y // + (index * yIncrement)
+                )
+
+                scenarioResult.stepResults
+                .forEach((stepResult, stepIndex)=>{
+                    //console.warn({stepResult})
+                    //debugger;
+                    x += 20;
+                    y += yIncrement
+                    //fill("yellow"); // status light
+                    circle(
+                        x,
+                        y,
+                        10
+                    );
+                    textAlign(LEFT, CENTER)
+                    text(
+                        // print Scenario name
+                        `step ${stepIndex}`,
+                        x + 20,
+                        y, // + ((index + stepIndex + 1) * yIncrement)
+                    )
+                    this.maxHeight = Math.max(this.maxHeight, y + ((index + stepIndex + 1) * yIncrement));
+                    x -= 20;
+                })
+                
+                //de-indent back to the left
+                x -= 20
+            })
+            // de-indent back to the left
+            x = this.position.x + 20;
         })
-        super.render();
     }
 }
 
@@ -2008,14 +2761,41 @@ let cmdprompt;
 // Add a keyboard listener for cmd shift p
 document.addEventListener('keydown', function(event) {
     if (event.code === 'KeyP' && event.shiftKey && event.metaKey) {
-        if(!store.commandPaletteVisible){
-            new ShowCommandPaletteCommand().execute();
+        if(!store.CmdPromptVisible){
+            new ShowCmdPromptCommand().execute();
         }else{
-            new HideCommandPaletteCommand().execute();
+            new HideCmdPromptCommand().execute();
         }
     }
 });
 
+// debounce
+let debounce = function(func, wait, immediate, options = {}) {
+    let timeout;
+    options = options || {};
+    let leading = options.leading || false;
+    let trailing = options.trailing || true;
+    return function() {
+        let context = this, args = arguments;
+        let later = function() {
+            timeout = null;
+            if (!immediate && trailing) func.apply(context, args);
+        }
+        let callNow = immediate && !timeout;
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait || 200);
+        if (callNow || (leading && !timeout)) func.apply(context, args);
+    }
+}
+let onResize = function(){
+    resizeCanvas(windowWidth, windowHeight);
+    system.get("Dashboard")?.reflowLayout()
+}
+let onResizeDebounced = debounce(onResize);
+
+window.addEventListener('resize', function() {
+    onResizeDebounced();
+});
 
 const MODES = {
     SELECT: 'select',
@@ -2057,22 +2837,147 @@ class StatusLight {
 }
 
 // TODO: extend Renderable
-class WidgetDashboard {
+class Dashboard {
     widgetIDs = []
-    registerWidget(widgetID){
+    widgets = {}
+    // we animate widgets, so we need to track their current positions and their target positions
+    layout = {}
+    visible = true
+    collapsed = false
+    init(){
+        // TODO: extend an entity component system where components have active state as boolean
+        this.active = true;
+        return this; // chainable
+    }
+    toggleCollapsed(){
+        this.collapsed = !this.collapsed;
+        if(this.collapsed){
+            this.collapse()
+        }else{
+            this.reflowLayout();
+        }
+    }
+    collapse(){
+        this.collapsed = true;
+        // update widget Target positions to be in a stack (slight offset per card)
+        this.widgetIDs.forEach((widgetID,index)=>{
+            let widget = this.widgets[widgetID]
+            let x = index * -30;
+            let y = index * 30;
+            let w = widget.widgetSize.width;
+            let h = widget.widgetSize.height;
+            this.layout[widgetID] = {
+                x,y,w,h
+            }
+        })
+    }
+    toggleVisibility(){
+        this.visible = !this.visible;
+    }
+    reflowLayout(){
+        // let the widgets redefine their sizes
+        this.widgetIDs.forEach((widgetID)=>{
+            this.widgets[widgetID]?.recalcDimensions?.();
+        })
+
+        // for now we assume cube widgets and grid layout
+        // allow extension for more advanced / customizable layout with pinned widgets,
+        // custom sized widgets, etc
+        let currentRowWidth = 0, 
+        accumulatedRowOffset = 0, 
+        currentRowHeight = 0, 
+        prevRowHeight = 0,
+        currentRowIndex = 0;
+        
+        this.widgetIDs.forEach((widgetID,index)=>{
+            let widget = this.widgets[widgetID]
+            
+            let w = widget.widgetSize.width;
+            currentRowWidth += w + 20;
+            let h = widget.widgetSize.height;
+            currentRowHeight = Math.max(currentRowHeight, h);
+            // console.warn({
+            //     widgetID,
+            //     widget,
+            //     currentRowHeight
+            // })
+            if(currentRowWidth > innerWidth){
+                // new row
+                currentRowWidth = w + 20;
+                currentRowIndex++;
+                accumulatedRowOffset += currentRowHeight + 20;
+                prevRowHeight = currentRowHeight;
+                currentRowHeight = 0;
+            }
+            let x = currentRowWidth - w - 20;
+            let y = accumulatedRowOffset + (
+                currentRowIndex * (widget.widgetSize.height + 20)
+            );
+            
+            
+            this.layout[widgetID] = {
+                x,y,w,h
+            }
+        })
+    }
+    registerWidget(widgetID,widgetInstance){
+        if(typeof widgetID !== "string"){
+            //system.panic('Dashboard.registerWidget: widgetID must be a string',widgetID)
+            if(widgetInstance === null){
+                // assign an ID
+                widgetInstance = widgetID; // swap
+                widgetID = "WidgetInstance"+performance.now();
+            }
+        }
+        if(!widgetInstance || typeof widgetInstance !== "object" || !(widgetInstance instanceof Widget)){
+            system.panic('Dashboard.registerWidget: widgetInstance must be a Widget',widgetInstance)
+        }
+        // require both args
+        if(!widgetID || !widgetInstance){
+            system.panic('Dashboard.registerWidget: missing required args',{widgetID,widgetInstance})
+        }
+        // define a back reference
+        widgetInstance.dashboard = this; 
         this.widgetIDs.push(widgetID);
+        this.widgets[widgetID] = widgetInstance;
+        console.warn('Dashboard widget count:'+this.widgetIDs.length);
+        console.warn("registerWidget widgetID,widgetInstance",{widgetID,widgetInstance})
+
+        // reflow widget layout
+        this.reflowLayout();
+
+        return this; // chainable
     }
     deRegisterWidget(widgetID){
         this.widgetIDs.splice(this.widgetIDs.indexOf(widgetID),1);
+        console.warn('Dashboard widget count:'+this.widgetIDs.length);
+
+        // reflow widget layout
+        this.reflowLayout();
+
+        return this; // chainable
     }
-    render(){
-        console.warn('WidgetDashboard.render widget count:'+this.widgetIDs.length);
+    clearAllWidgets(){
+        this.widgetIDs = [];
+        console.warn('Dashboard widget count:'+this.widgetIDs.length);
+
+        // reflow widget layout
+        this.reflowLayout();
+
+        return this; // chainable
+    }
+    draw(){
+        if(!this.visible){
+            return;
+        }
         this.widgetIDs.forEach((widgetID)=>{
-            if(!store.widgets[widgetID]){
-                system.warn('WidgetDashboard.render: widget not found',widgetID)
+            if(!this.widgets[widgetID]){
+                //system.warn('Dashboard.draw: widget not found',widgetID)
                 return;
             }
-            store.widgets[widgetID].render();
+            this.widgets[widgetID]
+                .setTargetPosition(this.layout[widgetID])
+                .draw(widgetID);
         });
     }
 }
@@ -2081,13 +2986,15 @@ class WidgetDashboard {
 let store = {
     interactionMode: MODES.PAN,
 
-    // note you need to instantiate a widget dashboard
-    // a context where widgets are rendered
-    widgets: {},
-
-    // for now, one dashboard per system
+    // for now, one dashboard per client instance
+    // in the future we'll make it a sub-instance on a per-system basis
+    // perhaps even allowing simultaneous dashboards, with one active / current one at a time
+    // assume they require fullscreen draw access and don't like to share?
+    // ExclusiveRenderContext vs SharedRenderContext s
     // next up: multi-pages of dashboards
-    WidgetDashboard: null,
+    Dashboard: null,
+    // maybe we just store these IN dashboard manager?...
+    widgets: {},
 
     // viewValue: '',
     // controllerValue: '',
@@ -2108,7 +3015,7 @@ let store = {
     },
     currentCommand: {},
     commandHistory: [],
-    commandPaletteVisible: false,
+    CmdPromptVisible: false,
 
     activeWizard: null,
     // user defined commands
@@ -2262,8 +3169,11 @@ const GHERKIN_AST_TOKENS = {
     EXAMPLE_ROW: 'ExampleRow',
     TAG: 'Tag',
     COMMENT: 'Comment',
-    BLANK: 'Blank'
+    BLANK: 'Blank',
+    TO_BE_IMPLEMENTED: 'TO_BE_IMPLEMENTED',
 };
+
+const ToBeImplemented = GHERKIN_AST_TOKENS.TO_BE_IMPLEMENTED
 
 /**
  * Rules for valid state transitions that 
@@ -2318,7 +3228,11 @@ class GherkinParserTransitionMatrix {
                         [S.THEN, S.THEN],
                         // *opt* then -> scenario
                         [S.THEN, S.SCENARIO], 
+                    [S.SCENARIO, S.TO_BE_IMPLEMENTED],
+                [S.TO_BE_IMPLEMENTED, S.SCENARIO],
         ])
+        // log our allowed transitions
+        console.warn('GherkinParserTransitionMatrix: allowed transitions:',this.matrix)
     }
 }
 
@@ -2399,6 +3313,7 @@ class GFDParser {
         WHEN: GHERKIN_AST_TOKENS.WHEN,
         THEN: GHERKIN_AST_TOKENS.THEN,
         FATAL_ERROR_STATE: 'Fatal Error State',
+        TO_BE_IMPLEMENTED: GHERKIN_AST_TOKENS.TO_BE_IMPLEMENTED,
     }
 
     throwFatalError(message){
@@ -2481,6 +3396,16 @@ class GFDParser {
                 GHERKIN_AST_TOKENS.WHEN,
                 GHERKIN_AST_TOKENS.THEN
             ];
+
+            if(steps === ToBeImplemented){
+                // continue
+                tokenDefinitions.push({
+                    __type: GHERKIN_AST_TOKENS.TO_BE_IMPLEMENTED,
+                    value: scenarioKey,
+                    index: scenarioCount
+                })
+                return;
+            }
 
             if(typeof steps === 'string'){
                 system.dump({
@@ -2901,6 +3826,14 @@ class WizardController {
     }
     // aka goToStep, showStep, viewStep
     switchToStep(stepIndex){
+        // TODO: validate we can LEAVE the current step FOR the desired step (check transition truth table)
+        if(this.currentStep?.toastOnSuccess){
+            //system.toast(this.currentStep.toastOnSuccess);
+            //system.successToast(this.currentStep.toastOnSuccess);
+            let msg = this.currentStep.toastOnSuccess?.call ? this.currentStep.toastOnSuccess.call(this,this) : this.currentStep.toastOnSuccess;
+            system.get("toastManager").showSuccess(msg);
+        }
+
         this.currentStepIndex = stepIndex;
         this.shownSteps.push(this.currentStepIndex);
         // drawSuggestions automatically updates based on the current step
@@ -2950,7 +3883,7 @@ class WizardController {
             
 
             this.stepResponses[this.currentStepIndex] = {
-                input: commandPaletteInput.value(),
+                input: CmdPromptInput.value(),
                 selectedSuggestionIndex: this.selectedSuggestionIndex,
                 selectedSuggestionValueOrLabel: 
                     selectedSuggestion?.value
@@ -3003,8 +3936,8 @@ class WizardController {
         // and a default onStepCompleted -> cmdprompt.reset() call
         // can opt out with wizardConfig.dontResetInputBetweenSteps = true
         if(!this.dontResetInputBetweenSteps){
-            commandPaletteInput.value("")
-            store.commandBuffer = {name: commandPaletteInput.value()}
+            CmdPromptInput.value("")
+            store.commandBuffer = {name: CmdPromptInput.value()}
         }
 
         // if there's a onStepCompleted function, call it
@@ -3036,7 +3969,7 @@ class WizardController {
         console.warn("WizardController end, finalCallback Defined?",{
             config: this.config,
             finalCallback: this.config.finalCallback ? true : false,
-            fcbString: this.config.finalCallback.toString()
+            fcbString: this.config.finalCallback?.toString()
         })
         if(this.config.finalCallback){
             this.config.finalCallback.call(this,this);
@@ -3106,17 +4039,14 @@ class WizardController {
                     this.wizardSuggestionList,
                     event
                 );
-                //this.OnPressEnter.call(this,event);
                 break;
             case 38:
-                //this.OnPressUp.call(this,event);
-                return this.wizardSuggestionList.OnPressUp.call(
+                return this.wizardSuggestionList.onPressUp.call(
                     this.wizardSuggestionList,
                     event
                 )
                 break;
             case 40:
-                //this.OnPressDown.call(this,event);
                 return this.wizardSuggestionList.onPressDown.call(
                     this.wizardSuggestionList,
                     event
@@ -3341,7 +4271,7 @@ extends Config
     finalCallback(wizardInstance){
         console.warn('AddGraphNodeWizardConfig finalCallback')
         
-        new HideCommandPaletteCommand().execute();
+        new HideCmdPromptCommand().execute();
 
         if(!store.currentGraph){
             store.currentGraph = new Graph();
@@ -3427,7 +4357,7 @@ class CommandStep {
 CustomCommandFactoryFactory -> generates instances of Custom Command Factories
             Custom Command Factories -> generate instances of Custom Commands
 
-CommandPalette offers Registration Method for Custom Command Factories, so that, Custom Commands can be found by name/description metatags, and instantiated on demand
+CmdPrompt offers Registration Method for Custom Command Factories, so that, Custom Commands can be found by name/description metatags, and instantiated on demand
 
 When a CommandSuggestion is selected, the appropriate Custom Command Factory is instantiated
             or we call a singleton factory to get a fresh instance of the Custom Command
@@ -3800,6 +4730,7 @@ extends Config {
     steps = [
         {
             question: "What is the name of the command?",
+            answerStorageKey: "input",
             onStepCompleted(wizardInstance){
                 console.warn('onStepCompleted',{wizardInstance, latestResponse: wizardInstance?.latestResponse})
                 const latestResponse = wizardInstance?.latestResponse;
@@ -3859,8 +4790,58 @@ extends Config {
     ]
     finalCallback(wizardInstance){
         console.warn('NewCommandWizardConfig finalCallback')
+        debugger;
+
+        // hide the command input
+        // register the command with the command prompt via store.availableCommands
+        cmdprompt.registerCommand(
+            // name
+            wizardInstance.stepResponses[0].input,
+            // description
+            wizardInstance.stepResponses[1].input,
+            // what to execute (in the future it'll be a repeating field of steps), for now it's a single text value
+            wizardInstance.stepResponses[2].input,
+        );
     }
 }
+
+class WizardConfig {
+    name = 'WizardConfig'
+    steps = []
+    constructor(name){
+        this.name = name ?? this.name
+    }
+}
+
+class ToggleDashboardVisibleWizardConfig
+extends WizardConfig {
+    name = "Toggle Dashboard: Visible"
+    steps = [
+        // TODO: bake into a pre-configured InstantCommandConfig instead of always using Wizard with a dummy first step manually
+        {question:"",onStepLoaded:(wiz)=>{wiz.end(); system.hideCmdPrompt();}}
+    ]
+    finalCallback(wiz){
+        console.warn("toggle dashboard visible")
+        system.get("Dashboard").toggleVisibility();
+    }
+}
+class ToggleDashboardVisible extends DefaultSuggestionDecorator(Command, new ToggleDashboardVisibleWizardConfig()){}
+
+class ToggleDashboardCollapsedWizardConfig
+extends WizardConfig {
+    name = "Toggle Dashboard: Collapsed"
+    steps = [
+        {question:"",onStepLoaded:(wiz)=>{wiz.end(); system.hideCmdPrompt();}}
+    ]
+    finalCallback(wiz){
+        console.warn("toggle dashboard collapsed")
+        system.get("Dashboard").toggleCollapsed();
+    }
+}
+
+
+class ToggleDashboardCollapsed extends DefaultSuggestionDecorator(Command, new ToggleDashboardCollapsedWizardConfig()){}
+
 class NewCommandCommand
 extends DefaultSuggestionDecorator(Command, new NewCommandWizardConfig()){}
 
@@ -3914,8 +4895,8 @@ extends Config {
     //     // TODO: make a global cmdprompt.reset() function
     //     // and a default onStepCompleted -> cmdprompt.reset() call
     //     // can opt out with wizardConfig.dontResetInputBetweenSteps = true
-    //     commandPaletteInput.value("")
-    //     commandBuffer = {name: commandPaletteInput.value()}
+    //     CmdPromptInput.value("")
+    //     commandBuffer = {name: CmdPromptInput.value()}
     // }
     steps = [
         // {
@@ -3959,7 +4940,7 @@ extends DefaultSuggestionDecorator(Command, new GPTChatSessionWizardConfig()){}
 
 class NewToastWizardConfig
 extends Config {
-    name = "New Toast"
+    name = "🥂 New Toast"
     steps = [{
         question: "What is the message of the toast?",
         answerStorageKey: "message",
@@ -3971,16 +4952,16 @@ extends Config {
             wizardInstance.stepResponses[0].input,
             {pinned: false}
         );
-        commandPaletteInput.value('');
-        new HideCommandPaletteCommand().execute();
+        CmdPromptInput.value('');
+        new HideCmdPromptCommand().execute();
     }
 }
 
 class ShowNewToastCommand 
 extends DefaultSuggestionDecorator(Command, new NewToastWizardConfig()){}
 
-// Define the ShowCommandPaletteCommand class
-class ShowCommandPaletteCommand extends Command {
+// Define the ShowCmdPromptCommand class
+class ShowCmdPromptCommand extends Command {
     constructor(){
         super("Show Command Prompt")
     }
@@ -3988,15 +4969,15 @@ class ShowCommandPaletteCommand extends Command {
         super.execute();
 
         // Show Command Prompt
-        store.commandPaletteVisible = true;
+        store.CmdPromptVisible = true;
 
         // focus the command palette input element
-        commandPaletteInput.elt.focus();
+        CmdPromptInput.elt.focus();
     }
 }
 
-// Define the HideCommandPaletteCommand class
-class HideCommandPaletteCommand extends Command {
+// Define the HideCmdPromptCommand class
+class HideCmdPromptCommand extends Command {
     constructor(){
         super("Hide CMD Prompt")
     }
@@ -4005,15 +4986,15 @@ class HideCommandPaletteCommand extends Command {
 
         // clear the command buffer
         store.commandBuffer = {name:''};
-        commandPaletteInput.value('');
+        CmdPromptInput.value('');
 
         // Hide CMD Prompt
-        store.commandPaletteVisible = false;
+        store.CmdPromptVisible = false;
     }
 }
 
-// Define the ToggleCommandPaletteCommand class
-class ToggleCommandPaletteCommand extends Command {
+// Define the ToggleCmdPromptCommand class
+class ToggleCmdPromptCommand extends Command {
     constructor(){
         super("Toggle CMD Prompt")
     }
@@ -4021,7 +5002,7 @@ class ToggleCommandPaletteCommand extends Command {
         super.execute();
 
         // Toggle CMD Prompt
-        store.commandPaletteVisible = !store.commandPaletteVisible;
+        store.CmdPromptVisible = !store.CmdPromptVisible;
     }
 }
 
@@ -4530,13 +5511,7 @@ class TodoConfig {
     }
 }
 
-class WizardConfig {
-    name = 'WizardConfig'
-    steps = []
-    constructor(name){
-        this.name = name ?? this.name
-    }
-}
+
 
 class TodoWizardConfig extends WizardConfig {
     name = "New Todo..."
@@ -4618,6 +5593,11 @@ class TodoWizardConfig extends WizardConfig {
     finalCallback(wizardInstance) {
         console.warn('TodoWizardConfig Final Callback',{wizardInstance});
 
+        // if the dashboard is un-collapsed, collapse it
+        // TODO: just broadcast an event the dashboard can subscribe to
+        // or raise an event the system can handle
+        system.get("Dashboard").collapse();
+
         // if no active graph, add a new graph
         if(!store.currentGraph){
             loadGraph("empty");
@@ -4636,7 +5616,7 @@ class TodoWizardConfig extends WizardConfig {
             graph: store.currentGraph // todo: just store ID
         })
 
-        new HideCommandPaletteCommand().execute();
+        new HideCmdPromptCommand().execute();
     }
 }
 class RepeatingTodoWizardConfig extends TodoWizardConfig {
@@ -4683,7 +5663,149 @@ class RepeatingTodoWizardConfig extends TodoWizardConfig {
         })
     }
 }
+class Duration {
+    
+}
+// todo: can be used to count up or down...
+class Timer {
+    mode = "timer" // vs. "stopwatch"
+    startedAt = null
+    elapsedSec = 0
+    resumedAt = null
+    pausedAt = null
+    pausedDuration = null
+    completedAt = null
+    ticker = null
+    finalDuration = null;
+    get durationSec(){
+        return this.options?.durationSec ?? 0
+    }
+    get remainingSec(){
+        return this.durationSec - this.elapsedSec
+    }
+    constructor(options){
+        this.options = options ?? {
+            durationSec: 60
+        }
+        this.start()
+    }
+    get timeElapsedFormatted(){
+        return `${this.elapsedSec} / ${this.durationSec}`
+    }
+    get timeRemainingFormatted(){
+        return `${this.remainingSec} / ${this.durationSec}`
+    }
+    tick(){
+        if(!this.ticking){
+            return;
+        }
+        this.elapsedSec = performance.now() - this.startedAt - this.pausedDuration;
+        this.elapsedSec = Math.floor(this.elapsedSec / 1000);
+        if(this.elapsedSec >= this.durationSec){
+            this.ended();
+            return;
+        }
+        requestAnimationFrame(()=>{
+            this.tick()
+        })
+    }
+    ended(){
+        this.completedAt = performance.now();
+        this.ticking = false;
+        this?.onComplete?.();
+    }
+    start(){
+        this.pausedAt = null
+        this.resumedAt = null
+        this.pausedDuration = null
+        this.completedAt = null
+        this.startedAt = performance.now();
+        this.ticking = true;
+        this.ticker = setTimeout(()=>{
+            this.tick();
+        },1);
+    }
+    pause(){
+        this.ticking = false;
+        this.pausedAt = performance.now();
+    }
+    resume(){
+        this.pausedDuration += performance.now() - this.pausedAt;
+        this.pausedAt = null;
+        this.resumedAt = performance.now();
+        this.ticking = true;
+        this.tick();
+    }
+    stop(){
+        this.ticking = false;
+    }
+    restart(){
+        this.pausedAt = null;
+        this.startedAt = performance.now();
+    }
+}
+// holds multiple Timers
+class TimerManager {
+    timers = []
+    recents = [
+        10 * 1000,
+        30 * 1000,
+        60 * 1000,
+        2 * 60 * 1000,
+        3 * 60 * 1000,
+        5 * 60 * 1000,
+        10 * 60 * 1000,
+        15 * 60 * 1000,
+        20 * 60 * 1000,
+        25 * 60 * 1000,
+        30 * 60 * 1000,
+        40 * 60 * 1000,
+        45 * 60 * 1000,
+        60 * 60 * 1000
+    ]
+    constructor(){
+        // default timer
+        this.timers.push(new Timer({
+            durationSec: 60
+        }));
+        this.timers[0].start()
+    }
+}
+// represents a TimerManager and capable 
+// of rendering multiple Timer instances in a single widget
+class TimerWidget extends Widget {
+    widgetSize = {
+        width: 200,
+        height: 200
+    }
+    constructor(){
+        super(...arguments)
+        // automatically generates a timerManager.timers[0]
+        this.timerManager = new TimerManager(); 
+    }
+    draw(){
+        super.draw(...arguments)
+        this.timerManager.timers.forEach((timer,index)=>{
+            // draw the timer
+            textAlign(LEFT,TOP);
+            // text(
+            //     `${timer.id} ${timer.timeElapsedFormatted}`, 
+            //     this.position.x + 20, 
+            //     this.position.y + (index * 20)
+            // )
+            // draw the time elapsed vs. time remaining
+            fill("red")
+
+            text(
+                `Timer ${index+1} \n elapsed: ${timer.timeElapsedFormatted} \n remaining: ${timer.timeRemainingFormatted}`,
+                this.position.x + 20,
+                this.position.y + 40
+            )
+        })
+    }
+}
 class TimerWizardConfig extends WizardConfig {
+    name = "New Timer..."
     steps = [
         {
             question: "What is the name of the timer?",
@@ -4757,9 +5879,13 @@ function isEmptyOrUndefined(thing){
     ) ? true : false;
 }
 
+// ToastMessage
 class ToastNotification {
     message = ''
     options = {}
+    get level() {
+        return this?.options?.level ?? 'info';
+    }
     constructor(message, options){
         this.options = options ?? {}
         this.message = message;
@@ -4793,8 +5919,14 @@ class ToastNotification {
             ? (255 - ((Date.now() - this.leaveTime) / (this.destroyTime - this.leaveTime)) * 255)
             : 255;
         leavingAlpha = Math.floor(leavingAlpha);
-        stroke(0, 0, 0, leavingAlpha); 
-        fill(25, 25, 25, leavingAlpha);
+        stroke(0, 0, 0, leavingAlpha);
+        let bubbleColor = color("blue");
+        // if this.level === 'success' color should be green
+        if(this.level === 'success'){
+            bubbleColor = color("darkgreen");
+        }
+        bubbleColor.setAlpha(leavingAlpha); 
+        fill(bubbleColor);
         const tBoxW = 300;
         const cornerRadius = 20;
         rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
@@ -4873,8 +6005,10 @@ class ToastNotificationManager {
         // console.warn(`if we're mocking ToastNotificationManager during a test run, we should be able to configure where the toasts are "rendered"`)
         options = options ?? {}
         options.level = options.level ?? 'info'; // DEFAULT_TOAST_LEVEL = 'info'
-        let {pinned} = options;
-        let toast = new ToastNotification(message, {pinned, manager: this});
+        let toast = new ToastNotification(message, {
+            manager: this, 
+            ...options
+        });
         // console.warn('showToast',{
         //     message,
         //     options,
@@ -4917,8 +6051,8 @@ class SetMaxSuggestionsCommandWizardConfig extends Config {
     ]
     finalCallback(wizardInstance){
         store.maxVisibleOptionsCount = parseInt(wizardInstance.stepResponses[0].input);
-        commandPaletteInput.value('');
-        new HideCommandPaletteCommand().execute();
+        CmdPromptInput.value('');
+        new HideCmdPromptCommand().execute();
         system.get("toastManager").showToast(`Set Max Suggestions: ${store.maxVisibleOptionsCount}`);
     }
 }
@@ -5086,9 +6220,9 @@ const TYPENAME_TO_CONSTRUCTOR_MAP = {
     CommandWizardConfig,
     ShowNewToastCommand,
     StartChatGPTSessionCommand,
-    ShowCommandPaletteCommand,
-    HideCommandPaletteCommand,
-    ToggleCommandPaletteCommand,
+    ShowCmdPromptCommand,
+    HideCmdPromptCommand,
+    ToggleCmdPromptCommand,
     // LoadMessengerWindowCommand,
     SetCommandIconCommand,
 
@@ -5116,13 +6250,32 @@ const TYPENAME_TO_CONSTRUCTOR_MAP = {
 };
 
 
-class CommandPalette {
+
+
+class CmdPrompt {
     // the current "Command" being constructed
     currentCommand = null; 
     // the list of available commands
     availableCommands = []; 
     // the list of contextually recommended commands
     filteredCommands = []; 
+
+    get visible(){
+        return store.CmdPromptVisible;
+    }
+
+    registerCommand(
+        name,
+        description,
+        stepText
+    ){
+        // generate a new command from Wizard responses
+        let newCommand = new Command(name, {
+            description,
+        })
+        this.availableCommands.push(newCommand);
+        system.get("toastManager").showSuccess(`Registered Command: ${name}`);
+    }
 
     //selectedSuggestionIndex = null;
     get selectedSuggestionIndex(){
@@ -5172,6 +6325,8 @@ class CommandPalette {
         this.availableCommands.push(new SetMaxSuggestionsCommand());
         this.availableCommands.push(new Command("Help",{
             wizardConfig: new WizardConfig("Help Wizard",{
+                // searchable tags
+                altnames: ["What is this thing?"],
                 steps: [
                     {
                         question: "What would you like help with?",
@@ -5193,13 +6348,16 @@ class CommandPalette {
                 ]
             })
         }))
-        // this.availableCommands.push(new Command("New Timer",{
-        //     wizardConfig: new TimerWizardConfig("New Timer Wizard")
-        // }))
+        this.availableCommands.push(new Command("New Timer",{
+            wizardConfig: new TimerWizardConfig("New Timer Wizard")
+        }))
         // this.availableCommands.push(new Command("New Error",{}))
         // this.availableCommands.push(new Command("New Graph",{}))
         // this.availableCommands.push(new Command("New Node Type",{}))
-        // this.availableCommands.push(new Command("New Requirement",{}))
+        this.availableCommands.push(new Command("New Requirement",{}))
+        this.availableCommands.push(new Command("New FeatureTest",{}))
+        this.availableCommands.push(new Command("New SystemTemplate",{}))
+        this.availableCommands.push(new Command("New SystemInstance",{}))
         // this.availableCommands.push(new Command("New Enum",{}))
         // this.availableCommands.push(new Command("New Action",{}))
         // this.availableCommands.push(new Command("New Event Type",{}))
@@ -5234,7 +6392,7 @@ class CommandPalette {
             ],
             callback: function(){
                 console.warn('running self test...')
-                new HideCommandPaletteCommand().execute();
+                new HideCmdPromptCommand().execute();
             }
         }))
         
@@ -5258,7 +6416,7 @@ class CommandPalette {
                     }
                     store.currentGraph = null;
                     // hide the command palette
-                    new HideCommandPaletteCommand().execute();
+                    new HideCmdPromptCommand().execute();
                 }
             })
         )
@@ -5282,9 +6440,13 @@ class CommandPalette {
                         {
                             prevStepResponse,
                         })
+                        // if the dashboard is un-collapsed, collapse it
+                        // TODO: just broadcast an event the dashboard can subscribe to
+                        // or raise an event the system can handle
+                        system.get("Dashboard").collapse();
                         loadGraph(prevStepResponse.selectedSuggestionValueOrLabel)
                         // close the command palette
-                        new HideCommandPaletteCommand().execute();
+                        new HideCmdPromptCommand().execute();
                     },
                     steps: [
                         {
@@ -5315,9 +6477,9 @@ class CommandPalette {
         )
 
         // Command Palette / Command Prompt Commands
-        this.availableCommands.push(new ShowCommandPaletteCommand());
-        this.availableCommands.push(new HideCommandPaletteCommand());
-        this.availableCommands.push(new ToggleCommandPaletteCommand());
+        this.availableCommands.push(new ShowCmdPromptCommand());
+        this.availableCommands.push(new HideCmdPromptCommand());
+        this.availableCommands.push(new ToggleCmdPromptCommand());
 
 
     }
@@ -5377,16 +6539,16 @@ class CommandPalette {
     }
     */
 
-    // onCommandPaletteInput -> filterCommands
+    // onCmdPromptInput -> filterCommands
 
     // TODO: need to trigger on backspace TOO!
-    onCommandPaletteInput(event){
+    onCmdPromptInput(event){
         //console.log({event});
 
-        //console.warn('onCommandPaletteInput',{event})
+        //console.warn('onCmdPromptInput',{event})
         // update the command buffer
         store.commandBuffer = {
-            name: commandPaletteInput.value()
+            name: CmdPromptInput.value()
         }
         if(this.currentCommand === null){
             this.initCommand();
@@ -5395,7 +6557,7 @@ class CommandPalette {
         }
 
         // console.warn(
-        //     'OnCommandPaletteInput, buffer is now:',
+        //     'OnCmdPromptInput, buffer is now:',
         //     {
         //         currentCommand: JSON.parse(JSON.stringify(this.currentCommand))
         //     }
@@ -5407,8 +6569,8 @@ class CommandPalette {
         //console.warn('sanity check filtered count: ',this.filteredCommands.length);
 
         // if the cmd palette is not visible, show it
-        if(!store.commandPaletteVisible){
-            new ShowCommandPaletteCommand().execute();
+        if(!store.CmdPromptVisible){
+            new ShowCmdPromptCommand().execute();
         }
 
         // if there's an active wizard, we need to handle the input differently
@@ -5435,6 +6597,17 @@ class CommandPalette {
         return false    
     }
 
+    hide(){
+        // hide the command palette
+        store.CmdPromptVisible = false;
+        // clear the command palette input
+        CmdPromptInput.value('');
+        // reset the command buffer
+        store.commandBuffer = {
+            name: ''
+        };
+    }
+
     OnPressEscape(){
         // if there's an active wizard, we need to handle the input differently
         if(store.activeWizard){
@@ -5442,14 +6615,7 @@ class CommandPalette {
             return;
         }
         // escape was pressed
-        // hide the command palette
-        store.commandPaletteVisible = false;
-        // clear the command palette input
-        commandPaletteInput.value('');
-        // reset the command buffer
-        store.commandBuffer = {
-            name: ''
-        };
+        this.hide()
         // need to decide when the current command is deselected
         // --- 
         // this.currentCommand = null;
@@ -5465,7 +6631,7 @@ class CommandPalette {
 
             this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex].clone();
         }
-        console.log('CommandPalette.OnPressEnter', {
+        console.log('CmdPrompt.OnPressEnter', {
             currentCMDName: this.currentCommand.name,
             selectedSuggIdx: this.selectedSuggestionIndex,
             filteredCommandsLength: this.filteredCommands.length,
@@ -5481,9 +6647,9 @@ class CommandPalette {
             name: ''
         };
         // hide the command palette
-        //store.commandPaletteVisible = false;
+        //store.CmdPromptVisible = false;
         // clear the command palette input
-        commandPaletteInput.value('');
+        CmdPromptInput.value('');
         // need to decide when the current command is deselected
         // --- 
         // this.currentCommand = null;
@@ -5634,6 +6800,8 @@ function mousePressed(){
         return;
     }
 
+    // TODO: click handlers for widgets on the dashboard
+
     // maybe select a node
     if(store.currentGraph && store.currentGraph.OnMousePressed){
         store.currentGraph.OnMousePressed();
@@ -5658,7 +6826,7 @@ function checkDidClickASuggestion(){
     // if a wizard is active, have IT check
     if(store.activeWizard){
         return store.activeWizard.checkDidClickASuggestion();
-    }else if(store.commandPaletteVisible){
+    }else if(store.CmdPromptVisible){
 
         // otherwise, only check if the command prompt 
         // is active and has visible suggestions
@@ -5722,11 +6890,25 @@ function mouseReleased(){
     }
 }
 
+const max_blur = 100;
+let bgEl;
+
 // Define the mouseWheel function
 function mouseWheel(event) {
     let oldZoom = zoom;
     zoom -= event.delta / 1000;
     zoom = constrain(zoom, 0.1, 3);
+
+    if(bgEl){
+        /* 
+            zoom ranges from | 0.1 - 1 - 3 |
+            blur ranges from | max_blur - 0 - max_blur |
+        */
+        const blur = zoom < 1 
+        ? max_blur * (1 - zoom) 
+        : max_blur * (zoom - 1);
+        bgEl.style.filter = `blur(${blur}px)`;
+    }
 
     // Adjust pan to account for mouse position while zooming
     let mouseWorldX = (mouseX - panX) / oldZoom;
@@ -5748,8 +6930,18 @@ function deleteSelectedNode() {
 }
 
 // Define the draw function
+// Main Draw / Root Draw
+// Todo: system manager should loop over active systems,
+// and call draw on systems which have non empty render queues
 function draw() {
-    background(25);
+    // clear the canvas
+    clear()
+    //background(color(0,0,0,0));
+
+    // draw our bg image
+    if(bgImage){
+        image(bgImage, 0, 0, windowWidth, windowHeight);
+    }
 
     push();
     translate(panX, panY);
@@ -5757,7 +6949,7 @@ function draw() {
 
     if(
         store.currentGraph 
-        //&& !store.commandPaletteVisible
+        //&& !store.CmdPromptVisible
     ){
         store.currentGraph.renderGraph();
     }
@@ -5773,13 +6965,21 @@ function draw() {
         gherkinStudio.draw();
     }
 
-    pop();
+    
 
     //drawModeSwitcher();
 
+    // render all widgets on the widget dashboard
+    // TODO: move pop() BEFORE DB Manager and let DBMan have it's own inner contextual Pan/Zoom
+    system.get("Dashboard")?.draw?.();
+
+    pop();
+
+    // ^^^ below the command palette
+
     // if the command palette is visible, draw it
-    if(store.commandPaletteVisible){
-        cmdprompt.renderCommandPrompt();
+    if(store.CmdPromptVisible){
+        cmdprompt?.renderCommandPrompt?.();
     }
 
     // display the current wizard (if any)
@@ -5788,8 +6988,7 @@ function draw() {
     // render toast notifications
     system.get("toastManager")?.draw?.();
 
-    // render all widgets on the widget dashboard
-    system.get("WidgetDashboard")?.draw?.();
+    
 
     renderDebugUI();
 
@@ -5979,7 +7178,7 @@ function ensureHeadTag(){
     document.getElementsByTagName('head')[0].appendChild(metaTag);
 }
 
-let commandPaletteInput = null;
+let CmdPromptInput = null;
 
 const CustomFeatureTestDecorator = (BaseClass, definition) => {
     i = null;
@@ -6156,12 +7355,33 @@ const runFeatureTest = (FeatureTestConfigOrInstance)=>{
         whenMap: whenLookupTable,
         thenMap: thenLookupTable,
     });
-    autorunFeatureTestResults.push(executor.execute());
+    const results = executor.execute();
+    autorunFeatureTestResults.push({
+        // feature name
+        name: instance.name,
+        // feature description
+        description: instance.description,
+        // FeatureTest
+        test: instance,
+        // results of the execution
+        results,
+        executor
+    });
 }
 
 
 // Define the setup function
 function setup() {
+    bgEl = document.getElementById('bg-image');
+    // loadImage('bg-1.jpg', img => {
+    //     bgImage = img;
+    //     // bgImage.filter(BLUR, 10);
+    // });
+
+    // offset panX panY to center the graph
+    panX = 100; //windowWidth / 2;
+    panY = 300; //windowHeight / 2;
+
     ensureHeadTag();
     createCanvas(windowWidth, windowHeight);
 
@@ -6173,8 +7393,8 @@ function setup() {
     // will be instantiated upon first access attempt via system.get('toastManager')
     system.lazySingleton('timeManager',     TimeManager);
     system.lazySingleton('toastManager',    ToastNotificationManager);
-    system.lazySingleton('cmdprompt',       CommandPalette);
-    system.lazySingleton('WidgetDashboard', WidgetDashboard);
+    system.lazySingleton('cmdprompt',       CmdPrompt);
+    system.lazySingleton('Dashboard', Dashboard);
     
     /// === region: Self Test Mode ===
     // TODO: parallelize with Promise.all([])
@@ -6207,33 +7427,48 @@ function setup() {
     // // bootstrap our self-test
     // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
 
-    // TODO: put this stuff in a CommandPalette.setup() callback
+    // TODO: put this stuff in a CmdPrompt.setup() callback
     push();
     textSize(50);
-    commandPaletteInput = createInput('');
-    commandPaletteInput.elt.style.backgroundColor = 'black';
-    commandPaletteInput.elt.style.color = 'white';
-    commandPaletteInput.size(windowWidth - 20);
-    commandPaletteInput.position(10, 130);
+    CmdPromptInput = createInput('');
+    CmdPromptInput.elt.style.backgroundColor = 'black';
+    CmdPromptInput.elt.style.color = 'white';
+    CmdPromptInput.size(windowWidth - 20);
+    CmdPromptInput.position(10, 130);
     // focus the command palette input
-    commandPaletteInput.elt.focus();
+    CmdPromptInput.elt.focus();
     pop();
     // Listen for the 'keydown' event
-    commandPaletteInput.elt.addEventListener('keydown', function(e) {
+    CmdPromptInput.elt.addEventListener('keydown', function(e) {
         // Check if the Enter key was pressed
         // if (e.key === 'Enter') {
-            // Call the onCommandPaletteInput method
+            // Call the onCmdPromptInput method
             cmdprompt = system.get('cmdprompt');
             if(!cmdprompt){
                 system.warn("cmdprompt not ready");
             }
-            cmdprompt?.onCommandPaletteInput(e);
+            cmdprompt?.onCmdPromptInput(e);
         // }
     });
 
     // NEW: init the widget dashboard
     // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
-    system.get("WidgetDashboard").init();
+    const grw = new GherkinRunnerWidget();
+    //grw.centerPosition();
+    // attach the results of the self test runner to the widget
+    grw.setResults(autorunFeatureTestResults);
+    system.get("Dashboard").init()
+        // add our first widget (todo: load state from dehydrated json)
+        // DEFAULT WIDGET SET
+        // .registerWidget("GherkinRunnerWidget",  grw)
+        .registerWidget("ClockWidget",          new ClockWidget())
+        .registerWidget("TodoWidget",           new TodoWidget())
+        .registerWidget("PomodoroWidget",       new PomodoroWidget())
+        .registerWidget("TimeToSunSetWidget",   new TimeToSunSetWidget())
+        //.registerWidget("iFrame Widget",        new iFrameWidget())
+        .registerWidget("Timers Widget",        new TimerWidget())
+        .registerWidget("ImageViewerWidget",    new ImageViewerWidget())
+        ;
 }
 
 class FluxExampleGraph extends Graph {
@@ -6519,6 +7754,18 @@ class SuggestionList {
                 //     keyCode: event.keyCode,
                 //     event
                 // })
+                // make sure the selected option index is in range
+                if(this.selectedOptionIndex >= this.filteredOptions.length){
+                    this.selectedOptionIndex = this.filteredOptions.length - 1;
+                }
+                else if(this.selectedOptionIndex === null
+                    || this.selectedOptionIndex === undefined
+                    || this.selectedOptionIndex === -1)
+                {
+                    if(this.filteredOptions.length){
+                        this.selectedOptionIndex = 0;
+                    }
+                }
                 break;
         }
     }

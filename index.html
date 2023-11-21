@@ -3,10 +3,34 @@
   <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/p5.js"></script>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/addons/p5.sound.min.js"></script> -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeatBox</title>
     <style>
         html, body {
+            background: #000;
             margin: 0;
             padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        input {
+          z-index: 3;
+        }
+        #bg-image {
+          position: fixed;
+          width: 100vw;
+          height: 100vh;
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          opacity: 0.3;
+          z-index: 1;
+        }
+        main {
+          /* backdrop-filter: blur(10px); */
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          z-index: 2;
         }
         canvas {
             display: block;
@@ -16,6 +40,7 @@
 
   </head>
   <body>
+    <img id="bg-image" src="./bg-1.jpg" alt="">
     <main>
     </main>
     <script src="./neat.js"></script>
