@@ -1791,6 +1791,8 @@ class Widget extends UndoRedoComponent {
             x: mouseX - panX,
             y: mouseY - panY,
         }
+        screenSpaceToWorldSpace.x *= zoom;
+        screenSpaceToWorldSpace.y *= zoom;
 
         let parentPosition = this?.parentWidget?.basePosition 
             ?? this?.parentWidget?.position 
@@ -1809,6 +1811,11 @@ class Widget extends UndoRedoComponent {
                 + (this.position.y ?? 0),
         }
 
+        fill("blue"); strokeWeight(0); ellipse(screenSpaceToWorldSpace.x,screenSpaceToWorldSpace.y,20)
+        text("ssTWS",
+        screenSpaceToWorldSpace.x,
+        screenSpaceToWorldSpace.y)
+
         strokeWeight(0)
         fill("red")
         ellipse(
@@ -1816,14 +1823,12 @@ class Widget extends UndoRedoComponent {
             realMouseY,
             10,
         )
-        // strokeWeight(3)
-        // stroke(0)
-        // fill(255)
-        // text(
-        //     "real: x:"+realMouseX.toFixed(0)+" y:"+realMouseY.toFixed(0),
-        //     realMouseX,
-        //     realMouseY
-        // )
+        strokeWeight(3); stroke(0); fill(255)
+        text(
+            "real: x:"+realMouseX.toFixed(0)+" y:"+realMouseY.toFixed(0),
+            realMouseX,
+            realMouseY
+        )
         
         
         let debug = {
@@ -3113,8 +3118,8 @@ class iFrameWidget extends Widget {
         }
         this.iframe.show();
         super.draw(...arguments)
-        this.corrected.x = (this.position.x + (mouseShifted.x*zoom))
-        this.corrected.y = (this.position.y + (mouseShifted.y*zoom))
+        this.corrected.x = 0//(this.position.x + (mouseShifted.x*zoom))
+        this.corrected.y = windowHeight - this.widgetSize.height//(this.position.y + (mouseShifted.y*zoom))
         // corrected.x *= zoom;
         // corrected.y *= zoom;
         this.iframe.position(
@@ -4151,10 +4156,12 @@ class Dashboard {
         return this; // chainable
     }
     clearAllWidgets(){
-        this.widgetIDs.length = 0;
         this.widgetDepthOrder.length = 0;
         this.widgetLayoutOrder.length = 0;
-        console.warn('Dashboard widget count:'+this.widgetIDs.length);
+        console.warn("Dashboard.clearAllWidgets",{
+            depthLen: this.widgetDepthOrder.length,
+            layoutLen: this.widgetLayoutOrder.length,
+        })
 
         // reflow widget layout
         this.reflowLayout();
@@ -4162,12 +4169,11 @@ class Dashboard {
         return this; // chainable
     }
     shuffleWidgets(){
-        //this.widgetIDs = shuffle(this.widgetIDs);
-
         this.widgetLayoutOrder = shuffle(this.widgetLayoutOrder);
     }
     shuffleWidgetPositions(){
         this.shuffleWidgets();
+
         // randomize widget zDepth and order in the widgetIDs array
         this.widgetLayoutOrder.forEach((widgetID,index)=>{
             /*
@@ -4179,6 +4185,7 @@ class Dashboard {
             ))
             this.widgets[widgetID].zDepth = z;
         });
+        
         this.updateWidgetDepthOrder();
     }
     updateWidgetDepthOrder() {
@@ -6255,6 +6262,11 @@ extends Config {
             answerStorageKey: "prompt",
             displayObservedInputs: ["prompt"],
             onStepCompleted(wizardInstance){
+                console.warn(
+                    "this onStepCompleted function wont serialize to JSON! \n" +
+                    "need to apply special function serialization logic to the config... \n" +
+                    "or use static definition api"
+                )
                 //wizardInstance.latestResponse
 
                 const cStep = wizardInstance?.currentStep;
@@ -6275,6 +6287,73 @@ extends Config {
             }
         }
     ]
+}
+
+class APIKeyCachable extends Cachable {}
+const OpenAPIKey = new APIKeyCachable();
+class ScrollableWidget extends Widget {
+    scrollViewportDims = {/*x:0,y:0*/padding:10}
+    scrollViewportPos = {x:0,y:0}
+    scrollContentDimensions = {x:0,y:0}
+    scrollContentPosition = {x:0,y:0}
+    scrollValues = {x:0,y:0}
+    scrollBarWidth = 10
+    minScrollBarSize = 10
+
+    draw(){
+        // draw the scrollable viewport
+        stroke(0); strokeWidth(1); fill(0,0)
+        rect(
+            this.position.x + this.scrollViewportDims.padding,
+            this.position.y + this.scrollViewportDims.padding,
+            this.widgetSize.width - this.scrollViewportDims.padding * 2,
+            this.widgetSize.height - this.scrollViewportDims.padding * 2
+        )
+        // draw the scroll bars
+        // vertical
+        stroke(0); strokeWidth(1); fill(0,0)
+        rect(
+            this.position.x + this.widgetSize.width - 3 - this.scrollBarWidth,
+            this.position.y + this.scrollViewportDims.padding,
+            this.scrollBarWidth,
+            Math.max(
+                this.minScrollBarSize, 
+                this.widgetSize.height - this.scrollViewportDims.padding * 2
+            )
+        )
+        // horizontal
+    }
+}
+// TODO: extends MessageQueue
+class ConsoleWidget extends ScrollableWidget {
+    // NOTE: not only do system.panic,info,success,warn pipe to this widget,
+    // but we also overload the built-in console{log,info,warn,error} functions to 
+    // pass arguments through so we can see the in the runtime without 
+    // needing to rely on chrome dev tools
+    messages = []
+
+    addMessage(message){
+        this.messages.push(message);
+    }
+
+    draw(){
+        super.draw(...arguments)
+
+        textAlign(LEFT, TOP);
+        text("Console Message Length : "+this.messages.length, 10, 10);
+    }
+}
+
+class ChatGPTWidget extends Widget {
+    constructor(){
+        super(...arguments);
+
+        if(!OpenAPIKey.value){
+            // set one
+            OpenAPIKey.value = prompt("Please enter your OpenAI API Key");
+            console.warn("storing key...", OpenAPIKey.value.length);
+        }
+    }
 }
 
 class StartChatGPTSessionCommand
@@ -7267,7 +7346,7 @@ const BasicWidgets = [
     },
     { name: "Timeline Editor Widget" },
     { name: "Nested Drag and Drop Sorting Widget" },
-    { name: "Fractal Tree Graph Viewer Widget"}
+    { name: "Fractal Tree Graph Viewer Widget"},
 ]
 // represents a TimerManager and capable 
 // of rendering multiple Timer instances in a single widget
@@ -9458,7 +9537,8 @@ function setupDefaults(){
     })
 }
 const PreloadedImages = {
-    "fine.gif": null
+    "fine.gif": null,
+    "inspiration/001.png": null
 };
 function preload() {
     PreloadedImages.forEach((_,imgName)=>{
@@ -9618,6 +9698,10 @@ function setup() {
             //new ColorPickerWidget()
             new ImageViewerWidget("./colorpickermockup.png")
         )
+        .registerWidget(
+            "Inspiration 001",
+            new ImageViewerWidget("./inspiration/001.png")
+        )
 
 
         // .registerWidget("CalculatorWidget", new CalculatorWidget())
@@ -9652,21 +9736,21 @@ function setup() {
             "ImageRotatorWidget",
             new ImageRotatorWidget()
         )
-        // .registerWidget(
-        //     "YoutubePlayerWidget",
-        //     new YoutubePlayerWidget(
-        //         "Focus Music",
-        //         {
-        //             pickRandomOnPlay: true,
-        //             autoPlay: true,
-        //             shuffle: true,
-        //             tracks: [
-        //                 "https://www.youtube.com/watch?v=tkgmYIsflSU",
-        //                 "https://www.youtube.com/watch?v=931PQwTA79k"
-        //             ]
-        //         }
-        //     )
-        // )
+        .registerWidget(
+            "YoutubePlayerWidget",
+            new YoutubePlayerWidget(
+                "Focus Music",
+                {
+                    pickRandomOnPlay: true,
+                    autoPlay: true,
+                    shuffle: true,
+                    tracks: [
+                        "https://www.youtube.com/watch?v=tkgmYIsflSU",
+                        "https://www.youtube.com/watch?v=931PQwTA79k"
+                    ]
+                }
+            )
+        )
         .registerWidget(new MoonPhaseWidget())
         .registerWidget(new UIDemoWidget())
         ;
