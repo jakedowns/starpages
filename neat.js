@@ -2839,8 +2839,12 @@ class ImageViewerWidget extends Widget {
         // if the src contains .gif, use a gif renderer
         this.isGif = this.src.includes(".gif");
 
-        // cache the image to a bitmap for faster continual rendering
-        this.image = loadImage(this.src);
+        if(PreloadedImages[this.src]){
+            this.image = PreloadedImages[this.src];
+        }else{
+            PreloadedImages[this.src] = loadImage(this.src);
+            this.image = PreloadedImages[this.src];
+        }
     }
     draw(){
         super.draw(...arguments)
@@ -9451,6 +9455,14 @@ function setupDefaults(){
             widget
         })
         defaultSuggestedCommands.push(getBasicSpawnWidgetConfig(widget));
+    })
+}
+const PreloadedImages = {
+    "fine.gif": null
+};
+function preload() {
+    PreloadedImages.forEach((_,imgName)=>{
+        PreloadedImages[imgName] = loadImage(imgName);
     })
 }
 function setup() {
