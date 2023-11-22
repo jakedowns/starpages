@@ -816,7 +816,12 @@ class Config
 
 // Define the Command class
 class Command {
-    name = 'default command';
+    get name(){
+        return `Command: ${this._name} | ${this.options?.wizardConfig?.name ?? 'No Wizard Config'}`
+    }
+    set name(value){
+        this._name = value;
+    }
     constructor(name, options){
         this.name = name ?? this.name;
         this.setOptions(options ?? {});
@@ -1688,12 +1693,48 @@ class UndoRedoComponent extends Component {
 }
 const minWidgetDepth = -3;
 const maxWidgetDepth = 3;
+
+const hoveredArray = []
+
 class Widget extends UndoRedoComponent {
     hovered = false
     // relative base position
     basePosition = {x:0,y:0}
     // draw position
     position = {x:0,y:0}
+
+    debugColor = color("red")
+
+    getPosition(thing){
+        return thing.basePosition ?? thing.position;
+    }
+
+    getPositionRecursive(node, accumulatedPosition = {x:0,y:0}){
+        if(node.parentWidget){
+            let parentPos = this.getPosition(node.parentWidget);
+            accumulatedPosition.x += parentPos.x;
+            accumulatedPosition.y += parentPos.y;
+            return this.getPositionRecursive(node.parentWidget, accumulatedPosition);
+        }
+
+        return accumulatedPosition;
+    }
+
+    get _absolutePosition(){
+        // if(this.parentWidget){   
+        // }
+        // let parentPosition = this?.parentWidget?.basePosition 
+        //     ?? this?.parentWidget?.position 
+        //     ?? {x:0,y:0};
+        // let selfBasePosition = this.basePosition ?? this.position;
+
+        return this.getPositionRecursive(this?.parentWidget ?? this);
+
+        // this.deepPosition = this?.parentWidget ? {
+        //     x: parentPosition.x + selfBasePosition.x,
+        //     y: parentPosition.y + selfBasePosition.y,
+        // } : selfBasePosition;
+    }
 
     targetPosition = {x:0,y:0}
     widgetSize = {width: 100, height: 100}
@@ -1704,9 +1745,18 @@ class Widget extends UndoRedoComponent {
     // set when registerWidget is called on Dashboard
     dashboard = null
     depthRange = maxWidgetDepth - minWidgetDepth;
+
+    setParentWidget(widget){
+        this.parentWidget = widget;
+    }
     
     constructor(name){
         super(name);
+        this.debugColor = color(
+            random(0,255),
+            random(0,255),
+            random(0,255)
+        )
 
         this.halfDepthRange = this.depthRange / 2;
 
@@ -1732,8 +1782,129 @@ class Widget extends UndoRedoComponent {
         this.basePosition.x = innerWidth / 2;
         this.basePosition.y = innerHeight / 2;
     }
+    isHovered(){
+
+        let realMouseX = (mouseX + panX)/zoom;
+        let realMouseY = (mouseY + panY)/zoom;
+
+        let screenSpaceToWorldSpace = {
+            x: mouseX - panX,
+            y: mouseY - panY,
+        }
+
+        let parentPosition = this?.parentWidget?.basePosition 
+            ?? this?.parentWidget?.position 
+            ?? {x:0,y:0};
+        let selfBasePosition = this.basePosition ?? this.position;
+
+        this.deepPosition = this?.parentWidget ? {
+            x: parentPosition.x + selfBasePosition.x,
+            y: parentPosition.y + selfBasePosition.y,
+        } : selfBasePosition;
+
+        this.parallaxedPosition = {
+            x: (this?.parentWidget?.position?.x ?? 0)
+                + (this.position.x ?? 0),
+            y: (this?.parentWidget?.position?.y ?? 0)
+                + (this.position.y ?? 0),
+        }
+
+        strokeWeight(0)
+        fill("red")
+        ellipse(
+            realMouseX,
+            realMouseY,
+            10,
+        )
+        // strokeWeight(3)
+        // stroke(0)
+        // fill(255)
+        // text(
+        //     "real: x:"+realMouseX.toFixed(0)+" y:"+realMouseY.toFixed(0),
+        //     realMouseX,
+        //     realMouseY
+        // )
+        
+        
+        let debug = {
+            x: mouseX * zoom,
+            y: mouseY * zoom,
+        }
+        
+        strokeWeight(0)
+        fill("yellow")
+        ellipse(
+            debug.x,
+            debug.y,
+            5
+        )
+        // strokeWeight(3)
+        // stroke(0)
+        // fill(255)
+        // text(
+        //     "mouse: x:"
+        //         +(debug.x).toFixed(0)
+        //         +" y:"
+        //         +(debug.y).toFixed(0),
+        //     debug.x,
+        //     debug.y
+        // )
+
+        stroke(this.hovered ? "yellow" : this.debugColor) //"green")
+        strokeWeight(1)
+        fill(color(0,0,0,0))
+
+        // debug bounds (base position)
+        rect(
+            this.deepPosition.x + this.widgetSize.width / 2,
+            this.deepPosition.y + this.widgetSize.height / 2,
+            this.widgetSize.width,
+            this.widgetSize.height
+        )
+
+        //stroke("red")
+        stroke(this.hovered ? "yellow" : this.debugColor) //"green")
+        rect(
+            this.parallaxedPosition.x + this.widgetSize.width / 2,
+            this.parallaxedPosition.y + this.widgetSize.height / 2,
+            this.widgetSize.width,
+            this.widgetSize.height
+        )
+
+        // Draw lines connecting the vertices of the two debug rectangles
+        let rectA_x1 = this.deepPosition.x;
+        let rectA_y1 = this.deepPosition.y;
+        let rectB_x1 = this.parallaxedPosition.x;
+        let rectB_y1 = this.parallaxedPosition.y;
+        let wS = this.widgetSize;
+        line(rectA_x1, rectA_y1, rectB_x1, rectB_y1);
+        line(rectA_x1 + wS.width, rectA_y1, rectB_x1 + wS.width, rectB_y1);
+        line(rectA_x1, rectA_y1 + wS.height, rectB_x1, rectB_y1 + wS.height);
+        line(rectA_x1 + wS.width, rectA_y1 + wS.height, rectB_x1 + wS.width, rectB_y1 + wS.height);
+        
+        // check if the mouse is intersecting the widget bounding box
+        // account for offset of zoom and panX,panY
+        let isHovered = realMouseX > this.deepPosition.x
+            && realMouseX < this.deepPosition.x + this.widgetSize.width
+            && realMouseY > this.deepPosition.y
+            && realMouseY < this.deepPosition.y + this.widgetSize.height;
+
+        return isHovered;
+    }
     preDraw(){
         this.moveToTarget();
+
+        this.hovered = this.isHovered();
+        if(this.hovered){
+            hoveredArray.push(this);
+        }
+
+        // if we have a parent widget, 
+        // skip parallax calculations (for now)
+        if(this?.parentWidget){
+            return this;
+        }
+
         // Based on zDepth, we'll affect the position to emulate parallax
         // Depth currently ranges from minDepth maxDepth
         // Calculate the parallax factor based on the zDepth of the widget.
@@ -1748,7 +1919,7 @@ class Widget extends UndoRedoComponent {
 
         // Apply exponential scaling to the parallax factor to achieve non-linear movement.
         // Things in the background (negative zDepth) will move slower, and things in the foreground (positive zDepth) will move faster.
-        let exponentialParallaxFactor = Math.pow(2, parallaxFactor);
+        let exponentialParallaxFactor = Math.pow(store.currentPlaxExpFactor, parallaxFactor);
 
         let affectedX = this.basePosition.x 
             + (exponentialParallaxFactor * mouseShifted.x);
@@ -1782,6 +1953,7 @@ class Widget extends UndoRedoComponent {
         }
     }
     draw(widgetID){
+        this?.preDraw?.()
 
         // debug print position
         fill("red")
@@ -1817,8 +1989,13 @@ class Widget extends UndoRedoComponent {
         _brightness = lerp(127.5, 204, _brightness / 255)
         _alpha = lerp(127.5, 204, _alpha / 255)
 
+        if(this.hovered){
+            _brightness = color(0,255,0)
+        }
+
         //let fillcolor = color(0) 
-        let fillcolor = color(_brightness)
+        // let fillcolor = color(_brightness)
+        let fillcolor = this.debugColor
         fillcolor.setAlpha(_alpha);
         fill(fillcolor)
 
@@ -2428,47 +2605,148 @@ class UIButton extends Widget {
         width: 100,
         height: 50
     }
-    draw(){
+    hoverColor = "yellow"
+    constructor(){
+        super(...arguments)
+    }
+    draw(rootWidget){
+        // this.position.x = rootWidget.position.x;
+        // this.position.y = rootWidget.position.y;
+        // super.draw(...arguments)
+        this.preDraw();
+        push()
 
+        strokeWeight(3)
+        stroke("blue")
+        fill(this.hovered ? "green" : "red")
+        rect(
+            rootWidget.position.x 
+                + this.position.x 
+                + (rootWidget.widgetSize.width / 2)
+                - (this.widgetSize.width / 2),
+            rootWidget.position.y 
+                + this.position.y 
+                + (rootWidget.widgetSize.height / 2)
+                - (this.widgetSize.height / 2),
+            this.widgetSize.width,
+            this.widgetSize.height,
+            20
+        )
+        textAlign(CENTER, CENTER)
+        fill("yellow")
+        text(
+            "UIButton",
+            rootWidget.position.x 
+                + this.position.x 
+                + (rootWidget.widgetSize.width / 2)
+                - (this.widgetSize.width / 2),
+            rootWidget.position.y 
+                + this.position.y 
+                + (rootWidget.widgetSize.height / 2)
+                - (this.widgetSize.height / 2)
+        )
+
+        pop();
     }
 }
 
+class UISlider extends Widget {
+    // draw a track with a button
+    handleButton
+    get position(){
+        return this._absolutePosition;
+    }
+    constructor(){
+        super(...arguments)
+        this.handleButton = new UIButton();
+        this.handleButton.setParentWidget(this);
+    }
+}
+
+// testUi
+// uitest
 class UIDemoWidget extends Widget {
+    elements = []
     widgetSize = {
         width: 300,
         height: 300
     }
     componentTree = [
-        {type: "div", children: [
-            {type: "h1", children: [
-                {type: "text", value: "Hello World!"},
-                {type: "boundProp", value: "store.zoom"},
-                {
-                    type: "UIButton", 
-                    value: "Reset Zoom",
-                    onClick: ["sets", "store.zoom", 1]
-                }
-            ]}
-        ]}
-    ]
-    draw(){
-        strokeWeight(1)
-        stroke("red")
-        if(this.hovered){
-            fill("yellow")
+        {
+            type: "div", 
+            children: [
+            {
+                type: "h1", 
+                children: [
+                    {
+                        type: "text", 
+                        value: "Hello World!"
+                    },
+                    {
+                        type: "boundProp", 
+                        value: "store.zoom"
+                    },
+                    {
+                        type: "UIButton", 
+                        value: "Reset Zoom",
+                        onClick: ["sets", "store.zoom", 1]
+                    }
+                ]}
+            ]
         }
-        fill("blue")
-        rect(
-            this.position.x + this.widgetSize.width / 2,
-            this.position.y + this.widgetSize.height / 2,
-            this.widgetSize.width,
-            this.widgetSize.height
-        )
+    ]
+    drawElement(type,component){
+        //console.warn("placeholder: drawElement",{type,component})
+    }
+    drawUIButton(component, rootWidget){
+        if(!this.elements[this.drawIndex]){
+            this.elements[this.drawIndex] = new UIButton(component);
+            this.elements[this.drawIndex].zDepth = rootWidget.zDepth + 1;
+        }
+        this.elements[this.drawIndex].draw(rootWidget);
 
         // in this case we don't call super.draw,
         // this is a widget with no base draw fns
         // TODO; maybe enforce that label is still rendered
         // by splitting to a separate base-class fn
+    }
+    drawComponent(component, rootWidget){
+        if(component?.type?.length){
+            switch(component.type){
+                case "div":
+                    this.drawElement("div",component);
+                    break;
+                case "h1":
+                    this.drawElement("h1",component);
+                    break;
+                case "text":
+                    this.drawElement("text",component);
+                    break;
+                case "boundProp":
+                    this.drawElement("boundProp",component);
+                    break;
+                case "UIButton":
+                    this.drawUIButton(component, rootWidget);
+                    break;
+                default:
+                    console.warn(`can render ${component.type}`)
+                    break;
+            }
+        }
+        if(component?.children?.length){
+            component.children.forEach((child)=>{
+                this.drawComponent(child, rootWidget)
+            })
+        }
+        this.drawIndex++;
+    }
+    draw(){
+        super.draw();
+
+        this.drawIndex = 0;
+        this.componentTree.forEach((component)=>{
+            this.drawComponent(component, this);
+        })
     }
 }
 
@@ -2638,6 +2916,76 @@ extends ImageViewerWidget {
         );
         //super.draw(...arguments)
         pop()
+    }
+}
+
+class ImageCubeRotatorWidget
+extends ImageViewerWidget {
+}
+
+class Spline {
+    localGravityMSS = 0.1;
+    friction = 0.999;
+
+    constructor(from, to, segmentCount) {
+        this.from = from;
+        this.to = to;
+        this.segmentCount = segmentCount;
+        this.segments = []; // Initialize segments array
+    }
+    draw(){
+        beginShape();
+        this.segments.forEach(segment => {
+            vertex(segment.x, segment.y);
+        });
+        endShape();
+    }
+}
+
+class Cable extends Spline {
+    constructor(from, to, color) {
+        super(from, to, 10); // Assuming segmentCount is always 10 for a Cable
+        this.color = color;
+    }
+    // Add methods for Cable class here
+}
+
+class SplinePhysicsSandboxWidget extends Widget {
+    socketRadius = 20;
+    widgetSize = {
+        width: 300,
+        height: 300
+    };
+    sockets = [
+        // left
+        {x: 10, y: 10},
+        {x: 10, y: 40},
+        {x: 10, y: 70},
+
+        // right
+        {x: 290, y: 10},
+        {x: 290, y: 40},
+        {x: 290, y: 70},
+    ];
+    cables = [];
+
+    constructor() {
+        super(...arguments);
+        this.cables.push(new Cable(this.sockets[0], this.sockets[2+1], "red"));
+        this.cables.push(new Cable(this.sockets[1], this.sockets[2+0], "green"));
+        this.cables.push(new Cable(this.sockets[2], this.sockets[2+2], "blue"));
+    }
+
+    draw() {
+        super.draw(...arguments);
+        this.cables.forEach((cable) => {
+            this.drawCable(cable);
+        });
+    }
+
+    drawCable(cable) {
+        // Forward the call to the Cable class
+        cable.draw();
     }
 }
 
@@ -3655,7 +4003,8 @@ class LayereredCanvasRenderer {
 // we do this so we can cache the canvas and apply a blur to it, and then use the cached blurred image texture to represent the frozen layer,
 // the frozen layers (out of focus layers) are panned with parallax factors when the midground is panned to simulate depth of field
 class Dashboard {
-    widgetIDs = []
+    widgetLayoutOrder = []
+    widgetDepthOrder = []
     widgets = {}
     // we animate widgets, so we need to track their current positions and their target positions
     layout = {}
@@ -3677,7 +4026,7 @@ class Dashboard {
     collapse(){
         this.collapsed = true;
         // update widget Target positions to be in a stack (slight offset per card)
-        this.widgetIDs.forEach((widgetID,index)=>{
+        this.widgetLayoutOrder.forEach((widgetID,index)=>{
             let widget = this.widgets[widgetID]
             let x = index * -30;
             let y = index * 30;
@@ -3693,7 +4042,7 @@ class Dashboard {
     }
     reflowLayout(){
         // let the widgets redefine their sizes
-        this.widgetIDs.forEach((widgetID)=>{
+        this.widgetLayoutOrder.forEach((widgetID)=>{
             this.widgets[widgetID]?.recalcDimensions?.();
         })
 
@@ -3706,7 +4055,7 @@ class Dashboard {
         prevRowHeight = 0,
         currentRowIndex = 0;
         
-        this.widgetIDs.forEach((widgetID,index)=>{
+        this.widgetLayoutOrder.forEach((widgetID,index)=>{
             let widget = this.widgets[widgetID]
             if(!widget || !widget?.widgetSize){
                 system.panic("Dashboard.reflowLayout: widget or widgetSize not found\n\n\nDid you forget to extend Widget base class?",{widgetID,widget})
@@ -3765,10 +4114,16 @@ class Dashboard {
         }
         // define a back reference
         widgetInstance.dashboard = this; 
-        this.widgetIDs.unshift(widgetID);
+        this.widgetDepthOrder.unshift(widgetID);
+        this.widgetLayoutOrder.unshift(widgetID);
         this.widgets[widgetID] = widgetInstance;
-        //console.warn('Dashboard widget count:'+this.widgetIDs.length);
-        //console.warn("registerWidget widgetID,widgetInstance",{widgetID,widgetInstance})
+        
+        console.warn("Dashboard > Register Widget",{
+            widgetID,
+            widgetInstance,
+            depthLen: this.widgetDepthOrder.length,
+            layoutLen: this.widgetLayoutOrder.length,
+        })
 
         // reflow widget layout
         this.reflowLayout();
@@ -3776,8 +4131,15 @@ class Dashboard {
         return this; // chainable
     }
     deRegisterWidget(widgetID){
-        this.widgetIDs.splice(this.widgetIDs.indexOf(widgetID),1);
-        console.warn('Dashboard widget count:'+this.widgetIDs.length);
+        
+        // remove from widgetDepthOrder, widgetLayoutOrder
+        this.widgetDepthOrder.splice(this.widgetDepthOrder.indexOf(widgetID),1);
+        this.widgetLayoutOrder.splice(this.widgetLayoutOrder.indexOf(widgetID),1);
+
+        console.warn('Dashboard.deRegisterWidget:',{
+            depthLen: this.widgetDepthOrder.length,
+            layoutLen: this.widgetLayoutOrder.length,
+        });
 
         // reflow widget layout
         this.reflowLayout();
@@ -3785,7 +4147,9 @@ class Dashboard {
         return this; // chainable
     }
     clearAllWidgets(){
-        this.widgetIDs = [];
+        this.widgetIDs.length = 0;
+        this.widgetDepthOrder.length = 0;
+        this.widgetLayoutOrder.length = 0;
         console.warn('Dashboard widget count:'+this.widgetIDs.length);
 
         // reflow widget layout
@@ -3793,11 +4157,47 @@ class Dashboard {
 
         return this; // chainable
     }
+    shuffleWidgets(){
+        //this.widgetIDs = shuffle(this.widgetIDs);
+
+        this.widgetLayoutOrder = shuffle(this.widgetLayoutOrder);
+    }
+    shuffleWidgetPositions(){
+        this.shuffleWidgets();
+        // randomize widget zDepth and order in the widgetIDs array
+        this.widgetLayoutOrder.forEach((widgetID,index)=>{
+            /*
+            z = index
+            */
+            let z = Math.round(random(
+                minWidgetDepth,
+                maxWidgetDepth
+            ))
+            this.widgets[widgetID].zDepth = z;
+        });
+        this.updateWidgetDepthOrder();
+    }
+    updateWidgetDepthOrder() {
+        // Assuming `widgets` is an object where keys are widget IDs and values are widget objects
+        // And each widget object has a `z` property indicating its Z-order
+        this.widgetDepthOrder.sort((a, b) => this.widgets[a].zDepth - this.widgets[b].zDepth);
+        // pass the zDepth value into the widget
+        this.widgetDepthOrder.forEach((widgetID,index)=>{
+            this.widgets[widgetID].zDepth = index;
+        });
+    }
     draw(){
         if(!this.visible){
             return;
         }
-        this.widgetIDs.forEach((widgetID)=>{
+
+        // check our draw order
+        // TOOD don't do this every frame, do it when the draw order changes
+        this.updateWidgetDepthOrder()
+
+        // reset our hover elements
+        hoveredArray.length = 0;
+        this.widgetDepthOrder.forEach((widgetID)=>{
             if(!this.widgets[widgetID]){
                 //system.warn('Dashboard.draw: widget not found',widgetID)
                 return;
@@ -3805,9 +4205,12 @@ class Dashboard {
             // widget.draw()
             this.widgets[widgetID]
                 .setTargetPosition(this.layout[widgetID])
-                ?.preDraw()
                 ?.draw(widgetID);
         });
+        // if there's at least one hovered widget, set the cursor to pointer
+        document.body.style.cursor = hoveredArray?.length 
+            ? "pointer" 
+            : "default";
     }
     focusWidget(id){
         // pan our view so the widget is centered on the screen
@@ -3844,6 +4247,11 @@ let store = {
     clearMode: true,
     interactionMode: MODES.PAN,
     shiftIsPressed: false,
+
+    currentPlaxExpFactor: 1, // 1-2 is good
+
+    //
+
 
     // for now, one dashboard per client instance
     // in the future we'll make it a sub-instance on a per-system basis
@@ -5762,6 +6170,13 @@ extends WizardConfig {
     }
 }
 
+class ShuffleDashboardWidgetPositionsCommand 
+extends Config {
+    name = "Shuffle Dashboard Widget Positions"
+    execute(){
+        system.get("Dashboard").shuffleWidgetPositions();
+    }
+}
 
 class ToggleDashboardCollapsed extends DefaultSuggestionDecorator(Command, new ToggleDashboardCollapsedWizardConfig()){}
 
@@ -6730,6 +7145,38 @@ const InvokableCommands = {
     },
     ["Set Dashboard Friction"](){
         console.warn("Set Dashboard Friction...");
+    },
+    ["Set Plax Exp Factor"](wiz){
+        let checkKeys = [
+            stepResponses[0].answerStorageKey,
+            "value",
+            "input"
+        ]
+        let match, matchKey;
+        // aka find, but also with a warning if there are multiple matches
+        checkKeys.forEach((key)=>{
+            if(isEmptyOrUndefined(wiz?.stepResponses?.[0]?.[key])){
+                console.warn('bad key',key,wiz?.stepResponses?.[0])
+            }else{
+                if(typeof match === 'undefined'){
+                    match = wiz?.stepResponses?.[0]?.[key]
+                    matchKey = key;
+                }else{
+                    console.warn('multiple matches',{
+                        key,
+                        stepResponse:wiz?.stepResponses?.[0],
+                        prevMatchKey: matchKey,
+                    })
+                }
+            }
+        })
+        if(typeof match === 'undefined'){
+            console.warn('no match found')
+        }else{
+            // match value
+            console.warn('match found',{match})
+            store["currentPlaxExpFactor"] = match;
+        }
     }
 }
 // Maps searchable names to Invokable Functions
@@ -6741,6 +7188,15 @@ const BasicCommands = [
         name: "Set Dashboard Friction",
         type: "number",
         default: 0.9,
+    },
+
+    {
+        name: "Set Plax Exp Factor",
+        type: "number",
+        default: 0,
+        min: 0,
+        max: 2,
+        step: 0.01
     },
 
     { name: "Play Lovely Day" },
@@ -6760,7 +7216,7 @@ const BasicWidgets = [
     },
 
     // ya'know, for testing buttons and stuff
-    { name: "UIDemo Widget" },
+    { name: "UIDemo Widget", classname: "UIDemoWidget" },
 
     // display a basic sphere gizmo
     { name: "Gizmo Viewer" },
@@ -7675,8 +8131,17 @@ class CmdPrompt {
             && this.filteredCommands.length
             && this.selectedSuggestionIndex < this.filteredCommands.length
         ){
-
-            this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex].clone();
+            if(!this.filteredCommands[this.selectedSuggestionIndex]){
+                system.panic("Command Not Found",{
+                    index: this.selectedSuggestionIndex,
+                })
+            }
+            if(!this.filteredCommands[this.selectedSuggestionIndex]?.clone){
+                this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex];
+            }else{
+                // clone the command so we don't mutate the original
+                this.currentCommand = this.filteredCommands[this.selectedSuggestionIndex].clone();
+            }
         }
         console.log('CmdPrompt.OnPressEnter', {
             currentCMDName: this.currentCommand.name,
@@ -8109,11 +8574,29 @@ class DebugPath {
 
     draw(_color){
         let maxZ = Math.max(...this.points.map(point => point.z));
+        let lineColor = _color ?? 20;
+        let adjustedLineColor = lineColor
         for(let i = 0; i < this.points.length - 1; i++) {
             let weight = map(this.points[i].z, 0, maxZ, 0, 10);
-            stroke(_color ?? 20);
+
+            // adjust lineColor
+            let brightness = map(i, 0, this.points.length, 0, 255);
+            
+            // adjust adjustedLineColor based on derived brightness
+            adjustedLineColor = color(
+                red(lineColor) * (255/brightness),
+                green(lineColor) * (255/brightness),
+                blue(lineColor) * (255/brightness)
+            );
+
+            stroke(adjustedLineColor);
             strokeWeight(weight);
-            line(this.points[i].x, this.points[i].y, this.points[i+1].x, this.points[i+1].y);
+            line(
+                this.points[i].x, 
+                this.points[i].y,
+                this.points[i+1].x, 
+                this.points[i+1].y
+            );
         }
     }
 }
@@ -8126,15 +8609,37 @@ const runtimeKeymapLookup = {}
 
 let zoomChanged = false;
 
+// User defined input mappings handle routing input to UI feedback.
+// This is fully customizable at runtime.
+const InputSourcesAndDrains = [
+    "WheelDelta", "WheelDeltaX", "WheelDeltaY",
+    "MouseX", "MouseY", "MouseDraggedX", "MouseDraggedY",
+
+    // drains
+    "PanX", "PanY", "zoom"
+]
+// we check for startswith neg to flip sign on the value
+const InputMap = {
+    wheel: {
+        delta: "null",
+        deltaX: "negPanX",
+        deltaY: "zoom",
+    }
+}
+
 // Define the mouseWheel function
 function mouseWheel(event) {
     // TODO: if the mouse is over a scroll container,
     // scroll it
     let oldZoom = zoom;
-    // if(store.shiftIsPressed){
-    //     zoom -= event.delta / 1000;
-    //     zoom = constrain(zoom, 0.1, 3);
-    // }else{
+    if(store.shiftIsPressed){
+
+        // IF ZOOM ON SCROLL ENABLED
+        zoom -= event.delta / 1000;
+        zoom = constrain(zoom, 0.1, 3);
+
+    }
+    // else{
     //     panX -= event.deltaX;
     //     panY -= event.deltaY;
     // }
@@ -8146,7 +8651,6 @@ function mouseWheel(event) {
         zoomChanged = oldZoom !== zoom
 
     //}else{
-        // PAN-X disabled
         //panX -= event.deltaX;
         panY -= event.deltaY;
     //}
@@ -8273,22 +8777,24 @@ class Implementer {
 }
 
 
-class MiniMap extends ImplementationOf([
-    // Draggable/Droppable
-    "Draggable",
-    // register for draw callback
-    "Drawable",
-    // implements common handlers
-    // and callbacks hooks
-    // for objects in SortingContexts 
-    "Sortable",
-    // ["Todos",{
-    //     configurableImplementations: true
-    // }],
-    // ["Todos",[
-    //     /* Webpack Style */
-    //     "FlexibleArguments"
-    // ]]
+class MiniMapWidget extends ImplementationOf([
+    "Widget",
+    
+    // // Draggable/Droppable
+    // "Draggable",
+    // // register for draw callback
+    // "Drawable",
+    // // implements common handlers
+    // // and callbacks hooks
+    // // for objects in SortingContexts 
+    // "Sortable",
+    // // ["Todos",{
+    // //     configurableImplementations: true
+    // // }],
+    // // ["Todos",[
+    // //     /* Webpack Style */
+    // //     "FlexibleArguments"
+    // // ]]
 ]) {
     widgetSize = {
         width: 300,
@@ -8301,6 +8807,8 @@ class MiniMap extends ImplementationOf([
         y: 0
     }
     draw(){
+        //super.preDraw();
+        super.draw();
         push() // exit previous context
         strokeWeight(3);
         stroke(255,0,0);
@@ -8397,13 +8905,13 @@ function draw() {
         mouseShifted.y, 
         zoom+0
     );
-    DebugPathInstance.draw();
+    // DebugPathInstance.draw();
     DebugPathTwo.addPoint(
         targetX, 
         targetY,
         zoom+0
     )
-    DebugPathTwo.draw(40);
+    // DebugPathTwo.draw(40);
     
 
     translate(mouseShifted.x, mouseShifted.y);
@@ -8895,15 +9403,7 @@ const getBasicSpawnWidgetConfig = function(widget){
 
 // Define the setup function
 let deepCanvasManager;
-function setup() {
-    /*
-        it's a spectrum
-    */
-    whatTheCenterIs = {
-        x: windowWidth / 2,
-        y: windowHeight / 2,
-        z: 0
-    }
+function setupDefaults(){
     // assign a random time to the query params so hard reload is by default
     // this is useful for testing
     // assign a random time to the query params so hard reload is by default
@@ -8911,6 +9411,13 @@ function setup() {
     let params = new URLSearchParams(window.location.search);
     params.set('time', Math.random());
     window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
+
+    // OLD
+    // hand-register some default commands
+    defaultSuggestedCommands.push(new ShuffleDashboardWidgetPositionsCommand());
+
+    // NEW
+    // define in a config object
     BasicCommands.forEach((def)=>{
         let cmdName = def.command ?? def.name;
         if(!InvokableCommands[cmdName]){
@@ -8945,6 +9452,18 @@ function setup() {
         })
         defaultSuggestedCommands.push(getBasicSpawnWidgetConfig(widget));
     })
+}
+function setup() {
+    /*
+        it's a spectrum
+    */
+    whatTheCenterIs = {
+        x: windowWidth / 2,
+        y: windowHeight / 2,
+        z: 0
+    }
+    
+    setupDefaults();
 
 
     deepCanvasManager = new LayereredCanvasRenderer();
@@ -9079,15 +9598,30 @@ function setup() {
     system.get("Dashboard").init()
         // add our first widget (todo: load state from dehydrated json)
         // DEFAULT WIDGET SET
+        
         // .registerWidget("Google Color Picker",
-        //     new iFrameWidget("https://www.google.com/search?si=ALGXSlaLv7V_s3rNc9eKgh_SDjxRKcW0ih5mkbSj_dG_s1DqJwBCAZERhCkbXL0Wtmw14QTxLP0MDLN_kv7wpA2SK5SYwEyItg%3D%3D&hl=en-US&kgs=62881ccfe441c2e7&shndl=21&source=sh/x/fbx/m1/1&fbxst=CgkKByMyYjEyNGE"))
+        //     new iFrameWidget(""))
+        .registerWidget(
+            "Color Picker",
+            //new ColorPickerWidget()
+            new ImageViewerWidget("./colorpickermockup.png")
+        )
+
+
         // .registerWidget("CalculatorWidget", new CalculatorWidget())
         // .registerWidget("StickyNoteWidget", new StickyNoteWidget())
         // .registerWidget("WeatherWidget")
         // .registerWidget("CalendarWidget")
         // .registerWidget("MessengerWidget")
+
+        .registerWidget(
+            "ImageViewerWidget:ThisIsFine", 
+            new ImageViewerWidget("fine.gif")
+        )
         
-        .registerWidget("4SeasonsImg", new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
+        .registerWidget(
+            "4SeasonsImg", 
+            new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
         
 
         .registerWidget("ZoomDependentWidget",  new ZoomDependentWidget())
@@ -9098,10 +9632,14 @@ function setup() {
         .registerWidget("Timers Widget",        new TimerWidget())
         //.registerWidget("GherkinRunnerWidget",  grw)
         //.registerWidget("ImageViewerWidget",    new ImageViewerWidget())
-        // .registerWidget(
-        //     "ImageRotatorWidget",
-        //     new ImageRotatorWidget()
-        // )
+        .registerWidget(
+            "ImageCubeRotatorWidget",
+            new ImageCubeRotatorWidget()
+        )
+        .registerWidget(
+            "ImageRotatorWidget",
+            new ImageRotatorWidget()
+        )
         // .registerWidget(
         //     "YoutubePlayerWidget",
         //     new YoutubePlayerWidget(
@@ -9118,7 +9656,12 @@ function setup() {
         //     )
         // )
         .registerWidget(new MoonPhaseWidget())
+        .registerWidget(new UIDemoWidget())
         ;
+
+            // shuffle widget order
+            system.get("Dashboard").shuffleWidgets()
+
     const todoNames = {
         "AM: shower": 1,
         "AM: walk bear": 1, 
