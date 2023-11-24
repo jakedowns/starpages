@@ -764,15 +764,15 @@ const AutorunningSelfTest = function(baseClass, options){
 
 // Automatically registers Command classes with the
 // Default Command Prompt Suggestions
-let defaultSuggestedCommands = []
-const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
-    console.warn('DefaultSuggestionDecorator',{
-        name: typeof wizardConfigInstance === 'undefined' 
-            ? command?.constructor?.name ?? command
-            : `${command?.name} ${wizardConfigInstance?.name}`,
-        command,
-        wizardConfigInstance
-    })
+let baseCmds = []
+const BaseCmds = function(command, wizardConfigInstance){
+    // console.warn('BaseCmds',{
+    //     name: typeof wizardConfigInstance === 'undefined' 
+    //         ? command?.constructor?.name ?? command
+    //         : `${command?.name} ${wizardConfigInstance?.name}`,
+    //     command,
+    //     wizardConfigInstance
+    // })
     let alreadyHatched = false;
     if(!wizardConfigInstance && command.__type === 'Config'){
         // we already have a wizardConfigInstance
@@ -784,7 +784,7 @@ const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
             command,
             wizardConfigInstance
         })
-        throw new Error("Bad usage of DefaultSuggestionDecorator, wizardConfigInstance must be defined and have a name")
+        throw new Error("Bad usage of BaseCmds, wizardConfigInstance must be defined and have a name")
     }
     // singleton
     let s = alreadyHatched
@@ -798,33 +798,39 @@ const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
     //     singleton: s
     // })
     // early registration before instance is created
-    defaultSuggestedCommands.push(s);
-    let index = defaultSuggestedCommands.length - 1;
+    baseCmds.push(s);
+    let index = baseCmds.length - 1;
     // console.warn(
-    //     'DefaultSuggestedCommandsArrayLen:',
-    //     defaultSuggestedCommands.length
+    //     'baseCmdsArrayLen:',
+    //     baseCmds.length
     // )
     return function(...args){
         // return s;
         // hot-swap when the instance is created
-        defaultSuggestedCommands[index] = new command(...args);
+        baseCmds[index] = new command(...args);
         console.warn('hot swap!',{
             s,
-            replacementInstance: defaultSuggestedCommands[index],
+            replacementInstance: baseCmds[index],
             newArgs: args,
             oldArgs: {
                 command,
                 wizardConfigInstance
             }
         })
-        if(defaultSuggestedCommands[index]?.postConstructor?.call){
-            defaultSuggestedCommands[index].postConstructor();
+        if(baseCmds[index]?.postConstructor?.call){
+            baseCmds[index].postConstructor();
         }
-        console.warn('init DefaultSuggestionDecorator',{
-            instance: defaultSuggestedCommands[index]
+        console.warn('init BaseCmds',{
+            instance: baseCmds[index]
         })
-        return defaultSuggestedCommands[index];
+        return baseCmds[index];
     }
+}
+
+debugLog_defaultSuggestions = function(){
+    baseCmds.forEach((s,i)=>{
+        console.log(i,s.name)
+    })
 }
 
 class Config
@@ -837,8 +843,11 @@ class Config
     steps = [{
         notice: "Default Wizard Config Step"
     }]
+    get name(){
+        return this?.config?.name ?? this.constructor.name ?? 'No Config Name Provided!';
+    }
     constructor(config){
-        console.warn("New Config Instance!",{config})
+        //console.warn("New Config Instance!",{config})
         this.config = config;
     }
     finalCallback(wizardInstance){
@@ -851,7 +860,7 @@ class Config
 // Define the Command class
 class Command {
     get name(){
-        return `Command: ${this._name} | ${this.options?.wizardConfig?.name ?? 'No Wizard Config'}`
+        return `Command: _name:{${this._name}}, wizardConfig:${this.options?.wizardConfig?.name ?? 'No Wizard Config'}`
     }
     set name(value){
         this._name = value;
@@ -879,20 +888,28 @@ class Command {
         return this?.options?.wizardConfig;
     }
     execute(){
+
+        if(this.onCommandExecuting){
+            this.onCommandExecuting();
+        }
+
         // This method is final and cannot be overridden by extending classes.
         // If you need to change the behavior, consider using hooks or events.
         // if (new.target !== Command) {
         //     throw new Error("Cannot override final method execute() from child class:".concat(this.constructor.name));
         // }
         // stay focused!!!
+        // daily train, ride the humps,
+        // > don't get distracted by the bumps
+        // 
         console.warn('Command.execute:',
         {
             name: this.name,
             
             hasWizard: this.wizardConfig ? true : false,
 
-            implementsActMethod: typeof this.act === 'function',
-            actIsType: typeof this.act,
+            implementsInvokeAsAFn: typeof this.invoke === 'function',
+            invokeIsType: typeof this.invoke,
 
             options: Object.keys(this.options),
             _options: this.options,
@@ -902,8 +919,8 @@ class Command {
                 hasExecuteFn: this.options.execute && this.options.execute?.call ? true : false,
                     fn: this.options.execute
         })
-        if(typeof this?.act === 'function'){
-            this.act();
+        if(typeof this?.invoke === 'function'){
+            this.invoke();
         }
         if(this.wizardConfig){
             // the constructor validates the wizardConfig for us
@@ -925,8 +942,10 @@ class Command {
             && typeof this.options?.callback !== 'function' 
             && typeof this.options?.execute !== 'function'
         ){
+            system.get("toastManager")
+            .showToast(`bad command: ${this.name}`, {level:TOAST_LEVELS.ERROR})
             //system.debug(this);
-            system.panic("Undefined Command Behavior!\nneed at least: act(), options.wizardConfig, options.callback or options.execute",{cmd:this})
+            //system.panic("Undefined Command Behavior!\nneed at least: invoke(), options.wizardConfig, options.callback or options.execute",{cmd:this})
         }
         // reset command buffer
         store.commandBuffer = {};
@@ -2062,14 +2081,22 @@ class Widget extends UndoRedoComponent {
             return this;
         }
 
+        let apparentDepth = this.zDepth;
+        // squash depth as zoom [0-3] approaches 3
+        apparentDepth = lerp(apparentDepth, apparentDepth * 0.5, zoom / 3);
+
         // Based on zDepth, we'll affect the position to emulate parallax
         // Depth currently ranges from minDepth maxDepth
         // Calculate the parallax factor based on the zDepth of the widget.
         // The parallax effect will be more pronounced for widgets with a higher zDepth.
         // The effect should flip signs when the sign of the current depth is negative
         // i.e. things closer to camera should move the opposite direction as things past the zDepth 0 focal point
-        let parallaxFactor = (this.zDepth < 0 ? -1 : 1) * (1 - Math.abs(this.zDepth));
+        let parallaxFactor = (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
         parallaxFactor *= this.parallaxMultiplier
+
+        // dampen the pFactor when the zoom is increased to simulate flattening of perspective
+        // use lerp to account for the zoom range being 0-3, not 0-1
+        parallaxFactor *= lerp(1, 0, zoom / 3);
 
         this.targetExpFactor = this.hovered ? parallaxFactor : 0;
         this.tweenExpFactor = lerp(this.tweenExpFactor, this.targetExpFactor, 0.1);
@@ -2913,7 +2940,7 @@ class CreateRootTestTableCommand extends Command {
     }
 }
 
-class NewTimeToSunSetWidgetCommand extends DefaultSuggestionDecorator(Command,{
+class NewTimeToSunSetWidgetCommand extends BaseCmds(Command,{
     name: "New Time to Sunset Widget...",
     steps: [
         {
@@ -2938,7 +2965,7 @@ class NewTimeToSunSetWidgetCommand extends DefaultSuggestionDecorator(Command,{
 }) {}
 
 // New Pomodoro Widget Command
-class NewPomodoroWidgetCommand extends DefaultSuggestionDecorator(Command,{
+class NewPomodoroWidgetCommand extends BaseCmds(Command,{
     name: "New Pomodoro Widget",
     steps: [
         {
@@ -2964,7 +2991,7 @@ class NewPomodoroWidgetCommand extends DefaultSuggestionDecorator(Command,{
     name = "New Todo Widget"
 }
 
-class NewTodoWidgetCommand extends DefaultSuggestionDecorator(Command,{
+class NewTodoWidgetCommand extends BaseCmds(Command,{
     name: "New Todo Widget",
     steps: [
         {
@@ -3018,7 +3045,7 @@ class NewTableWizardConfig extends Config {
     }
 }
 class NewTableCommand
-extends DefaultSuggestionDecorator(Command, new NewTableWizardConfig()) {}
+extends BaseCmds(Command, new NewTableWizardConfig()) {}
 
 class GherkinTestRunResults {}
 class GherkinTestRunResultsViewer {}
@@ -3041,7 +3068,7 @@ class TimerWidgetConfig {
 }
 
 class NewTimerCommand 
-extends DefaultSuggestionDecorator(
+extends BaseCmds(
     Command,
     TimerWidgetConfig
 ){/**/}
@@ -3101,7 +3128,7 @@ extends WrappedCommand(
 ){/* 😀 */}
 
 // class SetZoomLevelCommand
-// extends DefaultSuggestionDecorator(
+// extends BaseCmds(
 //     SimpleCommandConfig("Set Zoom Level", "assigns", "store.zoom", "int")
 // ){/* 😀 */}
 
@@ -3408,7 +3435,7 @@ class ZoomDependentWidget extends Widget {
 }
 // register the widget with the command system as instantiatable
 class NewZoomDependentWidgetCommand
-extends DefaultSuggestionDecorator(Command,{
+extends BaseCmds(Command,{
     name: "New Zoom Dependent Widget",
     steps: [
         {
@@ -3495,15 +3522,27 @@ class ImageViewerWidget extends Widget {
 
         this.src = src ?? this.src;
 
+        if(!this.src.includes("res/")){
+            this.src = "res/" + this.src;
+        }
+
         // if the src contains .gif, use a gif renderer
         this.isGif = this.src.includes(".gif");
 
         if(PreloadedImages[this.src]){
             this.image = PreloadedImages[this.src];
         }else{
-            PreloadedImages[this.src] = loadImage(this.src);
+            // does this need to be in a callback or does it unwrap itself?
+            // Answer: 
+            // Yes, it needs to be in a callback. The loadImage function is asynchronous, so we need to ensure
+            // that the image is fully loaded before assigning it to this.image. We can do this by passing a callback
+            // function to loadImage. The callback function will be executed once the image is fully loaded.
+            PreloadedImages[this.src] = loadImage(this.src, (img) => {
+                this.image = img;
+            });
             this.image = PreloadedImages[this.src];
         }
+        return this;
     }
     draw(){
         super.draw(...arguments)
@@ -3846,7 +3885,7 @@ class SplinePhysicsSandboxWidget extends Widget {
 }
 
 class NewImageViewerWidgetCommand 
-extends DefaultSuggestionDecorator(Command,{
+extends BaseCmds(Command,{
     name: "New Image Viewer Widget",
     steps: [
         {
@@ -3861,7 +3900,7 @@ extends DefaultSuggestionDecorator(Command,{
     }
 }){/**/}
 
-class NewIFrameWidgetCommand extends DefaultSuggestionDecorator(Command, {
+class NewIFrameWidgetCommand extends BaseCmds(Command, {
     name: "New iFrame Widget",
     steps: [
         {
@@ -4464,31 +4503,31 @@ class TimeToSunSetWidget extends ClockWidget {
 
         // // draw a sunset themed background gradient
         // // from yellow to orange to red
-        // let lines = 10;
-        // let colorsToLerp = [
-        //     "black",
-        //     "purple",
-        //     "red",
-        //     "orange",
-        //     "yellow",
-        //     "blue",
-        //     "green",
-        //     "brown",
-        // ]
-        // for(let i = 0; i < lines; i++){
-        //     // divide the display by the number of lines (horizontal bands)
-        //     // draw rects to represent the gradient
-        //     let colorIndex = Math.floor((i/lines) * colorsToLerp.length);
-        //     let color = colorsToLerp[colorIndex];
-        //     strokeWeight(0)
-        //     fill(color);
-        //     rect(
-        //         this.position.x, 
-        //         this.position.y + (i * (this.widgetSize.height / lines)), 
-        //         this.widgetSize.width, 
-        //         this.widgetSize.height / lines
-        //     )
-        // } 
+        let lines = 10;
+        let colorsToLerp = [
+            "black",
+            "purple",
+            "red",
+            "orange",
+            "yellow",
+            "blue",
+            "green",
+            "brown",
+        ]
+        for(let i = 0; i < lines; i++){
+            // divide the display by the number of lines (horizontal bands)
+            // draw rects to represent the gradient
+            let colorIndex = Math.floor((i/lines) * colorsToLerp.length);
+            let color = colorsToLerp[colorIndex];
+            strokeWeight(0)
+            fill(color);
+            rect(
+                this.position.x, 
+                this.position.y + (i * (this.widgetSize.height / lines)), 
+                this.widgetSize.width, 
+                this.widgetSize.height / lines
+            )
+        } 
     }
 
 }
@@ -7136,7 +7175,7 @@ extends WizardConfig {
         system.get("Dashboard").toggleVisibility();
     }
 }
-class ToggleDashboardVisible extends DefaultSuggestionDecorator(Command, new ToggleDashboardVisibleWizardConfig()){}
+class ToggleDashboardVisible extends BaseCmds(Command, new ToggleDashboardVisibleWizardConfig()){}
 
 class ToggleDashboardCollapsedWizardConfig
 extends WizardConfig {
@@ -7158,35 +7197,35 @@ extends Config {
     }
 }
 
-class ToggleDashboardCollapsed extends DefaultSuggestionDecorator(Command, new ToggleDashboardCollapsedWizardConfig()){}
+class ToggleDashboardCollapsed extends BaseCmds(Command, new ToggleDashboardCollapsedWizardConfig()){}
 
 class NewCommandCommand
-extends DefaultSuggestionDecorator(Command, new NewCommandWizardConfig()){}
+extends BaseCmds(Command, new NewCommandWizardConfig()){}
 
 class RunGherkinCommand
-extends DefaultSuggestionDecorator(Command, new RunGherkinCommandWizardConfig()){}
+extends BaseCmds(Command, new RunGherkinCommandWizardConfig()){}
 
 class AddGraphNodeCommand
-extends DefaultSuggestionDecorator(Command, new AddGraphNodeWizardConfig()){}
+extends BaseCmds(Command, new AddGraphNodeWizardConfig()){}
 
 /*
 class NewFlashCardGame
-extends DefaultSuggestionDecorator(Command, new FlashCardGameWizardConfig()) {}
+extends BaseCmds(Command, new FlashCardGameWizardConfig()) {}
 
 class NewMatchingCardGame
-extends DefaultSuggestionDecorator(Command, new MatchingCardGameWizardConfig()){}
+extends BaseCmds(Command, new MatchingCardGameWizardConfig()){}
 
 class NewKlondikeSolitaireGame
-extends DefaultSuggestionDecorator(Command, new KlondikeSolitaireGameWizardConfig()){}
+extends BaseCmds(Command, new KlondikeSolitaireGameWizardConfig()){}
 
 class NewMatch3Game
-extends DefaultSuggestionDecorator(Command, new Match3GameWizardConfig()){}
+extends BaseCmds(Command, new Match3GameWizardConfig()){}
 
 class NewChatRoom
-extends DefaultSuggestionDecorator(Command, new ChatRoomWizardConfig()){}
+extends BaseCmds(Command, new ChatRoomWizardConfig()){}
 
 class LoadMessengerWindowCommand
-extends DefaultSuggestionDecorator(Command, new LoadMessengerWindowWizardConfig()){}
+extends BaseCmds(Command, new LoadMessengerWindowWizardConfig()){}
 */
 
 class GPTChatSessionWizardConfig
@@ -7326,7 +7365,7 @@ class ChatGPTWidget extends Widget {
 }
 
 class StartChatGPTSessionCommand
-extends DefaultSuggestionDecorator(Command, new GPTChatSessionWizardConfig()){}
+extends BaseCmds(Command, new GPTChatSessionWizardConfig()){}
 
 class NewToastWizardConfig
 extends Config {
@@ -7348,7 +7387,7 @@ extends Config {
 }
 
 class ShowNewToastCommand 
-extends DefaultSuggestionDecorator(Command, new NewToastWizardConfig()){}
+extends BaseCmds(Command, new NewToastWizardConfig()){}
 
 // Define the ShowCmdPromptCommand class
 class ShowCmdPromptCommand extends Command {
@@ -7356,7 +7395,7 @@ class ShowCmdPromptCommand extends Command {
         super("Show Command Prompt")
     }
     // draw, perform, verb, invoke, execute, run, do,
-    act(){
+    invoke(){
         // Show Command Prompt
         store.CmdPromptVisible = true;
 
@@ -7371,7 +7410,7 @@ class MyJavascriptCommand extends Command {
         this.target = target.split('.');
         this.args = args;
     }
-    execute(){
+    invoke(){
         // safer than eval, but not by much...
         // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#never_use_eval!
         let context = window;
@@ -7388,21 +7427,28 @@ class WindowLocationReload extends MyJavascriptCommand {
     }
 }
 
+class SoftReloadCommand extends Command {
+    name = "Soft Reload"
+    // implements Command.invoke to be called back when Command.execute runs
+    invoke(){
+        console.warn("onCommandExecuting: Soft Reload")
+    }
+}
+
 class HardReloadCommand extends Command {
     name = "Hard Reload"
-    act(){
+    invoke(){
         new WindowLocationReload().execute();
     }
 }
-defaultSuggestedCommands.push(new HardReloadCommand());
 
 // Define the HideCmdPromptCommand class
 class HideCmdPromptCommand extends Command {
     constructor(){
         super("Hide CMD Prompt")
     }
-    execute(){
-        super.execute();
+
+    invoke(){
 
         // clear the command buffer
         store.commandBuffer = {name:''};
@@ -7418,9 +7464,7 @@ class ToggleCmdPromptCommand extends Command {
     constructor(){
         super("Toggle CMD Prompt")
     }
-    execute(){
-        super.execute();
-
+    invoke(){
         // Toggle CMD Prompt
         store.CmdPromptVisible = !store.CmdPromptVisible;
     }
@@ -8214,6 +8258,17 @@ class TimerManager {
     }
 }
 const InvokableCommands = {
+    // { name: "New Basic Command" },
+
+    /*
+    { name: "Send a Tweet", command: "NotYetImplemented" },
+    { name: "Post to Facebook", command: "NotYetImplemented" },
+    { name: "Post to Instagram", command: "NotYetImplemented" },
+    { name: "Get Share Link", command: "NotYetImplemented" },
+    { name: "Enter Bulk Widget Editor Mode", command: "NotYetImplemented"},
+    { name: "Group Widgets into Substack", command: "NotYetImplemented"}
+    */
+
     ForceReloadLayout(){
         system.get("Dashboard")
             ?.reflowLayout?.();
@@ -8233,9 +8288,38 @@ const InvokableCommands = {
                 ]
             }))
     },
+    /*
+        type: "number",
+        default: 0.9,
+    */
     ["Set Dashboard Friction"](){
         console.warn("Set Dashboard Friction...");
     },
+    // center field
+    // center plane
+    // return to origin again...
+    ["Center View"]:[
+        function(){
+            console.warn("Center View...");
+            alert("Center View...");
+        },
+        [
+            "Center {View|Viewport}: Center the current view or viewport",
+            "Center {View|Viewport} on Origin: Center the current view or viewport on the origin",
+            "{Center|Move} to {origin|home}: Center or move to the origin or home position",
+            "{?go} home: Optionally go to the home position"
+        ]
+    ],
+    /*
+    {
+        name: "Set Plax Exp Factor",
+        type: "number",
+        default: 0,
+        min: 0,
+        max: 2,
+        step: 0.01
+    },
+    */
     ["Set Plax Exp Factor"](wiz){
         let checkKeys = [
             stepResponses[0].answerStorageKey,
@@ -8271,36 +8355,6 @@ const InvokableCommands = {
 }
 const BasicBools = [
     "DISABLE_PARALLAX"
-]
-// Maps searchable names to Invokable Functions
-// think of it as the serialized command router / resolver / dispatcher
-const BasicCommands = [
-    // { name: "New Basic Command" },
-
-    { 
-        name: "Set Dashboard Friction",
-        type: "number",
-        default: 0.9,
-    },
-
-    {
-        name: "Set Plax Exp Factor",
-        type: "number",
-        default: 0,
-        min: 0,
-        max: 2,
-        step: 0.01
-    },
-
-    { name: "Play Lovely Day" },
-    { name: "Force Reflow Layout", command: "ForceReloadLayout" },
-    { name: "Focus Widget", command: "FocusWidget" },
-    { name: "Send a Tweet", command: "NotYetImplemented" },
-    { name: "Post to Facebook", command: "NotYetImplemented" },
-    { name: "Post to Instagram", command: "NotYetImplemented" },
-    { name: "Get Share Link", command: "NotYetImplemented" },
-    { name: "Enter Bulk Widget Editor Mode", command: "NotYetImplemented"},
-    { name: "Group Widgets into Substack", command: "NotYetImplemented"}
 ]
 const BasicWidgets = [
     // New {X} Widget...
@@ -8646,7 +8700,7 @@ class SetMaxSuggestionsCommandWizardConfig extends Config {
 }
 
 class SetMaxSuggestionsCommand 
-extends DefaultSuggestionDecorator(Command, new SetMaxSuggestionsCommandWizardConfig()) {}
+extends BaseCmds(Command, new SetMaxSuggestionsCommandWizardConfig()) {}
 
 const TAGS = {
     RUNS_ON_STARTUP: 'runs_on_startup',
@@ -8687,10 +8741,10 @@ class SaveStateToLocalStorageWizardConfig extends Config {
 }
 
 class NewTodoCommand
-extends DefaultSuggestionDecorator(Command, new TodoWizardConfig()){}
+extends BaseCmds(Command, new TodoWizardConfig()){}
 
 class NewRepeatingTodoCommand
-extends DefaultSuggestionDecorator(Command, new RepeatingTodoWizardConfig()){}
+extends BaseCmds(Command, new RepeatingTodoWizardConfig()){}
 
 function hydrateStore(store){
     // need to make sure all the objects in the store are instances of
@@ -8703,7 +8757,7 @@ function hydrateStore(store){
 
 // TODO: bind this command to happen on all mutations
 class SaveStateToLocalStorage 
-extends DefaultSuggestionDecorator(Command, new SaveStateToLocalStorageWizardConfig()) 
+extends BaseCmds(Command, new SaveStateToLocalStorageWizardConfig()) 
 {}
 class LoadStateFromLocalStorageWizardConfig extends Config {
     name = "Load State From Local Storage"
@@ -8731,39 +8785,39 @@ class LoadStateFromLocalStorageWizardConfig extends Config {
     }
 }
 class LoadStateFromLocalStorage 
-extends DefaultSuggestionDecorator(Command, new LoadStateFromLocalStorageWizardConfig()){}
+extends BaseCmds(Command, new LoadStateFromLocalStorageWizardConfig()){}
 
 // Mode Switching Commands
 class ModeSwitch_SELECT 
-extends DefaultSuggestionDecorator(Command, {
+extends BaseCmds(Command, {
     name: "Select Mode",
     OnSelect(){
         new SwitchModeCommand(MODES.SELECT).execute();
     }
 }){}
 class ModeSwitch_ADD_NODE
-extends DefaultSuggestionDecorator(Command, {
+extends BaseCmds(Command, {
     name: "Add Node Mode",
     OnSelect(){
         new SwitchModeCommand(MODES.ADD_NODE).execute();
     }
 }){}
 class ModeSwitch_ADD_EDGE
-extends DefaultSuggestionDecorator(Command, {
+extends BaseCmds(Command, {
     name: "Add Edge Mode",
     execute: function(){
         new SwitchModeCommand(MODES.ADD_EDGE).execute();
     }
 }){}
 class ModeSwitch_PAN
-extends DefaultSuggestionDecorator(Command, {
+extends BaseCmds(Command, {
     name: "Pan Mode",
     execute: function(){
         new SwitchModeCommand(MODES.PAN).execute();
     }
 }){}
 class ModeSwitch_DELETE
-extends DefaultSuggestionDecorator(Command,{
+extends BaseCmds(Command,{
     name: "Delete Mode",
     callback: function(){
         new SwitchModeCommand(MODES.DELETE).execute();
@@ -8904,8 +8958,30 @@ class CmdPrompt {
             this.availableCommands.push(new Command(cmd))
         })
 
+        let cmds2 = [
+            SoftReloadCommand,
+            HardReloadCommand,
+        ];
+        cmds2.forEach((cmd)=>{
+            this.availableCommands.push(new cmd())
+        })
+        // EVEN NEWER
+        // [
+        //     SoftReloadCommand
+        // ].forEach((CommandClass)=>{
+        //     // Config here should probably be extended to CommandConfig
+        //     // and there needs to be special consideration for serializing it
+        //     this.availableCommands.push(new Config({
+        //         name: CommandClass.name,
+        //         type: "CallCommandByStringName"
+        //     }))
+        // })
+        // console.warn("soft reload command",[
+        //     SoftReloadCommand
+        // ])
 
-        defaultSuggestedCommands.forEach((cmd)=>{
+
+        baseCmds.forEach((cmd)=>{
             this.availableCommands.push(cmd);
         })
         // NOTE: need to re-class these
@@ -9249,15 +9325,20 @@ class CmdPrompt {
             }
         }
         console.log('CmdPrompt.OnPressEnter', {
+            currentCMDConstructorName: this.currentCommand.constructor.name,
             currentCMDName: this.currentCommand.name,
             selectedSuggIdx: this.selectedSuggestionIndex,
             filteredCommandsLength: this.filteredCommands.length,
             currentCMD: this.currentCommand,
             currentCMDOptions: this.currentCommand.options,
         })
-        // enter was pressed
-        // execute the current command
-        this.currentCommand.execute();
+        try{
+            // enter was pressed
+            // execute the current command
+            this.currentCommand.execute.call(this.currentCommand);
+        }catch(e){
+            console.error(e)
+        }
         // TODO: step the undo/redo history
         // reset the command buffer
         store.commandBuffer = {
@@ -9304,22 +9385,30 @@ class CmdPrompt {
             if(!command){
                 return false;
             }
-            if(!command.name){
+            let checkName = command?.name;
+
+            if(command.__type === "Config"){
+                checkName = command?.config?.name ?? checkName
+            }
+
+
+            if(!checkName){
+                console.error("checkName failed",{command,checkName})
                 return false;
             }
-            if(!command.name.toLowerCase){
-                console.error('command name is not a string?', {command})
+            if(!checkName.toLowerCase){
+                console.error('checkName is not a string?', {command,checkName})
                 return false;
             }
-            let compare = command?.name ? command.name.toLowerCase() 
-                : (command?.label?.toLowerCase() ?? '');
+            let compare = checkName.toLowerCase();
 
             let match1 = compare
                 .includes(currentInputBufferTextLC);
 
-            let compare2 = !command?.altnames ? '' : command.altnames.join(' ').toLowerCase();
-            let match2 = compare2
-                .includes(currentInputBufferTextLC);
+            // revisit additional filterable fields later...
+            // let compare2 = !command?.altnames ? '' : command.altnames.join(' ').toLowerCase();
+            // let match2 = compare2
+            //     .includes(currentInputBufferTextLC);
             
             // we'll add more match in the future,
             // let's count the number of matches as a rudimentary ranking system
@@ -9327,9 +9416,9 @@ class CmdPrompt {
             if(match1){
                 matches++;
             }
-            if(match2){
-                matches++;
-            }
+            // if(match2){
+            //     matches++;
+            // }
             if(matches){
                 recommended_order.push({
                     command,
@@ -10611,7 +10700,7 @@ function setupDefaults(){
         // TODO: loop over definitions and infer from types what commands to expose
 
         let cmdName = `Toggle ${boolName}`
-        defaultSuggestedCommands.push(new Config({
+        baseCmds.push(new Config({
             name: cmdName,
             execute(){
                 store[boolName] = !store[boolName];
@@ -10621,22 +10710,61 @@ function setupDefaults(){
 
     // OLD
     // hand-register some default commands
-    defaultSuggestedCommands.push(new ShuffleDashboardWidgetPositionsCommand());
+    baseCmds.push(new ShuffleDashboardWidgetPositionsCommand());
+
+    
 
     // NEW
     // define in a config object
-    BasicCommands.forEach((def)=>{
-        let cmdName = def.command ?? def.name;
-        if(!InvokableCommands[cmdName]){
-            throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
-        }
-        defaultSuggestedCommands.push(new Config({
-            name: `Run Command: ${cmdName}`,
+    InvokableCommands.forEach((def,key)=>{
+        let cmdName = key.split(' ').join('').split(/(?=[A-Z])/).join(' '); //def.command ?? def.name;
+        // if(!InvokableCommands[key]){
+        //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
+        // }
+        // TODO: if def is not a function, we have some resolving to do...
+        baseCmds.push(new Config({
+            name: `${cmdName}`,
             execute(){
                 InvokableCommands[cmdName].call(this);
             }
         }))
     })
+    console.warn('setupDefaults:',{
+        InvokableCommands,
+        baseCmds
+    })
+
+    const h1 = "h1";
+    const p = "p";
+    const ul = "ul";
+    let page = [
+        [h1,"Hello!"],
+        [p,"Uh-oh, I invented HTML + Javascript again!"],
+        [p,"Or is this Flash + Actionscript?"],
+        [p,"Or is this {Unreal|Unity|Other} => Three.js?"],
+        [p,"Flutter? React Native?"],
+        [p,"What could modern cross-platform application development look and FEEL like in {currentYear}?!"],
+        [ul,"given advancements in:",[
+            "AI","NLP","Machine Learning","Quantum Computing",
+            "AR","VR","MR","XR","3D","4D","5D","6D","7D","8D","9D","10D"
+        ]],
+        [p, "If bill gates and steve jobs were jacked up on all this shit, what would they have invented this time instead?!"],
+        [p, "The bicycle of the mind just with JET PACKS!"]
+    ];
+    console.warn({page})
+    page.forEach(([tag,text])=>{
+        // HAHA, NO, silly AI!...:
+        // let el = document.createElement(tag);
+        // Where we're going, we don't have a Document, we have an Infinitely Nested Fractal Field Manifold Manipulator!
+        // baseCmds.push([tag,{default:text}])
+        // simplifies to:
+        console.warn({
+            tag,
+            text
+        })
+        //baseCmds.push([tag,text])
+    })
+
     BasicWidgets.forEach((widget, key, index)=>{
         // need to generate a basic config for the widget
         // need to register a command to intantiate the widget that is bound to the config class (so spawning the widget shows up in the default command suggestion list)
@@ -10645,7 +10773,7 @@ function setupDefaults(){
             console.warn("detected widget with classname",{
                 widget,
             })
-            defaultSuggestedCommands.push(new Config({
+            baseCmds.push(new Config({
                 name: `Spawn Widget: ${widget.name}`,
                 description: `Spawns a new ${widget.name} widget`,
             }))
@@ -10654,20 +10782,14 @@ function setupDefaults(){
 
         
         // register the command
-        console.warn("registering suggested command for widget",{
-            widget
-        })
-        defaultSuggestedCommands.push(getBasicSpawnWidgetConfig(widget));
+        // console.warn("registering suggested command for widget",{
+        //     widget
+        // })
+        baseCmds.push(getBasicSpawnWidgetConfig(widget));
     })
 }
-const PreloadedImages = {
-    "res/fine.gif": null,
-    "res/inspiration/001.png": null,
-    "res/inspiration/signs-of-yesterday.jpeg": null,
-};
-const PreloadedSVGs = {
-    "res/inspiration/Flag_of_Palestine.svg": null
-}
+const PreloadedImages = {};
+const PreloadedSVGs = {}
 function preload() {
     PreloadedImages.forEach((_,imgName)=>{
         PreloadedImages[imgName] = loadImage(imgName);
@@ -10830,7 +10952,12 @@ function setup() {
     // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
 
     document.addEventListener('keydown',(e)=>{
-        store.shiftIsPressed = e.shiftKey;
+        if(store.shiftIsMomentary){
+            store.shiftIsPressed = e.shiftKey;
+        }else{
+            // shiftIsToggle, not shiftIsMomentary
+            store.shiftIsPressed = !store.shiftIsPressed;
+        }
 
 
         // if we're not focused on any fields
@@ -10853,7 +10980,9 @@ function setup() {
         }
     })
     document.addEventListener('keyup',(e)=>{
-        store.shiftIsPressed = false
+        if(store.shiftIsMomentary){
+            store.shiftIsPressed = false
+        }
     })
 
     // TODO: put this stuff in a CmdPrompt.setup() callback
@@ -10883,6 +11012,14 @@ function setup() {
     });
 
     const WidgetsToRegister = [
+        "inspiration/Flag_of_Palestine.svg",
+        "milky-way-galaxy.gif",
+        "colorpickermockup.png",
+        "inspiration/001.png",
+        "inspiration/signs-of-yesterday.jpeg",
+        "fine.gif",
+        "video_731defd5b618ee03304ad345511f0e54.mp4",
+
         CalculatorWidget,
         CalendarWidget,
         ClockWidget,
@@ -10899,48 +11036,35 @@ function setup() {
         UIDemoWidget,
         WeatherWidget,
         ZoomDependentWidget,
-
-        
-
-        "milky-way-galaxy.gif",
-        "colorpickermockup.png",
-        "inspiration/001.png",
-        "inspiration/signs-of-yesterday.jpeg",
-        "fine.gif",
-        "video_731defd5b618ee03304ad345511f0e54.mp4",
-        "inspiration/Flag_of_Palestine.svg"
+        ImageCubeRotatorWidget,
+        ImageRotatorWidget,        
     ]
 
     // "the big widget registration"
     // NEW: init the widget dashboard
     // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
-    //const grw = new GherkinRunnerWidget();
-    //grw.centerPosition();
+    const grw = new GherkinRunnerWidget();
+    grw.centerPosition();
     // attach the results of the self test runner to the widget
-    //grw.setResults(autorunFeatureTestResults);
+    grw.setResults(autorunFeatureTestResults);
     system.get("Dashboard").init()
         // add our first widget (todo: load state from dehydrated json)
         // DEFAULT WIDGET SET
         
         // .registerWidget("Google Color Picker",
-
-        // .registerWidget(
-        //     "SVGViewerWidget:PFlag",
-        //     new SVGViewerWidget()
-        // )
+        .registerWidget(
+            new ImageViewerWidget("ukraine-flag.jpeg")
+        )
+        .registerWidget(
+            "SVGViewerWidget:PFlag",
+            new ImageViewerWidget("Flag_of_Palestine.svg")
+        )
         
         .registerWidget(
             "4SeasonsImg", 
             new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
         
-        //.registerWidget("GherkinRunnerWidget",  grw)
-        //.registerWidget("ImageViewerWidget",    new ImageViewerWidget())
-        .registerWidget(
-            new ImageCubeRotatorWidget()
-        )
-        .registerWidget(
-            new ImageRotatorWidget()
-        )
+        .registerWidget("GherkinRunnerWidget",  grw)
         .registerWidget(
             new YoutubePlayerWidget(
                 "Focus Music",
@@ -10995,9 +11119,6 @@ function setup() {
             }
             system.get("Dashboard").registerWidget(theInstance)
         })
-    
-    //system.get("Dashboard").widgets["MiniMapWidget"].centerPosition();
-    system.get("Dashboard").registerWidget(new H1Widget({text: "H1 Widget"}));
 
             // shuffle widget order
             // system.get("Dashboard").shuffleWidgets()
