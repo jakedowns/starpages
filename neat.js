@@ -70,6 +70,22 @@ const tsmc_machine_states = {
     WARNINGS: "🤨"
 }
 
+let initialDist = 0;
+
+function touchStarted() {
+  if (touches.length === 2) {
+    initialDist = dist(touches[0].x, touches[0].y, touches[1].x, touches[1].y);
+  }
+}
+
+function touchMoved() {
+  if (touches.length === 2) {
+    let newDist = dist(touches[0].x, touches[0].y, touches[1].x, touches[1].y);
+    store.pinchScaleFactor *= newDist / initialDist;
+    initialDist = newDist;
+  }
+}
+
 // Store >
 //          CustomCommands{} a hash table keyed by custom command name (unique id)
 //          CustomCommandFactories{} a hash table keyed by custom command name (unique id) of 
@@ -2132,14 +2148,17 @@ class Widget extends UndoRedoComponent {
             15
         )
         
-        this.flagDoNotDraw(false);
-        // if(isWithinXBounds || isWithinYBounds){
-        //     // The widget is within the viewport
-        //     this.flagDoNotDraw(true);
-        // }else{
-        //     this.flagDoNotDraw(false);
-        //     return;
-        // }
+        if(store.cullOutOfBoundsWidgets){
+            if(isWithinXBounds || isWithinYBounds){
+                // The widget is within the viewport
+                this.flagDoNotDraw(true);
+            }else{
+                this.flagDoNotDraw(false);
+                return;
+            }
+        }else{
+            this.flagDoNotDraw(false);
+        }
         store.frameDrawCount++;
 
         // debug print position
@@ -5162,6 +5181,8 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    pinchScaleFactor: 1,
+    cullOutOfBoundsWidgets: 1,
     DISABLE_PARALLAX: 0,
 
     // when typing in the command prompt, we also filter the current widgets
@@ -9980,6 +10001,10 @@ function handleAnalogStickInput(){
 // Todo: system manager should loop over active systems,
 // and call draw on systems which have non empty render queues
 function draw() {
+
+    // check the current pinch scale factor
+
+
     store.frameDrawCount = 0;
     store.frameDrawCount++;
 
@@ -10156,37 +10181,20 @@ function renderDebugUI(){
     fill(255, 0, 0);
     textSize(16);
     textAlign(RIGHT, BOTTOM);
-    text(
-        `FPS: ${FPS.toFixed(2)}`,
-        windowWidth - 20,
-        windowHeight - 50
-    );
+    const debugTexts = [
+        { text: `FPS: ${FPS.toFixed(2)}` },
+        { text: `DrawCalls: ${store.frameDrawCount}` },
+        { text: `whatTheCenterIs:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
+        { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
+        { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
+        { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` }
+    ];
 
-    text ( 
-        `DrawCalls: ${store.frameDrawCount}`,
-        windowWidth - 20,
-        windowHeight - 110
-    )
-
-    text(`whatTheCenterIs:{x:${
-        whatTheCenterIs.x.toFixed(2)
-    },y:${
-        whatTheCenterIs.y.toFixed(2)
-    }}`, windowWidth - 20, windowHeight - 90);
-
-    // render a line of text that prints the momentum vector
-    text(
-        `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}`,
-        windowWidth - 20,
-        windowHeight - 70
-    )
-
-    // render a line that prints the current thumbstick momentum
-    text(
-        `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}`,
-        windowWidth - 20,
-        windowHeight - 130
-    )
+    let offset = 50;
+    debugTexts.forEach((debugText) => {
+        text(debugText.text, windowWidth - 20, windowHeight - offset);
+        offset += 60;
+    });
 
     if(store.debugUI_DISABLED){
         return;
