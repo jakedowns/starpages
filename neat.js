@@ -12,6 +12,18 @@
     ---
 */
 
+// TODO: mother of all demos
+// credits: brett victor worrydream
+// 
+
+
+
+// TODO: synchronized music playback
+// synchronized web browsing
+// "stumble upon" random widgets
+// widget recommendation engine
+
+
 let whatTheCenterIs = {
     x: 0, y: 0, z: 0
 };
@@ -1696,12 +1708,76 @@ const maxWidgetDepth = 3;
 
 const hoveredArray = []
 
+function drawAnimatedDashedLine(
+    _weight, _color, speed, dashLength,
+    vert1, vert2
+){
+    strokeWeight(_weight)
+    stroke(_color)
+    let distance = dist(vert1.x, vert1.y, vert2.x, vert2.y);
+    let dashCount = Math.floor(distance / dashLength);
+    let xStep = (vert2.x - vert1.x) / dashCount;
+    let yStep = (vert2.y - vert1.y) / dashCount;
+    let offset = Math.abs((frameCount * speed) % dashLength);
+    for (let i = 0; i <= dashCount; i++) {
+        let x = vert1.x + i * xStep - offset;
+        let y = vert1.y + i * yStep - offset;
+        let dashEndX = x + xStep;
+        let dashEndY = y + yStep;
+        // If the end point is beyond the line, adjust it
+        if (dashEndX > vert2.x || dashEndY > vert2.y) {
+            dashEndX = vert2.x;
+            dashEndY = vert2.y;
+        }
+        // Draw the dash
+        if (i % 2 === 0) {
+            line(x, y, dashEndX, dashEndY);
+        }
+    }
+}
+
+function drawDashedRect(
+    _strokeWeight, _strokeColor,
+    fillColor,
+    x, y, w, h, dashLength
+){
+    strokeWeight(_strokeWeight)
+    stroke(_strokeColor)
+    fill(fillColor)
+    rect(10, 10, innerWidth - 20, innerHeight - 20)
+    rect(20, 20, windowWidth - 40, windowHeight - 40)
+    // draw a rect comprised of 4 dashed lines
+    drawDashedLine(x, y, x + w, y, dashLength);  // Top side
+    drawDashedLine(x + w, y, x + w, y + h, dashLength);  // Right side
+    drawDashedLine(x + w, y + h, x, y + h, dashLength);  // Bottom side
+    drawDashedLine(x, y + h, x, y, dashLength);  // Left side
+
+}
+function drawDashedLine(x1, y1, x2, y2, dashLength) {
+    let distance = dist(x1, y1, x2, y2);
+    let dashCount = Math.floor(distance / dashLength);
+    let xStep = (x2 - x1) / dashCount;
+    let yStep = (y2 - y1) / dashCount;
+
+    for (let i = 0; i < dashCount; i += 2) {
+        let x = x1 + i * xStep;
+        let y = y1 + i * yStep;
+        line(x, y, x + xStep, y + yStep);
+    }
+}
+
 class Widget extends UndoRedoComponent {
     hovered = false
     // relative base position
     basePosition = {x:0,y:0}
     // draw position
     position = {x:0,y:0}
+    // offset position
+    corrected = {}
+
+    get size(){
+        return this?.widgetSize ?? {width:100,height:100};
+    }
 
     debugColor = color("red")
 
@@ -1745,6 +1821,7 @@ class Widget extends UndoRedoComponent {
     // set when registerWidget is called on Dashboard
     dashboard = null
     depthRange = maxWidgetDepth - minWidgetDepth;
+    doNotDraw = false
 
     setParentWidget(widget){
         this.parentWidget = widget;
@@ -1811,81 +1888,97 @@ class Widget extends UndoRedoComponent {
                 + (this.position.y ?? 0),
         }
 
-        fill("blue"); strokeWeight(0); ellipse(screenSpaceToWorldSpace.x,screenSpaceToWorldSpace.y,20)
-        text("ssTWS",
-        screenSpaceToWorldSpace.x,
-        screenSpaceToWorldSpace.y)
+        push()
 
-        strokeWeight(0)
-        fill("red")
-        ellipse(
-            realMouseX,
-            realMouseY,
-            10,
-        )
-        strokeWeight(3); stroke(0); fill(255)
-        text(
-            "real: x:"+realMouseX.toFixed(0)+" y:"+realMouseY.toFixed(0),
-            realMouseX,
-            realMouseY
-        )
-        
-        
-        let debug = {
-            x: mouseX * zoom,
-            y: mouseY * zoom,
-        }
-        
-        strokeWeight(0)
-        fill("yellow")
-        ellipse(
-            debug.x,
-            debug.y,
-            5
-        )
-        // strokeWeight(3)
-        // stroke(0)
-        // fill(255)
-        // text(
-        //     "mouse: x:"
-        //         +(debug.x).toFixed(0)
-        //         +" y:"
-        //         +(debug.y).toFixed(0),
-        //     debug.x,
-        //     debug.y
-        // )
+            fill("blue"); strokeWeight(0); ellipse(screenSpaceToWorldSpace.x,screenSpaceToWorldSpace.y,20)
+            if(store.showWidgetPositions){
+                text("ssTWS",
+                screenSpaceToWorldSpace.x,
+                screenSpaceToWorldSpace.y)
+            }
 
-        stroke(this.hovered ? "yellow" : this.debugColor) //"green")
-        strokeWeight(1)
-        fill(color(0,0,0,0))
+            strokeWeight(0)
+            fill("red")
+            ellipse(
+                realMouseX,
+                realMouseY,
+                10,
+            )
+            if(store.showWidgetPositions){
+                strokeWeight(3); stroke(0); fill(255)
+                text(
+                    "real: x:"+realMouseX.toFixed(0)+" y:"+realMouseY.toFixed(0),
+                    realMouseX,
+                    realMouseY
+                )
+            }
+            
+            
+            let debug = {
+                x: mouseX * zoom,
+                y: mouseY * zoom,
+            }
+            
+            strokeWeight(0)
+            fill("yellow")
+            ellipse(
+                debug.x,
+                debug.y,
+                5
+            )
+            // strokeWeight(3)
+            // stroke(0)
+            // fill(255)
+            // text(
+            //     "mouse: x:"
+            //         +(debug.x).toFixed(0)
+            //         +" y:"
+            //         +(debug.y).toFixed(0),
+            //     debug.x,
+            //     debug.y
+            // )
 
-        // debug bounds (base position)
-        rect(
-            this.deepPosition.x + this.widgetSize.width / 2,
-            this.deepPosition.y + this.widgetSize.height / 2,
-            this.widgetSize.width,
-            this.widgetSize.height
-        )
+            stroke(this.hovered ? "yellow" : this.debugColor) //"green")
+            strokeWeight(3)
+            fill(color(0,0,0,0))
 
-        //stroke("red")
-        stroke(this.hovered ? "yellow" : this.debugColor) //"green")
-        rect(
-            this.parallaxedPosition.x + this.widgetSize.width / 2,
-            this.parallaxedPosition.y + this.widgetSize.height / 2,
-            this.widgetSize.width,
-            this.widgetSize.height
-        )
+            // debug bounds (base position)
+            rect(
+                this.deepPosition.x + this.widgetSize.width / 2,
+                this.deepPosition.y + this.widgetSize.height / 2,
+                this.widgetSize.width,
+                this.widgetSize.height
+            )
 
-        // Draw lines connecting the vertices of the two debug rectangles
-        let rectA_x1 = this.deepPosition.x;
-        let rectA_y1 = this.deepPosition.y;
-        let rectB_x1 = this.parallaxedPosition.x;
-        let rectB_y1 = this.parallaxedPosition.y;
-        let wS = this.widgetSize;
-        line(rectA_x1, rectA_y1, rectB_x1, rectB_y1);
-        line(rectA_x1 + wS.width, rectA_y1, rectB_x1 + wS.width, rectB_y1);
-        line(rectA_x1, rectA_y1 + wS.height, rectB_x1, rectB_y1 + wS.height);
-        line(rectA_x1 + wS.width, rectA_y1 + wS.height, rectB_x1 + wS.width, rectB_y1 + wS.height);
+            //stroke("red")
+            strokeWeight(1)
+            stroke(this.hovered ? "yellow" : this.debugColor) //"green")
+            rect(
+                this.parallaxedPosition.x + this.widgetSize.width / 2,
+                this.parallaxedPosition.y + this.widgetSize.height / 2,
+                this.widgetSize.width,
+                this.widgetSize.height
+            )
+
+            // Draw lines connecting the vertices of the two debug rectangles
+            let rectA_x1 = this.deepPosition.x + this.widgetSize.width / 2;
+            let rectA_y1 = this.deepPosition.y + this.widgetSize.width / 2;
+            let rectB_x1 = this.parallaxedPosition.x + this.widgetSize.width / 2;
+            let rectB_y1 = this.parallaxedPosition.y + this.widgetSize.height / 2;
+            let wS = this.widgetSize;
+            drawDashedLine(rectA_x1, rectA_y1, rectB_x1, rectB_y1, 5);
+            drawDashedLine(rectA_x1 + wS.width, rectA_y1, rectB_x1 + wS.width, rectB_y1, 5);
+            drawDashedLine(rectA_x1, rectA_y1 + wS.height, rectB_x1, rectB_y1 + wS.height, 5);
+            drawDashedLine(rectA_x1 + wS.width, rectA_y1 + wS.height, rectB_x1 + wS.width, rectB_y1 + wS.height, 5);
+
+            // draw an animated dashed line in the center of the two debug rectangles
+            drawAnimatedDashedLine(
+                1, "hotpink", 0.1, 20,
+                createVector(rectA_x1 + wS.width / 2, rectA_y1 + wS.height / 2),
+                createVector(rectB_x1 + wS.width / 2, rectB_y1 + wS.height / 2),
+            )
+
+        pop();
         
         // check if the mouse is intersecting the widget bounding box
         // account for offset of zoom and panX,panY
@@ -1896,6 +1989,10 @@ class Widget extends UndoRedoComponent {
 
         return isHovered;
     }
+    tweenedDepth = 0
+    targetRenderDepth = 0
+    targetExpFactor = 0
+    tweenExpFactor = 0
     preDraw(){
         this.moveToTarget();
 
@@ -1918,6 +2015,9 @@ class Widget extends UndoRedoComponent {
         // i.e. things closer to camera should move the opposite direction as things past the zDepth 0 focal point
         let parallaxFactor = (this.zDepth < 0 ? -1 : 1) * (1 - Math.abs(this.zDepth));
         parallaxFactor *= this.parallaxMultiplier
+
+        this.targetExpFactor = this.hovered ? parallaxFactor : 0;
+        this.tweenExpFactor = lerp(this.tweenExpFactor, this.targetExpFactor, 0.1);
         
         // Calculate the new x and y positions of the widget, taking into account the parallax factor.
         // The parallax effect is achieved by slightly shifting the position of the widget based on the parallax factor.
@@ -1926,7 +2026,18 @@ class Widget extends UndoRedoComponent {
         // Things in the background (negative zDepth) will move slower, and things in the foreground (positive zDepth) will move faster.
         let exponentialParallaxFactor = Math.pow(store.currentPlaxExpFactor, parallaxFactor);
 
-        let affectedX = this.basePosition.x 
+        if(store.DISABLE_PARALLAX){
+            exponentialParallaxFactor = 0;
+        }
+
+        this.targetRenderDepth = this.hovered 
+         ? this.zDepth + (this.halfDepthRange)
+         : minWidgetDepth;
+
+        // lerp to targetRenderDepth
+        this.tweenedDepth = lerp(this.tweenedDepth, this.targetRenderDepth, 0.1);
+
+        let affectedX = this.basePosition.x
             + (exponentialParallaxFactor * mouseShifted.x);
 
         let affectedY = this.basePosition.y
@@ -1957,27 +2068,66 @@ class Widget extends UndoRedoComponent {
             }
         }
     }
+    flagDoNotDraw(bool){
+        this.doNotDraw = bool;
+    }
     draw(widgetID){
+        // do physics updates n such, 
+        // need to know where things are to know if we can draw them
         this?.preDraw?.()
 
+        /*
+            we need to project an imaginary plane from screenspace into world space
+            we know the depth of the widget,
+            we need to do some math to see if the widget is within the rhombus of the viewport
+        */
+        let deepLeftPXBound = panX * zoom;
+        let deepRightPXBound = (panX - innerWidth) * zoom;
+        let deepTopPXBound = panY * zoom;
+        let deepBottomPXBound = (panY - innerHeight) * zoom;
+        
+        let isWithinXBounds = this.position.x + this.widgetSize.width > deepLeftPXBound && this.position.x < deepRightPXBound;
+        let isWithinYBounds = this.position.y + this.widgetSize.height > deepTopPXBound && this.position.y < deepBottomPXBound;
+
+        drawDashedRect(
+            3, "chartreuse",
+            color(0,0,0,0),
+            deepLeftPXBound,
+            deepTopPXBound,
+            deepRightPXBound - deepLeftPXBound,
+            deepBottomPXBound - deepTopPXBound,
+            15
+        )
+        
+        if(isWithinXBounds || isWithinYBounds){
+            // The widget is within the viewport
+            this.flagDoNotDraw(true);
+        }else{
+            this.flagDoNotDraw(false);
+            return;
+        }
+        store.frameDrawCount++;
+
         // debug print position
-        fill("red")
-        text(`x:${
-            this.basePosition.x.toFixed(2)
-        } y:${
-            this.basePosition.y.toFixed(2)
-        } z:${
-            this.zDepth.toFixed(2)
-        }\n xD:${
-            this.position.x.toFixed(2)
-        } yD:${
-            this.position.y.toFixed(2)
-        } zD:${
-            this.zDepth.toFixed(2)
-        }`,
-            this.position.x,
-            this.position.y
-        );
+        if(store.showWidgetPositions){
+            fill("red")
+            text(`x:${
+                this.basePosition.x.toFixed(2)
+            } y:${
+                this.basePosition.y.toFixed(2)
+            } z:${
+                this.zDepth.toFixed(2)
+            }\n xD:${
+                this.position.x.toFixed(2)
+            } yD:${
+                this.position.y.toFixed(2)
+            } zD:${
+                this.zDepth.toFixed(2)
+            }`,
+                this.position.x,
+                this.position.y
+            );
+        }
 
         strokeWeight(1)
         stroke("darkblue")
@@ -2032,6 +2182,116 @@ class Widget extends UndoRedoComponent {
             )
         //}
     }
+}
+
+class FlashCard extends Widget {
+    index
+    front = ""
+    back = ""
+    size = {
+        width: 100,
+        height: 150
+    }
+    constructor(index,front,back){
+        super(...arguments)
+        
+        this.index = index
+        this.front = front;
+        this.back = back;
+    }
+    draw(){
+        push()
+        strokeWeight(1)
+        color("red")
+        rect(
+            this.position.x,
+            this.position.y,
+            this.size.width,
+            this.size.height
+        )
+        pop()
+    }
+}
+class FlashCardWidget extends Widget {
+    cards = []
+    shownCardIDs = []
+    remainingCardIDs = []
+
+    guesses = []
+    score = 0
+
+    get currentCardID(){
+        return this.shownCardIDs.at(-1)?.index ?? -1;
+    }
+
+    constructor(){
+        super(...arguments)
+    }
+    afterConstructor(){
+        this.reset()
+    }
+    reset(){
+        // collect and shuffle
+        this.resetPool();
+        this.resetScore();
+    }
+    resetScore(){
+        this.score = 0;
+        this.guesses = [];
+    }
+    resetPool(){
+        
+
+        // collect
+        this.shownCardIDs.length = 0;
+        this.remainingCardIDs = Array.from({length: this.cards.length}, (_, i) => i);
+        // shuffle
+        this.remainingCardIDs = shuffle(this.remainingCardIDs);
+        // update the internal index in the cards...
+        this.remainingCardIDs.forEach((cardIndex, index)=>{
+            this.cards[cardIndex].index = index;
+        })
+    }
+    deal(){
+        // loop around and re-shuffle
+        if(!this.remainingCardIDs.length){
+            this.resetPool()
+        }
+        let nextCardIndex = this.remainingCardIDs.pop();
+        let nextCard = this.cards[nextCardIndex];
+        this.shownCardIDs.push(nextCardIndex);
+        return nextCard;
+    }
+    guess(guess){
+        this.guesses.push(guess);
+        // if the guess matches, update the score
+        if(this.cards[this.currentCardID].back === guess){
+            this.score++;
+        }else{
+            this.score--;
+        }
+    }
+    draw(){
+        super.draw(...arguments)
+        this.remainingCardIDs.forEach((cardID)=>{
+            this.cards[cardID].draw();
+        })
+        this.shownCardIDs.forEach((cardID)=>{
+            this.cards[cardID].draw();
+        })
+    }
+}
+class GreekAlphabetWidget extends FlashCardWidget {
+    alphabet = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta","iota","kappa","lambda","mu","nu","xi","omicron","pi","rho","sigma","tau","upsilon","phi","chi","psi","omega"]
+    symbols = ["α","β","γ","δ","ε","ζ","η","θ","ι","κ","λ","μ","ν","ξ","ο","π","ρ","σ","τ","υ","φ","χ","ψ","ω"]
+    constructor(){
+        super(...arguments)
+        this.cards = this.alphabet.map((letter,index)=>{
+            return new FlashCard(index,letter,this.symbols[index])
+        })
+        super.afterConstructor();
+    }
+    
 }
 
 class BVH {
@@ -2136,6 +2396,58 @@ class BVH {
     }
 }
 
+class VideoPlayerWidget extends Widget {
+    constructor(src){
+        super(...arguments)
+        this.src = src ?? "video_731defd5b618ee03304ad345511f0e54.mp4"
+        this.video = createVideo(this.src);
+        this.video.parent(document.body);
+        this.widgetSize = {width: 640, height: 480}; // Set the size of the video player
+        this.video.elt.setAttribute("playsinline", true);
+        // autoplay, show controls
+        this.video.elt.setAttribute("autoplay", true);
+        this.video.elt.setAttribute("controls", true);
+    }
+    draw(){
+        // try{
+            super.draw(...arguments)
+        // }catch(e){
+        //     if(e.type === "DoNotDraw"){
+        //         // bail the draw call
+        //         return;
+        //     }else{
+        //         // rethrow
+        //         throw e;
+        //     }
+        // }
+        // hide if command prompt is visible
+        if(system.get("cmdprompt").visible || this.doNotDraw){
+            this.video.hide();
+            return;
+        }
+        this.video.show();
+
+        this.video.position(
+            this.position.x - panX * -zoom, 
+            this.position.y + panY * -zoom
+        );
+        // Apply the size to the video
+        this.video.size(this.widgetSize.width, this.widgetSize.height); 
+        this.video.elt.style.transform = `scale(${zoom})`;
+    }
+}
+
+class MessengerWidget extends Widget {
+    name = "AIMWidget"
+    contactListIDsSorted = []
+    messageThreadIDsSorted = []
+    messageData = new Cachable()
+
+    constructor(){
+        super(...arguments);
+    }   
+}
+
 class MoonPhaseWidget extends Widget {
     name = "Moon Phase Widget"
     currentPhaseId = 0;
@@ -2167,14 +2479,14 @@ class MoonPhaseWidget extends Widget {
         super.draw(...arguments)
         // draw the moon phase
         push()
-        textSize(300)
-        textAlign(CENTER, CENTER)
-        const ej = MOON_PHASE_EMOJIS[MOON_PHASE_ORDER[this.currentPhaseId]];
-        text(
-            `${ej}`,
-            this.position.x + (this.widgetSize.width / 2),
-            this.position.y + (this.widgetSize.height / 2)
-        )
+            textSize(300)
+            textAlign(CENTER, CENTER)
+            const ej = MOON_PHASE_EMOJIS[MOON_PHASE_ORDER[this.currentPhaseId]];
+            text(
+                `${ej}`,
+                this.position.x + (this.widgetSize.width / 2),
+                this.position.y + (this.widgetSize.height / 2)
+            )
         pop()
     }
 }
@@ -2621,35 +2933,35 @@ class UIButton extends Widget {
         this.preDraw();
         push()
 
-        strokeWeight(3)
-        stroke("blue")
-        fill(this.hovered ? "green" : "red")
-        rect(
-            rootWidget.position.x 
-                + this.position.x 
-                + (rootWidget.widgetSize.width / 2)
-                - (this.widgetSize.width / 2),
-            rootWidget.position.y 
-                + this.position.y 
-                + (rootWidget.widgetSize.height / 2)
-                - (this.widgetSize.height / 2),
-            this.widgetSize.width,
-            this.widgetSize.height,
-            20
-        )
-        textAlign(CENTER, CENTER)
-        fill("yellow")
-        text(
-            "UIButton",
-            rootWidget.position.x 
-                + this.position.x 
-                + (rootWidget.widgetSize.width / 2)
-                - (this.widgetSize.width / 2),
-            rootWidget.position.y 
-                + this.position.y 
-                + (rootWidget.widgetSize.height / 2)
-                - (this.widgetSize.height / 2)
-        )
+            strokeWeight(3)
+            stroke("blue")
+            fill(this.hovered ? "green" : "red")
+            rect(
+                rootWidget.position.x 
+                    + this.position.x 
+                    + (rootWidget.widgetSize.width / 2)
+                    - (this.widgetSize.width / 2),
+                rootWidget.position.y 
+                    + this.position.y 
+                    + (rootWidget.widgetSize.height / 2)
+                    - (this.widgetSize.height / 2),
+                this.widgetSize.width,
+                this.widgetSize.height,
+                20
+            )
+            textAlign(CENTER, CENTER)
+            fill("yellow")
+            text(
+                "UIButton",
+                rootWidget.position.x 
+                    + this.position.x 
+                    + (rootWidget.widgetSize.width / 2)
+                    - (this.widgetSize.width / 2),
+                rootWidget.position.y 
+                    + this.position.y 
+                    + (rootWidget.widgetSize.height / 2)
+                    - (this.widgetSize.height / 2)
+            )
 
         pop();
     }
@@ -2768,25 +3080,25 @@ class ZoomDependentWidget extends Widget {
     draw(){
         super.draw(...arguments)
         push()
-        textSize(50)
-        this.center = {
-            x: this.position.x + (this.widgetSize.width / 2),
-            y: this.position.y + (this.widgetSize.height / 2)
-        }
-        // clamp zoom to last 2 significant decimal places
-        this.roundedZoom = Math.round(zoom * 100) / 100;
-        switch(true){
-            case zoom < 0.9:
-                // zoomed out
-                this.drawSmall()
-                break;
-            case zoom >= 0.9 && zoom < 1.5:
-                this.drawMed()
-                break;
-            default:
-                this.drawLarge()
-                break;
-        }
+            textSize(50)
+            this.center = {
+                x: this.position.x + (this.widgetSize.width / 2),
+                y: this.position.y + (this.widgetSize.height / 2)
+            }
+            // clamp zoom to last 2 significant decimal places
+            this.roundedZoom = Math.round(zoom * 100) / 100;
+            switch(true){
+                case zoom < 0.9:
+                    // zoomed out
+                    this.drawSmall()
+                    break;
+                case zoom >= 0.9 && zoom < 1.5:
+                    this.drawMed()
+                    break;
+                default:
+                    this.drawLarge()
+                    break;
+            }
         pop()
     }
     drawSmall(){
@@ -2829,12 +3141,56 @@ extends DefaultSuggestionDecorator(Command,{
     }
 }){/**/}
 
+class TitleIdeaSwitcher {
+    title_ideas = [
+        ["idea","box"],
+        ["idea","box"],
+        ["temporary","cease","fire","is","not","enough"],
+        ["tokens are sub-words"],
+        `
+    
+engrams are the smallest unit of meaning
+
+software can break up text input into engrams
+
+text can then be queried in hyperdimensional latent space...
+
+this fact has been understood since the early 19th century and 
+vaguely conceptualized even before that by [citation needed],
+
+however, only recently [has ai begun to : have the compute power to : train and infer in space so vast, it simulates intelligence, cognition, understanding, and even consciousness itself]
+`
+    ]
+    
+}
+
+class SVGViewerWidget extends Widget {
+    widgetSize = {
+        width: 1200,
+        height: 600
+    }
+    src = "res/inspiration/Flag_of_Palestine.svg"
+    draw(){
+        super.draw(...arguments)
+
+        if(!PreloadedSVGs[this.src]){
+            PreloadedSVGs[this.src] = loadImage(this.src)
+        }
+
+        // draw the SVG
+        if(PreloadedSVGs[this.src]){
+            // draw it
+            image(PreloadedSVGs[this.src], this.position.x, this.position.y, this.widgetSize.width, this.widgetSize.height);
+        }
+    }
+}
+
 class ImageViewerWidget extends Widget {
     widgetSize = { 
         width: 300, 
         height: 300 
     }
-    src = "smile.png"
+    src = "alien2.jpeg"
     isGif = false
     constructor(src){
         super(...arguments);
@@ -2853,23 +3209,24 @@ class ImageViewerWidget extends Widget {
     }
     draw(){
         super.draw(...arguments)
+        if(this.doNotDraw){ return; }
         push();
-        // beginShape();
-        // fill(255, 204, 0); // Add color to the shape. Here, it's set to yellow.
-        // // Create a star shape instead of a pentagon
-        // for (let i = 0; i < 10; i++) {
-        //     let radius = i % 2 === 0 
-        //         ? this.widgetSize.width / 2 
-        //         : this.widgetSize.width / 4;
-        //     let x = radius * cos(2 * PI * i / 10 - PI / 2);
-        //     let y = radius * sin(2 * PI * i / 10 - PI / 2);
-        //     x += this.position.x + (this.widgetSize.width / 2);
-        //     y += this.position.y + (this.widgetSize.height / 2) + 10;
-        //     vertex(x, y);
-        // }
-        // endShape(CLOSE);
-        // Clip the image to the shape
-        // clip(()=>{
+            // beginShape();
+            // fill(255, 204, 0); // Add color to the shape. Here, it's set to yellow.
+            // // Create a star shape instead of a pentagon
+            // for (let i = 0; i < 10; i++) {
+            //     let radius = i % 2 === 0 
+            //         ? this.widgetSize.width / 2 
+            //         : this.widgetSize.width / 4;
+            //     let x = radius * cos(2 * PI * i / 10 - PI / 2);
+            //     let y = radius * sin(2 * PI * i / 10 - PI / 2);
+            //     x += this.position.x + (this.widgetSize.width / 2);
+            //     y += this.position.y + (this.widgetSize.height / 2) + 10;
+            //     vertex(x, y);
+            // }
+            // endShape(CLOSE);
+            // Clip the image to the shape
+            // clip(()=>{
             // Calculate aspect ratio
             let aspectRatio = this.image.width / this.image.height;
             // Calculate new width and height while maintaining aspect ratio
@@ -2897,6 +3254,81 @@ class ImageViewerWidget extends Widget {
     }
 }
 
+function drawCrosshair(_color, vec2){
+    // draw the origin as a hollow circle
+    let circleRadius = 10; // define the radius of the circle
+    let circleResolution = 100; // define the resolution of the circle (number of line segments)
+    let angleStep = TWO_PI / circleResolution; // calculate the angle between each line segment
+    stroke(_color); // set the stroke color
+    noFill(); // ensure the circle is hollow
+    beginShape(); // start a new shape
+    for (let i = 0; i <= circleResolution; i++) {
+        let angle = angleStep * i; // calculate the angle of the current line segment
+        let x = vec2.x + cos(angle) * circleRadius; // calculate the x position of the current line segment
+        let y = vec2.y + sin(angle) * circleRadius; // calculate the y position of the current line segment
+        vertex(x, y); // add the current line segment to the shape
+    }
+    endShape(); // finish the shape
+
+    // draw a crosshair at vec2
+    stroke(_color)
+    line(
+        vec2.x - 10, vec2.y,
+        vec2.x + 10, vec2.y,
+    )
+    line(
+        vec2.x, vec2.y - 10,
+        vec2.x, vec2.y + 10
+    )
+}
+
+class Cursor {
+    draw(){
+        // debug draw a line from the center of the screen to where we think the mouse is,
+        // to help debug the mouse position
+        push();
+        strokeWeight(1)
+        stroke("red")
+        fill(0,0)
+        line(mouseX, mouseY, innerWidth / 2, innerHeight / 2)
+        
+        stroke("blue")
+        line(mouseX, mouseY, pmouseX, pmouseY)
+
+        stroke("green")
+
+        // represents 0,0 top/left of the "world" canvas
+        // corrected for zoom, and pan
+        let worldOriginInScreenSpace = {
+            x: panX * zoom,
+            y: panY * zoom
+        }
+        line(
+            mouseX, mouseY,
+            worldOriginInScreenSpace.x, worldOriginInScreenSpace.y,
+        )
+        // seriously tho, how do we map the "Center" of the "virtualCanvas" (dashboard)
+        // to screenspace and vice versa?
+        let worldOriginAttempt2 = {
+            x: (panX + (windowWidth/2)) * zoom,
+            y: (panY + (windowHeight/2)) * zoom
+        }
+
+        drawCrosshair("red", worldOriginInScreenSpace);
+        stroke("yellow")
+        line(
+            worldOriginInScreenSpace.x,
+            worldOriginInScreenSpace.y,
+            worldOriginAttempt2.x, 
+            worldOriginAttempt2.y
+        )
+        drawCrosshair("green", worldOriginAttempt2);
+        
+        
+        pop();
+    }
+}
+
 class ImageRotatorWidget
 extends ImageViewerWidget {
     // slowly rotates the image 360 degrees continuously
@@ -2904,6 +3336,7 @@ extends ImageViewerWidget {
     currentRotationDegrees = 0
     draw(){
         super.draw()
+        if(this.doNotDraw){ return; }
         push()
         // rotate the drawing context
         this.currentRotationDegrees += this.rotationSpeedDegreesPerSecond * deltaTime;
@@ -2928,8 +3361,124 @@ extends ImageViewerWidget {
     }
 }
 
+class Quaternion {
+    constructor(x, y, z, w) {
+        if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number' || typeof w !== 'number') {
+            throw new Error('Quaternion constructor requires four numeric arguments');
+        }
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        this.w = w;
+    }
+    slerp(q, t){
+        // quaternion slerp
+        
+        // Calculate angle between them.
+        let cosHalfTheta = this.w * q.w + this.x * q.x + this.y * q.y + this.z * q.z;
+
+        // if q1=q2 or q1=-q2 then theta = 0 and we can return q1
+        if (Math.abs(cosHalfTheta) >= 1.0){
+            return this;
+        }
+
+        // Calculate temporary values.
+        let halfTheta = Math.acos(cosHalfTheta);
+        let sinHalfTheta = Math.sqrt(1.0 - cosHalfTheta * cosHalfTheta);
+
+        // if theta = 180 degrees then result is not fully defined
+        // we could rotate around any axis normal to q1 or q2
+        if (Math.abs(sinHalfTheta) < 0.001){ // fabs is floating point absolute
+            return new Quaternion(
+                (this.w * 0.5 + q.w * 0.5),
+                (this.x * 0.5 + q.x * 0.5),
+                (this.y * 0.5 + q.y * 0.5),
+                (this.z * 0.5 + q.z * 0.5)
+            );
+        }
+
+        let ratioA = Math.sin((1 - t) * halfTheta) / sinHalfTheta;
+        let ratioB = Math.sin(t * halfTheta) / sinHalfTheta;
+
+        //calculate Quaternion.
+        return new Quaternion(
+            (this.w * ratioA + q.w * ratioB),
+            (this.x * ratioA + q.x * ratioB),
+            (this.y * ratioA + q.y * ratioB),
+            (this.z * ratioA + q.z * ratioB)
+        )
+    }
+    multiply(q){
+        return new Quaternion(
+            this.w * q.x + this.x * q.w + this.y * q.z - this.z * q.y,
+            this.w * q.y + this.y * q.w + this.z * q.x - this.x * q.z,
+            this.w * q.z + this.z * q.w + this.x * q.y - this.y * q.x,
+            this.w * q.w - this.x * q.x - this.y * q.y - this.z * q.z
+        )
+    }
+    static FromEulerAngles(roll, pitch, yaw){
+        let cy = Math.cos(yaw * 0.5);
+        let sy = Math.sin(yaw * 0.5);
+        let cr = Math.cos(roll * 0.5);
+        let sr = Math.sin(roll * 0.5);
+        let cp = Math.cos(pitch * 0.5);
+        let sp = Math.sin(pitch * 0.5);
+
+        return new Quaternion(
+            cy * sr * cp - sy * cr * sp,
+            cy * cr * sp + sy * sr * cp,
+            sy * cr * cp - cy * sr * sp,
+            cy * cr * cp + sy * sr * sp
+        )
+    }
+    toEulerAngles(){
+        // roll (x-axis rotation)
+        let sinr_cosp = 2 * (this.w * this.x + this.y * this.z);
+        let cosr_cosp = 1 - 2 * (this.x * this.x + this.y * this.y);
+        let roll = Math.atan2(sinr_cosp, cosr_cosp);
+        
+        // pitch (y-axis rotation)
+        let sinp = 2 * (this.w * this.y - this.z * this.x);
+        let pitch;
+        if (Math.abs(sinp) >= 1){
+            pitch = Math.sign(sinp) * (Math.PI / 2); // use 90 degrees if out of range
+        }else{
+            pitch = Math.asin(sinp);
+        }
+
+        // yaw (z-axis rotation)
+        let siny_cosp = 2 * (this.w * this.z + this.x * this.y);
+        let cosy_cosp = 1 - 2 * (this.y * this.y + this.z * this.z);
+        let yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+        return {
+            roll,
+            pitch,
+            yaw
+        }
+    }
+    normalize(){
+        let magnitude = Math.sqrt(
+            this.x * this.x +
+            this.y * this.y +
+            this.z * this.z +
+            this.w * this.w
+        );
+        return new Quaternion(
+            this.x / magnitude,
+            this.y / magnitude,
+            this.z / magnitude,
+            this.w / magnitude
+        )
+    }
+}
+
 class ImageCubeRotatorWidget
 extends ImageViewerWidget {
+    cubeRotationQuaternion = new Quaternion(0,0,0,1)
+    draw(){
+        super.draw(...arguments)  
+    }
 }
 
 class Spline {
@@ -3110,14 +3659,18 @@ class iFrameWidget extends Widget {
         console.warn('iFrameWidget.updateUrl',{url})
         this.iframe.elt.src = url;
     }
-    corrected = {}
+    
     draw(){
         if(system.get("cmdprompt").visible){
             this.iframe.hide();
             return
         }
-        this.iframe.show();
         super.draw(...arguments)
+        if(this.doNotDraw){
+            this.iframe.hide();
+        }else{
+            this.iframe.show();
+        }
         this.corrected.x = 0//(this.position.x + (mouseShifted.x*zoom))
         this.corrected.y = windowHeight - this.widgetSize.height//(this.position.y + (mouseShifted.y*zoom))
         // corrected.x *= zoom;
@@ -3454,6 +4007,82 @@ class TodoWidget extends Widget {
                 this.position.y + 60 + (index * 20)
             )
         })
+    }
+}
+
+/* TODO */
+class TimeSinceLoadWidget extends Widget {
+}
+
+class Sortable {
+    constructor() {
+        // Initialize any properties needed for sorting here
+    }
+
+    // Define any methods needed for sorting here
+}
+
+// for posting things to the void instead of Twitter
+class UnTweet extends Widget {
+    name = "UnTweet Widget"
+    size = { width: 300, height: 150 }
+    draw(){
+
+    }
+}
+
+class TodoScanner {
+    /* scans self-source code for todos */
+}
+
+class TodoImplementationProposer {
+    /* proposes steps to address Todos */
+}
+
+class TodoImplementer {
+    /* executes human-approved plans to address Todos */
+}
+
+class TodoImplementationTester {
+    /* tests todo implementations, tracks for regressions and completion / bugs / readiness for release */
+}
+
+class TodoImplementationMonitor {
+    /* monitors instances in the field of the solution for performance errors or bugs or other logs and analytics and metrics */
+}
+
+class TodoBackendManager {
+    /* class for interfacing with the internals of the Todo Management System from privileged code */
+}
+
+class TodoServer {
+    /* tiny webserver microservice which
+    - serves the Todo Management System
+    */
+}
+
+class PrioritizerWidget extends TodoWidget {
+    constructor() {
+        super();
+        this.sortingContext = new Sortable();
+    }
+
+    // Override the addTodo method to add sorting functionality
+    addTodo(thing) {
+        super.addTodo(thing);
+        this.sortTodos();
+    }
+
+    sortTodos() {
+        // Implement your sorting logic here using this.todos and this.sortingContext
+        // For example, you might do something like this:
+        // this.todos.sort(this.sortingContext.compareFunction);
+    }
+
+    // You might also want to override the draw method to add UI for sorting
+    draw(widgetID) {
+        super.draw(widgetID);
+        // Add your drawing code for the sorting UI here
     }
 }
 
@@ -4083,7 +4712,8 @@ class Dashboard {
             //     currentRowHeight
             // })
             // new row if we're going too wide
-            if(currentRowWidth > innerWidth){
+            let virtualWidth = innerWidth / zoom;
+            if(currentRowWidth > virtualWidth){
                 // place in the back buffer
                 prevRowHeight = currentRowMaxHeight;
                 currentRowIndex++;
@@ -4253,6 +4883,23 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    DISABLE_PARALLAX: 1,
+
+
+    // Define the initial state of the canvas
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    panningBG: false,
+    dragStartX: 0,
+    dragStartY: 0,
+    panMomentumVector: {
+        x: 0,
+        y: 0
+    },
+    panFriction: 0.3,
+    panMomentumDecay: 0.01,
+
     // use command Toggle Clear Mode to disable bg clear on draw for a fun
     // trippy effect
     clearMode: true,
@@ -4263,6 +4910,15 @@ let store = {
 
     //
 
+    maxThumbstickMomentum: 10,
+    thumbstickMomentum: 0,
+    tStickMomentumDecay: 0.9,
+    thumbstickPosition: {x:0,y:0},
+    // rolling average of thumbstick readings
+    thumbstickReadings: [],
+    averageThumbstickReading: {x:0,y:0},
+    tStickGain: 0.01,
+    tStickDeadzone: 0.5,
 
     // for now, one dashboard per client instance
     // in the future we'll make it a sub-instance on a per-system basis
@@ -4273,6 +4929,7 @@ let store = {
     Dashboard: null,
     // maybe we just store these IN dashboard manager?...
     widgets: {},
+    showWidgetPositions: false,
 
     // viewValue: '',
     // controllerValue: '',
@@ -4313,7 +4970,8 @@ let store = {
         const lights = {
             // rendererStarted:null,
             // rendererHasOptionsToRender:null,
-            shiftIsPressed:null
+            shiftIsPressed:null,
+            panningBG:null
         }
         Object.keys(lights).forEach((name,index)=>{
             lights[name] = new StatusLight({
@@ -6747,6 +7405,28 @@ class SetCommandIconCommand extends Command {
     }
 }
 
+[
+    'zoom', 
+    'panX', 
+    'panY',
+    'panningBG',
+    'dragStartX',
+    'dragStartY',
+    'panMomentumVector'
+].forEach((prop) => {
+    Object.defineProperty(window, prop, {
+        get: function() {
+            return store?.[prop] ?? -Math.Infinity;
+        },
+        set: function(value){
+            if(!store){
+                return;
+            }
+            store[prop] = value;
+        }
+    })
+});
+
 // an instance of a graph
 class Graph {
     nodes = []
@@ -7262,6 +7942,9 @@ const InvokableCommands = {
         }
     }
 }
+const BasicBools = [
+    "DISABLE_PARALLAX"
+]
 // Maps searchable names to Invokable Functions
 // think of it as the serialized command router / resolver / dispatcher
 const BasicCommands = [
@@ -7798,7 +8481,6 @@ const TYPENAME_TO_CONSTRUCTOR_MAP = {
     ShowCmdPromptCommand,
     HideCmdPromptCommand,
     ToggleCmdPromptCommand,
-    // LoadMessengerWindowCommand,
     SetCommandIconCommand,
 
     // Config related
@@ -8399,19 +9081,6 @@ class CmdPrompt {
     }
 }
 
-// Define the initial state of the canvas
-let zoom = 1;
-let panX = 0;
-let panY = 0;
-let panningBG = false;
-let dragStartX = 0;
-let dragStartY = 0;
-let panMomentumVector = {
-    x: 0,
-    y: 0
-}
-let panFriction = 0.8;
-
 // Define the mouseDragged function
 function mouseDragged(event){
     let blockPan = false;
@@ -8425,8 +9094,8 @@ function mouseDragged(event){
     }
     // update our stored momentum vector by checking the delta
     // between the current and previous mouse positions
-    panMomentumVector.x += (mouseX - pmouseX) * 0.1; // integrate with a decay factor
-    panMomentumVector.y += (mouseY - pmouseY) * 0.1; // integrate with a decay factor
+    panMomentumVector.x += (mouseX - pmouseX) * store.panMomentumDecay;
+    panMomentumVector.y += (mouseY - pmouseY) * store.panMomentumDecay;
 }
 
 class Star {
@@ -8512,8 +9181,8 @@ function stepPanMomentum(){
     panX += panMomentumVector.x;
     panY += panMomentumVector.y;
     // apply friction
-    panMomentumVector.x *= panFriction;
-    panMomentumVector.y *= panFriction;
+    panMomentumVector.x *= store.panFriction;
+    panMomentumVector.y *= store.panFriction;
     requestAnimationFrame(stepPanMomentum);
 }
 
@@ -8533,16 +9202,23 @@ function mousePressed(){
     if(store.currentGraph && store.currentGraph.OnMousePressed){
         store.currentGraph.OnMousePressed();
     }
-    if (
-        store.currentGraph 
-        && !store.currentGraph.selectedNodeIDs.length
-    ) {
-        panningBG = true;
-        dragStartX = mouseX;
-        dragStartY = mouseY;
-    } else {
-        panningBG = false;
-    }
+
+    panningBG = true;
+    dragStartX = mouseX;
+    dragStartY = mouseY;
+
+    // if (
+    //     store.currentGraph 
+    //     && !store.currentGraph.selectedNodeIDs.length
+    // ) {
+        // NOTE: we need to NOT flag as panning
+        // based on the click target and any current MODE override
+        // like maybe we should be allowing drag / drop
+        // or spawning a connection spline
+        
+    // } else {
+    //     panningBG = false;
+    // }
 }
 
 function __checkDidClickAVisibleSuggestion(){
@@ -8612,7 +9288,6 @@ function checkDidClickAModeSwitcherButton(){
 function mouseReleased(){
     if (panningBG) {
         panningBG = false;
-    } else {
         stopDragging();
     }
 }
@@ -8718,9 +9393,12 @@ function mouseWheel(event) {
     if(store.shiftIsPressed){
 
         // IF ZOOM ON SCROLL ENABLED
-        zoom -= event.delta / 1000;
+        zoom -= -event.delta / 1000;
         zoom = constrain(zoom, 0.1, 3);
 
+    }else{
+        panX -= event.deltaX;
+        panY -= event.deltaY;
     }
     // else{
     //     panX -= event.deltaX;
@@ -8732,10 +9410,13 @@ function mouseWheel(event) {
         //zoom = constrain(zoom, 0.1, 3);
 
         zoomChanged = oldZoom !== zoom
+        if(zoomChanged){
+            onResizeDebounced();
+        }
 
     //}else{
         //panX -= event.deltaX;
-        panY -= event.deltaY;
+        
     //}
     event.preventDefault();
 
@@ -8916,11 +9597,61 @@ class GraphViewer extends ImplementationOf([
     
 }
 
+function handleAnalogStickInput(){
+    // Calculate the distance of the mouse position from the center
+    let distanceFromCenter = Math.sqrt(Math.pow(mouseX - windowWidth / 2, 2) + Math.pow(mouseY - windowHeight / 2, 2));
+
+    // apply a scaling factor to the distance as Gain
+    distanceFromCenter *= store.tStickGain;
+
+    // filter the signal so it drops to 0 near the center (deadzone)
+    distanceFromCenter = distanceFromCenter < store.tStickDeadzone ? (distanceFromCenter - store.tStickDeadzone) * store.tStickGain : distanceFromCenter;
+    
+    // Calculate the direction of the momentum
+    let directionX = (mouseX - windowWidth / 2) / distanceFromCenter;
+    let directionY = (mouseY - windowHeight / 2) / distanceFromCenter;
+    
+    // Calculate the momentum based on the distance from the center, with a maximum value
+    let momentumX = Math.min(distanceFromCenter * Math.abs(directionX), store.maxThumbstickMomentum);
+    let momentumY = Math.min(distanceFromCenter * Math.abs(directionY), store.maxThumbstickMomentum);
+    
+    // Update the thumbstick position
+    store.thumbstickPosition.x += directionX * momentumX;
+    store.thumbstickPosition.y += directionY * momentumY;
+    
+    // Add the current reading to the thumbstick readings and calculate the average
+    store.thumbstickReadings.push({x: store.thumbstickPosition.x, y: store.thumbstickPosition.y});
+    if (store.thumbstickReadings.length > 10) store.thumbstickReadings.shift();
+
+    // update the average thumbstick reading
+    store.averageThumbstickReading.x = store.thumbstickReadings.reduce((sum, reading) => sum + reading.x, 0) / store.thumbstickReadings.length;
+    store.averageThumbstickReading.y = store.thumbstickReadings.reduce((sum, reading) => sum + reading.y, 0) / store.thumbstickReadings.length;
+
+    // Update the thumbstick position with the momentum
+    store.thumbstickPosition.x += store.thumbstickMomentum * directionX;
+    store.thumbstickPosition.y += store.thumbstickMomentum * directionY;
+
+    store.thumbstickMomentumX = momentumX;
+    store.thumbstickMomentumY = momentumY;
+    
+    // Apply the decay factor to the thumbstick momentum
+    store.thumbstickMomentumX *= store.tStickMomentumDecay;
+    store.thumbstickMomentumY *= store.tStickMomentumDecay;
+
+    // influence pan: store.averageThumbstickReading
+    // panX += store.averageThumbstickReading.x * store.thumbstickMomentumX;
+    // panY += store.averageThumbstickReading.y * store.thumbstickMomentumY;
+}
+
 // Define the draw function
 // Main Draw / Root Draw
 // Todo: system manager should loop over active systems,
 // and call draw on systems which have non empty render queues
 function draw() {
+    store.frameDrawCount = 0;
+    store.frameDrawCount++;
+
+    handleAnalogStickInput();
 
     // this value updates instantly
     // then we lerp our viewport's cursor vec3 torwards it
@@ -8940,96 +9671,108 @@ function draw() {
     }
     // center our coordinate system
     push();
-    const halfWidth = windowWidth / 2;
-    const halfHeight = windowHeight / 2;
-    translate(halfWidth, halfHeight)
-    
-    // NOTE: there is an issuer where when you're zoomed in,
-    // it's relative from the top left of the whole screen
-    // we want zoom to pull the center towards where the mouse is
-    // so 1 we need to calculate where the "center" is by getting
-    // the value offset negative of any current pan
-    // then find the difference between the mouse position and the center
-    // if there's a difference > 0.01 between the center and the mouse
-    // AND zoomChanged === true, then shift toward the center by nudging panX and panY
-    // by a fraction of the difference between the mouse and the center
-    // if(zoomChanged){
-    //     let center = {
-    //         x: panX * -1 * zoom,
-    //         y: panY * -1 * zoom
-    //     };
-    //     let mouseToCenter = {
-    //         x: mouseX - center.x,
-    //         y: mouseY - center.y
-    //     };
-    //     let distance = Math.sqrt(mouseToCenter.x * mouseToCenter.x + mouseToCenter.y * mouseToCenter.y);
-    //     const stepSize = -0.005;
-    //     if (distance > 0.01) {
-    //         panX += mouseToCenter.x < 0 
-    //         ? mouseToCenter.x * stepSize 
-    //         : mouseToCenter.x * -stepSize;
-    //         panY += mouseToCenter.y < 0 
-    //         ? mouseToCenter.y * stepSize 
-    //         : mouseToCenter.y * -stepSize;
-    //     }
-    //     zoomChanged = false;
-    // }
+        const halfWidth = windowWidth / 2;
+        const halfHeight = windowHeight / 2;
+        translate(halfWidth, halfHeight)
 
-    // lerp mouseShifted towards a target
-    let targetX = -mouseX + halfWidth;
-    let targetY = -mouseY + halfHeight;
-    if(!panningBG){
-        mouseShifted.x = lerp(mouseShifted.x, targetX, 0.1);
-        mouseShifted.y = lerp(mouseShifted.y, targetY, 0.1);
-    }
+        // every second update the url with the current location
+        // pan,zoom
+        if(frameCount % 60 === 0){
+            let url = new URL(window.location.href);
+            url.searchParams.set("panX", store.panX);
+            url.searchParams.set("panY", store.panY);
+            url.searchParams.set("zoom", store.zoom);
 
-    DebugPathInstance.addPoint(
-        mouseShifted.x, 
-        mouseShifted.y, 
-        zoom+0
-    );
-    // DebugPathInstance.draw();
-    DebugPathTwo.addPoint(
-        targetX, 
-        targetY,
-        zoom+0
-    )
-    // DebugPathTwo.draw(40);
-    
+            // update the url
+            window.history.replaceState({}, '', url);
+        }
+        
+        // NOTE: there is an issuer where when you're zoomed in,
+        // it's relative from the top left of the whole screen
+        // we want zoom to pull the center towards where the mouse is
+        // so 1 we need to calculate where the "center" is by getting
+        // the value offset negative of any current pan
+        // then find the difference between the mouse position and the center
+        // if there's a difference > 0.01 between the center and the mouse
+        // AND zoomChanged === true, then shift toward the center by nudging panX and panY
+        // by a fraction of the difference between the mouse and the center
+        // if(zoomChanged){
+        //     let center = {
+        //         x: panX * -1 * zoom,
+        //         y: panY * -1 * zoom
+        //     };
+        //     let mouseToCenter = {
+        //         x: mouseX - center.x,
+        //         y: mouseY - center.y
+        //     };
+        //     let distance = Math.sqrt(mouseToCenter.x * mouseToCenter.x + mouseToCenter.y * mouseToCenter.y);
+        //     const stepSize = -0.005;
+        //     if (distance > 0.01) {
+        //         panX += mouseToCenter.x < 0 
+        //         ? mouseToCenter.x * stepSize 
+        //         : mouseToCenter.x * -stepSize;
+        //         panY += mouseToCenter.y < 0 
+        //         ? mouseToCenter.y * stepSize 
+        //         : mouseToCenter.y * -stepSize;
+        //     }
+        //     zoomChanged = false;
+        // }
 
-    translate(mouseShifted.x, mouseShifted.y);
-    scale(zoom);
-    // translate(mouseX, mouseY);
-    translate(
-        panX - (halfWidth*zoom), 
-        panY -(halfHeight*zoom)
-    );
+        // lerp mouseShifted towards a target
+        let targetX = -mouseX + halfWidth;
+        let targetY = -mouseY + halfHeight;
+        if(!panningBG){
+            mouseShifted.x = lerp(mouseShifted.x, targetX, 0.1);
+            mouseShifted.y = lerp(mouseShifted.y, targetY, 0.1);
+        }
 
-    if(
-        store.currentGraph 
-        //&& !store.CmdPromptVisible
-    ){
-        store.currentGraph.renderGraph();
-    }
-    
-    if (panningBG) {
-        panX += mouseX - dragStartX;
-        panY += mouseY - dragStartY;
-        dragStartX = mouseX;
-        dragStartY = mouseY;
-    }
+        DebugPathInstance.addPoint(
+            mouseShifted.x, 
+            mouseShifted.y, 
+            zoom+0
+        );
+        // DebugPathInstance.draw();
+        DebugPathTwo.addPoint(
+            targetX, 
+            targetY,
+            zoom+0
+        )
+        // DebugPathTwo.draw(40);
+        
 
-    if(gherkinStudio && gherkinStudio.draw){
-        gherkinStudio.draw();
-    }
+        translate(mouseShifted.x, mouseShifted.y);
+        scale(zoom);
+        // translate(mouseX, mouseY);
+        translate(
+            panX - (halfWidth*zoom), 
+            panY -(halfHeight*zoom)
+        );
 
-    
+        if(
+            store.currentGraph 
+            //&& !store.CmdPromptVisible
+        ){
+            store.currentGraph.renderGraph();
+        }
+        
+        if (panningBG) {
+            panX += mouseX - dragStartX;
+            panY += mouseY - dragStartY;
+            dragStartX = mouseX;
+            dragStartY = mouseY;
+        }
 
-    //drawModeSwitcher();
+        if(gherkinStudio && gherkinStudio.draw){
+            gherkinStudio.draw();
+        }
 
-    // render all widgets on the widget dashboard
-    // TODO: move pop() BEFORE DB Manager and let DBMan have it's own inner contextual Pan/Zoom
-    system.get("Dashboard")?.draw?.();
+        
+
+        //drawModeSwitcher();
+
+        // render all widgets on the widget dashboard
+        // TODO: move pop() BEFORE DB Manager and let DBMan have it's own inner contextual Pan/Zoom
+        system.get("Dashboard")?.draw?.();
 
     // reset any transforms
     pop();
@@ -9053,7 +9796,8 @@ function draw() {
 
     renderDebugUI();
 
-    
+    // cursor is last to render
+    cursor?.draw()    
 }
 
 /** FIGHT ME */
@@ -9086,6 +9830,12 @@ function renderDebugUI(){
         windowHeight - 50
     );
 
+    text ( 
+        `DrawCalls: ${store.frameDrawCount}`,
+        windowWidth - 20,
+        windowHeight - 110
+    )
+
     text(`whatTheCenterIs:{x:${
         whatTheCenterIs.x.toFixed(2)
     },y:${
@@ -9097,6 +9847,13 @@ function renderDebugUI(){
         `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}`,
         windowWidth - 20,
         windowHeight - 70
+    )
+
+    // render a line that prints the current thumbstick momentum
+    text(
+        `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}`,
+        windowWidth - 20,
+        windowHeight - 130
     )
 
     if(store.debugUI_DISABLED){
@@ -9495,6 +10252,20 @@ function setupDefaults(){
     params.set('time', Math.random());
     window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
 
+    BasicBools.forEach((boolName)=>{
+        console.warn('adding basic bool toggle cmd for boolName: '+boolName)
+        // expose a toggle command for most basic bools in the store
+        // TODO: loop over definitions and infer from types what commands to expose
+
+        let cmdName = `Toggle ${boolName}`
+        defaultSuggestedCommands.push(new Config({
+            name: cmdName,
+            execute(){
+                store[boolName] = !store[boolName];
+            }
+        }))
+    })
+
     // OLD
     // hand-register some default commands
     defaultSuggestedCommands.push(new ShuffleDashboardWidgetPositionsCommand());
@@ -9537,15 +10308,74 @@ function setupDefaults(){
     })
 }
 const PreloadedImages = {
-    "fine.gif": null,
-    "inspiration/001.png": null
+    "res/fine.gif": null,
+    "res/inspiration/001.png": null,
+    "res/inspiration/signs-of-yesterday.jpeg": null,
 };
+const PreloadedSVGs = {
+    "res/inspiration/Flag_of_Palestine.svg": null
+}
 function preload() {
     PreloadedImages.forEach((_,imgName)=>{
         PreloadedImages[imgName] = loadImage(imgName);
     })
+    PreloadedSVGs.forEach((_,name)=>{
+        PreloadedSVGs[name] = loadImage(name);
+    })
 }
+class H1Widget extends Widget {
+    text = "H1 Widget"
+    constructor(opts){
+        this.text = opts?.text ?? this.text;
+        this.name = this.text.substring(0,10) + "...";
+        this.options = opts;
+    }
+    draw(){
+        push();
+        fill(255);
+        textSize(32);
+        textAlign(CENTER,CENTER);
+        text(`${this.text}`,0,0);
+        pop();
+    }
+}
+class Animation {
+    constructor(startValue, endValue, duration, updateCallback) {
+        this.startValue = startValue;
+        this.endValue = endValue;
+        this.duration = duration;
+        this.updateCallback = updateCallback;
+        this.startTime = null;
+    }
+
+    animate(timestamp) {
+        if (!this.startTime) this.startTime = timestamp;
+        const elapsed = timestamp - this.startTime;
+        if (elapsed >= this.duration) {
+            this.updateCallback(this.endValue);
+        } else {
+            const t = elapsed / this.duration;
+            const currentValue = this.startValue + (this.endValue - this.startValue) * t;
+            this.updateCallback(currentValue);
+            requestAnimationFrame(this.animate.bind(this));
+        }
+    }
+}
+let cursor;
 function setup() {
+    
+    // overload mouseX and mouseY to be set to 0 if they're null or undefined (one at a time)
+    // this is useful for when we're in a mode where we don't want the mouse to affect the canvas
+    // e.g. when we're in a mode where we're typing in a text field
+
+
+// load pan,zoom from query params (if any)
+    let params = new URLSearchParams(window.location.search);
+    panX = parseFloat(params.get('panX')) || 0;
+    panY = parseFloat(params.get('panY')) || 0;
+    
+
+
     /*
         it's a spectrum
     */
@@ -9566,8 +10396,8 @@ function setup() {
     // });
 
     // offset panX panY to center the graph
-    panX = 0; //windowWidth / 2;
-    panY = 0; //windowHeight / 2;
+    //panX = 0; //windowWidth / 2;
+    //panY = 0; //windowHeight / 2;
 
     ensureHeadTag();
     createCanvas(windowWidth, windowHeight);
@@ -9579,8 +10409,11 @@ function setup() {
     manager.boot(); rootSystem = system = manager.systems[0];
     console.info("booted");
 
+    cursor = new Cursor();
+
     let startZoom = 0.0001;
-    let endZoom = 1.12;
+    let endZoom;// = 1.12;
+    endZoom = parseFloat(params.get('zoom')) || 1.12;
     let duration = 3000; // Duration in milliseconds
     let startTime = null;
 
@@ -9651,20 +10484,34 @@ function setup() {
 
         }
     })
+    document.addEventListener('keypress', (e)=>{
+        // if the key is `f` and we don't have any inputs focused,
+        // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
+        if(e.key === 'f' && store.focusedField === null){
+            // Instantiate and start the animations
+            const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
+            const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
+            const zoomAnimation = new Animation(zoom, 1, 1000, value => zoom = value);
+
+            requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
+            requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
+            requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
+        }
+    })
     document.addEventListener('keyup',(e)=>{
         store.shiftIsPressed = false
     })
 
     // TODO: put this stuff in a CmdPrompt.setup() callback
     push();
-    textSize(50);
-    CmdPromptInput = createInput('');
-    CmdPromptInput.elt.style.backgroundColor = 'black';
-    CmdPromptInput.elt.style.color = 'white';
-    CmdPromptInput.size(windowWidth - 20);
-    CmdPromptInput.position(10, 130);
-    // focus the command palette input
-    CmdPromptInput.elt.focus();
+        textSize(50);
+        CmdPromptInput = createInput('');
+        CmdPromptInput.elt.style.backgroundColor = 'black';
+        CmdPromptInput.elt.style.color = 'white';
+        CmdPromptInput.size(windowWidth - 20);
+        CmdPromptInput.position(10, 130);
+        // focus the command palette input
+        CmdPromptInput.elt.focus();
     pop();
     // Listen for the 'keydown' event
     CmdPromptInput.elt.addEventListener('keypress', function(e) {
@@ -9700,19 +10547,34 @@ function setup() {
         )
         .registerWidget(
             "Inspiration 001",
-            new ImageViewerWidget("./inspiration/001.png")
+            new ImageViewerWidget("./res/inspiration/001.png")
         )
+        .registerWidget(
+            "hello triangle",
+            new ImageViewerWidget("res/inspiration/signs-of-yesterday.jpeg")
+        )
+        .registerWidget(
+            "Video Player", 
+            new VideoPlayerWidget("res/video_731defd5b618ee03304ad345511f0e54.mp4")
+        )
+        //.GreekAlphabetWidget();
+        .registerWidget(new GreekAlphabetWidget())
 
 
         // .registerWidget("CalculatorWidget", new CalculatorWidget())
         // .registerWidget("StickyNoteWidget", new StickyNoteWidget())
-        // .registerWidget("WeatherWidget")
-        // .registerWidget("CalendarWidget")
-        // .registerWidget("MessengerWidget")
+        .registerWidget("WeatherWidget", new WeatherWidget())
+        .registerWidget("CalendarWidget", new CalendarWidget())
+        .registerWidget("MessengerWidget", new MessengerWidget())
 
         .registerWidget(
             "ImageViewerWidget:ThisIsFine", 
-            new ImageViewerWidget("fine.gif")
+            new ImageViewerWidget("res/fine.gif")
+        )
+
+        .registerWidget(
+            "SVGViewerWidget:PFlag",
+            new SVGViewerWidget("res/inspiration/Flag_of_Palestine.svg")
         )
         
         .registerWidget(
@@ -9756,7 +10618,39 @@ function setup() {
         ;
 
             // shuffle widget order
-            system.get("Dashboard").shuffleWidgets()
+            // system.get("Dashboard").shuffleWidgets()
+            // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
+
+    const protoLists = {}
+    protoLists.about = {
+        type: "protoListItem",
+        name: "About",
+        // tracks own index into parent data struct for fast lookup with no loops
+        address: "protoLists.about",
+        items: [{
+            type: "protoListItem",
+        }],
+        description: `at the base level of the system, we need something, some data atom, and it could either be literals (fastest) or literals with sugar: protoListItem.
+        
+        inevitably, a time will come when we don't want to type that out for speed,
+
+        so protoItem > pItem > p 
+        who knows, our base class probably shouldn't be "p"
+        but we can find a more suitable name later...
+
+        so, from there, you can attach properties, they themselves, also being "p"'s and groups of "p"'s which are in turn, just "p"'s themselves, with pointers that _refer_ to the other "p"'s they're "collecting" or "representing" (think pointers, references)
+
+        the nice thing is, programming has gotten so abstracted away, that programmers no longer need to concern themselves with low level abstractions
+
+        of course, having a working knowledge and healthy appreciation for them goes a long way
+
+        but for the new comer just diving in, or for the person trying to get something done before their newborn wakes up from their nap, the less barriers between "thought" and "application" the better.
+
+        with advanced BCI interfaces, like neuralink coming online in the very near future, it's important to...
+
+        * 
+        `
+    }
 
     const todoNames = {
         "AM: shower": 1,
@@ -9801,22 +10695,22 @@ function setup() {
         // repeats monthly
         "📅 Monthly: finance monthly check-in": -99,
 
-        "🌞 AM: study mathematics": 0,
-        "🌞 AM: study physics": 0,
-        "🌞 AM: study engineering": 0,
-        "🌞 AM: power point": 0,
-        "🌤️ NO: study mathematics": 0,
-        "🌤️ NO: study physics": 0,
-        "🌤️ NO: study engineering": 0,
-        "🌤️ NO: power point": 0,
-        "🌆 PM: study mathematics": 0,
-        "🌆 PM: study physics": 0,
-        "🌆 PM: study engineering": 0,
-        "🌆 PM: power point": 0,
-        "🌙 NI: study mathematics": 0,
-        "🌙 NI: study physics": 0,
-        "🌙 NI: study engineering": 0,
-        "🌙 NI: power point": 0,
+        // "🌞 AM: study mathematics": 0,
+        // "🌞 AM: study physics": 0,
+        // "🌞 AM: study engineering": 0,
+        // "🌞 AM: power point": 0,
+        // "🌤️ NO: study mathematics": 0,
+        // "🌤️ NO: study physics": 0,
+        // "🌤️ NO: study engineering": 0,
+        // "🌤️ NO: power point": 0,
+        // "🌆 PM: study mathematics": 0,
+        // "🌆 PM: study physics": 0,
+        // "🌆 PM: study engineering": 0,
+        // "🌆 PM: power point": 0,
+        // "🌙 NI: study mathematics": 0,
+        // "🌙 NI: study physics": 0,
+        // "🌙 NI: study engineering": 0,
+        // "🌙 NI: power point": 0,
     }
     const todoWidget = system.get("Dashboard").widgets["TodoWidget"];
     todoNames.forEach((status,name,index)=>{
@@ -9824,6 +10718,16 @@ function setup() {
         todoWidget.setTodoStatus(todoWidget.todos.length-1, status)
     })
 
+}
+
+function generateRandomString(){
+    let result = '';
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const length = Math.floor(Math.random() * 256);
+    for ( let i = 0; i < length; i++ ) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
 }
 
 class FluxExampleGraph extends Graph {
@@ -9852,6 +10756,11 @@ class FluxExampleGraph extends Graph {
             // Codename Status Trees
             if(_n.id === 0){
                 const input = createInput('');
+                // name the input element and give it a throw-off autocomplete value too so it doesn't try to auto suggest anything
+                input.elt.name = generateRandomString();
+                input.elt.setAttribute('autocomplete', generateRandomString());
+
+
                 // TODO: move position when the node moves / when we pan
                 // account for pan and zoom
                 input.position(_n.x + 10, _n.y + 10);
