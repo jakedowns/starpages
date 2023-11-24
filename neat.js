@@ -76,6 +76,7 @@ function touchStarted() {
   if (touches.length === 2) {
     initialDist = dist(touches[0].x, touches[0].y, touches[1].x, touches[1].y);
   }
+  store.touchInputs = touches;
 }
 
 function touchMoved() {
@@ -84,6 +85,11 @@ function touchMoved() {
     store.pinchScaleFactor *= newDist / initialDist;
     initialDist = newDist;
   }
+  store.touchInputs = touches;
+}
+
+function touchEnded() {
+  store.touchInputs = touches;
 }
 
 // Store >
@@ -5181,6 +5187,7 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    touchInputs: [],
     pinchScaleFactor: 1,
     cullOutOfBoundsWidgets: 1,
     DISABLE_PARALLAX: 0,
@@ -10187,13 +10194,18 @@ function renderDebugUI(){
         { text: `whatTheCenterIs:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
         { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
         { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
-        { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` }
+        { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` },
+
+        {
+            text: `Touch Inputs: ${store.touchInputs.length}`,
+        }
     ];
 
-    let offset = 50;
+    let baseOffset = 20;
+    let offset = 60;
     debugTexts.forEach((debugText) => {
         text(debugText.text, windowWidth - 20, windowHeight - offset);
-        offset += 60;
+        offset += baseOffset;
     });
 
     if(store.debugUI_DISABLED){
