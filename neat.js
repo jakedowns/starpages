@@ -857,16 +857,33 @@ class Command {
         return this?.options?.wizardConfig;
     }
     execute(){
+        // This method is final and cannot be overridden by extending classes.
+        // If you need to change the behavior, consider using hooks or events.
+        // if (new.target !== Command) {
+        //     throw new Error("Cannot override final method execute() from child class:".concat(this.constructor.name));
+        // }
+        // stay focused!!!
         console.warn('Command.execute:',
         {
             name: this.name,
+            
             hasWizard: this.wizardConfig ? true : false,
-            hasCallback: this.options.callback ? true : false,
-            hasExecuteFn: this.execute ? true : false,
+
+            implementsActMethod: typeof this.act === 'function',
+            actIsType: typeof this.act,
+
             options: Object.keys(this.options),
-            _options: this.options
+            _options: this.options,
+
+                hasCallback: this.options.callback ? true : false,
+                
+                hasExecuteFn: this.options.execute && this.options.execute?.call ? true : false,
+                    fn: this.options.execute
         })
-        if(this.options.wizardConfig){
+        if(typeof this?.act === 'function'){
+            this.act();
+        }
+        if(this.wizardConfig){
             // the constructor validates the wizardConfig for us
             this.wizard = new WizardController(this.options.wizardConfig);
             this.wizard.start();
@@ -876,6 +893,18 @@ class Command {
         }
         if(this.options.execute){
             this.options.execute.call(this);
+        }
+        console.warn("Command.execute typeof this.act", typeof this.act, {
+            act: this.act
+        })
+        if(
+            typeof this.act !== 'function'
+            && !this.wizardConfig 
+            && typeof this.options?.callback !== 'function' 
+            && typeof this.options?.execute !== 'function'
+        ){
+            //system.debug(this);
+            system.panic("Undefined Command Behavior!\nneed at least: act(), options.wizardConfig, options.callback or options.execute",{cmd:this})
         }
         // reset command buffer
         store.commandBuffer = {};
@@ -1697,7 +1726,7 @@ class Component {
     constructor(name){
         // TODO: GUIDv4
         this.id = performance.now() + Math.random();
-        this.name = name;
+        //this.name = name;
     }
 }
 class UndoRedoComponent extends Component {
@@ -1753,7 +1782,7 @@ function drawDashedRect(
     drawDashedLine(x, y + h, x, y, dashLength);  // Left side
 
 }
-function drawDashedLine(x1, y1, x2, y2, dashLength) {
+function drawDashedLine(x1, y1, x2, y2, dashLength = 10) {
     let distance = dist(x1, y1, x2, y2);
     let dashCount = Math.floor(distance / dashLength);
     let xStep = (x2 - x1) / dashCount;
@@ -1774,6 +1803,10 @@ class Widget extends UndoRedoComponent {
     position = {x:0,y:0}
     // offset position
     corrected = {}
+
+    get name(){
+        return this.constructor.name;
+    }
 
     get size(){
         return this?.widgetSize ?? {width:100,height:100};
@@ -2099,13 +2132,14 @@ class Widget extends UndoRedoComponent {
             15
         )
         
-        if(isWithinXBounds || isWithinYBounds){
-            // The widget is within the viewport
-            this.flagDoNotDraw(true);
-        }else{
-            this.flagDoNotDraw(false);
-            return;
-        }
+        this.flagDoNotDraw(false);
+        // if(isWithinXBounds || isWithinYBounds){
+        //     // The widget is within the viewport
+        //     this.flagDoNotDraw(true);
+        // }else{
+        //     this.flagDoNotDraw(false);
+        //     return;
+        // }
         store.frameDrawCount++;
 
         // debug print position
@@ -2282,6 +2316,9 @@ class FlashCardWidget extends Widget {
     }
 }
 class GreekAlphabetWidget extends FlashCardWidget {
+    widgetSize = {
+        x:800, y:600
+    }
     alphabet = ["alpha","beta","gamma","delta","epsilon","zeta","eta","theta","iota","kappa","lambda","mu","nu","xi","omicron","pi","rho","sigma","tau","upsilon","phi","chi","psi","omega"]
     symbols = ["α","β","γ","δ","ε","ζ","η","θ","ι","κ","λ","μ","ν","ξ","ο","π","ρ","σ","τ","υ","φ","χ","ψ","ω"]
     constructor(){
@@ -2427,25 +2464,257 @@ class VideoPlayerWidget extends Widget {
         }
         this.video.show();
 
+        // this video player position
+        // this player.position
         this.video.position(
             this.position.x - panX * -zoom, 
-            this.position.y + panY * -zoom
+            this.position.y - panY * -zoom
         );
         // Apply the size to the video
-        this.video.size(this.widgetSize.width, this.widgetSize.height); 
+        this.video.size(this.widgetSize.width * zoom, this.widgetSize.height * zoom); 
         this.video.elt.style.transform = `scale(${zoom})`;
     }
 }
 
 class MessengerWidget extends Widget {
-    name = "AIMWidget"
+    name = "MessengerWidget"
     contactListIDsSorted = []
     messageThreadIDsSorted = []
     messageData = new Cachable()
 
+    widgetSize = {
+        width: 400,
+        height: 300
+    }
+
     constructor(){
         super(...arguments);
-    }   
+    }
+
+    draw(){
+        super.draw(...arguments)
+        push()
+            rectMode(CENTER);
+            fill("lightblue")
+            rect(
+                this.position.x + this.widgetSize.width / 2,
+                this.position.y + this.widgetSize.height / 2,
+                this.widgetSize.width,
+                this.widgetSize.height,
+                20 // this is the radius for the rounded corners
+            );
+            fill("black")
+            let tpx = this.position.x + this.widgetSize.width / 2;
+            let tpy = this.position.y + this.widgetSize.height / 2;
+            let tsx = this.widgetSize.width;
+            let tsy = this.widgetSize.height;
+            textSize(20)
+            textAlign(CENTER, CENTER)
+            text("Messenger!", tpx,tpy,tsx,tsy)
+        pop()
+    }
+}
+
+class CalculatorWidget extends Widget {
+    name = "CalculatorWidget"
+    widgetSize = {
+        width: 300,
+        height: 400
+    }
+    draw(){
+        super.draw(...arguments)
+        push()
+            rectMode(CENTER);
+            fill("lightgrey")
+            rect(
+                this.position.x + this.widgetSize.width / 2,
+                this.position.y + this.widgetSize.height / 2,
+                this.widgetSize.width,
+                this.widgetSize.height,
+                20 // this is the radius for the rounded corners
+            );
+            fill("black")
+            let tpx = this.position.x + this.widgetSize.width / 2;
+            let tpy = this.position.y + this.widgetSize.height / 2;
+            let tsx = this.widgetSize.width;
+            let tsy = this.widgetSize.height;
+            textSize(20)
+            textAlign(CENTER, CENTER)
+            text("Calculator!", tpx,tpy,tsx,tsy)
+        pop()
+    }
+}
+class StickyNoteWidget extends Widget {
+    name = "StickyNoteWidget"
+    widgetSize = {
+        width: 200,
+        height: 200
+    }
+    draw(){
+        super.draw(...arguments)
+        push()
+            rectMode(CENTER);
+            fill("yellow")
+            rect(
+                this.position.x + this.widgetSize.width / 2,
+                this.position.y + this.widgetSize.height / 2,
+                this.widgetSize.width,
+                this.widgetSize.height,
+                20 // this is the radius for the rounded corners
+            );
+            fill("black")
+            let tpx = this.position.x + this.widgetSize.width / 2;
+            let tpy = this.position.y + this.widgetSize.height / 2;
+            let tsx = this.widgetSize.width;
+            let tsy = this.widgetSize.height;
+            textSize(20)
+            textAlign(CENTER, CENTER)
+            text("Sticky Notes!", tpx,tpy,tsx,tsy)
+        pop()
+    }
+}
+class WeatherWidget extends Widget {
+    // TODO: move this stuff to a backing WeatherDataView class
+    // for now inline the props
+
+    weatherData = new Cachable()
+
+    constructor(){
+        super(...arguments)
+        // todo wait for a ClientInfo object to be available
+        // it will have IP and geo data we can use
+        // for now, just use a default location
+        // NOTE we also cache client info so it should be available
+        // immediately after refresh, and updated periodically after that
+        this.weatherData.set("location",{
+            city: "San Francisco",
+            state: "CA",
+            country: "US",
+            lat: 37.7749,
+            lon: -122.4194,
+        })
+        // TODO: fetch latest, for now mock response:
+        this.weatherData.set("current",{
+            "dt": 1619450400,
+            "sunrise": 1619429760,
+            "sunset": 1619477160,
+            "temp": 282.55,
+            "feels_like": 281.86,
+            "pressure": 1015,
+            "humidity": 87,
+            "dew_point": 280.71,
+            "uvi": 0,
+            "clouds": 90,
+            "visibility": 10000,
+            "wind_speed": 1.54,
+            "wind_deg": 0,
+            "wind_gust": 2.57,
+            "forecast": [
+                {
+                    "dt": 1619450400,
+                    "temp": 283.55,
+                    "feels_like": 282.86,
+                    "pressure": 1016,
+                    "humidity": 85,
+                    "dew_point": 281.71,
+                    "uvi": 1,
+                    "clouds": 80,
+                    "visibility": 10000,
+                    "wind_speed": 1.54,
+                    "wind_deg": 10,
+                    "wind_gust": 2.57,
+                },
+                {
+                    "dt": 1619536800,
+                    "temp": 284.55,
+                    "feels_like": 283.86,
+                    "pressure": 1017,
+                    "humidity": 83,
+                    "dew_point": 282.71,
+                    "uvi": 2,
+                    "clouds": 70,
+                    "visibility": 10000,
+                    "wind_speed": 1.54,
+                    "wind_deg": 20,
+                    "wind_gust": 2.57,
+                },
+                // more forecast data here...
+            ]
+        });                    
+    }
+
+
+    // we already have constructor.name...
+    draw(){
+        // render the current temp in degrees F and list the forecast
+        this.weatherData.get("current", (current)=>{
+            push()
+
+                // render the current temp
+                fill("white")
+                stroke("black")
+                strokeWeight(1)
+                textSize(100)
+                textAlign(CENTER, CENTER)
+                text(
+                    `${Math.round(current.temp - 273.15)}°C`,
+                    this.position.x + (this.widgetSize.width / 2),
+                    this.position.y + (this.widgetSize.height / 2)
+                )
+
+                // render the forecast
+                textSize(20)
+                textAlign(LEFT, TOP)
+                let forecast = current.forecast;
+                let forecastX = this.position.x + 20;
+                let forecastY = this.position.y + 20;
+                forecast.forEach((forecastItem)=>{
+                    text(
+                        `${Math.round(forecastItem.temp - 273.15)}°C`,
+                        forecastX,
+                        forecastY
+                    )
+                    forecastY += 20;
+                });
+            pop()
+        });
+    }
+}
+class TetrisWidget extends Widget {
+    widgetSize = { width: 300, height: 600 }
+    draw(){
+        fill("red")
+        rect(
+
+        )
+    }
+}
+class CalendarWidget extends Widget {
+    widgetSize = { width: 400, height: 300 }
+    draw(){
+        super.draw(...arguments)
+        push()
+            rectMode(CENTER);
+            fill("darkpurple")
+            stroke("green")
+            strokeWeight(10)
+            // Define the size of each square
+            let squareSize = 50;
+            // Define the number of squares per row
+            let squaresPerRow = 7;
+            // Define the number of rows
+            let rows = Math.ceil(31 / squaresPerRow);
+            // Define the starting position
+            let startX = this.position.x + (this.widgetSize.width - squaresPerRow * squareSize) / 2;
+            let startY = this.position.y + (this.widgetSize.height - rows * squareSize) / 2;
+            // Draw the grid
+            for(let i = 0; i < rows; i++) {
+                for(let j = 0; j < squaresPerRow; j++) {
+                    rect(startX + j * squareSize, startY + i * squareSize, squareSize, squareSize);
+                }
+            }
+        pop()
+    }
 }
 
 class MoonPhaseWidget extends Widget {
@@ -2681,7 +2950,7 @@ class NewTodoWidgetCommand extends DefaultSuggestionDecorator(Command,{
                 // add a new instance of the Todo Widget
                 //new NewTodoWidgetCommand().execute();
                 system.get("Dashboard")
-                .registerWidget("WidgetInstance"+performance.now(), new TodoWidget());
+                .registerWidget("TodoWidgetInstance"+performance.now(), new TodoWidget());
 
                 system.get("toastManager").showToast("Todo Widget Added!")
                 // end the wizard
@@ -2821,52 +3090,51 @@ extends WrappedCommand(
 ){/* 😀 */}
 
 class Cachable {
-    cacheKey = "default_cache_key";
-    _localValue;
+    cache = {};
     constructor(){}
-    get value (){
-        return this.readFromCache() ?? this.resolve();
+    getValue (keyname){
+        return this.readFromCache(keyname) ?? this.resolve(keyname);
     }
-    get instantValue(){
-        return this._localValue ?? this.readFromCache();
+    getInstantValue(keyname){
+        return this.cache[keyname] ?? this.readFromCache(keyname);
     }
-    get valuePromise(){
+    getValuePromise(keyname){
         return new Promise((returnFinalResult,reject)=>{
-            if(this.resolvedAt && this._localValue){
-                returnFinalResult(this._localValue);
+            if(this.cache[keyname]){
+                returnFinalResult(this.cache[keyname]);
             }else{
-                this.resolve().then((result)=>{
+                this.resolve(keyname).then((result)=>{
                     returnFinalResult(result);
                 })
             }
         })
     }
-    setCache(value){
-        localStorage.setItem(this.cacheKey, value);
+    set(keyname,value){
+        localStorage.setItem(keyname, value);
+        this.cache[keyname] = value;
     }
-    readFromCache(){
-        if(this.resolvedAt && this._localValue){
-            return this._localValue;
+    get(keyname){
+        if(this.cache[keyname]){
+            return this.cache[keyname];
         }
-        return localStorage.getItem(this.cacheKey);
+        return localStorage.getItem(keyname);
     }
-    resolver(){
+    resolver(keyname){
         return new Promise((resolve,reject)=>{
             setTimeout(()=>{
                 resolve("DONE 1 SEC LATER")
             },1000)
         }).then((result)=>{
-            this.onResolved(result);
+            this.onResolved(keyname, result);
         })
     }
-    onResolved(result){
-        console.warn("onResolved",{result})
+    onResolved(keyname, result){
+        console.warn("onResolved",{keyname, result})
     }
-    resolve(){
-        this.resolvedAt = new Date();
-        let promise = this.resolver().then((result)=>{
-            this._localValue = result
-            this.setCache(this._localValue);
+    resolve(keyname){
+        let promise = this.resolver(keyname).then((result)=>{
+            this.cache[keyname] = result
+            this.set(keyname, this.cache[keyname]);
         });
         return promise;
     }
@@ -3192,6 +3460,11 @@ class ImageViewerWidget extends Widget {
     }
     src = "alien2.jpeg"
     isGif = false
+    static bind(src){
+        return function(){
+            return new ImageViewerWidget(src)
+        };
+    }
     constructor(src){
         super(...arguments);
 
@@ -3290,10 +3563,10 @@ class Cursor {
         strokeWeight(1)
         stroke("red")
         fill(0,0)
-        line(mouseX, mouseY, innerWidth / 2, innerHeight / 2)
+        drawDashedLine(mouseX, mouseY, innerWidth / 2, innerHeight / 2)
         
         stroke("blue")
-        line(mouseX, mouseY, pmouseX, pmouseY)
+        drawDashedLine(mouseX, mouseY, pmouseX, pmouseY)
 
         stroke("green")
 
@@ -3303,7 +3576,7 @@ class Cursor {
             x: panX * zoom,
             y: panY * zoom
         }
-        line(
+        drawDashedLine(
             mouseX, mouseY,
             worldOriginInScreenSpace.x, worldOriginInScreenSpace.y,
         )
@@ -3316,7 +3589,7 @@ class Cursor {
 
         drawCrosshair("red", worldOriginInScreenSpace);
         stroke("yellow")
-        line(
+        drawDashedLine(
             worldOriginInScreenSpace.x,
             worldOriginInScreenSpace.y,
             worldOriginAttempt2.x, 
@@ -3616,6 +3889,7 @@ class NewIFrameWidgetCommand extends DefaultSuggestionDecorator(Command, {
 }){}
 class iFrameWidget extends Widget {
     url = ""
+    pinned = false
     constructor(url){
         super(...arguments);
         this.url = url ?? this.url;
@@ -3671,8 +3945,13 @@ class iFrameWidget extends Widget {
         }else{
             this.iframe.show();
         }
-        this.corrected.x = 0//(this.position.x + (mouseShifted.x*zoom))
-        this.corrected.y = windowHeight - this.widgetSize.height//(this.position.y + (mouseShifted.y*zoom))
+        if(this.pinned){
+            this.corrected.x = 0//(this.position.x + (mouseShifted.x*zoom))
+            this.corrected.y = windowHeight - this.widgetSize.height//(this.position.y + (mouseShifted.y*zoom))
+        }else{
+            this.corrected.x = (this.position.x - panX) * zoom;
+            this.corrected.y = (this.position.y - panY) * zoom;
+        }
         // corrected.x *= zoom;
         // corrected.y *= zoom;
         this.iframe.position(
@@ -3705,9 +3984,9 @@ extends iFrameWidget {
     playedTracks = []
     _tracks = null
     tracksChanged = false
+    pinned = false
     constructor(name, options){
         super(...arguments)
-        this.name = name;
         this.options = options ?? {};
         this.setTrackList(this.getTrackList());
         this.updateUrl(this.getFirstTrack());
@@ -3893,7 +4172,7 @@ class Pomodoro {
     }
 }
 class PomodoroWidget extends Widget {
-    name = "Pomodoro Widget"
+    name = "🍅 Pomodoro Widget"
     widgetSize = { width: 300, height: 150 }
     pomClassInstance = null
     constructor(){
@@ -3905,7 +4184,7 @@ class PomodoroWidget extends Widget {
         fill("darkblue")
         textAlign(CENTER, CENTER);
         text(
-            "Pomodoro Timer",
+            "🍅 Pomodoro Timer 🍅",
             this.position.x + (this.widgetSize.width/2), 
             this.position.y + 20 // + (this.dimensions.height/2)
         )
@@ -4883,7 +5162,11 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
-    DISABLE_PARALLAX: 1,
+    DISABLE_PARALLAX: 0,
+
+    // when typing in the command prompt, we also filter the current widgets
+    // in case you are searching for just Todos or something
+    filteredWidgetIDs: [],
 
 
     // Define the initial state of the canvas
@@ -7044,9 +7327,8 @@ class ShowCmdPromptCommand extends Command {
     constructor(){
         super("Show Command Prompt")
     }
-    execute(){
-        super.execute();
-
+    // draw, perform, verb, invoke, execute, run, do,
+    act(){
         // Show Command Prompt
         store.CmdPromptVisible = true;
 
@@ -7055,16 +7337,33 @@ class ShowCmdPromptCommand extends Command {
     }
 }
 
+class MyJavascriptCommand extends Command {
+    constructor(target, ...args){
+        super();
+        this.target = target.split('.');
+        this.args = args;
+    }
+    execute(){
+        // safer than eval, but not by much...
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#never_use_eval!
+        let context = window;
+        for(let i = 0; i < this.target.length - 1; i++) {
+            context = context[this.target[i]];
+        }
+        context[this.target[this.target.length - 1]].call(window, ...this.args)
+    }
+}
+
+class WindowLocationReload extends MyJavascriptCommand {
+    constructor(){
+        super("window.location.reload");
+    }
+}
+
 class HardReloadCommand extends Command {
     name = "Hard Reload"
-    // constructor(){
-    //     super(...arguments)
-    // }
-    execute(){
-        let url = new URL(window.location.href);
-        url.searchParams.set('t', Date.now());
-        console.warn("Hard Reload", url.toString());
-        window.location.href = url.toString();
+    act(){
+        new WindowLocationReload().execute();
     }
 }
 defaultSuggestedCommands.push(new HardReloadCommand());
@@ -8565,6 +8864,19 @@ class CmdPrompt {
     }
 
     addDefaultCommands(){
+        let cmds = [
+            "new song",
+            "new piano widget",
+            "new music widget",
+            "new tetris widget",
+            "new widget widget",
+            "widget designer widget",
+        ]
+        cmds.forEach((cmd)=>{
+            this.availableCommands.push(new Command(cmd))
+        })
+
+
         defaultSuggestedCommands.forEach((cmd)=>{
             this.availableCommands.push(cmd);
         })
@@ -9495,6 +9807,20 @@ class SortingContextInterface {
 class TodosInterface {
 
 }
+const WidgetInterface = function(classConstructor){
+    let backingWidget = new Widget();
+    return class extends classConstructor {
+        proveIsWidget(){
+            alert("yuuuup i'm a widget!")
+        }
+        setTargetPosition(x,y){
+            return backingWidget.setTargetPosition(x,y);
+        }
+        render(){
+            return backingWidget.render();
+        }
+    }
+}
 
 
 
@@ -9510,39 +9836,44 @@ const Interfaces = {
     "Sortable": SortableInterface,
     "SortingContext": SortingContextInterface,
     "Todos": TodosInterface,
+    "Widget": WidgetInterface,
 }
 // TODO: make all methods chainable by default
 // make it opt out
 class Implementer {
-    get __instance(){
-
-    }
     /*
     ["Todos",{configurableImplementations: true}],
     ["Todos",[/* Webpack Style *-/"FlexibleArguments"]]
     */
     constructor(ArrayOfInterfaces){
         this.interfaces = ArrayOfInterfaces;
-        return __instance; // chainable
+        // this.interfaces.forEach((trait)=>{
+        //     if(!window?.Interfaces?.[trait]){
+        //         throw new Error("Interface not found: " + trait);
+        //     }
+        //     this.___rawInstance = window?.Interfaces[trait](this);
+        // })
+        return this; // chainable
     }
     // "applyMixins"
     postConstructor(){
         // loop over the mixin instances and...
         // well... mix them in
         this.interfaces.forEach((trait)=>{
-            if(!window?.Interfaces?.[trait]){
+            if(!Interfaces?.[trait]){
                 throw new Error("Interface not found: " + trait);
             }
             // hot-swap wrapped instance with the mixed-in version
-            this.__instance = window?.Interfaces[trait](this);
+            this.__instance = Interfaces[trait](this.constructor);
         })
-        return this.__instance; // chainable
+        return new this.__instance; // chainable
     }
 }
 
 
 class MiniMapWidget extends ImplementationOf([
     "Widget",
+    // PinnedWidget, Pinnable
     
     // // Draggable/Droppable
     // "Draggable",
@@ -9564,6 +9895,7 @@ class MiniMapWidget extends ImplementationOf([
         width: 300,
         height: 300
     }
+    pinned = true
     // top left for now
     // TODO: let the user move it
     fixedPosition = {
@@ -10252,6 +10584,7 @@ function setupDefaults(){
     params.set('time', Math.random());
     window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
 
+    // like store.DISABLE_PARALLAX for example
     BasicBools.forEach((boolName)=>{
         console.warn('adding basic bool toggle cmd for boolName: '+boolName)
         // expose a toggle command for most basic bools in the store
@@ -10326,8 +10659,9 @@ function preload() {
 class H1Widget extends Widget {
     text = "H1 Widget"
     constructor(opts){
+        super(...arguments)
         this.text = opts?.text ?? this.text;
-        this.name = this.text.substring(0,10) + "...";
+        //this.name = this.text.substring(0,10) + "...";
         this.options = opts;
     }
     draw(){
@@ -10528,6 +10862,36 @@ function setup() {
         // If you 
     });
 
+    const WidgetsToRegister = [
+        CalculatorWidget,
+        CalendarWidget,
+        ClockWidget,
+        GreekAlphabetWidget,
+        MessengerWidget,
+        MiniMapWidget,
+        MoonPhaseWidget,
+        PomodoroWidget,
+        StickyNoteWidget,
+        TetrisWidget,
+        TimerWidget,
+        TimeToSunSetWidget,
+        TodoWidget,
+        UIDemoWidget,
+        WeatherWidget,
+        ZoomDependentWidget,
+
+        
+
+        "milky-way-galaxy.gif",
+        "colorpickermockup.png",
+        "inspiration/001.png",
+        "inspiration/signs-of-yesterday.jpeg",
+        "fine.gif",
+        "video_731defd5b618ee03304ad345511f0e54.mp4",
+        "inspiration/Flag_of_Palestine.svg"
+    ]
+
+    // "the big widget registration"
     // NEW: init the widget dashboard
     // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
     //const grw = new GherkinRunnerWidget();
@@ -10539,67 +10903,25 @@ function setup() {
         // DEFAULT WIDGET SET
         
         // .registerWidget("Google Color Picker",
-        //     new iFrameWidget(""))
-        .registerWidget(
-            "Color Picker",
-            //new ColorPickerWidget()
-            new ImageViewerWidget("./colorpickermockup.png")
-        )
-        .registerWidget(
-            "Inspiration 001",
-            new ImageViewerWidget("./res/inspiration/001.png")
-        )
-        .registerWidget(
-            "hello triangle",
-            new ImageViewerWidget("res/inspiration/signs-of-yesterday.jpeg")
-        )
-        .registerWidget(
-            "Video Player", 
-            new VideoPlayerWidget("res/video_731defd5b618ee03304ad345511f0e54.mp4")
-        )
-        //.GreekAlphabetWidget();
-        .registerWidget(new GreekAlphabetWidget())
 
-
-        // .registerWidget("CalculatorWidget", new CalculatorWidget())
-        // .registerWidget("StickyNoteWidget", new StickyNoteWidget())
-        .registerWidget("WeatherWidget", new WeatherWidget())
-        .registerWidget("CalendarWidget", new CalendarWidget())
-        .registerWidget("MessengerWidget", new MessengerWidget())
-
-        .registerWidget(
-            "ImageViewerWidget:ThisIsFine", 
-            new ImageViewerWidget("res/fine.gif")
-        )
-
-        .registerWidget(
-            "SVGViewerWidget:PFlag",
-            new SVGViewerWidget("res/inspiration/Flag_of_Palestine.svg")
-        )
+        // .registerWidget(
+        //     "SVGViewerWidget:PFlag",
+        //     new SVGViewerWidget()
+        // )
         
         .registerWidget(
             "4SeasonsImg", 
             new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
         
-
-        .registerWidget("ZoomDependentWidget",  new ZoomDependentWidget())
-        .registerWidget("ClockWidget",          new ClockWidget())
-        .registerWidget("TodoWidget",           new TodoWidget())
-        .registerWidget("PomodoroWidget",       new PomodoroWidget())
-        .registerWidget("TimeToSunSetWidget",   new TimeToSunSetWidget())
-        .registerWidget("Timers Widget",        new TimerWidget())
         //.registerWidget("GherkinRunnerWidget",  grw)
         //.registerWidget("ImageViewerWidget",    new ImageViewerWidget())
         .registerWidget(
-            "ImageCubeRotatorWidget",
             new ImageCubeRotatorWidget()
         )
         .registerWidget(
-            "ImageRotatorWidget",
             new ImageRotatorWidget()
         )
         .registerWidget(
-            "YoutubePlayerWidget",
             new YoutubePlayerWidget(
                 "Focus Music",
                 {
@@ -10608,14 +10930,54 @@ function setup() {
                     shuffle: true,
                     tracks: [
                         "https://www.youtube.com/watch?v=tkgmYIsflSU",
-                        "https://www.youtube.com/watch?v=931PQwTA79k"
+                        "https://www.youtube.com/watch?v=931PQwTA79k",
+                        "https://www.youtube.com/watch?v=LQUXuQ6Zd9w",
                     ]
                 }
             )
         )
-        .registerWidget(new MoonPhaseWidget())
-        .registerWidget(new UIDemoWidget())
+        // intentionally on a separate line to make it easier to comment out last chained method
         ;
+        WidgetsToRegister.forEach((widgetClassName)=>{
+            let theInstance = null;
+            const widgetTypes = {
+                ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
+                VideoPlayerWidget: [".mp4"],
+                YoutubePlayerWidget: [".youtube."]
+            };
+            if(typeof widgetClassName === 'string'){
+                for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
+                    if (extensions.some(ext => widgetClassName.includes(ext))) {
+                        if(!window[widgetType]){
+                            console.warn("missing widget type",{
+                                widgetType,
+                                extensions,
+                                widgetClassName
+                            })
+                            continue;
+                        }
+
+                        theInstance = new window[widgetType](widgetClassName);
+                        break;
+                    }
+                }
+                if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
+                    theInstance = new iFrameWidget(widgetClassName);
+                }
+            }else{
+                if (!theInstance) {
+                    theInstance = new widgetClassName();
+                }
+            }
+            if(!theInstance){
+                console.warn(`failed to instantiate widget ${widgetClassName}`)
+                return;
+            }
+            system.get("Dashboard").registerWidget(theInstance)
+        })
+    
+    //system.get("Dashboard").widgets["MiniMapWidget"].centerPosition();
+    system.get("Dashboard").registerWidget(new H1Widget({text: "H1 Widget"}));
 
             // shuffle widget order
             // system.get("Dashboard").shuffleWidgets()
@@ -10713,10 +11075,14 @@ function setup() {
         // "🌙 NI: power point": 0,
     }
     const todoWidget = system.get("Dashboard").widgets["TodoWidget"];
-    todoNames.forEach((status,name,index)=>{
-        todoWidget.addTodo(name)
-        todoWidget.setTodoStatus(todoWidget.todos.length-1, status)
-    })
+    if(!todoWidget){
+        console.warn("todo widget missing?")
+    }else{
+        todoNames.forEach((status,name,index)=>{
+            todoWidget.addTodo(name)
+            todoWidget.setTodoStatus(todoWidget.todos.length-1, status)
+        })
+    }
 
 }
 
