@@ -2598,9 +2598,14 @@ class CalculatorWidget extends Widget {
 }
 class StickyNoteWidget extends Widget {
     name = "StickyNoteWidget"
+    text = "Sticky Notes!\nAND DONT FORGET TO WALK ROVER! 🐶🚶⏰"
     widgetSize = {
         width: 200,
         height: 200
+    }
+    constructor(text){
+        super(...arguments)
+        this.text = text;
     }
     draw(){
         super.draw(...arguments)
@@ -2621,7 +2626,7 @@ class StickyNoteWidget extends Widget {
             let tsy = this.widgetSize.height;
             textSize(20)
             textAlign(CENTER, CENTER)
-            text("Sticky Notes!", tpx,tpy,tsx,tsy)
+            text(this.text, tpx,tpy,tsx,tsy)
         pop()
     }
 }
@@ -4276,11 +4281,12 @@ class PomodoroWidget extends Widget {
     }
 }
 
+class RandomThought extends Widget {}
+class Reminder extends Widget {}
+
 // a little widget for drawing pixel art
 // can use the output as icons for commands and widget backgrounds, etc...
 // TODO: implement a basic file manager for saved media resources
-class PixelArtWidget extends Widget {
-}
 
 class TodoWidget extends Widget {
     name = "Todo Widget"
@@ -5100,12 +5106,12 @@ class Dashboard {
         this.widgetLayoutOrder.unshift(widgetID);
         this.widgets[widgetID] = widgetInstance;
         
-        console.warn("Dashboard > Register Widget",{
-            widgetID,
-            widgetInstance,
-            depthLen: this.widgetDepthOrder.length,
-            layoutLen: this.widgetLayoutOrder.length,
-        })
+        // console.warn("Dashboard > Register Widget",{
+        //     widgetID,
+        //     widgetInstance,
+        //     depthLen: this.widgetDepthOrder.length,
+        //     layoutLen: this.widgetLayoutOrder.length,
+        // })
 
         // reflow widget layout
         this.reflowLayout();
@@ -6031,6 +6037,17 @@ class Refactor extends UndoRedoDecorator(DynamicThing) {
     // - removePart // remove from consideration
     // - runTests // run tests on the parts
     // - setTestConfiguration() // override the current configuration table with new values
+}
+
+class ComputerKeyboardPreview extends Widget {
+    widgetSize = { width: 300, height: 100 }
+
+    draw(){
+        super.draw(...arguments);
+
+        color("red")
+        rect(0,0,100,100)
+    }
 }
 
 class BonsaiTreeWidget extends Widget {
@@ -8356,61 +8373,92 @@ const InvokableCommands = {
 const BasicBools = [
     "DISABLE_PARALLAX"
 ]
+class Solitaire {}
+class Gizmo extends Widget {
+    draw(){
+        super.draw(...arguments)
+        console.warn('todo draw'+this.constructor.name)
+    }
+}
+class WidgetForge extends Widget {}
+class WizardForge extends WidgetForge {}
+class GiphyWidget extends Widget {}
+class MandlebrotWidget extends Widget {}
+class FileBrowserWidget extends Widget {}
+class WebBrowserWidget extends Widget {}
+class IFTTTWidget extends Widget {}
+class ShaderToyWidget extends Widget {}
+class PixelArtWidget extends Widget {}
+class VectorArtWidget extends Widget {}
+class TextEditorWidget extends Widget {}
+class P5JSSketchWidget extends Widget {}
+class DrawIOWidget extends Widget {}
+class FigJamWidget extends Widget {}
+class ChessWidget extends Widget {}
+class WorkflowyWidget extends Widget {}
+class CreditsWidget extends Widget {}
+class JSONViewer extends Widget {}
+class GraphVizDotLangViewer extends Widget {}
+class ThreeJSViewer extends Widget {}
+class GlobeWidget extends Widget {}
+class TimezoneClocksWidget extends Widget {}
+class SplineEditorWidget extends Widget {}
+class TimelineWidget extends Widget {}
+class ColorPickerWidget extends Widget {}
+class NestedDragAndDropSortingWidget extends Widget {}
+class FractalTreeGraphViewerWidget extends Widget {}
+
 const BasicWidgets = [
-    // New {X} Widget...
-    {
-        name: "Solitaire"
-    },
-
+    Solitaire,
     // ya'know, for testing buttons and stuff
-    { name: "UIDemo Widget", classname: "UIDemoWidget" },
+    UIDemoWidget,
 
-    // display a basic sphere gizmo
-    { name: "Gizmo Viewer" },
+    // display a basic manipulation gizmo cage
+    Gizmo,
 
-    { 
-        name: "Client Resolver Debug Widget", 
-        classname: "ClientResolverDebugWidget"
-    },
+    ClientResolverDebugWidget,
 
-    // Unimplemented Widgets 
+    WizardForge,
 
-    // Wizard Forge sounds better than Widget Wizard Factory Wizard
-    { 
-        name: "Wizard Forge Editor", 
-        aliases: ["Widget Wizard Factory Wizard"] 
-    },
+    GiphyWidget,
 
-    { name: "Giphy Widget" },
+    MandlebrotWidget,
+    FileBrowserWidget,
+    WebBrowserWidget, // iframeWidget wrapper
+    IFTTTWidget, // IFTTT Integration
 
-    { name: "Mandlebrot Widget" },
-    { name: "File browser Widget" },
-    { name: "Web browser Widget"},
-    { name: "IFTTT Widget"},
-    // (falls through to base Widget class if no class defined)
-    { name: "ShaderToy Widget" },
-    { name: "Pixel Art Editor"},
-    { name: "Vector Art Editor"},
-    { name: "Text Editor Widget"},
-    { name: "P5.js Sketch Widget"},
-    { name: "Draw.io Widget"},
-    { name: "Fig Jam Widget"},
-    { name: "Workflowy Widget"},
-    { name: "Credits Widget"}, /* a "slideshow" of credits */
-    { name: "JSON Viewer"}, /* JSONBlob */
-    { name: "GraphViz Dotlang Viewer"},
-    { name: "3D Model Viewer Widget"},
-    { name: "Sticky Note Widget"},
-    { name: "Globe Widget"},
-    { name: "Timezone Clocks Widget"},
-    { name: "Spline Editor Widget" },
-    { 
-        // palettes, rgb, hsl, hsv, cmyk, etc...
-        name: "Color Picker Widget" 
-    },
-    { name: "Timeline Editor Widget" },
-    { name: "Nested Drag and Drop Sorting Widget" },
-    { name: "Fractal Tree Graph Viewer Widget"},
+    ShaderToyWidget,
+    PixelArtWidget,
+    VectorArtWidget,
+    TextEditorWidget,
+    P5JSSketchWidget,
+    DrawIOWidget,
+    FigJamWidget,
+    ChessWidget,
+    WorkflowyWidget,
+
+    // About, More Info... etc...
+    // Legal, Privacy, Terms, etc...
+    /* a "slideshow" of credits */
+    CreditsWidget,
+
+    JSONViewer,
+    GraphVizDotLangViewer,
+    ThreeJSViewer,
+    //StickyNoteWidget,
+    GlobeWidget,
+    TimezoneClocksWidget,
+    SplineEditorWidget,
+    TimelineWidget,
+
+    // palettes, rgb, hsl, hsv, cmyk, etc...
+    ColorPickerWidget,
+
+    NestedDragAndDropSortingWidget,
+    // "Hypercard"
+    FractalTreeGraphViewerWidget,
+
+    ComputerKeyboardPreview
 ]
 // represents a TimerManager and capable 
 // of rendering multiple Timer instances in a single widget
@@ -9527,11 +9575,94 @@ function mouseDragged(event){
     panMomentumVector.y += (mouseY - pmouseY) * store.panMomentumDecay;
 }
 
-class Star {
+class Field {
+    makesClass = null; //DefaultFieldConstiuentClass;
+    objectPool = [] 
+    instancePool = []
+    constructor(MyFieldConstituentClass){
+        this.makesClass = MyFieldConstituentClass;
+    }
+}
+class FieldView extends Widget {
+    // isometric perspective is commonly implemented at:
+    // 30 degrees from the horizontal plane
+    // 45 degrees from the vertical plane
+    // 0 degrees from the depth plane
+
+    modes = ["isometric", "orthographic"]
+    renderZModes = ["wireframe","solid","shaded_solid","shaded_wireframe"]
+    viewMode = "isometric"
+
+    fieldOfViewAngle = 30;
+
+    showOrientationGrid = true;
+    showPerspectiveGrid = true;
+    gridOpts = {
+        spacing: 50,
+        color: "rgba(255,255,255,0.1)",
+        strokeWeight: 1,
+
+        // let different segments of the grid have a lighter value indicating a half step
+        alternateBrightness: 0.2,
+
+        renderZMode: "wireframe" 
+    }
+
+    // currently viewing fields is a cursor into the graph structure
+    // it is not the graph structure itself, think of it like a pagination DTO
+    // the server guarentees to send information about how many pages remain, what page your on,
+    // maybe even configurable options like, how many items per page, sorting, filtering, etc
+    // all these adjustable parameters represent a "place" 
+        // a specific location within the "Execution space" of the application
+        // when we don't define our behaviours thoroughly and consistently, we are doomed to deal with undefined behaviors
+        // if we slowly collect and define all the behaviors, we can start to see the patterns and commonalities
+        // then, we can create abstractions, simplifications, and common sense defaults to apply (meta-patterns)
+        // we can apply these meta-patterns to the pattern itself, and the patterns _it's_ capable of generating
+    // 
+
+
+    switchViewMode(next){ this.viewMode = next }
+
+    draw(){
+        super.draw(...arguments);
+        // draw the grid
+        push()
+
+        //
+        // Set grid color
+        stroke(this.gridOpts.color);
+        strokeWeight(this.gridOpts.strokeWeight);
+
+        // Draw horizontal lines
+        for(let i = 0; i < height; i += this.gridOpts.spacing) {
+            line(0, i, width, i);
+        }
+
+        // Draw vertical lines
+        for(let i = 0; i < width; i += this.gridOpts.spacing) {
+            line(i, 0, i, height);
+        }
+        pop()
+    }
+}
+const FieldOf = function(MyFieldConstituentClass){
+    let myClass = MyFieldConstituentClass;
+    return function(){
+        return new Field(myClass)
+    }
+}
+
+class Star extends Widget {
+    //fillColor = "white"
     position = {x:0,y:0,z:0}
     brightness = 255;
     temperature = 5000;
     get fillColor(){
+        // return early if we've already memoized the color
+        if(this._fillColor){
+            return this._fillColor;
+        }
+
         // Convert temperature from Kelvin to RGB
         let temp = this.temperature / 100;
         let red, green, blue;
@@ -9548,19 +9679,17 @@ class Star {
         // return a memoized evaluation of temperature => p5.js color
         return this._fillColor ?? (this._fillColor = color(red, green, blue));
     }
-}
-class Field {
-    makesClass = null; //DefaultFieldConstiuentClass;
-    objectPool = [] 
-    instancePool = []
-    constructor(MyFieldConstituentClass){
-        this.makesClass = MyFieldConstituentClass;
+    constructor(){
+        super(...arguments)
+        // todo: random color temp -> hex color
     }
-}
-const FieldOf = function(MyFieldConstituentClass){
-    let myClass = MyFieldConstituentClass;
-    return function(){
-        return new Field(myClass)
+    draw(){
+        super.draw(...arguments);
+
+        // draw a circle
+        fill(this.fillColor);
+        strokeWeight(0);
+        circle(0,0,10);
     }
 }
 
@@ -9591,6 +9720,34 @@ class StarField extends FieldOf(Star){
     
     // MaxInstancesPerObjectType int[]
     // 
+}
+
+
+
+class StarFieldWidget extends Widget {
+    get widgetSize(){
+        return {
+            x: innerWidth,
+            y: innerHeight
+        }
+    }
+
+    // placeholder Class data to be abstracted...
+    // this is a "Field" of "Stars"
+    stars = []
+    maxStars = 100;
+    constructor(){
+        super(...arguments);
+
+        for(let i = 0; i < this.maxStars; i++){
+            this.stars.push(new Star());
+        }
+    }
+
+    draw(){
+        super.draw(...arguments);
+
+    }
 }
 
 // while the pan momentum vector magnitude is greater than 0.1
@@ -9744,6 +9901,41 @@ class DebugPath {
     points = []
     constructor(){
     }
+
+    averageWindowOffset = 0
+    averageWindowSize = 3
+    averageIfDistSmallerThan = 100
+
+    stepPruner(){
+        this.averageNearbyPoints();
+    }
+
+    averageNearbyPoints(){
+        // if the averageWindowOffset + the avgWinSize extends beyond the bounds of the points,
+        // reset it back to the beginning
+        if(this.averageWindowOffset + this.averageWindowSize > this.points.length){
+            this.averageWindowOffset = 0;
+        }
+        let points = this.points.slice(this.averageWindowOffset, this.averageWindowOffset + this.averageWindowSize);
+        let avgX = 0;
+        let avgY = 0;
+        let avgZ = 0;
+        for(let i = 0; i < points.length; i++){
+            avgX += points[i].x;
+            avgY += points[i].y;
+            avgZ += points[i].z;
+        }
+        avgX /= points.length;
+        avgY /= points.length;
+        avgZ /= points.length;
+        if(Math.sqrt(Math.pow(avgX - this.points[this.points.length - 1].x, 2) + Math.pow(avgY - this.points[this.points.length - 1].y, 2)) < this.averageIfDistSmallerThan){
+            // Remove the points that are being averaged / combined
+            this.points.splice(this.averageWindowOffset, this.averageWindowSize);
+            // Add the new averaged point
+            this.points.push({x: avgX, y: avgY, z: avgZ});
+        }
+    }
+
     addPoint(x,y,z){
         // if the most recent point is nearby, don't bother
         // adding a new point
@@ -9757,6 +9949,9 @@ class DebugPath {
             }
         }
         this.points.push({x,y,z});
+
+        // prune as we add points
+        this.stepPruner();
     }
 
     draw(_color){
@@ -9767,7 +9962,7 @@ class DebugPath {
             let weight = map(this.points[i].z, 0, maxZ, 0, 10);
 
             // adjust lineColor
-            let brightness = map(i, 0, this.points.length, 0, 255);
+            let brightness = map(i, 0, this.points.length, 255, 0);
             
             // adjust adjustedLineColor based on derived brightness
             adjustedLineColor = color(
@@ -10092,6 +10287,28 @@ function handleAnalogStickInput(){
     // panY += store.averageThumbstickReading.y * store.thumbstickMomentumY;
 }
 
+// NEW: VISUAL CLIPBOARD! 
+// SHOW WHEN THINGS ARE CUT/COPIED
+class Clipping extends Widget {
+    draw(){
+        super.draw(...args)
+        // draw the clippings
+        fill("pink")
+        rect(0,0,100,100)
+    }
+}
+class VisualClipboard extends Widget {
+    clippings = [] // todo: add getter that casts to Clipping[]
+
+    draw(){
+        super.draw(...args)
+        // draw the clippings
+        this.clippings.forEach((clipping)=>{
+            clipping.draw();
+        })
+    }
+}
+
 // Define the draw function
 // Main Draw / Root Draw
 // Todo: system manager should loop over active systems,
@@ -10184,13 +10401,17 @@ function draw() {
             mouseShifted.y, 
             zoom+0
         );
-        // DebugPathInstance.draw();
+        if(!store.DISABLE_DEBUG_PATHS){
+            DebugPathInstance.draw();
+        }
         DebugPathTwo.addPoint(
             targetX, 
             targetY,
             zoom+0
         )
-        // DebugPathTwo.draw(40);
+        if(!store.DISABLE_DEBUG_PATHS){
+            DebugPathTwo.draw(40);
+        }
         
 
         translate(mouseShifted.x, mouseShifted.y);
@@ -10758,10 +10979,10 @@ function setupDefaults(){
         // Where we're going, we don't have a Document, we have an Infinitely Nested Fractal Field Manifold Manipulator!
         // baseCmds.push([tag,{default:text}])
         // simplifies to:
-        console.warn({
-            tag,
-            text
-        })
+        // console.warn({
+        //     tag,
+        //     text
+        // })
         //baseCmds.push([tag,text])
     })
 
@@ -10773,11 +10994,26 @@ function setupDefaults(){
             console.warn("detected widget with classname",{
                 widget,
             })
+
+            // make an option for spawning
+            // but also (until we get user profiles sorted out)
+            // just load all available widget types in the default dashboard
+            // TODO: make a WidgetRegistry viewer so we can offer a clean dashboard at startup
+            // and Dashboard profiles for switching dashboard instances, (even viewing them side by side OR overlapping)
             baseCmds.push(new Config({
                 name: `Spawn Widget: ${widget.name}`,
                 description: `Spawns a new ${widget.name} widget`,
             }))
             return;
+        }else if(typeof widget === "function"){
+            console.warn("detected widget as function",{
+                widget,
+            })
+
+        }else{
+            console.warn("detected widget as object",{
+                widget,
+            })
         }
 
         
@@ -10798,13 +11034,13 @@ function preload() {
         PreloadedSVGs[name] = loadImage(name);
     })
 }
-class H1Widget extends Widget {
-    text = "H1 Widget"
+class DOMNode extends Widget {
+    get text(){
+        return this._text;
+    }
     constructor(opts){
-        super(...arguments)
-        this.text = opts?.text ?? this.text;
-        //this.name = this.text.substring(0,10) + "...";
-        this.options = opts;
+        this.opts = opts;
+        this._text = opts?.text ?? this.text;
     }
     draw(){
         push();
@@ -10813,6 +11049,15 @@ class H1Widget extends Widget {
         textAlign(CENTER,CENTER);
         text(`${this.text}`,0,0);
         pop();
+    }
+}
+class H1Widget extends DOMNode {
+    text = "H1 Widget"
+    constructor(opts){
+        super(...arguments)
+        this.text = opts?.text ?? this.text;
+        //this.name = this.text.substring(0,10) + "...";
+        this.options = opts;
     }
 }
 class Animation {
