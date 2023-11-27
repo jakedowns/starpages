@@ -1,6 +1,6 @@
 /*  
     Free Palestine
-    End Imperilism
+    End Imperalism
     Land Back
     Reparations Now
     ---
@@ -11,6 +11,17 @@
     Taggable, Flaggable, Commentable, Annotatable,
     ---
 */
+
+let todos = [{
+    "Overview of neat.js": {
+      "Ambitions": "- The script aims to create a complex system with various functionalities such as synchronized music playback, web browsing, widget recommendation engine, and more.\n- It also aims to run headless in a node.js environment and communicate with a client version.\n- The script plans to implement a system that sends text, email, SMS, APN, web push notifications, etc.",
+      "Current Progress": "- The script has implemented various classes and functions to handle different functionalities such as handling mouse and touch events, managing states, evaluating code within a sandbox, etc.\n- It has implemented classes for different widgets and interfaces.\n- It has implemented a state machine to manage state transitions.\n- It has implemented a REPL (Read-Eval-Print Loop) that evaluates a string of code within a sandbox.",
+      "To-dos": "- The script plans to implement click handlers for widgets on the dashboard.\n- It plans to implement a visual clipboard to show when things are cut/copied.\n- It plans to implement a feature test that can be created, built, imported at runtime.\n- It plans to implement a system that can send notifications.",
+      "Functions": "- touchStarted(), touchMoved(), touchEnded(): Functions to handle touch events.\n- mouseWheel(event): Function to handle mouse wheel events.\n- updateBlur(): Function to update the blur effect.\n- deleteSelectedNode(): Function to delete a selected node.\n- handleAnalogStickInput(): Function to handle analog stick input.\n- nodesForFlowIndex(flowIndex): Function to get nodes for a given flow index.",
+      "Classes": "- TruthTable: Class to define valid state transitions.\n- TimeManager: Class to manage time.\n- FeatureTest: Class to define a feature test.\n- StateMachine: Class to manage states.\n- VirtualMachine: Class that extends StateMachine to manage memory and internal clock.\n- REPL: Class that extends VirtualMachine to evaluate a string of code within a sandbox.\n- Widget, Star, StarFieldWidget, DebugPath, MiniMapWidget, GraphViewer, Clipping, VisualClipboard: Classes to define different widgets.\n- Interface, DraggableInterface, DrawableInterface, ResizableInterface, SelectableInterface, TabbableInterface, SortableInterface, SortingContextInterface, TodosInterface: Classes to define different interfaces.",
+      "Constants": "- MOON_PHASE_EMOJIS, MOON_PHASE_ORDER: Constants to define moon phases.\n- HALT_ON_PANIC, SHOW_DEV_WARNINGS, MAX_SUGGESTED_SCENARIOS_PER_FEATURE: Constants to define system behaviors.\n- tsmc_machine_states: Constant to define machine states.\n- DefaultKeyBindings: Constant to define default key bindings."
+    }
+  }]
 
 // TODO: mother of all demos
 // credits: brett victor worrydream
@@ -764,7 +775,21 @@ const AutorunningSelfTest = function(baseClass, options){
 
 // Automatically registers Command classes with the
 // Default Command Prompt Suggestions
-let baseCmds = []
+
+class Hello {
+    intentions = [
+        "make it like playing with a train set"
+    ]
+    constructor(){
+        console.info(`
+        Hello, World! This is an update! welcome to version 1.0! we're testing a new sandbox for working with code.`)
+    }
+}
+
+let baseCmds = [
+    // new Command("hello", {
+    // }
+]
 const BaseCmds = function(command, wizardConfigInstance){
     // console.warn('BaseCmds',{
     //     name: typeof wizardConfigInstance === 'undefined' 
@@ -1835,7 +1860,7 @@ function drawDashedLine(x1, y1, x2, y2, dashLength = 10) {
         line(x, y, x + xStep, y + yStep);
     }
 }
-
+let fov = 100;
 class Widget extends UndoRedoComponent {
     hovered = false
     // relative base position
@@ -1868,6 +1893,13 @@ class Widget extends UndoRedoComponent {
         }
 
         return accumulatedPosition;
+    }
+
+    get smartPosition(){
+        if(this.pinned || this?.options?.pinned){
+            return this.basePosition;
+        }
+        return this._absolutePosition;
     }
 
     get _absolutePosition(){
@@ -2046,11 +2078,11 @@ class Widget extends UndoRedoComponent {
             drawDashedLine(rectA_x1 + wS.width, rectA_y1 + wS.height, rectB_x1 + wS.width, rectB_y1 + wS.height, 5);
 
             // draw an animated dashed line in the center of the two debug rectangles
-            drawAnimatedDashedLine(
-                1, "hotpink", 0.1, 20,
-                createVector(rectA_x1 + wS.width / 2, rectA_y1 + wS.height / 2),
-                createVector(rectB_x1 + wS.width / 2, rectB_y1 + wS.height / 2),
-            )
+            // drawAnimatedDashedLine(
+            //     1, "hotpink", 0.1, 20,
+            //     createVector(rectA_x1 + wS.width / 2, rectA_y1 + wS.height / 2),
+            //     createVector(rectB_x1 + wS.width / 2, rectB_y1 + wS.height / 2),
+            // )
 
         pop();
         
@@ -2124,6 +2156,13 @@ class Widget extends UndoRedoComponent {
 
         let affectedY = this.basePosition.y
             + (exponentialParallaxFactor * mouseShifted.y);
+
+        // scale the parallax based on the distance from the center of the screen
+        let distanceFromCenter = dist(affectedX, affectedY, innerWidth / 2, innerHeight / 2);
+        let distanceFactor = distanceFromCenter / (innerWidth / 2);
+        distanceFactor = lerp(1, distanceFactor, zoom / 6); // Reduced the effect by dividing zoom by 6 instead of 3
+        affectedX = lerp(affectedX, innerWidth / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
+        affectedY = lerp(affectedY, innerHeight / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
         
         // Update the position of the widget to the newly calculated values.
         this.position.x = affectedX;
@@ -2154,6 +2193,10 @@ class Widget extends UndoRedoComponent {
         this.doNotDraw = bool;
     }
     draw(widgetID){
+        // update fov using Sin wave
+        //fov = 100 + (sin(frameCount / 100) * 100);
+        fov = lerp(100, 200, zoom / 3);
+
         // do physics updates n such, 
         // need to know where things are to know if we can draw them
         this?.preDraw?.()
@@ -2181,17 +2224,17 @@ class Widget extends UndoRedoComponent {
             15
         )
         
-        if(store.cullOutOfBoundsWidgets){
-            if(isWithinXBounds || isWithinYBounds){
-                // The widget is within the viewport
-                this.flagDoNotDraw(true);
-            }else{
-                this.flagDoNotDraw(false);
-                return;
-            }
-        }else{
-            this.flagDoNotDraw(false);
-        }
+        // if(store.cullOutOfBoundsWidgets){
+        //     if(isWithinXBounds || isWithinYBounds){
+        //         // The widget is within the viewport
+        //         this.flagDoNotDraw(true);
+        //     }else{
+        //         this.flagDoNotDraw(false);
+        //         return;
+        //     }
+        // }else{
+        //     this.flagDoNotDraw(false);
+        // }
         store.frameDrawCount++;
 
         // debug print position
@@ -2267,6 +2310,26 @@ class Widget extends UndoRedoComponent {
                 this.position.y + this.widgetSize.height + 40
             )
         //}
+
+        push()
+
+        // Calculate scale factor based on depth and field of view
+        let scaleFactor = fov / (fov + this.zDepth);
+
+        // Scale position and size of the object
+        let scaledX = this.position.x * scaleFactor;
+        let scaledY = this.position.y * scaleFactor;
+        let scaledWidth = this.widgetSize.width * scaleFactor;
+        let scaledHeight = this.widgetSize.height * scaleFactor;
+
+        stroke("red")
+        strokeWeight(3)
+        fill(color(0,0,0,0))
+
+        // Draw the object
+        rect(scaledX, scaledY, scaledWidth, scaledHeight);
+
+        pop()
     }
 }
 
@@ -3634,8 +3697,11 @@ class Cursor {
         fill(0,0)
         drawDashedLine(mouseX, mouseY, innerWidth / 2, innerHeight / 2)
         
-        stroke("blue")
-        drawDashedLine(mouseX, mouseY, pmouseX, pmouseY)
+        stroke("purple")
+        line(mouseX, mouseY, pmouseX, pmouseY)
+
+        // draw a crosshair at the mouse position
+        drawCrosshair("blue", {x: mouseX, y: mouseY})
 
         stroke("green")
 
@@ -3759,19 +3825,11 @@ class Quaternion {
         )
     }
     static FromEulerAngles(roll, pitch, yaw){
-        let cy = Math.cos(yaw * 0.5);
-        let sy = Math.sin(yaw * 0.5);
-        let cr = Math.cos(roll * 0.5);
-        let sr = Math.sin(roll * 0.5);
-        let cp = Math.cos(pitch * 0.5);
-        let sp = Math.sin(pitch * 0.5);
-
-        return new Quaternion(
-            cy * sr * cp - sy * cr * sp,
-            cy * cr * sp + sy * sr * cp,
-            sy * cr * cp - cy * sr * sp,
-            cy * cr * cp + sy * sr * sp
-        )
+        let qx = Math.sin(x / 2);
+        let qy = Math.sin(y / 2);
+        let qz = Math.sin(z / 2);
+        let qw = Math.cos(x / 2) * Math.cos(y / 2) * Math.cos(z / 2) - Math.sin(x / 2) * Math.sin(y / 2) * Math.sin(z / 2);
+        return new Quaternion(qx, qy, qz, qw);
     }
     toEulerAngles(){
         // roll (x-axis rotation)
@@ -3812,6 +3870,34 @@ class Quaternion {
             this.z / magnitude,
             this.w / magnitude
         )
+    }
+    // conjugate(){
+    //     return new Quaternion(
+    //         -this.x,
+    //         -this.y,
+    //         -this.z,
+    //         this.w
+    //     )
+    // }
+    multiplyVector(vector) {
+        const u = [this.x, this.y, this.z];
+        const a = this.w;
+        const v = vector;
+
+        const dotUV = u[0]*v[0] + u[1]*v[1] + u[2]*v[2];
+        const crossUV = [
+            u[1]*v[2] - u[2]*v[1],
+            u[2]*v[0] - u[0]*v[2],
+            u[0]*v[1] - u[1]*v[0]
+        ];
+
+        const rotatedVector = [
+            2*dotUV*u[0] + (a*a - dotUV)*v[0] + 2*a*crossUV[0],
+            2*dotUV*u[1] + (a*a - dotUV)*v[1] + 2*a*crossUV[1],
+            2*dotUV*u[2] + (a*a - dotUV)*v[2] + 2*a*crossUV[2]
+        ];
+
+        return rotatedVector;
     }
 }
 
@@ -8408,57 +8494,164 @@ class ColorPickerWidget extends Widget {}
 class NestedDragAndDropSortingWidget extends Widget {}
 class FractalTreeGraphViewerWidget extends Widget {}
 
+// NEW: VISUAL CLIPBOARD! 
+// SHOW WHEN THINGS ARE CUT/COPIED
+class Clipping extends Widget {
+    draw(){
+        super.draw(...arguments)
+        // draw the clippings
+        fill("pink")
+        rect(0,0,100,100)
+    }
+}
+const drawVertex = function(x,y){
+    // draw a vertex
+    drawCrosshair("red",{x,y})
+}
+class IsometricPreview extends Widget {
+    constructor(){
+        super(...arguments)
+        this.cubeRotation = Quaternion.FromEulerAngles(Math.PI / 4, Math.PI / 4, 0);
+    }
+    draw(){
+        super.draw(...arguments)
+
+        // stroke("yellow")
+        // strokeWeight(1)
+        // fill("red")
+        // rect(0,0,100,100)
+
+        // draw a rotating isometric cube in 2D context as lines connecting a collection of verts
+        let size = 100;
+        let angle = frameCount * 0.01;
+        let halfSize = size / 2;
+        let vertices = [
+            [-halfSize, -halfSize, -halfSize], // First triangle
+            [halfSize, -halfSize, -halfSize],
+            [halfSize, halfSize, -halfSize],
+            [-halfSize, -halfSize, -halfSize], // Second triangle
+            [halfSize, halfSize, -halfSize],
+            [-halfSize, halfSize, -halfSize],
+            [-halfSize, -halfSize, halfSize], // Third triangle
+            [halfSize, -halfSize, halfSize],
+            [halfSize, halfSize, halfSize],
+            [-halfSize, -halfSize, halfSize], // Fourth triangle
+            [halfSize, halfSize, halfSize],
+            [-halfSize, halfSize, halfSize]
+        ];
+        push();
+        translate(width / 2 + halfSize, height / 2 + halfSize);
+        //rotate(angle);
+
+        // step the rotation of the cube (this.cubeRotation)
+        this.cubeRotation = this.cubeRotation.multiply(Quaternion.FromEulerAngles(0.01,0.01,0.01))
+
+        // apply the rotation to the vertices in screenspace
+        let screenSpaceVertices = vertices.map((vertex)=>{
+            // Apply quaternion rotation
+            let rotatedVertex = this.cubeRotation.multiplyVector(vertex);
+
+            // Project into screen space
+            let scale = fov / (fov + rotatedVertex[2]);
+            let x2d = rotatedVertex[0] * scale;
+            let y2d = rotatedVertex[1] * scale;
+
+            return [x2d, y2d];
+        })
+
+        strokeWeight(1)
+        stroke(255, 0, 0);
+        beginShape();
+        for(let i = 0; i < screenSpaceVertices.length; i += 3){
+            // Project the 3D point to 2D space
+            let x2d1 = screenSpaceVertices[i][0];
+            let y2d1 = screenSpaceVertices[i][1];
+
+            let x2d2 = screenSpaceVertices[i+1][0];
+            let y2d2 = screenSpaceVertices[i+1][1];
+
+            let x2d3 = screenSpaceVertices[i+2][0];
+            let y2d3 = screenSpaceVertices[i+2][1];
+
+            // Draw the triangle
+            line(x2d1, y2d1, x2d2, y2d2);
+            line(x2d2, y2d2, x2d3, y2d3);
+            line(x2d3, y2d3, x2d1, y2d1);
+
+            // Draw the verts
+            ellipse(x2d1, y2d1, 5, 5);
+            ellipse(x2d2, y2d2, 5, 5);
+            ellipse(x2d3, y2d3, 5, 5);
+        }
+        endShape(CLOSE);
+        pop();
+    }
+}
+
+class VisualClipboard extends Widget {
+    clippings = [] // todo: add getter that casts to Clipping[]
+
+    draw(){
+        super.draw(...args)
+        // draw the clippings
+        this.clippings.forEach((clipping)=>{
+            clipping.draw();
+        })
+    }
+}
+
 const BasicWidgets = [
-    Solitaire,
-    // ya'know, for testing buttons and stuff
-    UIDemoWidget,
+    IsometricPreview,
+    // Solitaire,
+    // // ya'know, for testing buttons and stuff
+    // UIDemoWidget,
 
-    // display a basic manipulation gizmo cage
-    Gizmo,
+    // // display a basic manipulation gizmo cage
+    // Gizmo,
 
-    ClientResolverDebugWidget,
+    // ClientResolverDebugWidget,
 
-    WizardForge,
+    // WizardForge,
 
-    GiphyWidget,
+    // GiphyWidget,
 
-    MandlebrotWidget,
-    FileBrowserWidget,
-    WebBrowserWidget, // iframeWidget wrapper
-    IFTTTWidget, // IFTTT Integration
+    // MandlebrotWidget,
+    // FileBrowserWidget,
+    // WebBrowserWidget, // iframeWidget wrapper
+    // IFTTTWidget, // IFTTT Integration
 
-    ShaderToyWidget,
-    PixelArtWidget,
-    VectorArtWidget,
-    TextEditorWidget,
-    P5JSSketchWidget,
-    DrawIOWidget,
-    FigJamWidget,
-    ChessWidget,
-    WorkflowyWidget,
+    // ShaderToyWidget,
+    // PixelArtWidget,
+    // VectorArtWidget,
+    // TextEditorWidget,
+    // P5JSSketchWidget,
+    // DrawIOWidget,
+    // FigJamWidget,
+    // ChessWidget,
+    // WorkflowyWidget,
 
-    // About, More Info... etc...
-    // Legal, Privacy, Terms, etc...
-    /* a "slideshow" of credits */
-    CreditsWidget,
+    // // About, More Info... etc...
+    // // Legal, Privacy, Terms, etc...
+    // /* a "slideshow" of credits */
+    // CreditsWidget,
 
-    JSONViewer,
-    GraphVizDotLangViewer,
-    ThreeJSViewer,
-    //StickyNoteWidget,
-    GlobeWidget,
-    TimezoneClocksWidget,
-    SplineEditorWidget,
-    TimelineWidget,
+    // JSONViewer,
+    // GraphVizDotLangViewer,
+    // ThreeJSViewer,
+    // //StickyNoteWidget,
+    // GlobeWidget,
+    // TimezoneClocksWidget,
+    // SplineEditorWidget,
+    // TimelineWidget,
 
-    // palettes, rgb, hsl, hsv, cmyk, etc...
-    ColorPickerWidget,
+    // // palettes, rgb, hsl, hsv, cmyk, etc...
+    // ColorPickerWidget,
 
-    NestedDragAndDropSortingWidget,
-    // "Hypercard"
-    FractalTreeGraphViewerWidget,
+    // NestedDragAndDropSortingWidget,
+    // // "Hypercard"
+    // FractalTreeGraphViewerWidget,
 
-    ComputerKeyboardPreview
+    // ComputerKeyboardPreview
 ]
 // represents a TimerManager and capable 
 // of rendering multiple Timer instances in a single widget
@@ -9903,36 +10096,56 @@ class DebugPath {
     }
 
     averageWindowOffset = 0
-    averageWindowSize = 3
-    averageIfDistSmallerThan = 100
+    averageWindowSize = 9
+    averageIfDistSmallerThan = 50
 
     stepPruner(){
         this.averageNearbyPoints();
     }
 
     averageNearbyPoints(){
+        // if we don't have enough points to average, bail
+        if(this.points.length < this.averageWindowSize){
+            return;
+        }
+
+        // if the oldest point is older than 3 seconds, remove it
+        // if(Date.now() - this.points[0].t > 3000){
+        //     this.points.shift();
+        // }
+
         // if the averageWindowOffset + the avgWinSize extends beyond the bounds of the points,
         // reset it back to the beginning
-        if(this.averageWindowOffset + this.averageWindowSize > this.points.length){
-            this.averageWindowOffset = 0;
-        }
         let points = this.points.slice(this.averageWindowOffset, this.averageWindowOffset + this.averageWindowSize);
         let avgX = 0;
         let avgY = 0;
         let avgZ = 0;
+        let avgT = 0;
+        let avgA = 0;
         for(let i = 0; i < points.length; i++){
             avgX += points[i].x;
             avgY += points[i].y;
             avgZ += points[i].z;
+            avgT += points[i].t;
+            avgA += points[i].a;
         }
         avgX /= points.length;
         avgY /= points.length;
         avgZ /= points.length;
+        avgT /= points.length;
+        avgA /= points.length;
         if(Math.sqrt(Math.pow(avgX - this.points[this.points.length - 1].x, 2) + Math.pow(avgY - this.points[this.points.length - 1].y, 2)) < this.averageIfDistSmallerThan){
             // Remove the points that are being averaged / combined
             this.points.splice(this.averageWindowOffset, this.averageWindowSize);
             // Add the new averaged point
-            this.points.push({x: avgX, y: avgY, z: avgZ});
+            this.points.push({x: avgX, y: avgY, z: avgZ, t: avgT, a: avgA});
+        }
+        // step the window
+        this.averageWindowOffset++;
+        // if we've stepped the window beyond the bounds of the points,
+        // reset it back to the beginning
+        if(this.averageWindowOffset > this.points.length){
+            this.averageWindowOffset = 0;
         }
     }
 
@@ -9948,28 +10161,58 @@ class DebugPath {
                 return;
             }
         }
-        this.points.push({x,y,z});
-
+        this.points.push({x,y,z,t:Date.now(),a:255});
         // prune as we add points
-        this.stepPruner();
+        //this.stepPruner();
     }
 
     draw(_color){
+        this.stepPruner();
+        // @generateIfNeeded_clampedRange(0,360,1) // 1 step per frame
+        if(this.hueShift === undefined){this.hueShift = 0}
+        this.hueShift+=.01;
+        if(this.hueShift > 360){this.hueShift = 0;}
+
+
         let maxZ = Math.max(...this.points.map(point => point.z));
-        let lineColor = _color ?? 20;
-        let adjustedLineColor = lineColor
+        let lineColor = `hsl(${this.hueShift}, 100%, 100%)`; // Adjusted brightness to 50% to avoid white color
+        let adjustedLineColor = color(lineColor)
+
+        let weight = 3; //map(this.points[i].z, 0, maxZ, 0, 10);
+        let brightness = .5; //map(i, 0, this.points.length, 255, 0);
+        // Ensure brightness is applied to the color
+        // adjustedLineColor.setBrightness(brightness * 255);
         for(let i = 0; i < this.points.length - 1; i++) {
-            let weight = map(this.points[i].z, 0, maxZ, 0, 10);
 
             // adjust lineColor
-            let brightness = map(i, 0, this.points.length, 255, 0);
             
             // adjust adjustedLineColor based on derived brightness
-            adjustedLineColor = color(
-                red(lineColor) * (255/brightness),
-                green(lineColor) * (255/brightness),
-                blue(lineColor) * (255/brightness)
-            );
+            // adjustedLineColor = color(
+            //     red(lineColor) * (255/brightness),
+            //     green(lineColor) * (255/brightness),
+            //     blue(lineColor) * (255/brightness)
+            // );
+
+            // based on the points age, trend it's .a alpha to 0
+            this.points[i].a = map(Date.now() - this.points[i].t, 0, 3000, 255, 0);
+            adjustedLineColor.setAlpha(this.points[i].a);
+
+            if(this.colorTheme === "bw"){
+                //
+            }else{
+                // lineColor = color(255,255,255,1)
+                // adjustedLineColor = lineColor
+                // adjustedLineColor = color(
+                //     red(lineColor) + this.hueShift,
+                //     green(lineColor) + this.hueShift,
+                //     blue(lineColor) + this.hueShift
+                // );
+                // adjustedLineColor.setRed(red(lineColor) + this.hueShift);
+                // adjustedLineColor.setGreen(green(lineColor) + this.hueShift);
+                // adjustedLineColor.setBlue(blue(lineColor) + this.hueShift);
+                // set the lightness
+                // adjustedLineColor.setAlpha(100)
+            }
 
             stroke(adjustedLineColor);
             strokeWeight(weight);
@@ -10009,6 +10252,84 @@ const InputMap = {
     }
 }
 
+const sprites = [];
+class Sprite {
+    x = 0; 
+    y = 0;
+    radius = 20;
+    blur = 2;
+    drawSimple(){
+        fill(this.getRelativeColor())
+        let scaledRad = this.radius * zoom * (50 - this.z / 100);
+        const {x,y} = this.getRelativePosition()
+        ellipse(x, y, scaledRad, scaledRad);
+    }
+    getRelativePosition(){
+        // apply parallax based on depth
+        // impart pan and zoom to the sprite as well
+        let x = this.x + panX * (1 / this.z) * zoom;
+        let y = this.y + panY * (1 / this.z) * zoom;
+
+        // NOTE: we need to give the illusion of a lens, so we want outside to move faster than inside relative to the center of the viewport (this gives the illusion of a wider field of view)
+        x += (windowWidth / 2) * (1 - (1 / this.z)) * zoom;
+        y += (windowHeight / 2) * (1 - (1 / this.z)) * zoom;
+        return {x,y}
+    }
+    getRelativeColor(){
+        let startColor = color(255, 0, 0); // Red
+        let endColor = color(0, 0, 255); // Blue
+
+        // Normalize the z value to a range between 0 and 1
+        let normalizedZ = map(this.z, -10, 10, 0, 1);
+
+        // Use lerpColor to interpolate between the start and end colors based on z
+        let gradientColor = lerpColor(startColor, endColor, normalizedZ);
+        return gradientColor;
+    }
+    draw(){
+        // draw a circle
+        if(!store.cachedSprite){
+            // draw a circle to an offscreen buffer,
+            // blur it
+            // cache the blurred sprite for future use
+            store.cachedSprite = createGraphics(100,100);
+            store.cachedSprite.strokeWeight(0);
+            //store.cachedSprite.fill("red")
+            // center mode: center
+            store.cachedSprite.ellipseMode(CENTER);
+            store.cachedSprite.ellipse(this.radius,this.radius, this.radius, this.radius);
+            store.cachedSprite.filter(BLUR, this.blur);
+        }
+
+        const {x,y} = this.getRelativePosition()
+
+        // if we're out of viewports bounds, don't draw
+        if(
+            (x < 0 && y < 0)
+            || (x > windowWidth && y > windowHeight)
+        ){
+            return;
+        }
+
+        // scale the sprite based on z depth
+        let scale = map(1 / this.z, 0, 1, 1, 30);
+        // tint the image based on a gradient based on depth (nearer, bluer, mid white, far red)
+        // Define the start and end colors of your gradient
+        let gradientColor = this.getRelativeColor()
+
+        // Apply the gradient color
+        tint(gradientColor);
+        image(
+            store.cachedSprite, 
+            x, y, 
+            store.cachedSprite.width * scale, 
+            store.cachedSprite.height * scale
+        );
+        noTint(); // reset tint
+        
+    }
+}
+
 // Define the mouseWheel function
 function mouseWheel(event) {
     // TODO: if the mouse is over a scroll container,
@@ -10019,10 +10340,17 @@ function mouseWheel(event) {
         // IF ZOOM ON SCROLL ENABLED
         zoom -= -event.delta / 1000;
         zoom = constrain(zoom, 0.1, 3);
+        // make sure we offset the pan to account for the zoom messing with our center
+        // we should be passing _towards_ the mouse 
+        panX -= mouseX * (oldZoom - zoom);
+        panY -= mouseY * (oldZoom - zoom);
+
 
     }else{
-        panX -= event.deltaX;
-        panY -= event.deltaY;
+        // The zoom level affects the pan speed. When zoomed out (zoom = 0.1), we pan further.
+        // Conversely, when zoomed in (zoom = 1-3), we pan less far.
+        panX -= event.deltaX * (3-zoom);
+        panY -= event.deltaY * (3-zoom);
     }
     // else{
     //     panX -= event.deltaX;
@@ -10287,33 +10615,18 @@ function handleAnalogStickInput(){
     // panY += store.averageThumbstickReading.y * store.thumbstickMomentumY;
 }
 
-// NEW: VISUAL CLIPBOARD! 
-// SHOW WHEN THINGS ARE CUT/COPIED
-class Clipping extends Widget {
-    draw(){
-        super.draw(...args)
-        // draw the clippings
-        fill("pink")
-        rect(0,0,100,100)
-    }
-}
-class VisualClipboard extends Widget {
-    clippings = [] // todo: add getter that casts to Clipping[]
 
-    draw(){
-        super.draw(...args)
-        // draw the clippings
-        this.clippings.forEach((clipping)=>{
-            clipping.draw();
-        })
-    }
-}
 
 // Define the draw function
 // Main Draw / Root Draw
 // Todo: system manager should loop over active systems,
 // and call draw on systems which have non empty render queues
 function draw() {
+
+    //
+
+
+    
 
     // check the current pinch scale factor
 
@@ -10334,6 +10647,58 @@ function draw() {
         clear()
     }
     //background(color(0,0,0,0));
+
+    /**
+    * @description Iterating over sprites array
+    * @type {Sprite[]} sprites - Each sprite is an instance of the Sprite class
+    */
+    push();
+    sprites.forEach((sprite,index)=>{
+        //sprite.drawSimple();
+        sprite.draw();
+
+        // push sprite in z space
+        // once it reaches a certain depth, snap it back to the other end of z space and a random x,y scaled by z
+        sprite.z -= 0.01;
+        if(sprite.z){
+            if(sprite.z < -10){
+                sprite.z = 10;
+                // sprite.x = Math.random() * windowWidth;
+                // sprite.y = Math.random() * windowHeight;
+            }
+            if(sprite.z > 10){
+                sprite.z = -10;
+                // sprite.x = Math.random() * windowWidth;
+                // sprite.y = Math.random() * windowHeight;
+            }
+        }
+
+        return;
+
+        // use some perlin noise to perterb the 
+        // sprite's position
+        // (in the future, we'll convert to flowfield influence)
+        let seed = Math.random();
+        let offsetX = sprite.x * 0.00001; // Decrease multiplier for smoother noise
+        let offsetY = sprite.y * 0.00001; // Decrease multiplier for smoother noise
+        let uniqueFactorX = sprite.x * 0.2; // Add offset for unique noise per region
+        let uniqueFactorY = sprite.y * 0.2; // Add offset for unique noise per region
+
+        // Update sprite's x position with noise-based perturbation
+        // noise() generates Perlin noise value at specified coordinates
+        // offsetX + frameCount * 0.01 + seed + uniqueFactorX gives unique noise coordinates for each frame and sprite
+        // noise() returns value between 0 and 1, so we subtract 0.5 to allow movement in both positive and negative directions
+        // Final value is multiplied by 20 to increase the effect and by Math.sin(frameCount * 0.01) for oscillating effect over time
+        sprite.x += (noise(offsetX + frameCount * 0.01 + seed + uniqueFactorX) - 0.5) * 2 * Math.sin(frameCount * 0.01);
+        
+        // Update sprite's y position with noise-based perturbation
+        // Similar to x position update, but uses Math.cos(frameCount * 0.01) for oscillation to create perpendicular movement
+        sprite.y += (noise(offsetY + frameCount * 0.01 + seed + uniqueFactorY) - 0.5) * 2 * Math.cos(frameCount * 0.01);
+        // make sure to keep them within window bounds
+        sprite.x = constrain(sprite.x, 0, windowWidth)
+        sprite.y = constrain(sprite.y, 0, windowHeight);
+    })
+    pop()
 
     // draw our bg image
     if(bgImage){
@@ -10508,6 +10873,10 @@ function renderDebugUI(){
 
         {
             text: `Touch Inputs: ${store.touchInputs.length}`,
+        },
+
+        {
+            text:`fov ${fov}`
         }
     ];
 
@@ -11009,12 +11378,13 @@ function setupDefaults(){
             console.warn("detected widget as function",{
                 widget,
             })
-
+            baseCmds.push(widget)
         }else{
-            console.warn("detected widget as object",{
+            console.error("detected widget as object",{
                 widget,
             })
         }
+        //system.get("Dashboard").registerWidget(widget.name, new widget());
 
         
         // register the command
@@ -11129,6 +11499,18 @@ function setup() {
     console.info("booting...");
     manager.boot(); rootSystem = system = manager.systems[0];
     console.info("booted");
+
+    // system.get("Dashboard").registerWidget(new IsometricPreview());
+
+    // spawn a bunch of BlurSprite
+    for(var i=0;i<20;i++){
+        let sprite = new Sprite();
+        sprite.x = random(-windowWidth,windowWidth);
+        sprite.y = random(-windowHeight,windowHeight);
+        sprite.z = random(-10,10)
+        sprite.radius = random(1,10)
+        sprites.push(sprite);
+    }
 
     cursor = new Cursor();
 
@@ -11295,75 +11677,78 @@ function setup() {
     system.get("Dashboard").init()
         // add our first widget (todo: load state from dehydrated json)
         // DEFAULT WIDGET SET
+
+        system.get("Dashboard")
+            .registerWidget(new IsometricPreview())
         
         // .registerWidget("Google Color Picker",
-        .registerWidget(
-            new ImageViewerWidget("ukraine-flag.jpeg")
-        )
-        .registerWidget(
-            "SVGViewerWidget:PFlag",
-            new ImageViewerWidget("Flag_of_Palestine.svg")
-        )
+        // .registerWidget(
+        //     new ImageViewerWidget("ukraine-flag.jpeg")
+        // )
+        // .registerWidget(
+        //     "SVGViewerWidget:PFlag",
+        //     new ImageViewerWidget("Flag_of_Palestine.svg")
+        // )
         
-        .registerWidget(
-            "4SeasonsImg", 
-            new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
+        // .registerWidget(
+        //     "4SeasonsImg", 
+        //     new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
         
-        .registerWidget("GherkinRunnerWidget",  grw)
-        .registerWidget(
-            new YoutubePlayerWidget(
-                "Focus Music",
-                {
-                    pickRandomOnPlay: true,
-                    autoPlay: true,
-                    shuffle: true,
-                    tracks: [
-                        "https://www.youtube.com/watch?v=tkgmYIsflSU",
-                        "https://www.youtube.com/watch?v=931PQwTA79k",
-                        "https://www.youtube.com/watch?v=LQUXuQ6Zd9w",
-                    ]
-                }
-            )
-        )
-        // intentionally on a separate line to make it easier to comment out last chained method
-        ;
-        WidgetsToRegister.forEach((widgetClassName)=>{
-            let theInstance = null;
-            const widgetTypes = {
-                ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
-                VideoPlayerWidget: [".mp4"],
-                YoutubePlayerWidget: [".youtube."]
-            };
-            if(typeof widgetClassName === 'string'){
-                for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
-                    if (extensions.some(ext => widgetClassName.includes(ext))) {
-                        if(!window[widgetType]){
-                            console.warn("missing widget type",{
-                                widgetType,
-                                extensions,
-                                widgetClassName
-                            })
-                            continue;
-                        }
+        // .registerWidget("GherkinRunnerWidget",  grw)
+        // .registerWidget(
+        //     new YoutubePlayerWidget(
+        //         "Focus Music",
+        //         {
+        //             pickRandomOnPlay: true,
+        //             autoPlay: true,
+        //             shuffle: true,
+        //             tracks: [
+        //                 "https://www.youtube.com/watch?v=tkgmYIsflSU",
+        //                 "https://www.youtube.com/watch?v=931PQwTA79k",
+        //                 "https://www.youtube.com/watch?v=LQUXuQ6Zd9w",
+        //             ]
+        //         }
+        //     )
+        // )
+        // // intentionally on a separate line to make it easier to comment out last chained method
+        // ;
+        // WidgetsToRegister.forEach((widgetClassName)=>{
+        //     let theInstance = null;
+        //     const widgetTypes = {
+        //         ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
+        //         VideoPlayerWidget: [".mp4"],
+        //         YoutubePlayerWidget: [".youtube."]
+        //     };
+        //     if(typeof widgetClassName === 'string'){
+        //         for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
+        //             if (extensions.some(ext => widgetClassName.includes(ext))) {
+        //                 if(!window[widgetType]){
+        //                     console.warn("missing widget type",{
+        //                         widgetType,
+        //                         extensions,
+        //                         widgetClassName
+        //                     })
+        //                     continue;
+        //                 }
 
-                        theInstance = new window[widgetType](widgetClassName);
-                        break;
-                    }
-                }
-                if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
-                    theInstance = new iFrameWidget(widgetClassName);
-                }
-            }else{
-                if (!theInstance) {
-                    theInstance = new widgetClassName();
-                }
-            }
-            if(!theInstance){
-                console.warn(`failed to instantiate widget ${widgetClassName}`)
-                return;
-            }
-            system.get("Dashboard").registerWidget(theInstance)
-        })
+        //                 theInstance = new window[widgetType](widgetClassName);
+        //                 break;
+        //             }
+        //         }
+        //         if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
+        //             theInstance = new iFrameWidget(widgetClassName);
+        //         }
+        //     }else{
+        //         if (!theInstance) {
+        //             theInstance = new widgetClassName();
+        //         }
+        //     }
+        //     if(!theInstance){
+        //         console.warn(`failed to instantiate widget ${widgetClassName}`)
+        //         return;
+        //     }
+        //     system.get("Dashboard").registerWidget(theInstance)
+        // })
 
             // shuffle widget order
             // system.get("Dashboard").shuffleWidgets()
