@@ -3,6 +3,121 @@
   <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/p5.js"></script>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/addons/p5.sound.min.js"></script> -->
+    
+
+    <script type="module">
+      import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.module.js';
+
+        let _camera, scene, renderer, _cube, _sphere;
+
+        document.addEventListener('DOMContentLoaded', (event) => {
+            // setTimeout(() => {
+              init();
+              animate();
+            // }, 1000);
+        });
+
+        function init() {
+
+            _camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.1, 100 );
+            _camera.position.z = 2;
+
+            scene = new THREE.Scene();
+
+            // Add a directional light
+            const light = new THREE.DirectionalLight(0xffffff, 0.5);
+            light.position.set(1, 1, 1);
+            light.castShadow = true; // Enable shadow casting by the light
+            scene.add(light);
+
+            const texture = new THREE.TextureLoader().load( 'res/crate.gif' );
+
+            // Create a transparent cube
+            let geometry = new THREE.BoxGeometry(1, 1, 1);
+            // For the cube
+            let material = new THREE.MeshPhongMaterial({
+                color: 0x00ff00,
+                transparent: true,
+                opacity: 0.5
+            });
+
+            _cube = new THREE.Mesh(geometry, material);
+            _cube.castShadow = true; // Enable shadow casting by the cube
+            _cube.receiveShadow = true; // Enable shadow receiving by the cube
+            scene.add(_cube);
+
+            // Create a solid sphere
+            geometry = new THREE.SphereGeometry(0.5, 32, 32);
+            material = new THREE.MeshPhongMaterial({
+                color: 0xff0000
+            });
+            _sphere = new THREE.Mesh(geometry, material);
+            _sphere.castShadow = true; // Enable shadow casting by the sphere
+            _sphere.receiveShadow = true; // Enable shadow receiving by the sphere
+            scene.add(_sphere);
+
+            renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } ); // Enable transparency of the background
+            renderer.setClearColor( 0x000000, 0 ); // Set clear color to black (default) and fully transparent
+            renderer.setPixelRatio( window.devicePixelRatio );
+            renderer.setSize( window.innerWidth, window.innerHeight );
+            renderer.shadowMap.enabled = true; // Enable shadow mapping in the renderer
+            renderer.shadowMap.enabled = true;
+            light.castShadow = true;
+            _cube.castShadow = true;
+            _cube.receiveShadow = true;
+            _sphere.castShadow = true;
+            _sphere.receiveShadow = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Use PCFSoftShadowMap for softer shadows
+            document.body.appendChild( renderer.domElement );
+            console.warn("append renderer.domElement", renderer.domElement)
+            renderer.domElement.id = "threejscanvas";
+
+            //
+
+            window.addEventListener( 'resize', onWindowResize );
+
+        }
+
+        function onWindowResize() {
+
+            _camera.aspect = window.innerWidth / window.innerHeight;
+            _camera.updateProjectionMatrix();
+
+            renderer.setSize( window.innerWidth, window.innerHeight );
+
+        }
+
+        let baseFrequency = 0.001; // Base frequency for the sinusoidal movement
+        let phaseShift = Math.PI; // Phase shift to make the movements out of phase
+
+
+        function animate() {
+          
+          // rotate the camera around the origin at a radius of 2
+          _camera.position.x = 2 * Math.sin(Date.now() / 1000);
+          _camera.position.z = 2 * Math.cos(Date.now() / 1000);
+          _camera.lookAt(0, 0, 0);
+
+          // update camera FOV to match "window.zoom"
+          _camera.fov = 70 / window.zoom;
+
+          // Sinusoidal movement for cube and sphere
+          let time = Date.now() * baseFrequency;
+          _cube.position.y = Math.sin(time);
+          _sphere.position.y = Math.sin(time + phaseShift);
+          
+          try{
+            renderer.render( scene, _camera );
+          }catch(e){
+            console.error(e)
+          }
+          
+          // Request the next frame at the end of the function to ensure all updates are rendered before the next frame is requested
+          requestAnimationFrame( animate );
+
+        }
+
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NeatBox</title>
     <style>
@@ -62,6 +177,31 @@
         }
         video {
           position: absolute;
+        }
+        #glcanvas {
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 998;
+          box-sizing: border-box;
+        }
+        #glcanvas canvas {
+          width: 100%;
+          height: 100%;
+          z-index: 998;
+          /* border: 10px solid red; */
+          box-sizing: border-box;
+          /* top: 10px;
+          left: 10px; */
+        }
+        #threejscanvas, #threejscanvas canvas {
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 997;
+          box-sizing: border-box;
         }
     </style>
     <meta charset="utf-8" />

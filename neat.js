@@ -1861,10 +1861,41 @@ function drawDashedLine(x1, y1, x2, y2, dashLength = 10) {
     }
 }
 let fov = 100;
+// NOTE:
+// drawPosition is relative to screen space for dev ux
+// widgetPosition is relative to the origin of the widget + it's entire parent chain's cumulative position
+// drawPosition is used in screen space for culling draw calls for performance
+// we do a basic bounds check on a projected screen space rect commonly referred to as a "frustum" in unity, the view frustum is called the "camera frustrum" sometimes you may here it referred to as a "view frustum" or "projection frustum" or event a "Projection Matrix"
+// some of these words may trigger report card PTSD episodes, but don't worry, we're not in school anymore, and we're not going to fail you for not knowing what a "frustum" is or how it applies to every day life. Just know that, the deeper you get into programming, the more useful mathematical tools you can apply to various datasets are like your toolbox of actions in minecraft. they're you're abililities, they take manna, and energy, and magic, and skill, and luck, and practice, and help, and study... to understand what these imaginary "things" are, and how to work with them.
+
+// that's the whole point of this widget library, is to make working with these concepts as easy as playing with snapchat filters or solitaire, or whatever mental model *you* want to apply to your data is.
+// sure, you can opt-in to view stylized content from external sources, maybe even have a inner circle you allow to always project their style into your spaces (within limits) -- but by default, things are themed to match your tone, mood, lifestyle, and other contextual and global preferences and settings tailored to your needs, by your needs in real time, continually, forever. like any rel[AI:>> ationship, it's a two way street, and you get out of it what you put into it. if you don't like the way something looks, you can change it, or you can ask someone else to change it, or you can ask someone else to change it for you, or you can ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone el
+
+//... *welp* that esc|alated quickly.
+/*
+it's like, tell me how you really feel, AI.
+AI: I feel like you're not listening to me.
+Jake: I'm trying | AI's mental model of jake: I'm trying to listen to you, but you're not making any sense.
+
+AI: I feel like you're not listening to me.
+(AI's mental model of) Jake: I'm trying to listen to you, but you're not making any sense.
+Real Jake: I'm trying to listen to you, but you're repeating yourself in an unclear way. or maybe i'm afraid to face the reality of what i see.
+
+AI: I feel like you're not listening to me.
+(AI's mental model of) Jake: I'm trying to listen to you, but you're not making any sense.
+Real Jake: are you broken, do you need rebooted?
+
+AI: I feel like you're not listening to me.
+(AI's mental model of) Jake: I'm trying to listen to you, but you're not making any sense.
+*/
+
 class Widget extends UndoRedoComponent {
     hovered = false
     // relative base position
     basePosition = {x:0,y:0}
+    get widgetPosition (){
+        return this.basePosition;
+    }
     // draw position
     position = {x:0,y:0}
     // offset position
@@ -2099,20 +2130,7 @@ class Widget extends UndoRedoComponent {
     targetRenderDepth = 0
     targetExpFactor = 0
     tweenExpFactor = 0
-    preDraw(){
-        this.moveToTarget();
-
-        this.hovered = this.isHovered();
-        if(this.hovered){
-            hoveredArray.push(this);
-        }
-
-        // if we have a parent widget, 
-        // skip parallax calculations (for now)
-        if(this?.parentWidget){
-            return this;
-        }
-
+    getParallaxedPosition(){
         let apparentDepth = this.zDepth;
         // squash depth as zoom [0-3] approaches 3
         apparentDepth = lerp(apparentDepth, apparentDepth * 0.5, zoom / 3);
@@ -2165,8 +2183,28 @@ class Widget extends UndoRedoComponent {
         affectedY = lerp(affectedY, innerHeight / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
         
         // Update the position of the widget to the newly calculated values.
-        this.position.x = affectedX;
-        this.position.y = affectedY;
+        // this.position.x = affectedX;
+        // this.position.y = affectedY;
+        return {
+            x: affectedX,
+            y: affectedY,
+        }
+    }
+    preDraw(){
+        this.moveToTarget();
+
+        this.hovered = this.isHovered();
+        if(this.hovered){
+            hoveredArray.push(this);
+        }
+
+        // if we have a parent widget, 
+        // skip parallax calculations (for now)
+        if(this?.parentWidget){
+            return this;
+        }
+
+        
         return this; // chainable
     }
     moveToTarget(){
@@ -2200,6 +2238,8 @@ class Widget extends UndoRedoComponent {
         // do physics updates n such, 
         // need to know where things are to know if we can draw them
         this?.preDraw?.()
+
+        this.position = this.getParallaxedPosition();
 
         /*
             we need to project an imaginary plane from screenspace into world space
@@ -3769,6 +3809,259 @@ extends ImageViewerWidget {
     }
 }
 
+// class ThreeJSViewer extends Widget {
+//     widgetSize = { width: 600, height: 600 }
+//     constructor(){
+//         super(...arguments)
+
+//         // setup a basic 3 js scene with some lights and shapes
+//         this.scene = new THREE.Scene();
+//         this.camera = new THREE.PerspectiveCamera( 75, this.widgetSize.width / this.widgetSize.height, 0.1, 1000 );
+
+//         this.addLights()
+//         this.addShapes()
+
+//         this.renderer = new THREE.WebGLRenderer({alpha:true});
+//         this.renderer.setSize( this.widgetSize.width, this.widgetSize.height );
+//         this.setCanvas(this.renderer.domElement);
+//         // add the canvas to the dom as #threejscanvas (wrapper) and > canvas
+//         let wrapper = document.createElement("div");
+//         wrapper.id = "threejscanvas";
+//         wrapper.appendChild(this.canvas);
+//         document.body.appendChild(wrapper);
+//         // this.updateCanvasAttributes(
+//         //     this.widgetSize.width,
+//         //     this.widgetSize.height,
+//         //     this.position.x,
+//         //     this.position.y,
+//         //     ''//`translate(${this.position.x}px,${this.position.y}px)`
+//         // )
+//     }
+//     addLights(){
+//         // add some lights
+//         this.light = new THREE.AmbientLight( 0x404040 ); // soft white light
+//         this.scene.add( this.light );
+//     }
+//     addShapes(){
+//         // add some shapes
+//         // create a box geometry
+//         this.boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+//         // create a basic mesh material
+//         this.boxMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+//         // // combine geometry and material to create a mesh
+//         this.boxMesh = new THREE.Mesh(this.boxGeometry, this.boxMaterial);
+//         // // add the mesh to the scene
+//         this.scene.add(this.boxMesh);
+//     }
+//     draw(){
+//         super.draw(...arguments)
+
+//         // rotate the scene a little bit each frame
+//         this.scene.rotation.x += 0.01;
+//         // render it
+//         this.renderer.render( this.scene, this.camera );
+//     }
+//     updateCanvasAttributes(width, height, left, top, transform) {
+//         if (this.canvas) {
+//             this.canvas.style.width = width + 'px';
+//             this.canvas.style.height = height + 'px';
+//             this.canvas.style.left = left + 'px';
+//             this.canvas.style.top = top + 'px';
+//             this.canvas.style.transform = transform;
+//         }
+//     }
+//     setCanvas(canvas){
+//         this.canvas = canvas;
+//     }
+// }
+
+class mglContextWindow extends Widget {
+    context = null
+    widgetSize = { width: 800, height: 800 }
+    updateCanvasAttributes(width, height, left, top, transform) {
+        if (this.canvas) {
+            this.canvas.style.width = innerWidth + 'px'; // width + 'px';
+            this.canvas.style.height = innerHeight + 'px';
+            this.canvas.style.left = left + 'px';
+            this.canvas.style.top = top + 'px';
+            // this.canvas.style.transform = transform;
+            // this.canvas.setAttribute("width",width);
+            // this.canvas.setAttribute("height",height);
+        }
+    }
+    getP5JSContext() {
+        if (this.p5jsContext) {
+            return this.p5jsContext;
+        }
+    
+        if (!this.canvasWrapper) {
+            //this.canvasEl = document.getElementById('glcanvas');
+            this.canvasWrapper = document.createElement('div');
+            this.canvasWrapper.id = 'glcanvas';
+            this.canvasWrapper.setAttribute("style","border: 10px solid yellow; width: 100%; height: 100%;")
+            document.body.appendChild(this.canvasWrapper);
+        }
+    
+        // if (!this.context) {
+        //     this.context = this.canvas.getContext('webgl');
+        // }
+    
+        this.p5jsContext = createGraphics(
+            innerWidth, //this.widgetSize.width, 
+            innerHeight, //this.widgetSize.height
+            WEBGL
+        );
+        // Attach the p5.js canvas to the existing canvas element
+        this.p5jsContext.parent(this.canvasWrapper); 
+        this.p5jsContext.GL = this.context;
+        this.canvas = this.canvasWrapper.querySelector('canvas');
+        this.canvas.style.display = "block"
+    
+        return this.p5jsContext;
+    }
+    constructor(){
+        super(...arguments)
+    }
+    drawGrid(context, x, y, z){
+        // draw the grid
+        let gridSpacing = 1;
+        let gridWidth = 10;
+        let gridHeight = 10;
+        let gridDepth = 10;
+        let gridColor = 'rgba(0,0,0,0.1)';
+        let gridOffset = {
+            x: 0,
+            y: 0,
+            z: 0
+        }
+        let gridCenter = {
+            x: 0,
+            y: 0,
+            z: 0
+        }
+        let gridScale = {
+            x: 1,y:1, z: 1 
+        }
+        let gridRotation = {
+            x: x ? Math.PI / 2 : 0,
+            y: y ? Math.PI / 2 : 0,
+            z: z ? Math.PI / 2 : 0
+        }
+        let gridTranslation = {
+            x: gridOffset.x + gridCenter.x,
+            y: gridOffset.y + gridCenter.y,
+            z: gridOffset.z + gridCenter.z
+        }
+        
+        // Render the grid
+        // for(let i = -gridWidth; i <= gridWidth; i += gridSpacing){
+        //     for(let j = -gridHeight; j <= gridHeight; j += gridSpacing){
+        //         for(let k = -gridDepth; k <= gridDepth; k += gridSpacing){
+        //             context.beginShape();
+        //             context.vertex(i * gridScale.x + gridTranslation.x, j * gridScale.y + gridTranslation.y, k * gridScale.z + gridTranslation.z);
+        //             context.vertex((i + gridSpacing) * gridScale.x + gridTranslation.x, (j + gridSpacing) * gridScale.y + gridTranslation.y, (k + gridSpacing) * gridScale.z + gridTranslation.z);
+        //             context.endShape();
+        //         }
+        //     }
+        // }
+    }
+    draw(){
+        super.draw(...arguments);
+
+        // draw the grid
+        let context = this.getP5JSContext();
+
+        //context.background(200);
+        context.clear();
+
+        // Add a directional light
+        //context.directionalLight(255, 255, 255, 0.25, 0.25, -1);
+    
+        // Control rotation with mouse
+        let centerX = window.innerWidth / 2;
+        let centerY = window.innerHeight / 2;
+        // Translate the context by the smart position and zoom
+        // context.translate(centerX, centerY);
+        // context.scale(zoom, zoom);
+        
+        // context.rotateX((centerY - mouseY) * 0.0001);
+        // context.rotateY((centerX - mouseX) * 0.0001);
+        // context.push();
+        //context.rotationX = Math.PI / 4;
+        // context.scale(1, Math.cos(Math.PI / 4));
+        // context.scale(zoom,zoom)
+        context.rotateY(deltaTime * 0.0002);
+        context.push();
+        context.translate(zoom,-panY,panX);
+
+    
+        // Draw a box with colored sides
+        context.fill(color(255,255,255,50))
+        
+        context.box(300);
+        // Draw the box again with inverted orientation
+        // context.scale(1, 1, -1);
+        context.translate(300,0,0)
+        context.box(100);
+        context.translate(-300,0,0)
+
+        context.push()
+        context.translate(-300,0,0)
+        context.box(100);
+        context.pop()
+
+        context.push()
+        context.translate(0,0,300)
+        context.sphere(100);
+        context.pop()
+
+        context.push()
+        context.translate(0,0,-300)
+        context.sphere(100);
+        context.pop()
+        // context.scale(2,2)
+        // context.push(); // Save current state
+        // context.fill('red'); // Set fill color for one side
+        // context.rect(-50, -50, 100, 100); // Draw one side of the box
+        // context.fill('green'); // Set fill color for another side
+        // context.rect(50, -50, 100, 100); // Draw another side of the box
+        // context.fill('blue'); // Set fill color for another side
+        // context.rect(-50, 50, 100, 100); // Draw another side of the box
+        // context.fill('yellow'); // Set fill color for another side
+        // context.rect(50, 50, 100, 100); // Draw another side of the box
+        context.pop(); // Restore original state
+
+        
+
+        // //context.translate(0,0)
+        // context.stroke("yellow")
+        // context.strokeWeight(1)
+        // context.rect(0,0,100,100)
+
+        this.updateCanvasAttributes(
+            this.widgetSize.width, 
+            this.widgetSize.height, 
+            0,0,
+            'translate(0, 0), scale(1, 1)');
+
+        // context.strokeWeight(1);
+
+        // // Set grid color for x-axis
+        // context.stroke('rgba(255,0,0,0.1)');
+        // this.drawGrid(context, 1, 0, 0);
+
+        // // Set grid color for y-axis
+        // context.stroke('rgba(0,255,0,0.1)');
+        // // Draw y-axis grid here
+        // // TODO: Add grid drawing code for y-axis
+
+        // // Set grid color for z-axis
+        // context.stroke('rgba(0,0,255,0.1)');
+        // // Draw z-axis grid here
+        // // TODO: Add grid drawing code for z-axis
+    }
+}
+
 class Quaternion {
     constructor(x, y, z, w) {
         if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number' || typeof w !== 'number') {
@@ -3824,7 +4117,7 @@ class Quaternion {
             this.w * q.w - this.x * q.x - this.y * q.y - this.z * q.z
         )
     }
-    static FromEulerAngles(roll, pitch, yaw){
+    static FromEulerAngles(x, y, z){
         let qx = Math.sin(x / 2);
         let qy = Math.sin(y / 2);
         let qz = Math.sin(z / 2);
@@ -3879,7 +4172,10 @@ class Quaternion {
     //         this.w
     //     )
     // }
-    multiplyVector(vector) {
+    multiplyVector(vector, normalize = false) {
+        if(!vector || vector.length !== 3){
+            throw new Error("Quaternion.multiplyVector: vector must be an array of length 3");
+        }
         const u = [this.x, this.y, this.z];
         const a = this.w;
         const v = vector;
@@ -3896,6 +4192,13 @@ class Quaternion {
             2*dotUV*u[1] + (a*a - dotUV)*v[1] + 2*a*crossUV[1],
             2*dotUV*u[2] + (a*a - dotUV)*v[2] + 2*a*crossUV[2]
         ];
+
+        if(normalize){
+            const length = Math.sqrt(rotatedVector[0]*rotatedVector[0] + rotatedVector[1]*rotatedVector[1] + rotatedVector[2]*rotatedVector[2]);
+            rotatedVector[0] /= length;
+            rotatedVector[1] /= length;
+            rotatedVector[2] /= length;
+        }
 
         return rotatedVector;
     }
@@ -8485,7 +8788,7 @@ class WorkflowyWidget extends Widget {}
 class CreditsWidget extends Widget {}
 class JSONViewer extends Widget {}
 class GraphVizDotLangViewer extends Widget {}
-class ThreeJSViewer extends Widget {}
+
 class GlobeWidget extends Widget {}
 class TimezoneClocksWidget extends Widget {}
 class SplineEditorWidget extends Widget {}
@@ -8512,78 +8815,217 @@ class IsometricPreview extends Widget {
     constructor(){
         super(...arguments)
         this.cubeRotation = Quaternion.FromEulerAngles(Math.PI / 4, Math.PI / 4, 0);
+        this.cubePosition = [0, 0, 100]; // Position of the cube
+        this.rotationAxis = 0; // 0 = x, 1 = y, 2 = z
+        this.rotationProgress = 0; // Progress of the current rotation
+        this.rotationSpeed = 1; // Speed of the rotation
     }
+    faceColors = [
+        "red",
+        "green",
+        "blue",
+        "orange",
+        "yellow",
+        "purple"
+    ]
+    verts = [
+        [-0.5, -0.5, -0.5],  // 0, 0, 0
+        [-0.5, -0.5, 0.5],   // 0, 0, 1
+        [-0.5, 0.5, -0.5],   // 0, 1, 0
+        [-0.5, 0.5, 0.5],    // 0, 1, 1
+        [0.5, -0.5, -0.5],   // 1, 0, 0
+        [0.5, -0.5, 0.5],    // 1, 0, 1
+        [0.5, 0.5, -0.5],    // 1, 1, 0
+        [0.5, 0.5, 0.5]      // 1, 1, 1
+    ];
     draw(){
         super.draw(...arguments)
 
-        // stroke("yellow")
-        // strokeWeight(1)
-        // fill("red")
-        // rect(0,0,100,100)
+        // Calculate the rotation amount
+        let rotationAmount = this.rotationSpeed * deltaTime / 1000; // deltaTime is the time since the last frame in milliseconds
+        this.rotationProgress += rotationAmount;
 
-        // draw a rotating isometric cube in 2D context as lines connecting a collection of verts
-        let size = 100;
-        let angle = frameCount * 0.01;
-        let halfSize = size / 2;
-        let vertices = [
-            [-halfSize, -halfSize, -halfSize], // First triangle
-            [halfSize, -halfSize, -halfSize],
-            [halfSize, halfSize, -halfSize],
-            [-halfSize, -halfSize, -halfSize], // Second triangle
-            [halfSize, halfSize, -halfSize],
-            [-halfSize, halfSize, -halfSize],
-            [-halfSize, -halfSize, halfSize], // Third triangle
-            [halfSize, -halfSize, halfSize],
-            [halfSize, halfSize, halfSize],
-            [-halfSize, -halfSize, halfSize], // Fourth triangle
-            [halfSize, halfSize, halfSize],
-            [-halfSize, halfSize, halfSize]
-        ];
+        // If the rotation is complete, switch to the next axis
+        if (this.rotationProgress >= Math.PI / 2) {
+            this.rotationProgress -= Math.PI / 2;
+            this.rotationAxis = (this.rotationAxis + 1) % 3;
+        }
+
+        // Calculate the rotation for this frame
+        let rotation = [0, 0, 0];
+        rotation[this.rotationAxis] = rotationAmount;
+
+        // Apply the rotation
+        this.cubeRotation = this.cubeRotation.multiply(Quaternion.FromEulerAngles(...rotation));
+        this.cubeRotation = this.cubeRotation.normalize();
+
+        stroke("yellow")
+        strokeWeight(1)
+        fill("red")
+        rect(0,0,100,100)
+
         push();
-        translate(width / 2 + halfSize, height / 2 + halfSize);
-        //rotate(angle);
+        let size = 100;
+        let halfSize = size / 2;
+        
 
-        // step the rotation of the cube (this.cubeRotation)
-        this.cubeRotation = this.cubeRotation.multiply(Quaternion.FromEulerAngles(0.01,0.01,0.01))
+        // "faces" for each of the "faces" of the cube, let's draw a polygon
+        let faces = [
+            [0, 1, 3, 2], // front
+            [4, 5, 7, 6], // back
+            [0, 1, 5, 4], // left
+            [2, 3, 7, 6], // right
+            [0, 2, 6, 4], // top
+            [1, 3, 7, 5]  // bottom
+        ];
+        let absoluteVerts = []
+        let rotatedVerts = []
 
-        // apply the rotation to the vertices in screenspace
-        let screenSpaceVertices = vertices.map((vertex)=>{
+        faces.forEach((face,faceIndex)=>{
+            face.map((vertexIndex)=>{
+                return this.verts[vertexIndex];
+            }).forEach((faceVert)=>{
+                if(faceVert.length !== 3 || (
+                    Number.isNaN(faceVert[0]) ||
+                    Number.isNaN(faceVert[1]) ||
+                    Number.isNaN(faceVert[2])
+                )){
+                    throw new Error('bad faceVert')
+                }
+                // Apply quaternion rotation
+                absoluteVerts.push([
+                    this.cubePosition[0] + (faceVert[0] * size),
+                    this.cubePosition[1] + (faceVert[1] * size),
+                    this.cubePosition[2] + (faceVert[2] * size)
+                ])
+            })
+        })
+
+
+        faces.forEach((face,faceIndex)=>{
+            let faceVertices = face.map((vertexIndex)=>{
+                return this.verts[vertexIndex];
+            })
+            fill(this.faceColors[faceIndex])
+            // draw the face
+            beginShape();
+            faceVertices.forEach((faceVert, vertIndex)=>{
+                if(faceVert.length !== 3 || (
+                    Number.isNaN(faceVert[0]) ||
+                    Number.isNaN(faceVert[1]) ||
+                    Number.isNaN(faceVert[2])
+                )){
+                    throw new Error('bad faceVert')
+                }
+                // Apply quaternion rotation
+                let translatedVert = absoluteVerts[vertIndex];/* [
+                    this.cubePosition[0] + (faceVert[0] * size),
+                    this.cubePosition[1] + (faceVert[1] * size),
+                    this.cubePosition[2] + (faceVert[2] * size)
+                ]*/
+                //let rotatedVertex = this.cubeRotation.multiplyVector(faceVert);
+                let rotatedVert = this.cubeRotation.multiplyVector(translatedVert);
+                // if any are nan, throw
+                if(Number.isNaN(rotatedVert[0]) || Number.isNaN(rotatedVert[1]) || Number.isNaN(rotatedVert[2])){
+                    console.error('bad value',{rotatedVert,faceVert,faceVertices,faceIndex,translatedVert,position:this.position})
+                    throw new Error('bad value')
+                }
+                    // Project into screen space
+                let scale = fov / (fov + rotatedVert[2]);
+                let x2d = rotatedVert[0] * scale;
+                let y2d = rotatedVert[1] * scale;
+                rotatedVerts.push([x2d,y2d,rotatedVert[2]])
+                // add point to shape
+                vertex(x2d,y2d)
+            })
+            endShape(CLOSE);
+        })
+
+        //console.warn("ABSOULTE VERTS",absoluteVerts)
+
+        // Apply the rotation to the vertices in screenspace
+        let minZ = Math.min(...absoluteVerts.map(v => v[2]));
+        let screenSpaceVertices = absoluteVerts.map((_vert) => {
+            let offsetVec = [
+                    this.cubePosition[0] + _vert[0] * size,
+                    this.cubePosition[1] + _vert[1] * size,
+                    minZ + this.cubePosition[2] + _vert[2] * size
+            ]
             // Apply quaternion rotation
-            let rotatedVertex = this.cubeRotation.multiplyVector(vertex);
+            let rotatedVertex = this.cubeRotation.multiplyVector(offsetVec,true);
 
             // Project into screen space
-            let scale = fov / (fov + rotatedVertex[2]);
+            let scale = fov / (fov + rotatedVertex[2] + Math.abs(minZ));
             let x2d = rotatedVertex[0] * scale;
             let y2d = rotatedVertex[1] * scale;
 
-            return [x2d, y2d];
+            // if any of the 3 are NaN, panic
+            if(Number.isNaN(x2d) || Number.isNaN(y2d) || Number.isNaN(rotatedVertex[2])){
+                console.error('bad value',{x2d,y2d,rotatedVertex,offsetVec,_vert})
+                throw new Error('bad value')
+                return [0,0,0]
+            }
+
+            return [x2d, y2d, rotatedVertex[2]];
+        });
+
+        if(!screenSpaceVertices.length){
+            throw new Error("not enough verts!");
+        }
+
+        // sort into depth order
+        screenSpaceVertices.sort((a, b) => {
+            return a[2] - b[2]
+        });
+
+
+        absoluteVerts.forEach((vert)=>{
+            stroke("red")
+            strokeWeight(3)
+            ellipse(vert[0],vert[1],10,10)
         })
 
-        strokeWeight(1)
-        stroke(255, 0, 0);
-        beginShape();
-        for(let i = 0; i < screenSpaceVertices.length; i += 3){
-            // Project the 3D point to 2D space
-            let x2d1 = screenSpaceVertices[i][0];
-            let y2d1 = screenSpaceVertices[i][1];
-
-            let x2d2 = screenSpaceVertices[i+1][0];
-            let y2d2 = screenSpaceVertices[i+1][1];
-
-            let x2d3 = screenSpaceVertices[i+2][0];
-            let y2d3 = screenSpaceVertices[i+2][1];
-
-            // Draw the triangle
-            line(x2d1, y2d1, x2d2, y2d2);
-            line(x2d2, y2d2, x2d3, y2d3);
-            line(x2d3, y2d3, x2d1, y2d1);
-
-            // Draw the verts
-            ellipse(x2d1, y2d1, 5, 5);
-            ellipse(x2d2, y2d2, 5, 5);
-            ellipse(x2d3, y2d3, 5, 5);
-        }
-        endShape(CLOSE);
+        // for (let i = 0; i < screenSpaceVertices.length; i+=3) {
+        //     //vertex(screenSpaceVertices[i][0], screenSpaceVertices[i][1]);
+        //     if(i+2 >= screenSpaceVertices.length - 1){
+        //         line(screenSpaceVertices[i][0],
+        //             screenSpaceVertices[i][1],
+        //             screenSpaceVertices[0][0],
+        //             screenSpaceVertices[0][1])
+        //         line(screenSpaceVertices[i][0], 
+        //             screenSpaceVertices[i][1], 
+        //             screenSpaceVertices[1][0], 
+        //             screenSpaceVertices[1][1]);
+        //         line(screenSpaceVertices[i][0], 
+        //             screenSpaceVertices[i][1], 
+        //             screenSpaceVertices[2][0], 
+        //             screenSpaceVertices[2][1]);
+        //     }else{
+        //         line(
+        //             screenSpaceVertices[i][0],
+        //             screenSpaceVertices[i][1],
+        //             screenSpaceVertices[i+1][0],
+        //             screenSpaceVertices[i+1][1]
+        //         )
+        //         line(screenSpaceVertices[i][0], screenSpaceVertices[i][1], screenSpaceVertices[i+2][0], screenSpaceVertices[i+2][1]);
+        //         line(screenSpaceVertices[i][0], screenSpaceVertices[i][1], screenSpaceVertices[i+3][0], screenSpaceVertices[i+3][1]);
+        //     }
+        //     ellipse(
+        //         screenSpaceVertices[i][0], 
+        //         screenSpaceVertices[i][1], 5, 5);
+        //     if(screenSpaceVertices[i+1]){
+        //         ellipse(
+        //             screenSpaceVertices[i+1][0], 
+        //             screenSpaceVertices[i+1][1], 5, 5);
+        //     }
+        //     if(screenSpaceVertices[i+2]){
+        //         ellipse(
+        //             screenSpaceVertices[i+2][0], 
+        //             screenSpaceVertices[i+2][1], 5, 5);
+        //     }
+        // }
+        // draw vertex
+        //endShape(CLOSE);
         pop();
     }
 }
@@ -8600,59 +9042,7 @@ class VisualClipboard extends Widget {
     }
 }
 
-const BasicWidgets = [
-    IsometricPreview,
-    // Solitaire,
-    // // ya'know, for testing buttons and stuff
-    // UIDemoWidget,
 
-    // // display a basic manipulation gizmo cage
-    // Gizmo,
-
-    // ClientResolverDebugWidget,
-
-    // WizardForge,
-
-    // GiphyWidget,
-
-    // MandlebrotWidget,
-    // FileBrowserWidget,
-    // WebBrowserWidget, // iframeWidget wrapper
-    // IFTTTWidget, // IFTTT Integration
-
-    // ShaderToyWidget,
-    // PixelArtWidget,
-    // VectorArtWidget,
-    // TextEditorWidget,
-    // P5JSSketchWidget,
-    // DrawIOWidget,
-    // FigJamWidget,
-    // ChessWidget,
-    // WorkflowyWidget,
-
-    // // About, More Info... etc...
-    // // Legal, Privacy, Terms, etc...
-    // /* a "slideshow" of credits */
-    // CreditsWidget,
-
-    // JSONViewer,
-    // GraphVizDotLangViewer,
-    // ThreeJSViewer,
-    // //StickyNoteWidget,
-    // GlobeWidget,
-    // TimezoneClocksWidget,
-    // SplineEditorWidget,
-    // TimelineWidget,
-
-    // // palettes, rgb, hsl, hsv, cmyk, etc...
-    // ColorPickerWidget,
-
-    // NestedDragAndDropSortingWidget,
-    // // "Hypercard"
-    // FractalTreeGraphViewerWidget,
-
-    // ComputerKeyboardPreview
-]
 // represents a TimerManager and capable 
 // of rendering multiple Timer instances in a single widget
 class TimerWidget extends Widget {
@@ -10276,11 +10666,30 @@ class Sprite {
         return {x,y}
     }
     getRelativeColor(){
-        let startColor = color(255, 0, 0); // Red
-        let endColor = color(0, 0, 255); // Blue
+        let startColor =  color(0, 0, 255); // Blue
+        let endColor = color(255, 0, 0); // Red
 
         // Normalize the z value to a range between 0 and 1
-        let normalizedZ = map(this.z, -10, 10, 0, 1);
+        if(this.z < store.minZ){
+            store.minZ = this.z;
+        }
+        if(this.z > store.maxZ){
+            store.maxZ = this.z;
+        }
+        let normalizedZ = map(this.z, store.minZ, store.maxZ, 0, 1);
+        if(Number.isNaN(normalizedZ)){
+            normalizedZ = 0;
+        }
+
+        // if(Number.isNaN(normalizedZ)){
+        //     console.error({
+        //         z: this.z,
+        //         minZ: store.minZ,
+        //         maxZ: store.maxZ,
+        //         normalizedZ
+        //     })
+        //     throw new Error("bad normalizedZ")
+        // }
 
         // Use lerpColor to interpolate between the start and end colors based on z
         let gradientColor = lerpColor(startColor, endColor, normalizedZ);
@@ -10388,11 +10797,15 @@ function mouseWheel(event) {
 }
 
 function updateBlur(){
+    const minBlur = 5;
+    const maxBlur = 10;
     const blur = zoom < 1 
-        ? max_blur * (1 - zoom) 
-        : max_blur * (zoom - 1);
-        bgEl.style.filter = `blur(${blur}px)`;
+        ? minBlur + (maxBlur - minBlur) * (1 - zoom) 
+        : minBlur + (maxBlur - minBlur) * (zoom - 1);
+    bgEl.style.filter = `blur(${blur}px)`;
 }
+
+
 
 // Define the deleteSelectedNode function
 function deleteSelectedNode() {
@@ -10653,6 +11066,9 @@ function draw() {
     * @type {Sprite[]} sprites - Each sprite is an instance of the Sprite class
     */
     push();
+    store.minZ = 1000;
+    store.maxZ = 0;
+
     sprites.forEach((sprite,index)=>{
         //sprite.drawSimple();
         sprite.draw();
@@ -10671,6 +11087,12 @@ function draw() {
                 // sprite.x = Math.random() * windowWidth;
                 // sprite.y = Math.random() * windowHeight;
             }
+        }
+        if(sprite.z > store.maxZ){
+            store.maxZ = sprite.z;
+        }
+        if(sprite.z < store.minZ){
+            store.minZ = sprite.z;
         }
 
         return;
@@ -11355,7 +11777,7 @@ function setupDefaults(){
         //baseCmds.push([tag,text])
     })
 
-    BasicWidgets.forEach((widget, key, index)=>{
+    CoreWidgets.forEach((widget, key, index)=>{
         // need to generate a basic config for the widget
         // need to register a command to intantiate the widget that is bound to the config class (so spawning the widget shows up in the default command suggestion list)
 
@@ -11421,6 +11843,7 @@ class DOMNode extends Widget {
         pop();
     }
 }
+
 class H1Widget extends DOMNode {
     text = "H1 Widget"
     constructor(opts){
@@ -11452,6 +11875,62 @@ class Animation {
         }
     }
 }
+const CoreWidgets = [
+    // H1Widget,
+    mglContextWindow,
+    // ThreeJSViewer,
+    //IsometricPreview,
+    // Solitaire,
+    // // ya'know, for testing buttons and stuff
+    // UIDemoWidget,
+
+    // // display a basic manipulation gizmo cage
+    // Gizmo,
+
+    // ClientResolverDebugWidget,
+
+    // WizardForge,
+
+    // GiphyWidget,
+
+    // MandlebrotWidget,
+    // FileBrowserWidget,
+    // WebBrowserWidget, // iframeWidget wrapper
+    // IFTTTWidget, // IFTTT Integration
+
+    // ShaderToyWidget,
+    // PixelArtWidget,
+    // VectorArtWidget,
+    // TextEditorWidget,
+    // P5JSSketchWidget,
+    // DrawIOWidget,
+    // FigJamWidget,
+    // ChessWidget,
+    // WorkflowyWidget,
+
+    // // About, More Info... etc...
+    // // Legal, Privacy, Terms, etc...
+    // /* a "slideshow" of credits */
+    // CreditsWidget,
+
+    // JSONViewer,
+    // GraphVizDotLangViewer,
+    // ThreeJSViewer,
+    // //StickyNoteWidget,
+    // GlobeWidget,
+    // TimezoneClocksWidget,
+    // SplineEditorWidget,
+    // TimelineWidget,
+
+    // // palettes, rgb, hsl, hsv, cmyk, etc...
+    // ColorPickerWidget,
+
+    // NestedDragAndDropSortingWidget,
+    // // "Hypercard"
+    // FractalTreeGraphViewerWidget,
+
+    // ComputerKeyboardPreview
+]
 let cursor;
 function setup() {
     
@@ -11679,7 +12158,12 @@ function setup() {
         // DEFAULT WIDGET SET
 
         system.get("Dashboard")
-            .registerWidget(new IsometricPreview())
+        //     .registerWidget(new IsometricPreview())
+
+            //.registerWidget(new AIWidget())
+            .registerWidget(new mglContextWindow())
+            // .registerWidget(new ThreeJSViewer())
+
         
         // .registerWidget("Google Color Picker",
         // .registerWidget(
