@@ -3,12 +3,13 @@
   <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/p5.js"></script>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/addons/p5.sound.min.js"></script> -->
-    
 
     <script type="module">
       import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.module.js';
 
         let _camera, scene, renderer, _cube, _sphere;
+        let _stars = [];
+        let flow_lattice = [];
 
         let _gizmo;
 
@@ -19,9 +20,43 @@
             // }, 1000);
         });
 
-        function init() {
+        async function init() {
+          // function waitReturnTrue(fn){
+          //   return new Promise((resolve, reject) => {
+          //     let interval = setInterval(() => {
+          //       if(fn()){
+          //         clearInterval(interval);
+          //         resolve();
+          //       }
+          //     }, 1000);
+          //   });
+          // }
+          // await waitReturnTrue(() => typeof noise !== "undefined");
 
-            _camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.1, 100 );
+          // init the flow lattice, a 3D array of 3D vectors
+          for(let x = 0; x < 10; x++){
+            flow_lattice[x] = [];
+            for(let y = 0; y < 10; y++){
+              flow_lattice[x][y] = [];
+              for(let z = 0; z < 10; z++){
+                let nx = Math.random();
+                let ny = Math.random();
+                let nz = Math.random();
+                flow_lattice[x][y][z] = new THREE.Vector3(nx, ny, nz);
+              }
+            }
+          }
+
+          // wait for this to load
+          //: THREE.FresnelShader
+          // while(typeof THREE.FresnelShader === "undefined"){
+          //   await new Promise(resolve => setTimeout(resolve, 1000));
+          //   //console.warn("waiting for THREE.FresnelShader to load")
+          // }
+          init_phase_2();
+        }
+        function init_phase_2(){
+          _camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.1, 100 );
             _camera.position.z = 2;
 
             scene = new THREE.Scene();
@@ -32,6 +67,39 @@
             _gizmo.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1, 0x00ff00)); // Green
             _gizmo.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0x0000ff)); // Blue
             scene.add(_gizmo);
+
+
+            // render arrows for each vector in the flow lattice
+            flow_lattice.forEach((x, i) => {
+              x.forEach((y, j) => {
+                y.forEach((z, k) => {
+                  let arrow = new THREE.ArrowHelper(z, new THREE.Vector3(i, j, k), 0.5, 0x00ff00);
+                  scene.add(arrow);
+                });
+              });
+            });
+
+            // generate stars (random points in space within a sphere)
+            const starsGeometry = new THREE.SphereGeometry(0.01, 32, 32);
+            const starsMaterial = new THREE.MeshBasicMaterial({
+                color: 0xFFFFFF
+            });
+            // fill _stars array with 1000 random points
+            for (let i = 0; i < 1000; i++) {
+                const starVector = new THREE.Vector3(
+                    THREE.MathUtils.randFloatSpread(2),
+                    THREE.MathUtils.randFloatSpread(2),
+                    THREE.MathUtils.randFloatSpread(2)
+                );
+                const starSphere = new THREE.Mesh(starsGeometry, new THREE.MeshBasicMaterial({
+                    color: 0xFFFFFF
+                }));
+                starSphere.castShadow = true; // Enable shadow casting by the star
+                starSphere.receiveShadow = true; // Enable shadow receiving by the star
+                starSphere.position.set(starVector.x, starVector.y, starVector.z);
+                scene.add(starSphere);
+                _stars.push(starSphere);
+            }
 
             // Add a directional light
             const light = new THREE.DirectionalLight(0xFFC0CB, 1.0);
@@ -87,10 +155,30 @@
             console.warn("append renderer.domElement", renderer.domElement)
             renderer.domElement.id = "threejscanvas";
 
-            //
+            // big plane
+            const planeGeometry = new THREE.PlaneGeometry( 100, 100, 32 );
+            let fresnelUniforms = {
+                "mRefractionRatio": { value: 1.02 },
+                "mFresnelBias": { value: 0.1 },
+                "mFresnelPower": { value: 2.0 },
+                "mFresnelScale": { value: 1.0 },
+                "tCube": { value: null }
+            };
+
+            // let planeMaterial = new THREE.ShaderMaterial({
+            //     uniforms: fresnelUniforms,
+            //     // vertexShader: THREE.FresnelShader.vertexShader,
+            //     // fragmentShader: THREE.FresnelShader.fragmentShader,
+            //     side: THREE.DoubleSide,
+            //     transparent: true
+            // });
+            // const plane = new THREE.Mesh( planeGeometry, planeMaterial );
+            // plane.receiveShadow = true;
+            // // rotate 90 on x axis
+            // plane.rotation.x = Math.PI / 2;
+            // scene.add( plane );
 
             window.addEventListener( 'resize', onWindowResize );
-
         }
 
         function onWindowResize() {
@@ -107,11 +195,34 @@
 
 
         function animate() {
+          if(!_camera){
+            return;
+          }
           
           // rotate the camera around the origin at a radius of 2
-          // _camera.position.x = 2 * Math.sin(Date.now() / 1000 + window.panX) * window.zoom;
-          // _camera.position.z = 2 * Math.cos(Date.now() / 1000 + window.panY) * window.zoom;
-          // _camera.lookAt(0, 0, 0);
+          _camera.position.x = 2 * Math.sin(Date.now() * 0.0001) * (1/window.zoom);
+          _camera.position.z = 2 * Math.cos(Date.now() * 0.0001) * (1/window.zoom);
+          _camera.lookAt(0, 0, 0);
+
+          // Perturb the stars with 4D Perlin noise
+          _stars.forEach(star => {
+            if(typeof noise !== "undefined"){
+
+              let factor = 0.1;
+              let scale = 0.05;
+              let _noise = noise(star.position.x, star.position.y, star.position.z, Date.now() * 0.0015);
+              star.position.x += _noise * factor - scale;
+              star.position.y += _noise * factor - scale;
+              star.position.z += _noise * factor - scale;
+
+              // set star color based on position
+              star.material.color.setRGB(
+                  Math.abs(star.position.x),
+                  Math.abs(star.position.y),
+                  Math.abs(star.position.z)
+              );
+            }
+          });
 
           // update camera FOV to match "window.zoom"
           _camera.fov = window.fov; // 70 / window.zoom;
@@ -127,9 +238,9 @@
           _sphere.position.y = Math.sin((time + phaseShift) * speedFactor);
 
           // move the camera based on panX and panY
-          _camera.position.x = -window.panX * window.zoom * 0.01;
-          _camera.position.y = -window.panY * window.zoom * 0.01;
-          _camera.position.z = 1/window.zoom;
+          // _camera.position.x = window.panX * window.zoom * 0.01;
+          // _camera.position.y = -window.panY * window.zoom * 0.01;
+          // _camera.position.z = 1/window.zoom;
           
           try{
             // console.warn({renderer, scene, _camera})
@@ -226,7 +337,7 @@
           top: 0; left: 0; right: 0; bottom: 0;
           width: 100%;
           height: 100%;
-          z-index: 997;
+          z-index: 1000;
           box-sizing: border-box;
         }
     </style>
@@ -242,6 +353,7 @@
     <script>
       var script = document.createElement('script');
       script.src = "./neat.js?version=" //+ new Date().getTime();
+      // script.src = "./neat-typescript.js";
       document.head.appendChild(script);
     </script>
   </body>
