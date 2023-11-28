@@ -2230,10 +2230,14 @@ class Widget extends UndoRedoComponent {
     flagDoNotDraw(bool){
         this.doNotDraw = bool;
     }
+    // NOTE: we can instrument this widget
+    // with perf metrics, and then check at the end of the frame
+    // which widgets were drawn, and which were culled
+    // and which are taking the most wall time
     draw(widgetID){
         // update fov using Sin wave
         //fov = 100 + (sin(frameCount / 100) * 100);
-        fov = lerp(100, 200, zoom / 3);
+        fov = lerp(60, 200, map(zoom, MIN_ZOOM, MAX_ZOOM, 0, 1));
 
         // do physics updates n such, 
         // need to know where things are to know if we can draw them
@@ -3882,8 +3886,8 @@ class mglContextWindow extends Widget {
         if (this.canvas) {
             this.canvas.style.width = innerWidth + 'px'; // width + 'px';
             this.canvas.style.height = innerHeight + 'px';
-            this.canvas.style.left = left + 'px';
-            this.canvas.style.top = top + 'px';
+            // this.canvas.style.left = left + 'px';
+            // this.canvas.style.top = top + 'px';
             // this.canvas.style.transform = transform;
             // this.canvas.setAttribute("width",width);
             // this.canvas.setAttribute("height",height);
@@ -3990,46 +3994,64 @@ class mglContextWindow extends Widget {
         //context.rotationX = Math.PI / 4;
         // context.scale(1, Math.cos(Math.PI / 4));
         // context.scale(zoom,zoom)
-        context.rotateY(deltaTime * 0.0002);
+        context.rotateY(deltaTime * 0.0001);
         context.push();
-        context.translate(zoom,-panY,panX);
+            let DRAW_DEPTH = 1/zoom; //-300;
+            context.translate(
+                -panX*zoom, 
+                -panY*zoom, 
+                DRAW_DEPTH
+                );
 
-    
-        // Draw a box with colored sides
-        context.fill(color(255,255,255,50))
         
-        context.box(300);
-        // Draw the box again with inverted orientation
-        // context.scale(1, 1, -1);
-        context.translate(300,0,0)
-        context.box(100);
-        context.translate(-300,0,0)
+            // Draw a box with colored sides
+            context.fill(color(255,255,255,50))
+            
+            context.box(300);
+            // Draw the box again with inverted orientation
+            // context.scale(1, 1, -1);
+            context.translate(300,0,DRAW_DEPTH)
+            context.box(100);
+            context.translate(-300,0,DRAW_DEPTH)
 
-        context.push()
-        context.translate(-300,0,0)
-        context.box(100);
-        context.pop()
+            context.push()
+            context.translate(-300,0,DRAW_DEPTH)
+            context.box(100);
+            context.pop()
 
-        context.push()
-        context.translate(0,0,300)
-        context.sphere(100);
-        context.pop()
+            context.push()
+            context.translate(0,0,300+DRAW_DEPTH)
+            context.sphere(100,12);
+            context.pop()
 
-        context.push()
-        context.translate(0,0,-300)
-        context.sphere(100);
-        context.pop()
-        // context.scale(2,2)
-        // context.push(); // Save current state
-        // context.fill('red'); // Set fill color for one side
-        // context.rect(-50, -50, 100, 100); // Draw one side of the box
-        // context.fill('green'); // Set fill color for another side
-        // context.rect(50, -50, 100, 100); // Draw another side of the box
-        // context.fill('blue'); // Set fill color for another side
-        // context.rect(-50, 50, 100, 100); // Draw another side of the box
-        // context.fill('yellow'); // Set fill color for another side
-        // context.rect(50, 50, 100, 100); // Draw another side of the box
-        context.pop(); // Restore original state
+            context.push()
+            context.translate(0,0,-300+DRAW_DEPTH)
+            context.sphere(100,12);
+            context.pop()
+
+            // ADD A GROUND PLANE
+            //context.pop();
+            //context.rotateY(deltaTime * 0.0002);
+            // context.push();
+            // context.push();
+                // context.translate(0, 300, 0);
+                // context.rotateX(Math.PI / 2);
+                // context.fill(200);
+                // context.plane(2000, 2000);
+            // context.pop();
+            context.pop();
+
+            // context.scale(2,2)
+            // context.push(); // Save current state
+            // context.fill('red'); // Set fill color for one side
+            // context.rect(-50, -50, 100, 100); // Draw one side of the box
+            // context.fill('green'); // Set fill color for another side
+            // context.rect(50, -50, 100, 100); // Draw another side of the box
+            // context.fill('blue'); // Set fill color for another side
+            // context.rect(-50, 50, 100, 100); // Draw another side of the box
+            // context.fill('yellow'); // Set fill color for another side
+            // context.rect(50, 50, 100, 100); // Draw another side of the box
+        // context.pop(); // Restore original state
 
         
 
@@ -4038,11 +4060,11 @@ class mglContextWindow extends Widget {
         // context.strokeWeight(1)
         // context.rect(0,0,100,100)
 
-        this.updateCanvasAttributes(
-            this.widgetSize.width, 
-            this.widgetSize.height, 
-            0,0,
-            'translate(0, 0), scale(1, 1)');
+        // this.updateCanvasAttributes(
+        //     this.widgetSize.width, 
+        //     this.widgetSize.height, 
+        //     0,0,
+        //     'translate(0, 0), scale(1, 1)');
 
         // context.strokeWeight(1);
 
@@ -10463,7 +10485,9 @@ function mouseReleased(){
 
 const max_blur = 100;
 let bgEl;
-zoomStepSize = (3 - 0.1) / 8;
+const MIN_ZOOM = 0.01;
+const MAX_ZOOM = 1; //3;
+zoomStepSize = (MAX_ZOOM - MIN_ZOOM) / 8;
 
 const DefaultKeyBindings = {
     "cmd+/": "ToggleCommandPromptCommand",
@@ -10748,7 +10772,7 @@ function mouseWheel(event) {
 
         // IF ZOOM ON SCROLL ENABLED
         zoom -= -event.delta / 1000;
-        zoom = constrain(zoom, 0.1, 3);
+        zoom = constrain(zoom, MIN_ZOOM, MAX_ZOOM);
         // make sure we offset the pan to account for the zoom messing with our center
         // we should be passing _towards_ the mouse 
         panX -= mouseX * (oldZoom - zoom);
@@ -10758,8 +10782,8 @@ function mouseWheel(event) {
     }else{
         // The zoom level affects the pan speed. When zoomed out (zoom = 0.1), we pan further.
         // Conversely, when zoomed in (zoom = 1-3), we pan less far.
-        panX -= event.deltaX * (3-zoom);
-        panY -= event.deltaY * (3-zoom);
+        panX -= event.deltaX * (MAX_ZOOM-zoom);
+        panY -= event.deltaY * (MAX_ZOOM-zoom);
     }
     // else{
     //     panX -= event.deltaX;
@@ -10799,9 +10823,7 @@ function mouseWheel(event) {
 function updateBlur(){
     const minBlur = 5;
     const maxBlur = 10;
-    const blur = zoom < 1 
-        ? minBlur + (maxBlur - minBlur) * (1 - zoom) 
-        : minBlur + (maxBlur - minBlur) * (zoom - 1);
+    const blur = map(zoom, MIN_ZOOM, MAX_ZOOM, minBlur, maxBlur)
     bgEl.style.filter = `blur(${blur}px)`;
 }
 
@@ -11262,11 +11284,11 @@ function draw() {
 }
 
 /** FIGHT ME */
-Object.prototype.forEach = function(callback){
-    return Object.entries(this).forEach(([key,value],index)=>{
-        callback(value,key,index);
-    })
-}
+// Object.prototype.forEach = function(callback){
+//     return Object.entries(this).forEach(([key,value],index)=>{
+//         callback(value,key,index);
+//     })
+// }
 
 let FPS;
 let frameTimes = [];
@@ -11314,7 +11336,7 @@ function renderDebugUI(){
     }
 
     // draw the status lights
-    store.status_lights.forEach((light)=>{
+    Object.entries(store.status_lights).forEach(([key,light])=>{
         light.draw();
     });
 
@@ -11728,7 +11750,7 @@ function setupDefaults(){
 
     // NEW
     // define in a config object
-    InvokableCommands.forEach((def,key)=>{
+    Object.entries(InvokableCommands).forEach(([key, def])=>{
         let cmdName = key.split(' ').join('').split(/(?=[A-Z])/).join(' '); //def.command ?? def.name;
         // if(!InvokableCommands[key]){
         //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
@@ -11819,10 +11841,10 @@ function setupDefaults(){
 const PreloadedImages = {};
 const PreloadedSVGs = {}
 function preload() {
-    PreloadedImages.forEach((_,imgName)=>{
+    Object.entries(PreloadedImages).forEach(([_,imgName])=>{
         PreloadedImages[imgName] = loadImage(imgName);
     })
-    PreloadedSVGs.forEach((_,name)=>{
+    Object.entries(PreloadedSVGs).forEach(([_,name])=>{
         PreloadedSVGs[name] = loadImage(name);
     })
 }
@@ -12084,6 +12106,48 @@ function setup() {
             requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
             requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
         }
+        let KeyboardPanInfluence = { x: 0, y: 0 };
+        let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
+        let maxInfluence = 100 * (1 / zoom);
+        let decayFactor = 0.9;
+        let lerpFactor = 0.1; // control the speed of lerp
+
+        switch(e.key) {
+            case 'w':
+                zoom += 0.1;
+                break;
+            case 's':
+                zoom -= 0.1;
+                break;
+            case 'a':
+            case 'ArrowLeft':
+                KeyboardPanInfluenceTarget.x = Math.max(KeyboardPanInfluenceTarget.x - 10 / zoom, -maxInfluence);
+                break;
+            case 'd':
+            case 'ArrowRight':
+                KeyboardPanInfluenceTarget.x = Math.min(KeyboardPanInfluenceTarget.x + 10 / zoom, maxInfluence);
+                break;
+            case 'q':
+            case 'ArrowUp':
+                KeyboardPanInfluenceTarget.y = Math.max(KeyboardPanInfluenceTarget.y - 10 / zoom, -maxInfluence);
+                break;
+            case 'e':
+            case 'ArrowDown':
+                KeyboardPanInfluenceTarget.y = Math.min(KeyboardPanInfluenceTarget.y + 10 / zoom, maxInfluence);
+                break;
+        }
+
+        // Lerp the influence values over time
+        KeyboardPanInfluence.x += (KeyboardPanInfluenceTarget.x - KeyboardPanInfluence.x) * lerpFactor;
+        KeyboardPanInfluence.y += (KeyboardPanInfluenceTarget.y - KeyboardPanInfluence.y) * lerpFactor;
+
+        // Decay the influence when the keyboard movement stops
+        KeyboardPanInfluence.x *= decayFactor;
+        KeyboardPanInfluence.y *= decayFactor;
+
+        // Apply the influence to the pan with lerp towards the target
+        panX += (KeyboardPanInfluence.x - panX) * lerpFactor;
+        panY += (KeyboardPanInfluence.y - panY) * lerpFactor;
     })
     document.addEventListener('keyup',(e)=>{
         if(store.shiftIsMomentary){
