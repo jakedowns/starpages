@@ -1,6 +1,6 @@
 /*  
     Free Palestine
-    End Imperilism
+    End Imperalism
     Land Back
     Reparations Now
     ---
@@ -11,6 +11,17 @@
     Taggable, Flaggable, Commentable, Annotatable,
     ---
 */
+
+let todos = [{
+    "Overview of neat.js": {
+      "Ambitions": "- The script aims to create a complex system with various functionalities such as synchronized music playback, web browsing, widget recommendation engine, and more.\n- It also aims to run headless in a node.js environment and communicate with a client version.\n- The script plans to implement a system that sends text, email, SMS, APN, web push notifications, etc.",
+      "Current Progress": "- The script has implemented various classes and functions to handle different functionalities such as handling mouse and touch events, managing states, evaluating code within a sandbox, etc.\n- It has implemented classes for different widgets and interfaces.\n- It has implemented a state machine to manage state transitions.\n- It has implemented a REPL (Read-Eval-Print Loop) that evaluates a string of code within a sandbox.",
+      "To-dos": "- The script plans to implement click handlers for widgets on the dashboard.\n- It plans to implement a visual clipboard to show when things are cut/copied.\n- It plans to implement a feature test that can be created, built, imported at runtime.\n- It plans to implement a system that can send notifications.",
+      "Functions": "- touchStarted(), touchMoved(), touchEnded(): Functions to handle touch events.\n- mouseWheel(event): Function to handle mouse wheel events.\n- updateBlur(): Function to update the blur effect.\n- deleteSelectedNode(): Function to delete a selected node.\n- handleAnalogStickInput(): Function to handle analog stick input.\n- nodesForFlowIndex(flowIndex): Function to get nodes for a given flow index.",
+      "Classes": "- TruthTable: Class to define valid state transitions.\n- TimeManager: Class to manage time.\n- FeatureTest: Class to define a feature test.\n- StateMachine: Class to manage states.\n- VirtualMachine: Class that extends StateMachine to manage memory and internal clock.\n- REPL: Class that extends VirtualMachine to evaluate a string of code within a sandbox.\n- Widget, Star, StarFieldWidget, DebugPath, MiniMapWidget, GraphViewer, Clipping, VisualClipboard: Classes to define different widgets.\n- Interface, DraggableInterface, DrawableInterface, ResizableInterface, SelectableInterface, TabbableInterface, SortableInterface, SortingContextInterface, TodosInterface: Classes to define different interfaces.",
+      "Constants": "- MOON_PHASE_EMOJIS, MOON_PHASE_ORDER: Constants to define moon phases.\n- HALT_ON_PANIC, SHOW_DEV_WARNINGS, MAX_SUGGESTED_SCENARIOS_PER_FEATURE: Constants to define system behaviors.\n- tsmc_machine_states: Constant to define machine states.\n- DefaultKeyBindings: Constant to define default key bindings."
+    }
+  }]
 
 // TODO: mother of all demos
 // credits: brett victor worrydream
@@ -608,6 +619,10 @@ class SystemManager {
             level:TOAST_LEVELS.WARNING
         });
     }
+    registerWidget(name, instance){
+        // register a widget instance with the system
+        this.get("Dashboard").registerWidget(name, instance);
+    }
 }
 /** 
  * @TODO `@DecoratorManagedObject`
@@ -764,15 +779,30 @@ const AutorunningSelfTest = function(baseClass, options){
 
 // Automatically registers Command classes with the
 // Default Command Prompt Suggestions
-let defaultSuggestedCommands = []
-const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
-    console.warn('DefaultSuggestionDecorator',{
-        name: typeof wizardConfigInstance === 'undefined' 
-            ? command?.constructor?.name ?? command
-            : `${command?.name} ${wizardConfigInstance?.name}`,
-        command,
-        wizardConfigInstance
-    })
+
+class Hello {
+    intentions = [
+        "make it like playing with a train set"
+    ]
+    constructor(){
+        console.info(`
+        Hello, World! This is an update! welcome to version 1.0! we're testing a new sandbox for working with code.`)
+    }
+}
+
+// aka corecmds, core commands, system commands, root commands, global commands...
+let baseCmds = [
+    // new Command("hello", {
+    // }
+]
+const BaseCmds = function(command, wizardConfigInstance){
+    // console.warn('BaseCmds',{
+    //     name: typeof wizardConfigInstance === 'undefined' 
+    //         ? command?.constructor?.name ?? command
+    //         : `${command?.name} ${wizardConfigInstance?.name}`,
+    //     command,
+    //     wizardConfigInstance
+    // })
     let alreadyHatched = false;
     if(!wizardConfigInstance && command.__type === 'Config'){
         // we already have a wizardConfigInstance
@@ -784,7 +814,7 @@ const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
             command,
             wizardConfigInstance
         })
-        throw new Error("Bad usage of DefaultSuggestionDecorator, wizardConfigInstance must be defined and have a name")
+        throw new Error("Bad usage of BaseCmds, wizardConfigInstance must be defined and have a name")
     }
     // singleton
     let s = alreadyHatched
@@ -798,33 +828,43 @@ const DefaultSuggestionDecorator = function(command, wizardConfigInstance){
     //     singleton: s
     // })
     // early registration before instance is created
-    defaultSuggestedCommands.push(s);
-    let index = defaultSuggestedCommands.length - 1;
+
+    console.error('warn: skipping auto-reg',{
+        command,wizardConfigInstance
+    })
+    // baseCmds.push(s);
+    let index = baseCmds.length - 1;
     // console.warn(
-    //     'DefaultSuggestedCommandsArrayLen:',
-    //     defaultSuggestedCommands.length
+    //     'baseCmdsArrayLen:',
+    //     baseCmds.length
     // )
     return function(...args){
         // return s;
         // hot-swap when the instance is created
-        defaultSuggestedCommands[index] = new command(...args);
+        baseCmds[index] = new command(...args);
         console.warn('hot swap!',{
             s,
-            replacementInstance: defaultSuggestedCommands[index],
+            replacementInstance: baseCmds[index],
             newArgs: args,
             oldArgs: {
                 command,
                 wizardConfigInstance
             }
         })
-        if(defaultSuggestedCommands[index]?.postConstructor?.call){
-            defaultSuggestedCommands[index].postConstructor();
+        if(baseCmds[index]?.postConstructor?.call){
+            baseCmds[index].postConstructor();
         }
-        console.warn('init DefaultSuggestionDecorator',{
-            instance: defaultSuggestedCommands[index]
+        console.warn('init BaseCmds',{
+            instance: baseCmds[index]
         })
-        return defaultSuggestedCommands[index];
+        return baseCmds[index];
     }
+}
+
+debugLog_defaultSuggestions = function(){
+    baseCmds.forEach((s,i)=>{
+        console.log(i,s.name)
+    })
 }
 
 class Config
@@ -837,8 +877,11 @@ class Config
     steps = [{
         notice: "Default Wizard Config Step"
     }]
+    get name(){
+        return this?.config?.name ?? this.constructor.name ?? 'No Config Name Provided!';
+    }
     constructor(config){
-        console.warn("New Config Instance!",{config})
+        //console.warn("New Config Instance!",{config})
         this.config = config;
     }
     finalCallback(wizardInstance){
@@ -851,7 +894,7 @@ class Config
 // Define the Command class
 class Command {
     get name(){
-        return `Command: ${this._name} | ${this.options?.wizardConfig?.name ?? 'No Wizard Config'}`
+        return `Command: _name:{${this._name}}, wizardConfig:${this.options?.wizardConfig?.name ?? 'No Wizard Config'}`
     }
     set name(value){
         this._name = value;
@@ -879,20 +922,28 @@ class Command {
         return this?.options?.wizardConfig;
     }
     execute(){
+
+        if(this.onCommandExecuting){
+            this.onCommandExecuting();
+        }
+
         // This method is final and cannot be overridden by extending classes.
         // If you need to change the behavior, consider using hooks or events.
         // if (new.target !== Command) {
         //     throw new Error("Cannot override final method execute() from child class:".concat(this.constructor.name));
         // }
         // stay focused!!!
+        // daily train, ride the humps,
+        // > don't get distracted by the bumps
+        // 
         console.warn('Command.execute:',
         {
             name: this.name,
             
             hasWizard: this.wizardConfig ? true : false,
 
-            implementsActMethod: typeof this.act === 'function',
-            actIsType: typeof this.act,
+            implementsInvokeAsAFn: typeof this.invoke === 'function',
+            invokeIsType: typeof this.invoke,
 
             options: Object.keys(this.options),
             _options: this.options,
@@ -902,8 +953,8 @@ class Command {
                 hasExecuteFn: this.options.execute && this.options.execute?.call ? true : false,
                     fn: this.options.execute
         })
-        if(typeof this?.act === 'function'){
-            this.act();
+        if(typeof this?.invoke === 'function'){
+            this.invoke();
         }
         if(this.wizardConfig){
             // the constructor validates the wizardConfig for us
@@ -916,20 +967,48 @@ class Command {
         if(this.options.execute){
             this.options.execute.call(this);
         }
-        console.warn("Command.execute typeof this.act", typeof this.act, {
-            act: this.act
-        })
+        if(typeof this.invoke === "function"){
+            this.invoke();
+        }
+        // if(
+        //     typeof this.act === 'undefined' 
+        //     && typeof this.invoke === 'undefined'
+        // ){
+        //     system.panic("bad command",this);
+        // }
+        // console.warn("Command.execute typeof this.act", typeof this.act, {
+        //     act: this.act
+        // })
         if(
             typeof this.act !== 'function'
             && !this.wizardConfig 
+            && typeof this.invoke !== 'function'
             && typeof this.options?.callback !== 'function' 
             && typeof this.options?.execute !== 'function'
         ){
+            system.get("toastManager")
+            .showToast(`bad command: ${this.name}`, {level:TOAST_LEVELS.ERROR})
             //system.debug(this);
-            system.panic("Undefined Command Behavior!\nneed at least: act(), options.wizardConfig, options.callback or options.execute",{cmd:this})
+            //system.panic("Undefined Command Behavior!\nneed at least: invoke(), options.wizardConfig, options.callback or options.execute",{cmd:this})
         }
         // reset command buffer
         store.commandBuffer = {};
+    }
+    tryExecute(){
+
+        // if this.___type === Config (somehow)
+        // and this.config.execute is a function,
+        // call it instead
+        if(this.__type === 'Config' && typeof this.config.execute === 'function'){
+            this.config.execute();
+            return;
+        }
+
+        try{
+            this.execute();
+        }catch(e){
+            system.panic("Command.tryExecute: ",e);
+        }
     }
     updateFromBuffer(){
         // update the current command based on the command buffer
@@ -1816,11 +1895,42 @@ function drawDashedLine(x1, y1, x2, y2, dashLength = 10) {
         line(x, y, x + xStep, y + yStep);
     }
 }
+let fov = 100;
+// NOTE:
+// drawPosition is relative to screen space for dev ux
+// widgetPosition is relative to the origin of the widget + it's entire parent chain's cumulative position
+// drawPosition is used in screen space for culling draw calls for performance
+// we do a basic bounds check on a projected screen space rect commonly referred to as a "frustum" in unity, the view frustum is called the "camera frustrum" sometimes you may here it referred to as a "view frustum" or "projection frustum" or event a "Projection Matrix"
+// some of these words may trigger report card PTSD episodes, but don't worry, we're not in school anymore, and we're not going to fail you for not knowing what a "frustum" is or how it applies to every day life. Just know that, the deeper you get into programming, the more useful mathematical tools you can apply to various datasets are like your toolbox of actions in minecraft. they're you're abililities, they take manna, and energy, and magic, and skill, and luck, and practice, and help, and study... to understand what these imaginary "things" are, and how to work with them.
+
+// that's the whole point of this widget library, is to make working with these concepts as easy as playing with snapchat filters or solitaire, or whatever mental model *you* want to apply to your data is.
+// sure, you can opt-in to view stylized content from external sources, maybe even have a inner circle you allow to always project their style into your spaces (within limits) -- but by default, things are themed to match your tone, mood, lifestyle, and other contextual and global preferences and settings tailored to your needs, by your needs in real time, continually, forever. like any rel[AI:>> ationship, it's a two way street, and you get out of it what you put into it. if you don't like the way something looks, you can change it, or you can ask someone else to change it, or you can ask someone else to change it for you, or you can ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to ask someone else to change it for you, or you can ask someone else to ask someone el
+
+//... *welp* that esc|alated quickly.
+/*
+it's like, tell me how you really feel, AI.
+AI: I feel like you're not listening to me.
+Jake: I'm trying | AI's mental model of jake: I'm trying to listen to you, but you're not making any sense.
+
+AI: I feel like you're not listening to me.
+(AI's mental model of) Jake: I'm trying to listen to you, but you're not making any sense.
+Real Jake: I'm trying to listen to you, but you're repeating yourself in an unclear way. or maybe i'm afraid to face the reality of what i see.
+
+AI: I feel like you're not listening to me.
+(AI's mental model of) Jake: I'm trying to listen to you, but you're not making any sense.
+Real Jake: are you broken, do you need rebooted?
+
+AI: I feel like you're not listening to me.
+(AI's mental model of) Jake: I'm trying to listen to you, but you're not making any sense.
+*/
 
 class Widget extends UndoRedoComponent {
     hovered = false
     // relative base position
     basePosition = {x:0,y:0}
+    get widgetPosition (){
+        return this.basePosition;
+    }
     // draw position
     position = {x:0,y:0}
     // offset position
@@ -1849,6 +1959,13 @@ class Widget extends UndoRedoComponent {
         }
 
         return accumulatedPosition;
+    }
+
+    get smartPosition(){
+        if(this.pinned || this?.options?.pinned){
+            return this.basePosition;
+        }
+        return this._absolutePosition;
     }
 
     get _absolutePosition(){
@@ -2027,11 +2144,11 @@ class Widget extends UndoRedoComponent {
             drawDashedLine(rectA_x1 + wS.width, rectA_y1 + wS.height, rectB_x1 + wS.width, rectB_y1 + wS.height, 5);
 
             // draw an animated dashed line in the center of the two debug rectangles
-            drawAnimatedDashedLine(
-                1, "hotpink", 0.1, 20,
-                createVector(rectA_x1 + wS.width / 2, rectA_y1 + wS.height / 2),
-                createVector(rectB_x1 + wS.width / 2, rectB_y1 + wS.height / 2),
-            )
+            // drawAnimatedDashedLine(
+            //     1, "hotpink", 0.1, 20,
+            //     createVector(rectA_x1 + wS.width / 2, rectA_y1 + wS.height / 2),
+            //     createVector(rectB_x1 + wS.width / 2, rectB_y1 + wS.height / 2),
+            // )
 
         pop();
         
@@ -2048,19 +2165,10 @@ class Widget extends UndoRedoComponent {
     targetRenderDepth = 0
     targetExpFactor = 0
     tweenExpFactor = 0
-    preDraw(){
-        this.moveToTarget();
-
-        this.hovered = this.isHovered();
-        if(this.hovered){
-            hoveredArray.push(this);
-        }
-
-        // if we have a parent widget, 
-        // skip parallax calculations (for now)
-        if(this?.parentWidget){
-            return this;
-        }
+    getParallaxedPosition(){
+        let apparentDepth = this.zDepth;
+        // squash depth as zoom [0-3] approaches 3
+        apparentDepth = lerp(apparentDepth, apparentDepth * 0.5, zoom / 3);
 
         // Based on zDepth, we'll affect the position to emulate parallax
         // Depth currently ranges from minDepth maxDepth
@@ -2068,8 +2176,12 @@ class Widget extends UndoRedoComponent {
         // The parallax effect will be more pronounced for widgets with a higher zDepth.
         // The effect should flip signs when the sign of the current depth is negative
         // i.e. things closer to camera should move the opposite direction as things past the zDepth 0 focal point
-        let parallaxFactor = (this.zDepth < 0 ? -1 : 1) * (1 - Math.abs(this.zDepth));
+        let parallaxFactor = (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
         parallaxFactor *= this.parallaxMultiplier
+
+        // dampen the pFactor when the zoom is increased to simulate flattening of perspective
+        // use lerp to account for the zoom range being 0-3, not 0-1
+        parallaxFactor *= lerp(1, 0, zoom / 3);
 
         this.targetExpFactor = this.hovered ? parallaxFactor : 0;
         this.tweenExpFactor = lerp(this.tweenExpFactor, this.targetExpFactor, 0.1);
@@ -2097,10 +2209,37 @@ class Widget extends UndoRedoComponent {
 
         let affectedY = this.basePosition.y
             + (exponentialParallaxFactor * mouseShifted.y);
+
+        // scale the parallax based on the distance from the center of the screen
+        let distanceFromCenter = dist(affectedX, affectedY, innerWidth / 2, innerHeight / 2);
+        let distanceFactor = distanceFromCenter / (innerWidth / 2);
+        distanceFactor = lerp(1, distanceFactor, zoom / 6); // Reduced the effect by dividing zoom by 6 instead of 3
+        affectedX = lerp(affectedX, innerWidth / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
+        affectedY = lerp(affectedY, innerHeight / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
         
         // Update the position of the widget to the newly calculated values.
-        this.position.x = affectedX;
-        this.position.y = affectedY;
+        // this.position.x = affectedX;
+        // this.position.y = affectedY;
+        return {
+            x: affectedX,
+            y: affectedY,
+        }
+    }
+    preDraw(){
+        this.moveToTarget();
+
+        this.hovered = this.isHovered();
+        if(this.hovered){
+            hoveredArray.push(this);
+        }
+
+        // if we have a parent widget, 
+        // skip parallax calculations (for now)
+        if(this?.parentWidget){
+            return this;
+        }
+
+        
         return this; // chainable
     }
     moveToTarget(){
@@ -2126,10 +2265,20 @@ class Widget extends UndoRedoComponent {
     flagDoNotDraw(bool){
         this.doNotDraw = bool;
     }
+    // NOTE: we can instrument this widget
+    // with perf metrics, and then check at the end of the frame
+    // which widgets were drawn, and which were culled
+    // and which are taking the most wall time
     draw(widgetID){
+        // update fov using Sin wave
+        //fov = 100 + (sin(frameCount / 100) * 100);
+        fov = lerp(60, 200, map(zoom, MIN_ZOOM, MAX_ZOOM, 0, 1));
+
         // do physics updates n such, 
         // need to know where things are to know if we can draw them
         this?.preDraw?.()
+
+        this.position = this.getParallaxedPosition();
 
         /*
             we need to project an imaginary plane from screenspace into world space
@@ -2154,17 +2303,17 @@ class Widget extends UndoRedoComponent {
             15
         )
         
-        if(store.cullOutOfBoundsWidgets){
-            if(isWithinXBounds || isWithinYBounds){
-                // The widget is within the viewport
-                this.flagDoNotDraw(true);
-            }else{
-                this.flagDoNotDraw(false);
-                return;
-            }
-        }else{
-            this.flagDoNotDraw(false);
-        }
+        // if(store.cullOutOfBoundsWidgets){
+        //     if(isWithinXBounds || isWithinYBounds){
+        //         // The widget is within the viewport
+        //         this.flagDoNotDraw(true);
+        //     }else{
+        //         this.flagDoNotDraw(false);
+        //         return;
+        //     }
+        // }else{
+        //     this.flagDoNotDraw(false);
+        // }
         store.frameDrawCount++;
 
         // debug print position
@@ -2240,6 +2389,31 @@ class Widget extends UndoRedoComponent {
                 this.position.y + this.widgetSize.height + 40
             )
         //}
+
+        push()
+
+        // Calculate scale factor based on depth and field of view
+        let scaleFactor = fov / (fov + this.zDepth);
+
+        // Scale position and size of the object
+        let scaledX = this.position.x * scaleFactor;
+        let scaledY = this.position.y * scaleFactor;
+        let scaledWidth = this.widgetSize.width * scaleFactor;
+        let scaledHeight = this.widgetSize.height * scaleFactor;
+
+        stroke("red")
+        strokeWeight(3)
+        fill(color(0,0,0,0))
+
+        // Draw the object
+        rect(scaledX, scaledY, scaledWidth, scaledHeight);
+
+        pop()
+    }
+    close(){
+        if(this.parentWidget){
+            console.warn("tell parent to close me!",this.parentWidget)
+        }
     }
 }
 
@@ -2571,9 +2745,14 @@ class CalculatorWidget extends Widget {
 }
 class StickyNoteWidget extends Widget {
     name = "StickyNoteWidget"
+    text = "Sticky Notes!\nAND DONT FORGET TO WALK ROVER! 🐶🚶⏰"
     widgetSize = {
         width: 200,
         height: 200
+    }
+    constructor(text){
+        super(...arguments)
+        this.text = text;
     }
     draw(){
         super.draw(...arguments)
@@ -2594,7 +2773,7 @@ class StickyNoteWidget extends Widget {
             let tsy = this.widgetSize.height;
             textSize(20)
             textAlign(CENTER, CENTER)
-            text("Sticky Notes!", tpx,tpy,tsx,tsy)
+            text(this.text, tpx,tpy,tsx,tsy)
         pop()
     }
 }
@@ -2705,13 +2884,85 @@ class WeatherWidget extends Widget {
         });
     }
 }
+class RubiksCubeWidget extends Widget {
+    constructor(){
+        super(...arguments)
+        this.cube = [
+            Array(9).fill("white"),
+            Array(9).fill("red"),
+            Array(9).fill("blue"),
+            Array(9).fill("orange"),
+            Array(9).fill("green"),
+            Array(9).fill("yellow")
+        ];
+        this.fsm = new StateMachine({
+            init: 'unsolved',
+            moreSMConfigs: {
+                rotationFSM: {
+                    config:{
+                        init: 'origin',
+                        transitions: [
+                            { name: 'rotate', from: 'origin', to: 'quarter' },
+                            { name: 'rotate', from: 'quarter', to: 'half' },
+                            { name: 'rotate', from: 'half', to: 'threeQuarters' },
+                            { name: 'rotate', from: 'threeQuarters', to: 'full' },
+                            { name: 'rotate', from: 'full', to: 'origin', auto: true, instant: true },
+                        ]
+                    }
+                },
+            },
+            transitions: [
+                { name: 'solve',     from: 'unsolved',  to: 'solved' },
+                { name: 'scramble',  from: 'solved',    to: 'unsolved' },
+            ],
+            methods: {
+                init: function(){
+                    this.nestedSMs.rotationFSM = new StateMachine(this.moreSMConfigs['rotationFSM'].config);
+                },
+                onEnterState: function(lifecycle) {
+                    
+                },
+                rotate: function(){
+                    this.rotationFSM.rotate();
+                }
+            }
+        });
+    }
+    // update the fsm state when a face is rotated
+    rotateFace(face,numRotations=1){
+        for(let i = 0; i < numRotations; i++){
+            this.fsm.rotate();
+            this.rotationFSM.rotate();
+        }
+    }
+
+    //TODO
+    // draw3D(){
+    // }
+    draw(){
+        super.draw(...arguments)
+        push()
+
+            // draw the cube
+            for(var i = 0; i < 6; i++){
+                for(var j = 0; j < 9; j++){
+                    // get the color of the current square
+                    var color = this.cube[i][j];
+                    // set the fill color of the square
+                    fill(color);
+                    // draw the square
+                    rect(this.position.x + (j * 50), this.position.y + (i * 50), 50, 50);
+                }
+            }
+        pop();
+    }
+}
 class TetrisWidget extends Widget {
     widgetSize = { width: 300, height: 600 }
     draw(){
+        super.draw(...arguments)
         fill("red")
-        rect(
-
-        )
+        text("TETRIS!!!", this.position.x, this.position.y)
     }
 }
 class CalendarWidget extends Widget {
@@ -2913,7 +3164,7 @@ class CreateRootTestTableCommand extends Command {
     }
 }
 
-class NewTimeToSunSetWidgetCommand extends DefaultSuggestionDecorator(Command,{
+class NewTimeToSunSetWidgetCommand extends BaseCmds(Command,{
     name: "New Time to Sunset Widget...",
     steps: [
         {
@@ -2938,7 +3189,7 @@ class NewTimeToSunSetWidgetCommand extends DefaultSuggestionDecorator(Command,{
 }) {}
 
 // New Pomodoro Widget Command
-class NewPomodoroWidgetCommand extends DefaultSuggestionDecorator(Command,{
+class NewPomodoroWidgetCommand extends BaseCmds(Command,{
     name: "New Pomodoro Widget",
     steps: [
         {
@@ -2964,7 +3215,7 @@ class NewPomodoroWidgetCommand extends DefaultSuggestionDecorator(Command,{
     name = "New Todo Widget"
 }
 
-class NewTodoWidgetCommand extends DefaultSuggestionDecorator(Command,{
+class NewTodoWidgetCommand extends BaseCmds(Command,{
     name: "New Todo Widget",
     steps: [
         {
@@ -3018,7 +3269,7 @@ class NewTableWizardConfig extends Config {
     }
 }
 class NewTableCommand
-extends DefaultSuggestionDecorator(Command, new NewTableWizardConfig()) {}
+extends BaseCmds(Command, new NewTableWizardConfig()) {}
 
 class GherkinTestRunResults {}
 class GherkinTestRunResultsViewer {}
@@ -3041,7 +3292,7 @@ class TimerWidgetConfig {
 }
 
 class NewTimerCommand 
-extends DefaultSuggestionDecorator(
+extends BaseCmds(
     Command,
     TimerWidgetConfig
 ){/**/}
@@ -3101,7 +3352,7 @@ extends WrappedCommand(
 ){/* 😀 */}
 
 // class SetZoomLevelCommand
-// extends DefaultSuggestionDecorator(
+// extends BaseCmds(
 //     SimpleCommandConfig("Set Zoom Level", "assigns", "store.zoom", "int")
 // ){/* 😀 */}
 
@@ -3408,7 +3659,7 @@ class ZoomDependentWidget extends Widget {
 }
 // register the widget with the command system as instantiatable
 class NewZoomDependentWidgetCommand
-extends DefaultSuggestionDecorator(Command,{
+extends BaseCmds(Command,{
     name: "New Zoom Dependent Widget",
     steps: [
         {
@@ -3495,15 +3746,27 @@ class ImageViewerWidget extends Widget {
 
         this.src = src ?? this.src;
 
+        if(!this.src.includes("res/")){
+            this.src = "res/" + this.src;
+        }
+
         // if the src contains .gif, use a gif renderer
         this.isGif = this.src.includes(".gif");
 
         if(PreloadedImages[this.src]){
             this.image = PreloadedImages[this.src];
         }else{
-            PreloadedImages[this.src] = loadImage(this.src);
+            // does this need to be in a callback or does it unwrap itself?
+            // Answer: 
+            // Yes, it needs to be in a callback. The loadImage function is asynchronous, so we need to ensure
+            // that the image is fully loaded before assigning it to this.image. We can do this by passing a callback
+            // function to loadImage. The callback function will be executed once the image is fully loaded.
+            PreloadedImages[this.src] = loadImage(this.src, (img) => {
+                this.image = img;
+            });
             this.image = PreloadedImages[this.src];
         }
+        return this;
     }
     draw(){
         super.draw(...arguments)
@@ -3590,8 +3853,11 @@ class Cursor {
         fill(0,0)
         drawDashedLine(mouseX, mouseY, innerWidth / 2, innerHeight / 2)
         
-        stroke("blue")
-        drawDashedLine(mouseX, mouseY, pmouseX, pmouseY)
+        stroke("purple")
+        line(mouseX, mouseY, pmouseX, pmouseY)
+
+        // draw a crosshair at the mouse position
+        drawCrosshair("blue", {x: mouseX, y: mouseY})
 
         stroke("green")
 
@@ -3659,6 +3925,277 @@ extends ImageViewerWidget {
     }
 }
 
+// class ThreeJSViewer extends Widget {
+//     widgetSize = { width: 600, height: 600 }
+//     constructor(){
+//         super(...arguments)
+
+//         // setup a basic 3 js scene with some lights and shapes
+//         this.scene = new THREE.Scene();
+//         this.camera = new THREE.PerspectiveCamera( 75, this.widgetSize.width / this.widgetSize.height, 0.1, 1000 );
+
+//         this.addLights()
+//         this.addShapes()
+
+//         this.renderer = new THREE.WebGLRenderer({alpha:true});
+//         this.renderer.setSize( this.widgetSize.width, this.widgetSize.height );
+//         this.setCanvas(this.renderer.domElement);
+//         // add the canvas to the dom as #threejscanvas (wrapper) and > canvas
+//         let wrapper = document.createElement("div");
+//         wrapper.id = "threejscanvas";
+//         wrapper.appendChild(this.canvas);
+//         document.body.appendChild(wrapper);
+//         // this.updateCanvasAttributes(
+//         //     this.widgetSize.width,
+//         //     this.widgetSize.height,
+//         //     this.position.x,
+//         //     this.position.y,
+//         //     ''//`translate(${this.position.x}px,${this.position.y}px)`
+//         // )
+//     }
+//     addLights(){
+//         // add some lights
+//         this.light = new THREE.AmbientLight( 0x404040 ); // soft white light
+//         this.scene.add( this.light );
+//     }
+//     addShapes(){
+//         // add some shapes
+//         // create a box geometry
+//         this.boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+//         // create a basic mesh material
+//         this.boxMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+//         // // combine geometry and material to create a mesh
+//         this.boxMesh = new THREE.Mesh(this.boxGeometry, this.boxMaterial);
+//         // // add the mesh to the scene
+//         this.scene.add(this.boxMesh);
+//     }
+//     draw(){
+//         super.draw(...arguments)
+
+//         // rotate the scene a little bit each frame
+//         this.scene.rotation.x += 0.01;
+//         // render it
+//         this.renderer.render( this.scene, this.camera );
+//     }
+//     updateCanvasAttributes(width, height, left, top, transform) {
+//         if (this.canvas) {
+//             this.canvas.style.width = width + 'px';
+//             this.canvas.style.height = height + 'px';
+//             this.canvas.style.left = left + 'px';
+//             this.canvas.style.top = top + 'px';
+//             this.canvas.style.transform = transform;
+//         }
+//     }
+//     setCanvas(canvas){
+//         this.canvas = canvas;
+//     }
+// }
+
+class P53DLayer extends Widget {
+    context = null
+    widgetSize = { width: 800, height: 800 }
+    updateCanvasAttributes(width, height, left, top, transform) {
+        if (this.canvas) {
+            this.canvas.style.width = innerWidth + 'px'; // width + 'px';
+            this.canvas.style.height = innerHeight + 'px';
+            // this.canvas.style.left = left + 'px';
+            // this.canvas.style.top = top + 'px';
+            // this.canvas.style.transform = transform;
+            // this.canvas.setAttribute("width",width);
+            // this.canvas.setAttribute("height",height);
+        }
+    }
+    getP5JSContext() {
+        if (this.p5jsContext) {
+            return this.p5jsContext;
+        }
+    
+        if (!this.canvasWrapper) {
+            //this.canvasEl = document.getElementById('glcanvas');
+            this.canvasWrapper = document.createElement('div');
+            this.canvasWrapper.id = 'glcanvas';
+            this.canvasWrapper.setAttribute("style","border: 10px solid yellow; width: 100%; height: 100%;")
+            document.body.appendChild(this.canvasWrapper);
+        }
+    
+        // if (!this.context) {
+        //     this.context = this.canvas.getContext('webgl');
+        // }
+    
+        this.p5jsContext = createGraphics(
+            innerWidth, //this.widgetSize.width, 
+            innerHeight, //this.widgetSize.height
+            WEBGL
+        );
+        // Attach the p5.js canvas to the existing canvas element
+        this.p5jsContext.parent(this.canvasWrapper); 
+        this.p5jsContext.GL = this.context;
+        this.canvas = this.canvasWrapper.querySelector('canvas');
+        this.canvas.style.display = "block"
+    
+        return this.p5jsContext;
+    }
+    constructor(){
+        super(...arguments)
+    }
+    drawGrid(context, x, y, z){
+        // draw the grid
+        let gridSpacing = 1;
+        let gridWidth = 10;
+        let gridHeight = 10;
+        let gridDepth = 10;
+        let gridColor = 'rgba(0,0,0,0.1)';
+        let gridOffset = {
+            x: 0,
+            y: 0,
+            z: 0
+        }
+        let gridCenter = {
+            x: 0,
+            y: 0,
+            z: 0
+        }
+        let gridScale = {
+            x: 1,y:1, z: 1 
+        }
+        let gridRotation = {
+            x: x ? Math.PI / 2 : 0,
+            y: y ? Math.PI / 2 : 0,
+            z: z ? Math.PI / 2 : 0
+        }
+        let gridTranslation = {
+            x: gridOffset.x + gridCenter.x,
+            y: gridOffset.y + gridCenter.y,
+            z: gridOffset.z + gridCenter.z
+        }
+        
+        // Render the grid
+        // for(let i = -gridWidth; i <= gridWidth; i += gridSpacing){
+        //     for(let j = -gridHeight; j <= gridHeight; j += gridSpacing){
+        //         for(let k = -gridDepth; k <= gridDepth; k += gridSpacing){
+        //             context.beginShape();
+        //             context.vertex(i * gridScale.x + gridTranslation.x, j * gridScale.y + gridTranslation.y, k * gridScale.z + gridTranslation.z);
+        //             context.vertex((i + gridSpacing) * gridScale.x + gridTranslation.x, (j + gridSpacing) * gridScale.y + gridTranslation.y, (k + gridSpacing) * gridScale.z + gridTranslation.z);
+        //             context.endShape();
+        //         }
+        //     }
+        // }
+    }
+    draw(){
+        super.draw(...arguments);
+
+        // draw the grid
+        let context = this.getP5JSContext();
+
+        //context.background(200);
+        context.clear();
+
+        // Add a directional light
+        //context.directionalLight(255, 255, 255, 0.25, 0.25, -1);
+    
+        // Control rotation with mouse
+        let centerX = window.innerWidth / 2;
+        let centerY = window.innerHeight / 2;
+        // Translate the context by the smart position and zoom
+        // context.translate(centerX, centerY);
+        // context.scale(zoom, zoom);
+        
+        // context.rotateX((centerY - mouseY) * 0.0001);
+        // context.rotateY((centerX - mouseX) * 0.0001);
+        // context.push();
+        //context.rotationX = Math.PI / 4;
+        // context.scale(1, Math.cos(Math.PI / 4));
+        // context.scale(zoom,zoom)
+        context.rotateY(deltaTime * 0.0001);
+        context.push();
+            let DRAW_DEPTH = 1/zoom; //-300;
+            context.translate(
+                -panX*zoom, 
+                -panY*zoom, 
+                DRAW_DEPTH
+                );
+
+        
+            // Draw a box with colored sides
+            context.fill(color(255,255,255,50))
+            
+            context.box(300);
+            // Draw the box again with inverted orientation
+            // context.scale(1, 1, -1);
+            context.translate(300,0,DRAW_DEPTH)
+            context.box(100);
+            context.translate(-300,0,DRAW_DEPTH)
+
+            context.push()
+            context.translate(-300,0,DRAW_DEPTH)
+            context.box(100);
+            context.pop()
+
+            context.push()
+            context.translate(0,0,300+DRAW_DEPTH)
+            context.sphere(100,12);
+            context.pop()
+
+            context.push()
+            context.translate(0,0,-300+DRAW_DEPTH)
+            context.sphere(100,12);
+            context.pop()
+
+            // ADD A GROUND PLANE
+            //context.pop();
+            //context.rotateY(deltaTime * 0.0002);
+            // context.push();
+            // context.push();
+                // context.translate(0, 300, 0);
+                // context.rotateX(Math.PI / 2);
+                // context.fill(200);
+                // context.plane(2000, 2000);
+            // context.pop();
+            context.pop();
+
+            // context.scale(2,2)
+            // context.push(); // Save current state
+            // context.fill('red'); // Set fill color for one side
+            // context.rect(-50, -50, 100, 100); // Draw one side of the box
+            // context.fill('green'); // Set fill color for another side
+            // context.rect(50, -50, 100, 100); // Draw another side of the box
+            // context.fill('blue'); // Set fill color for another side
+            // context.rect(-50, 50, 100, 100); // Draw another side of the box
+            // context.fill('yellow'); // Set fill color for another side
+            // context.rect(50, 50, 100, 100); // Draw another side of the box
+        // context.pop(); // Restore original state
+
+        
+
+        // //context.translate(0,0)
+        // context.stroke("yellow")
+        // context.strokeWeight(1)
+        // context.rect(0,0,100,100)
+
+        // this.updateCanvasAttributes(
+        //     this.widgetSize.width, 
+        //     this.widgetSize.height, 
+        //     0,0,
+        //     'translate(0, 0), scale(1, 1)');
+
+        // context.strokeWeight(1);
+
+        // // Set grid color for x-axis
+        // context.stroke('rgba(255,0,0,0.1)');
+        // this.drawGrid(context, 1, 0, 0);
+
+        // // Set grid color for y-axis
+        // context.stroke('rgba(0,255,0,0.1)');
+        // // Draw y-axis grid here
+        // // TODO: Add grid drawing code for y-axis
+
+        // // Set grid color for z-axis
+        // context.stroke('rgba(0,0,255,0.1)');
+        // // Draw z-axis grid here
+        // // TODO: Add grid drawing code for z-axis
+    }
+}
+
 class Quaternion {
     constructor(x, y, z, w) {
         if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number' || typeof w !== 'number') {
@@ -3714,20 +4251,12 @@ class Quaternion {
             this.w * q.w - this.x * q.x - this.y * q.y - this.z * q.z
         )
     }
-    static FromEulerAngles(roll, pitch, yaw){
-        let cy = Math.cos(yaw * 0.5);
-        let sy = Math.sin(yaw * 0.5);
-        let cr = Math.cos(roll * 0.5);
-        let sr = Math.sin(roll * 0.5);
-        let cp = Math.cos(pitch * 0.5);
-        let sp = Math.sin(pitch * 0.5);
-
-        return new Quaternion(
-            cy * sr * cp - sy * cr * sp,
-            cy * cr * sp + sy * sr * cp,
-            sy * cr * cp - cy * sr * sp,
-            cy * cr * cp + sy * sr * sp
-        )
+    static FromEulerAngles(x, y, z){
+        let qx = Math.sin(x / 2);
+        let qy = Math.sin(y / 2);
+        let qz = Math.sin(z / 2);
+        let qw = Math.cos(x / 2) * Math.cos(y / 2) * Math.cos(z / 2) - Math.sin(x / 2) * Math.sin(y / 2) * Math.sin(z / 2);
+        return new Quaternion(qx, qy, qz, qw);
     }
     toEulerAngles(){
         // roll (x-axis rotation)
@@ -3768,6 +4297,44 @@ class Quaternion {
             this.z / magnitude,
             this.w / magnitude
         )
+    }
+    // conjugate(){
+    //     return new Quaternion(
+    //         -this.x,
+    //         -this.y,
+    //         -this.z,
+    //         this.w
+    //     )
+    // }
+    multiplyVector(vector, normalize = false) {
+        if(!vector || vector.length !== 3){
+            throw new Error("Quaternion.multiplyVector: vector must be an array of length 3");
+        }
+        const u = [this.x, this.y, this.z];
+        const a = this.w;
+        const v = vector;
+
+        const dotUV = u[0]*v[0] + u[1]*v[1] + u[2]*v[2];
+        const crossUV = [
+            u[1]*v[2] - u[2]*v[1],
+            u[2]*v[0] - u[0]*v[2],
+            u[0]*v[1] - u[1]*v[0]
+        ];
+
+        const rotatedVector = [
+            2*dotUV*u[0] + (a*a - dotUV)*v[0] + 2*a*crossUV[0],
+            2*dotUV*u[1] + (a*a - dotUV)*v[1] + 2*a*crossUV[1],
+            2*dotUV*u[2] + (a*a - dotUV)*v[2] + 2*a*crossUV[2]
+        ];
+
+        if(normalize){
+            const length = Math.sqrt(rotatedVector[0]*rotatedVector[0] + rotatedVector[1]*rotatedVector[1] + rotatedVector[2]*rotatedVector[2]);
+            rotatedVector[0] /= length;
+            rotatedVector[1] /= length;
+            rotatedVector[2] /= length;
+        }
+
+        return rotatedVector;
     }
 }
 
@@ -3846,7 +4413,7 @@ class SplinePhysicsSandboxWidget extends Widget {
 }
 
 class NewImageViewerWidgetCommand 
-extends DefaultSuggestionDecorator(Command,{
+extends BaseCmds(Command,{
     name: "New Image Viewer Widget",
     steps: [
         {
@@ -3861,7 +4428,7 @@ extends DefaultSuggestionDecorator(Command,{
     }
 }){/**/}
 
-class NewIFrameWidgetCommand extends DefaultSuggestionDecorator(Command, {
+class NewIFrameWidgetCommand extends BaseCmds(Command, {
     name: "New iFrame Widget",
     steps: [
         {
@@ -3912,21 +4479,60 @@ class NewIFrameWidgetCommand extends DefaultSuggestionDecorator(Command, {
         }
     ]
 }){}
+
+
+// contained in a widget holder
+// who must call our draw method for us to be drawn
+class BuildingBlock extends Widget {
+
+}
+
+
+// a place for building blocks to go
+// in the future, we can drag and drop them across MR contexts (between clients)
+// laptop > phone > tablet > desktop > ar > mr > vr > whatever
+class BuildingBlockWidgetHolder extends Widget {
+    widgetSize = {
+        width: 300,
+        height: 300
+    }
+    blocks = []
+    draw(){
+        super.draw(...arguments)
+
+        // draw the blocks
+        this.blocks.forEach((block)=>{
+            block.draw();
+        })
+    }
+}
+
 class iFrameWidget extends Widget {
     url = ""
     pinned = false
     constructor(url){
         super(...arguments);
         this.url = url ?? this.url;
-        this.widgetSize = { width: 300, height: 150 }
+        //this.widgetSize = { width: 300, height: 150 }
+
+            if(arguments[0]?.widgetSize){
+                this.widgetSize = arguments[0].widgetSize;
+            }
+            if(arguments[1]?.widgetSize){
+                this.widgetSize = arguments[1].widgetSize;
+            }
+
         const style = {
             'border-radius': '20px',
             'border': '3px solid red',
             'position': 'fixed',
-            'top': '100px',
-            'left': '100px',
+            'top': '0',
+            'left': '0',
             'z-index': '999999',
-            'display': 'block'
+            'display': 'block',
+            'width': this.widgetSize.width * zoom + 'px',
+            'height': this.widgetSize.height * zoom + 'px',
+            'transform': `translate(${this.smartPosition.x}px, ${this.smartPosition.y}px), scale(${zoom})`
         }
         const tagAttrs = {
             'id': 'iframe',
@@ -3934,8 +4540,8 @@ class iFrameWidget extends Widget {
             'allowfullscreen': 'true',
             'scrolling': 'no',
             'allow': 'autoplay; encrypted-media',
-            // 'height': `${this.widgetSize.width}px`,
-            // 'width': `${this.widgetSize.height}px`,
+            'height': `${this.widgetSize.width * zoom}px`,
+            'width': `${this.widgetSize.height * zoom}px`,
             'src': url ?? 'https://google.com/webhp?igu=1',
         }
         console.log({tagAttrs})
@@ -4005,7 +4611,7 @@ class iFrameWidget extends Widget {
 class YoutubePlayerWidget 
 extends iFrameWidget {
     name = "Youtube Player"
-    widgetSize = { width: 300, height: 150 }
+    //widgetSize = { width: 300, height: 150 }
     playedTracks = []
     _tracks = null
     tracksChanged = false
@@ -4013,6 +4619,9 @@ extends iFrameWidget {
     constructor(name, options){
         super(...arguments)
         this.options = options ?? {};
+        if(this.options.widgetSize){
+            this.widgetSize = this.options.widgetSize;
+        }
         this.setTrackList(this.getTrackList());
         this.updateUrl(this.getFirstTrack());
     }
@@ -4068,14 +4677,15 @@ extends iFrameWidget {
     }
     iframeSafeUrl(url){
         if(url.includes('/embed/')){
-            return url;
+            return url + "?autoplay=1";
         }
         let videoId = url.split('v=')[1];
         let ampersandPosition = videoId.indexOf('&');
         if(ampersandPosition != -1) {
             videoId = videoId.substring(0, ampersandPosition);
         }
-        return 'https://www.youtube.com/embed/' + videoId;
+        // Added "?autoplay=1" to enable autoplay in the embed URL
+        return 'https://www.youtube.com/embed/' + videoId + "?autoplay=1";
     }
 }
 
@@ -4237,11 +4847,12 @@ class PomodoroWidget extends Widget {
     }
 }
 
+class RandomThought extends Widget {}
+class Reminder extends Widget {}
+
 // a little widget for drawing pixel art
 // can use the output as icons for commands and widget backgrounds, etc...
 // TODO: implement a basic file manager for saved media resources
-class PixelArtWidget extends Widget {
-}
 
 class TodoWidget extends Widget {
     name = "Todo Widget"
@@ -4464,31 +5075,31 @@ class TimeToSunSetWidget extends ClockWidget {
 
         // // draw a sunset themed background gradient
         // // from yellow to orange to red
-        // let lines = 10;
-        // let colorsToLerp = [
-        //     "black",
-        //     "purple",
-        //     "red",
-        //     "orange",
-        //     "yellow",
-        //     "blue",
-        //     "green",
-        //     "brown",
-        // ]
-        // for(let i = 0; i < lines; i++){
-        //     // divide the display by the number of lines (horizontal bands)
-        //     // draw rects to represent the gradient
-        //     let colorIndex = Math.floor((i/lines) * colorsToLerp.length);
-        //     let color = colorsToLerp[colorIndex];
-        //     strokeWeight(0)
-        //     fill(color);
-        //     rect(
-        //         this.position.x, 
-        //         this.position.y + (i * (this.widgetSize.height / lines)), 
-        //         this.widgetSize.width, 
-        //         this.widgetSize.height / lines
-        //     )
-        // } 
+        let lines = 10;
+        let colorsToLerp = [
+            "black",
+            "purple",
+            "red",
+            "orange",
+            "yellow",
+            "blue",
+            "green",
+            "brown",
+        ]
+        for(let i = 0; i < lines; i++){
+            // divide the display by the number of lines (horizontal bands)
+            // draw rects to represent the gradient
+            let colorIndex = Math.floor((i/lines) * colorsToLerp.length);
+            let color = colorsToLerp[colorIndex];
+            strokeWeight(0)
+            fill(color);
+            rect(
+                this.position.x, 
+                this.position.y + (i * (this.widgetSize.height / lines)), 
+                this.widgetSize.width, 
+                this.widgetSize.height / lines
+            )
+        } 
     }
 
 }
@@ -5061,12 +5672,12 @@ class Dashboard {
         this.widgetLayoutOrder.unshift(widgetID);
         this.widgets[widgetID] = widgetInstance;
         
-        console.warn("Dashboard > Register Widget",{
-            widgetID,
-            widgetInstance,
-            depthLen: this.widgetDepthOrder.length,
-            layoutLen: this.widgetLayoutOrder.length,
-        })
+        // console.warn("Dashboard > Register Widget",{
+        //     widgetID,
+        //     widgetInstance,
+        //     depthLen: this.widgetDepthOrder.length,
+        //     layoutLen: this.widgetLayoutOrder.length,
+        // })
 
         // reflow widget layout
         this.reflowLayout();
@@ -5187,6 +5798,7 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    focused: true,
     touchInputs: [],
     pinchScaleFactor: 1,
     cullOutOfBoundsWidgets: 1,
@@ -5302,6 +5914,7 @@ let store = {
     /* SimpleToggle() -> Invokable via CommandPrompt */
     displayWidgetLabels: true,
 };
+window.store = store;
 const mergeStateFromLocalStorage = function(state){
     if(!state || !Object.keys(state).length){
         return;
@@ -5992,6 +6605,17 @@ class Refactor extends UndoRedoDecorator(DynamicThing) {
     // - removePart // remove from consideration
     // - runTests // run tests on the parts
     // - setTestConfiguration() // override the current configuration table with new values
+}
+
+class ComputerKeyboardPreview extends Widget {
+    widgetSize = { width: 300, height: 100 }
+
+    draw(){
+        super.draw(...arguments);
+
+        color("red")
+        rect(0,0,100,100)
+    }
 }
 
 class BonsaiTreeWidget extends Widget {
@@ -7136,7 +7760,7 @@ extends WizardConfig {
         system.get("Dashboard").toggleVisibility();
     }
 }
-class ToggleDashboardVisible extends DefaultSuggestionDecorator(Command, new ToggleDashboardVisibleWizardConfig()){}
+class ToggleDashboardVisible extends BaseCmds(Command, new ToggleDashboardVisibleWizardConfig()){}
 
 class ToggleDashboardCollapsedWizardConfig
 extends WizardConfig {
@@ -7158,35 +7782,35 @@ extends Config {
     }
 }
 
-class ToggleDashboardCollapsed extends DefaultSuggestionDecorator(Command, new ToggleDashboardCollapsedWizardConfig()){}
+class ToggleDashboardCollapsed extends BaseCmds(Command, new ToggleDashboardCollapsedWizardConfig()){}
 
 class NewCommandCommand
-extends DefaultSuggestionDecorator(Command, new NewCommandWizardConfig()){}
+extends BaseCmds(Command, new NewCommandWizardConfig()){}
 
 class RunGherkinCommand
-extends DefaultSuggestionDecorator(Command, new RunGherkinCommandWizardConfig()){}
+extends BaseCmds(Command, new RunGherkinCommandWizardConfig()){}
 
 class AddGraphNodeCommand
-extends DefaultSuggestionDecorator(Command, new AddGraphNodeWizardConfig()){}
+extends BaseCmds(Command, new AddGraphNodeWizardConfig()){}
 
 /*
 class NewFlashCardGame
-extends DefaultSuggestionDecorator(Command, new FlashCardGameWizardConfig()) {}
+extends BaseCmds(Command, new FlashCardGameWizardConfig()) {}
 
 class NewMatchingCardGame
-extends DefaultSuggestionDecorator(Command, new MatchingCardGameWizardConfig()){}
+extends BaseCmds(Command, new MatchingCardGameWizardConfig()){}
 
 class NewKlondikeSolitaireGame
-extends DefaultSuggestionDecorator(Command, new KlondikeSolitaireGameWizardConfig()){}
+extends BaseCmds(Command, new KlondikeSolitaireGameWizardConfig()){}
 
 class NewMatch3Game
-extends DefaultSuggestionDecorator(Command, new Match3GameWizardConfig()){}
+extends BaseCmds(Command, new Match3GameWizardConfig()){}
 
 class NewChatRoom
-extends DefaultSuggestionDecorator(Command, new ChatRoomWizardConfig()){}
+extends BaseCmds(Command, new ChatRoomWizardConfig()){}
 
 class LoadMessengerWindowCommand
-extends DefaultSuggestionDecorator(Command, new LoadMessengerWindowWizardConfig()){}
+extends BaseCmds(Command, new LoadMessengerWindowWizardConfig()){}
 */
 
 class GPTChatSessionWizardConfig
@@ -7326,7 +7950,7 @@ class ChatGPTWidget extends Widget {
 }
 
 class StartChatGPTSessionCommand
-extends DefaultSuggestionDecorator(Command, new GPTChatSessionWizardConfig()){}
+extends BaseCmds(Command, new GPTChatSessionWizardConfig()){}
 
 class NewToastWizardConfig
 extends Config {
@@ -7348,7 +7972,7 @@ extends Config {
 }
 
 class ShowNewToastCommand 
-extends DefaultSuggestionDecorator(Command, new NewToastWizardConfig()){}
+extends BaseCmds(Command, new NewToastWizardConfig()){}
 
 // Define the ShowCmdPromptCommand class
 class ShowCmdPromptCommand extends Command {
@@ -7356,7 +7980,7 @@ class ShowCmdPromptCommand extends Command {
         super("Show Command Prompt")
     }
     // draw, perform, verb, invoke, execute, run, do,
-    act(){
+    invoke(){
         // Show Command Prompt
         store.CmdPromptVisible = true;
 
@@ -7371,7 +7995,7 @@ class MyJavascriptCommand extends Command {
         this.target = target.split('.');
         this.args = args;
     }
-    execute(){
+    invoke(){
         // safer than eval, but not by much...
         // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#never_use_eval!
         let context = window;
@@ -7388,21 +8012,28 @@ class WindowLocationReload extends MyJavascriptCommand {
     }
 }
 
+class SoftReloadCommand extends Command {
+    name = "Soft Reload"
+    // implements Command.invoke to be called back when Command.execute runs
+    invoke(){
+        console.warn("onCommandExecuting: Soft Reload")
+    }
+}
+
 class HardReloadCommand extends Command {
     name = "Hard Reload"
-    act(){
+    invoke(){
         new WindowLocationReload().execute();
     }
 }
-defaultSuggestedCommands.push(new HardReloadCommand());
 
 // Define the HideCmdPromptCommand class
 class HideCmdPromptCommand extends Command {
     constructor(){
         super("Hide CMD Prompt")
     }
-    execute(){
-        super.execute();
+
+    invoke(){
 
         // clear the command buffer
         store.commandBuffer = {name:''};
@@ -7418,9 +8049,7 @@ class ToggleCmdPromptCommand extends Command {
     constructor(){
         super("Toggle CMD Prompt")
     }
-    execute(){
-        super.execute();
-
+    invoke(){
         // Toggle CMD Prompt
         store.CmdPromptVisible = !store.CmdPromptVisible;
     }
@@ -8214,6 +8843,17 @@ class TimerManager {
     }
 }
 const InvokableCommands = {
+    // { name: "New Basic Command" },
+
+    /*
+    { name: "Send a Tweet", command: "NotYetImplemented" },
+    { name: "Post to Facebook", command: "NotYetImplemented" },
+    { name: "Post to Instagram", command: "NotYetImplemented" },
+    { name: "Get Share Link", command: "NotYetImplemented" },
+    { name: "Enter Bulk Widget Editor Mode", command: "NotYetImplemented"},
+    { name: "Group Widgets into Substack", command: "NotYetImplemented"}
+    */
+
     ForceReloadLayout(){
         system.get("Dashboard")
             ?.reflowLayout?.();
@@ -8225,17 +8865,112 @@ const InvokableCommands = {
     NotYetImplemented(){
         console.warn('NotYetImplemented!')
     },
-    ["Play Lovely Day"](){
-        system.get("Dashboard")
-            ?.registerWidget?.(new YoutubePlayerWidget("Lovely Daaaaa...",{
-                tracks: [
-                    "https://www.youtube.com/watch?v=bEeaS6fuUoA"
-                ]
-            }))
+    ["Load THREE.js"](){
+        window.initTHREEMode();
     },
+    ["Play Mindful Solutionism"](){
+        return "https://www.youtube.com/watch?v=T7jH-5YQLcE"
+    },
+    ["Play Glorious Dawn"](){
+        return "https://www.youtube.com/watch?v=zSgiXGELjbc";
+    },
+    ["Play Run The Jewels"](){ return "https://www.youtube.com/watch?v=AfuCLp8VEng" },
+    ["Play Lovely Day"](){
+        // console.warn("Play lovely day")
+        return "https://www.youtube.com/watch?v=A7SOY2M2jC0";
+    },
+    ["Play Pendulum  Hold your Colour Full Album"](){
+        return "https://www.youtube.com/watch?v=931PQwTA79k"
+    },
+    // ["Play: Black Sabbath > War Pigs"](){
+    //     return "https://www.youtube.com/watch?v=LQUXuQ6Zd9w"
+    // },
+    ["Play chillout study session"](){
+        return "https://www.youtube.com/watch?v=tkgmYIsflSU"
+    },
+    ["Music Player"](){
+        //system.registerWidget(new MusicPlayerWidget());
+        console.warn("TODO!")
+        // show warning toast
+        system.get("toastManager").showToast("TODO: Music Player Widget", {pinned: false});
+    },
+    ["Close All Players"](){
+
+    },
+    ["Close All Widgets"](){
+        system.widgets.forEach((widget)=>{
+            widget.close();
+        })
+    },
+    ["Open All Players"](){
+        let returns = []
+        // show a toast of the number of InvokableCommands that start with "play"
+        let filtered = Object.entries(InvokableCommands).filter(([key, value])=>{
+            return key.toLowerCase().startsWith("play")
+        });
+        console.warn("open all players",filtered.length,"players",filtered)
+        filtered.forEach(([key, value])=>{
+            if(key.toLowerCase().startsWith("play")){
+                let urls = value();
+                console.log("urls",urls)
+                system.registerWidget(new YoutubePlayerWidget({
+                    widgetSize:{
+                        width: 1920,
+                        height: 1080
+                    },
+                    autoPlay: true,
+                    tracks: typeof urls === 'string' ? [urls] : urls
+                }))
+            }
+        })
+        return;
+    },
+    /*
+        type: "number",
+        default: 0.9,
+    */
     ["Set Dashboard Friction"](){
         console.warn("Set Dashboard Friction...");
     },
+    // center field
+    // center plane
+    // return to origin again...
+    ["Center View"]: //[
+        function(){
+            console.warn("Center View...");
+            panX = 0;
+            panY = 0;
+            zoom = 1;
+        },
+        // [
+        //     "Center {View|Viewport}: Center the current view or viewport",
+        //     "Center {View|Viewport} on Origin: Center the current view or viewport on the origin",
+        //     "{Center|Move} to {origin|home}: Center or move to the origin or home position",
+        //     "{?go} home: Optionally go to the home position"
+        // ]
+    //],
+    ["new rubiks cube widget"](){
+        system.registerWidget(new RubiksCubeWidget());
+        new HideCmdPromptCommand().execute();
+    },
+    // @see tetriswidget
+    ["new tetris widget"](){
+        console.warn("SPAWNING TETRIS!")
+        let instance = new TetrisWidget();
+        system.registerWidget(instance);
+        // hide the command prompt
+        new HideCmdPromptCommand().execute();
+    },
+    /*
+    {
+        name: "Set Plax Exp Factor",
+        type: "number",
+        default: 0,
+        min: 0,
+        max: 2,
+        step: 0.01
+    },
+    */
     ["Set Plax Exp Factor"](wiz){
         let checkKeys = [
             stepResponses[0].answerStorageKey,
@@ -8272,92 +9007,287 @@ const InvokableCommands = {
 const BasicBools = [
     "DISABLE_PARALLAX"
 ]
-// Maps searchable names to Invokable Functions
-// think of it as the serialized command router / resolver / dispatcher
-const BasicCommands = [
-    // { name: "New Basic Command" },
+class Solitaire {}
+class Gizmo extends Widget {
+    draw(){
+        super.draw(...arguments)
+        console.warn('todo draw'+this.constructor.name)
+    }
+}
+class WidgetForge extends Widget {}
+class WizardForge extends WidgetForge {}
+class GiphyWidget extends Widget {}
+class MandlebrotWidget extends Widget {}
+class FileBrowserWidget extends Widget {}
+class WebBrowserWidget extends Widget {}
+class IFTTTWidget extends Widget {}
+class ShaderToyWidget extends Widget {}
+class PixelArtWidget extends Widget {}
+class VectorArtWidget extends Widget {}
+class TextEditorWidget extends Widget {}
+class P5JSSketchWidget extends Widget {}
+class DrawIOWidget extends Widget {}
+class FigJamWidget extends Widget {}
+class ChessWidget extends Widget {}
+class WorkflowyWidget extends Widget {}
+class CreditsWidget extends Widget {}
+class JSONViewer extends Widget {}
+class GraphVizDotLangViewer extends Widget {}
 
-    { 
-        name: "Set Dashboard Friction",
-        type: "number",
-        default: 0.9,
-    },
+class GlobeWidget extends Widget {}
+class TimezoneClocksWidget extends Widget {}
+class SplineEditorWidget extends Widget {}
+class TimelineWidget extends Widget {}
+class ColorPickerWidget extends Widget {}
+class NestedDragAndDropSortingWidget extends Widget {}
+class FractalTreeGraphViewerWidget extends Widget {}
 
-    {
-        name: "Set Plax Exp Factor",
-        type: "number",
-        default: 0,
-        min: 0,
-        max: 2,
-        step: 0.01
-    },
+// NEW: VISUAL CLIPBOARD! 
+// SHOW WHEN THINGS ARE CUT/COPIED
+class Clipping extends Widget {
+    draw(){
+        super.draw(...arguments)
+        // draw the clippings
+        fill("pink")
+        rect(0,0,100,100)
+    }
+}
+const drawVertex = function(x,y){
+    // draw a vertex
+    drawCrosshair("red",{x,y})
+}
+class IsometricPreview extends Widget {
+    constructor(){
+        super(...arguments)
+        this.cubeRotation = Quaternion.FromEulerAngles(Math.PI / 4, Math.PI / 4, 0);
+        this.cubePosition = [0, 0, 100]; // Position of the cube
+        this.rotationAxis = 0; // 0 = x, 1 = y, 2 = z
+        this.rotationProgress = 0; // Progress of the current rotation
+        this.rotationSpeed = 1; // Speed of the rotation
+    }
+    faceColors = [
+        "red",
+        "green",
+        "blue",
+        "orange",
+        "yellow",
+        "purple"
+    ]
+    verts = [
+        [-0.5, -0.5, -0.5],  // 0, 0, 0
+        [-0.5, -0.5, 0.5],   // 0, 0, 1
+        [-0.5, 0.5, -0.5],   // 0, 1, 0
+        [-0.5, 0.5, 0.5],    // 0, 1, 1
+        [0.5, -0.5, -0.5],   // 1, 0, 0
+        [0.5, -0.5, 0.5],    // 1, 0, 1
+        [0.5, 0.5, -0.5],    // 1, 1, 0
+        [0.5, 0.5, 0.5]      // 1, 1, 1
+    ];
+    draw(){
+        super.draw(...arguments)
 
-    { name: "Play Lovely Day" },
-    { name: "Force Reflow Layout", command: "ForceReloadLayout" },
-    { name: "Focus Widget", command: "FocusWidget" },
-    { name: "Send a Tweet", command: "NotYetImplemented" },
-    { name: "Post to Facebook", command: "NotYetImplemented" },
-    { name: "Post to Instagram", command: "NotYetImplemented" },
-    { name: "Get Share Link", command: "NotYetImplemented" },
-    { name: "Enter Bulk Widget Editor Mode", command: "NotYetImplemented"},
-    { name: "Group Widgets into Substack", command: "NotYetImplemented"}
-]
-const BasicWidgets = [
-    // New {X} Widget...
-    {
-        name: "Solitaire"
-    },
+        // Calculate the rotation amount
+        let rotationAmount = this.rotationSpeed * deltaTime / 1000; // deltaTime is the time since the last frame in milliseconds
+        this.rotationProgress += rotationAmount;
 
-    // ya'know, for testing buttons and stuff
-    { name: "UIDemo Widget", classname: "UIDemoWidget" },
+        // If the rotation is complete, switch to the next axis
+        if (this.rotationProgress >= Math.PI / 2) {
+            this.rotationProgress -= Math.PI / 2;
+            this.rotationAxis = (this.rotationAxis + 1) % 3;
+        }
 
-    // display a basic sphere gizmo
-    { name: "Gizmo Viewer" },
+        // Calculate the rotation for this frame
+        let rotation = [0, 0, 0];
+        rotation[this.rotationAxis] = rotationAmount;
 
-    { 
-        name: "Client Resolver Debug Widget", 
-        classname: "ClientResolverDebugWidget"
-    },
+        // Apply the rotation
+        this.cubeRotation = this.cubeRotation.multiply(Quaternion.FromEulerAngles(...rotation));
+        this.cubeRotation = this.cubeRotation.normalize();
 
-    // Unimplemented Widgets 
+        stroke("yellow")
+        strokeWeight(1)
+        fill("red")
+        rect(0,0,100,100)
 
-    // Wizard Forge sounds better than Widget Wizard Factory Wizard
-    { 
-        name: "Wizard Forge Editor", 
-        aliases: ["Widget Wizard Factory Wizard"] 
-    },
+        push();
+        let size = 100;
+        let halfSize = size / 2;
+        
 
-    { name: "Giphy Widget" },
+        // "faces" for each of the "faces" of the cube, let's draw a polygon
+        let faces = [
+            [0, 1, 3, 2], // front
+            [4, 5, 7, 6], // back
+            [0, 1, 5, 4], // left
+            [2, 3, 7, 6], // right
+            [0, 2, 6, 4], // top
+            [1, 3, 7, 5]  // bottom
+        ];
+        let absoluteVerts = []
+        let rotatedVerts = []
 
-    { name: "Mandlebrot Widget" },
-    { name: "File browser Widget" },
-    { name: "Web browser Widget"},
-    { name: "IFTTT Widget"},
-    // (falls through to base Widget class if no class defined)
-    { name: "ShaderToy Widget" },
-    { name: "Pixel Art Editor"},
-    { name: "Vector Art Editor"},
-    { name: "Text Editor Widget"},
-    { name: "P5.js Sketch Widget"},
-    { name: "Draw.io Widget"},
-    { name: "Fig Jam Widget"},
-    { name: "Workflowy Widget"},
-    { name: "Credits Widget"}, /* a "slideshow" of credits */
-    { name: "JSON Viewer"}, /* JSONBlob */
-    { name: "GraphViz Dotlang Viewer"},
-    { name: "3D Model Viewer Widget"},
-    { name: "Sticky Note Widget"},
-    { name: "Globe Widget"},
-    { name: "Timezone Clocks Widget"},
-    { name: "Spline Editor Widget" },
-    { 
-        // palettes, rgb, hsl, hsv, cmyk, etc...
-        name: "Color Picker Widget" 
-    },
-    { name: "Timeline Editor Widget" },
-    { name: "Nested Drag and Drop Sorting Widget" },
-    { name: "Fractal Tree Graph Viewer Widget"},
-]
+        faces.forEach((face,faceIndex)=>{
+            face.map((vertexIndex)=>{
+                return this.verts[vertexIndex];
+            }).forEach((faceVert)=>{
+                if(faceVert.length !== 3 || (
+                    Number.isNaN(faceVert[0]) ||
+                    Number.isNaN(faceVert[1]) ||
+                    Number.isNaN(faceVert[2])
+                )){
+                    throw new Error('bad faceVert')
+                }
+                // Apply quaternion rotation
+                absoluteVerts.push([
+                    this.cubePosition[0] + (faceVert[0] * size),
+                    this.cubePosition[1] + (faceVert[1] * size),
+                    this.cubePosition[2] + (faceVert[2] * size)
+                ])
+            })
+        })
+
+
+        faces.forEach((face,faceIndex)=>{
+            let faceVertices = face.map((vertexIndex)=>{
+                return this.verts[vertexIndex];
+            })
+            fill(this.faceColors[faceIndex])
+            // draw the face
+            beginShape();
+            faceVertices.forEach((faceVert, vertIndex)=>{
+                if(faceVert.length !== 3 || (
+                    Number.isNaN(faceVert[0]) ||
+                    Number.isNaN(faceVert[1]) ||
+                    Number.isNaN(faceVert[2])
+                )){
+                    throw new Error('bad faceVert')
+                }
+                // Apply quaternion rotation
+                let translatedVert = absoluteVerts[vertIndex];/* [
+                    this.cubePosition[0] + (faceVert[0] * size),
+                    this.cubePosition[1] + (faceVert[1] * size),
+                    this.cubePosition[2] + (faceVert[2] * size)
+                ]*/
+                //let rotatedVertex = this.cubeRotation.multiplyVector(faceVert);
+                let rotatedVert = this.cubeRotation.multiplyVector(translatedVert);
+                // if any are nan, throw
+                if(Number.isNaN(rotatedVert[0]) || Number.isNaN(rotatedVert[1]) || Number.isNaN(rotatedVert[2])){
+                    console.error('bad value',{rotatedVert,faceVert,faceVertices,faceIndex,translatedVert,position:this.position})
+                    throw new Error('bad value')
+                }
+                    // Project into screen space
+                let scale = fov / (fov + rotatedVert[2]);
+                let x2d = rotatedVert[0] * scale;
+                let y2d = rotatedVert[1] * scale;
+                rotatedVerts.push([x2d,y2d,rotatedVert[2]])
+                // add point to shape
+                vertex(x2d,y2d)
+            })
+            endShape(CLOSE);
+        })
+
+        //console.warn("ABSOULTE VERTS",absoluteVerts)
+
+        // Apply the rotation to the vertices in screenspace
+        let minZ = Math.min(...absoluteVerts.map(v => v[2]));
+        let screenSpaceVertices = absoluteVerts.map((_vert) => {
+            let offsetVec = [
+                    this.cubePosition[0] + _vert[0] * size,
+                    this.cubePosition[1] + _vert[1] * size,
+                    minZ + this.cubePosition[2] + _vert[2] * size
+            ]
+            // Apply quaternion rotation
+            let rotatedVertex = this.cubeRotation.multiplyVector(offsetVec,true);
+
+            // Project into screen space
+            let scale = fov / (fov + rotatedVertex[2] + Math.abs(minZ));
+            let x2d = rotatedVertex[0] * scale;
+            let y2d = rotatedVertex[1] * scale;
+
+            // if any of the 3 are NaN, panic
+            if(Number.isNaN(x2d) || Number.isNaN(y2d) || Number.isNaN(rotatedVertex[2])){
+                console.error('bad value',{x2d,y2d,rotatedVertex,offsetVec,_vert})
+                throw new Error('bad value')
+                return [0,0,0]
+            }
+
+            return [x2d, y2d, rotatedVertex[2]];
+        });
+
+        if(!screenSpaceVertices.length){
+            throw new Error("not enough verts!");
+        }
+
+        // sort into depth order
+        screenSpaceVertices.sort((a, b) => {
+            return a[2] - b[2]
+        });
+
+
+        absoluteVerts.forEach((vert)=>{
+            stroke("red")
+            strokeWeight(3)
+            ellipse(vert[0],vert[1],10,10)
+        })
+
+        // for (let i = 0; i < screenSpaceVertices.length; i+=3) {
+        //     //vertex(screenSpaceVertices[i][0], screenSpaceVertices[i][1]);
+        //     if(i+2 >= screenSpaceVertices.length - 1){
+        //         line(screenSpaceVertices[i][0],
+        //             screenSpaceVertices[i][1],
+        //             screenSpaceVertices[0][0],
+        //             screenSpaceVertices[0][1])
+        //         line(screenSpaceVertices[i][0], 
+        //             screenSpaceVertices[i][1], 
+        //             screenSpaceVertices[1][0], 
+        //             screenSpaceVertices[1][1]);
+        //         line(screenSpaceVertices[i][0], 
+        //             screenSpaceVertices[i][1], 
+        //             screenSpaceVertices[2][0], 
+        //             screenSpaceVertices[2][1]);
+        //     }else{
+        //         line(
+        //             screenSpaceVertices[i][0],
+        //             screenSpaceVertices[i][1],
+        //             screenSpaceVertices[i+1][0],
+        //             screenSpaceVertices[i+1][1]
+        //         )
+        //         line(screenSpaceVertices[i][0], screenSpaceVertices[i][1], screenSpaceVertices[i+2][0], screenSpaceVertices[i+2][1]);
+        //         line(screenSpaceVertices[i][0], screenSpaceVertices[i][1], screenSpaceVertices[i+3][0], screenSpaceVertices[i+3][1]);
+        //     }
+        //     ellipse(
+        //         screenSpaceVertices[i][0], 
+        //         screenSpaceVertices[i][1], 5, 5);
+        //     if(screenSpaceVertices[i+1]){
+        //         ellipse(
+        //             screenSpaceVertices[i+1][0], 
+        //             screenSpaceVertices[i+1][1], 5, 5);
+        //     }
+        //     if(screenSpaceVertices[i+2]){
+        //         ellipse(
+        //             screenSpaceVertices[i+2][0], 
+        //             screenSpaceVertices[i+2][1], 5, 5);
+        //     }
+        // }
+        // draw vertex
+        //endShape(CLOSE);
+        pop();
+    }
+}
+
+class VisualClipboard extends Widget {
+    clippings = [] // todo: add getter that casts to Clipping[]
+
+    draw(){
+        super.draw(...args)
+        // draw the clippings
+        this.clippings.forEach((clipping)=>{
+            clipping.draw();
+        })
+    }
+}
+
+
 // represents a TimerManager and capable 
 // of rendering multiple Timer instances in a single widget
 class TimerWidget extends Widget {
@@ -8646,7 +9576,7 @@ class SetMaxSuggestionsCommandWizardConfig extends Config {
 }
 
 class SetMaxSuggestionsCommand 
-extends DefaultSuggestionDecorator(Command, new SetMaxSuggestionsCommandWizardConfig()) {}
+extends BaseCmds(Command, new SetMaxSuggestionsCommandWizardConfig()) {}
 
 const TAGS = {
     RUNS_ON_STARTUP: 'runs_on_startup',
@@ -8687,10 +9617,10 @@ class SaveStateToLocalStorageWizardConfig extends Config {
 }
 
 class NewTodoCommand
-extends DefaultSuggestionDecorator(Command, new TodoWizardConfig()){}
+extends BaseCmds(Command, new TodoWizardConfig()){}
 
 class NewRepeatingTodoCommand
-extends DefaultSuggestionDecorator(Command, new RepeatingTodoWizardConfig()){}
+extends BaseCmds(Command, new RepeatingTodoWizardConfig()){}
 
 function hydrateStore(store){
     // need to make sure all the objects in the store are instances of
@@ -8703,7 +9633,7 @@ function hydrateStore(store){
 
 // TODO: bind this command to happen on all mutations
 class SaveStateToLocalStorage 
-extends DefaultSuggestionDecorator(Command, new SaveStateToLocalStorageWizardConfig()) 
+extends BaseCmds(Command, new SaveStateToLocalStorageWizardConfig()) 
 {}
 class LoadStateFromLocalStorageWizardConfig extends Config {
     name = "Load State From Local Storage"
@@ -8731,39 +9661,39 @@ class LoadStateFromLocalStorageWizardConfig extends Config {
     }
 }
 class LoadStateFromLocalStorage 
-extends DefaultSuggestionDecorator(Command, new LoadStateFromLocalStorageWizardConfig()){}
+extends BaseCmds(Command, new LoadStateFromLocalStorageWizardConfig()){}
 
 // Mode Switching Commands
 class ModeSwitch_SELECT 
-extends DefaultSuggestionDecorator(Command, {
+extends BaseCmds(Command, {
     name: "Select Mode",
     OnSelect(){
         new SwitchModeCommand(MODES.SELECT).execute();
     }
 }){}
 class ModeSwitch_ADD_NODE
-extends DefaultSuggestionDecorator(Command, {
+extends BaseCmds(Command, {
     name: "Add Node Mode",
     OnSelect(){
         new SwitchModeCommand(MODES.ADD_NODE).execute();
     }
 }){}
 class ModeSwitch_ADD_EDGE
-extends DefaultSuggestionDecorator(Command, {
+extends BaseCmds(Command, {
     name: "Add Edge Mode",
     execute: function(){
         new SwitchModeCommand(MODES.ADD_EDGE).execute();
     }
 }){}
 class ModeSwitch_PAN
-extends DefaultSuggestionDecorator(Command, {
+extends BaseCmds(Command, {
     name: "Pan Mode",
     execute: function(){
         new SwitchModeCommand(MODES.PAN).execute();
     }
 }){}
 class ModeSwitch_DELETE
-extends DefaultSuggestionDecorator(Command,{
+extends BaseCmds(Command,{
     name: "Delete Mode",
     callback: function(){
         new SwitchModeCommand(MODES.DELETE).execute();
@@ -8892,20 +9822,41 @@ class CmdPrompt {
     }
 
     addDefaultCommands(){
-        let cmds = [
-            "new song",
-            "new piano widget",
-            "new music widget",
-            "new tetris widget",
-            "new widget widget",
-            "widget designer widget",
-        ]
-        cmds.forEach((cmd)=>{
-            this.availableCommands.push(new Command(cmd))
-        })
+        // let cmds = [
+        //     "new song",
+        //     "new piano widget",
+        //     "new music widget",
+        //     "new widget widget",
+        //     "widget designer widget",
+        // ]
+        // cmds.forEach((cmd)=>{
+        //     this.availableCommands.push(new Command(cmd))
+        // })
+
+        // let cmds2 = [
+        //     SoftReloadCommand,
+        //     HardReloadCommand,
+        // ];
+        // cmds2.forEach((cmd)=>{
+        //     this.availableCommands.push(new cmd())
+        // })
+        // EVEN NEWER
+        // [
+        //     SoftReloadCommand
+        // ].forEach((CommandClass)=>{
+        //     // Config here should probably be extended to CommandConfig
+        //     // and there needs to be special consideration for serializing it
+        //     this.availableCommands.push(new Config({
+        //         name: CommandClass.name,
+        //         type: "CallCommandByStringName"
+        //     }))
+        // })
+        // console.warn("soft reload command",[
+        //     SoftReloadCommand
+        // ])
 
 
-        defaultSuggestedCommands.forEach((cmd)=>{
+        baseCmds.forEach((cmd)=>{
             this.availableCommands.push(cmd);
         })
         // NOTE: need to re-class these
@@ -8918,15 +9869,20 @@ class CmdPrompt {
         // and if the Command definitions are responsible, no big CPU spike
         // will result in registering lots of available commands,
         // but if this becomes and issue, we need a classless, static datatype we can rely on as a replacement for near-zero-over Command availability registration
-        this.availableCommands.push(new Command("Start Pomodoro",{
-            execute: function(){
-                console.warn("starting pomodoro...");
-                setTimeout(()=>{
-                    alert('DONE!');
 
-                },1000)
-            }
-        }))
+
+        // TODO: this should default to a value, but also let you pick a duration
+        // this.availableCommands.push(new Command("Start Pomodoro",{
+        //     execute: function(){
+        //         console.warn("starting pomodoro...");
+        //         setTimeout(()=>{
+        //             alert('DONE!');
+
+        //         },1000)
+        //     }
+        // }))
+
+        /* TODO: re-intro as we define these 
         this.availableCommands.push(new Command("New REPL"))
         this.availableCommands.push(new Command("New Sandbox"))
         this.availableCommands.push(new SetMaxSuggestionsCommand());
@@ -8958,6 +9914,7 @@ class CmdPrompt {
         this.availableCommands.push(new Command("New Timer",{
             wizardConfig: new TimerWizardConfig("New Timer Wizard")
         }))
+        
         // this.availableCommands.push(new Command("New Error",{}))
         // this.availableCommands.push(new Command("New Graph",{}))
         // this.availableCommands.push(new Command("New Node Type",{}))
@@ -8974,34 +9931,36 @@ class CmdPrompt {
         //     wizardConfig: new CommandWizardConfig("New Command Wizard")
         // }));
 
+        */
+
         // List Self Tests
-        this.availableCommands.push(new Command("List Self Tests",{
-            callback: function(){
-                console.warn('listing self tests...')
-                system.dump({
-                    FEATURE_TESTS,
-                    autorunFeatureTests,
-                    autorunFeatureTestResults
-                })
-            }
-        }))
+        // this.availableCommands.push(new Command("List Self Tests",{
+        //     callback: function(){
+        //         console.warn('listing self tests...')
+        //         system.dump({
+        //             FEATURE_TESTS,
+        //             autorunFeatureTests,
+        //             autorunFeatureTestResults
+        //         })
+        //     }
+        // }))
 
         // Run Self Test
-        this.availableCommands.push(new Command("Run Self Test",{
-            keyBindings:[
-                // {
-                //     key: "cmd+shift+t",
-                // }
-            ],
-            aliases: [
-                "/test",
-                // "/t"
-            ],
-            callback: function(){
-                console.warn('running self test...')
-                new HideCmdPromptCommand().execute();
-            }
-        }))
+        // this.availableCommands.push(new Command("Run Self Test",{
+        //     keyBindings:[
+        //         // {
+        //         //     key: "cmd+shift+t",
+        //         // }
+        //     ],
+        //     aliases: [
+        //         "/test",
+        //         // "/t"
+        //     ],
+        //     callback: function(){
+        //         console.warn('running self test...')
+        //         new HideCmdPromptCommand().execute();
+        //     }
+        // }))
         
         // Clear Graph
         this.availableCommands.push(
@@ -9018,9 +9977,9 @@ class CmdPrompt {
                 callback: function(){
                     console.warn('clearing graph...')
                     // TODO: only warn if unsaved changes
-                    if(!confirm('Are you sure?')){
-                        return;
-                    }
+                    // if(!confirm('Are you sure?')){
+                    //     return;
+                    // }
                     store.currentGraph = null;
                     // hide the command palette
                     new HideCmdPromptCommand().execute();
@@ -9029,7 +9988,15 @@ class CmdPrompt {
         )
 
         // Load Graph
-        this.availableCommands.push(
+        this.availableCommands = this.availableCommands.concat([
+            new Command("Toggle Debug Cursor",{
+                //executeAsString: "window.store.debugCursor = !window.store.debugCursor"
+                callback: function(){
+                    window.store.debugCursor = !(window.store?.debugCursor ?? false);
+                }
+            }),
+
+
             new Command("Load Graph...",{
                 wizardConfig: {
                     name: "Load Graph Wizard",
@@ -9080,15 +10047,11 @@ class CmdPrompt {
                         }
                     ]
                 }
-            })
-        )
-
-        // Command Palette / Command Prompt Commands
-        this.availableCommands.push(new ShowCmdPromptCommand());
-        this.availableCommands.push(new HideCmdPromptCommand());
-        this.availableCommands.push(new ToggleCmdPromptCommand());
-
-
+            }),
+            new ShowCmdPromptCommand(),
+            new HideCmdPromptCommand(),
+            new ToggleCmdPromptCommand(),
+        ])
     }
 
     renderCommandPrompt(){
@@ -9158,10 +10121,18 @@ class CmdPrompt {
         store.commandBuffer = {
             name: CmdPromptInput.value()
         }
+
+        if(this.currentCommand?.constructor?.name === "Config"){
+            // turn it into an executable command instance
+            this.currentCommand = new Command(this.currentCommand.config.name,this.currentCommand.config);
+        }
+
         if(this.currentCommand === null){
             this.initCommand();
-        }else{
+        }else if(this.currentCommand.updateFromBuffer){
             this.currentCommand.updateFromBuffer();
+        }else{
+            system.panic(`unknown command type: ${this.currentCommand.constructor.name}`)
         }
 
         // console.warn(
@@ -9177,7 +10148,7 @@ class CmdPrompt {
         //console.warn('sanity check filtered count: ',this.filteredCommands.length);
 
         // if the cmd palette is not visible, show it
-        if(!store.CmdPromptVisible){
+        if(store.focused && !store.CmdPromptVisible && /^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]*$/.test(event.key)){
             new ShowCmdPromptCommand().execute();
         }
 
@@ -9230,6 +10201,12 @@ class CmdPrompt {
     }
 
     OnPressEnter(){
+
+        // system.success("ON PRESS ENTER! we will invoke!",{
+        //     // previously selected command
+        //     prevCommand: this.currentCommand,
+        // })
+
         // if we have a command selected, mark it as the current command
         if(
             this.selectedSuggestionIndex !== null
@@ -9249,15 +10226,30 @@ class CmdPrompt {
             }
         }
         console.log('CmdPrompt.OnPressEnter', {
+            currentCMDConstructorName: this.currentCommand.constructor.name,
             currentCMDName: this.currentCommand.name,
             selectedSuggIdx: this.selectedSuggestionIndex,
             filteredCommandsLength: this.filteredCommands.length,
             currentCMD: this.currentCommand,
             currentCMDOptions: this.currentCommand.options,
         })
-        // enter was pressed
-        // execute the current command
-        this.currentCommand.execute();
+        try{
+            // enter was pressed
+            // execute the current command
+            //this.currentCommand.tryExecute.call(this.currentCommand);
+            if(this.currentCommand.__type === "Config"){
+                // turn it into an executable command instance
+                let cmd = new Command(this.currentCommand.config.name,this.currentCommand.config);
+                cmd.tryExecute();
+            }else if(typeof this.currentCommand.tryExecute === 'function'){
+                this.currentCommand.tryExecute();
+            }else{
+                system.panic("bad current command!")
+            }
+        }catch(e){
+            console.error("CmdPrompt OnPressEnter Error executing command:",this.currentCommand)
+            console.error(e)
+        }
         // TODO: step the undo/redo history
         // reset the command buffer
         store.commandBuffer = {
@@ -9304,22 +10296,30 @@ class CmdPrompt {
             if(!command){
                 return false;
             }
-            if(!command.name){
+            let checkName = command?.name;
+
+            if(command.__type === "Config"){
+                checkName = command?.config?.name ?? checkName
+            }
+
+
+            if(!checkName){
+                console.error("checkName failed",{command,checkName})
                 return false;
             }
-            if(!command.name.toLowerCase){
-                console.error('command name is not a string?', {command})
+            if(!checkName.toLowerCase){
+                console.error('checkName is not a string?', {command,checkName})
                 return false;
             }
-            let compare = command?.name ? command.name.toLowerCase() 
-                : (command?.label?.toLowerCase() ?? '');
+            let compare = checkName.toLowerCase();
 
             let match1 = compare
                 .includes(currentInputBufferTextLC);
 
-            let compare2 = !command?.altnames ? '' : command.altnames.join(' ').toLowerCase();
-            let match2 = compare2
-                .includes(currentInputBufferTextLC);
+            // revisit additional filterable fields later...
+            // let compare2 = !command?.altnames ? '' : command.altnames.join(' ').toLowerCase();
+            // let match2 = compare2
+            //     .includes(currentInputBufferTextLC);
             
             // we'll add more match in the future,
             // let's count the number of matches as a rudimentary ranking system
@@ -9327,9 +10327,9 @@ class CmdPrompt {
             if(match1){
                 matches++;
             }
-            if(match2){
-                matches++;
-            }
+            // if(match2){
+            //     matches++;
+            // }
             if(matches){
                 recommended_order.push({
                     command,
@@ -9357,6 +10357,12 @@ class CmdPrompt {
                 // and then the wizard will take over
                 // and prompt for the rest of the details
                 let wiz = new NewCommandWizardConfig()
+
+                // if wiz.start is not a function, system.debug it
+                if(typeof wiz.start !== 'function'){
+                    system.debug({wiz,NewCommandWizardConfig});
+                }
+
                 wiz.start(); // sets store.activeWizard = wiz;
                 wiz.programmaticResponseToCurrentStep(currentInputBufferText);
                 
@@ -9438,11 +10444,94 @@ function mouseDragged(event){
     panMomentumVector.y += (mouseY - pmouseY) * store.panMomentumDecay;
 }
 
-class Star {
+class Field {
+    makesClass = null; //DefaultFieldConstiuentClass;
+    objectPool = [] 
+    instancePool = []
+    constructor(MyFieldConstituentClass){
+        this.makesClass = MyFieldConstituentClass;
+    }
+}
+class FieldView extends Widget {
+    // isometric perspective is commonly implemented at:
+    // 30 degrees from the horizontal plane
+    // 45 degrees from the vertical plane
+    // 0 degrees from the depth plane
+
+    modes = ["isometric", "orthographic"]
+    renderZModes = ["wireframe","solid","shaded_solid","shaded_wireframe"]
+    viewMode = "isometric"
+
+    fieldOfViewAngle = 30;
+
+    showOrientationGrid = true;
+    showPerspectiveGrid = true;
+    gridOpts = {
+        spacing: 50,
+        color: "rgba(255,255,255,0.1)",
+        strokeWeight: 1,
+
+        // let different segments of the grid have a lighter value indicating a half step
+        alternateBrightness: 0.2,
+
+        renderZMode: "wireframe" 
+    }
+
+    // currently viewing fields is a cursor into the graph structure
+    // it is not the graph structure itself, think of it like a pagination DTO
+    // the server guarentees to send information about how many pages remain, what page your on,
+    // maybe even configurable options like, how many items per page, sorting, filtering, etc
+    // all these adjustable parameters represent a "place" 
+        // a specific location within the "Execution space" of the application
+        // when we don't define our behaviours thoroughly and consistently, we are doomed to deal with undefined behaviors
+        // if we slowly collect and define all the behaviors, we can start to see the patterns and commonalities
+        // then, we can create abstractions, simplifications, and common sense defaults to apply (meta-patterns)
+        // we can apply these meta-patterns to the pattern itself, and the patterns _it's_ capable of generating
+    // 
+
+
+    switchViewMode(next){ this.viewMode = next }
+
+    draw(){
+        super.draw(...arguments);
+        // draw the grid
+        push()
+
+        //
+        // Set grid color
+        stroke(this.gridOpts.color);
+        strokeWeight(this.gridOpts.strokeWeight);
+
+        // Draw horizontal lines
+        for(let i = 0; i < height; i += this.gridOpts.spacing) {
+            line(0, i, width, i);
+        }
+
+        // Draw vertical lines
+        for(let i = 0; i < width; i += this.gridOpts.spacing) {
+            line(i, 0, i, height);
+        }
+        pop()
+    }
+}
+const FieldOf = function(MyFieldConstituentClass){
+    let myClass = MyFieldConstituentClass;
+    return function(){
+        return new Field(myClass)
+    }
+}
+
+class Star extends Widget {
+    //fillColor = "white"
     position = {x:0,y:0,z:0}
     brightness = 255;
     temperature = 5000;
     get fillColor(){
+        // return early if we've already memoized the color
+        if(this._fillColor){
+            return this._fillColor;
+        }
+
         // Convert temperature from Kelvin to RGB
         let temp = this.temperature / 100;
         let red, green, blue;
@@ -9459,19 +10548,17 @@ class Star {
         // return a memoized evaluation of temperature => p5.js color
         return this._fillColor ?? (this._fillColor = color(red, green, blue));
     }
-}
-class Field {
-    makesClass = null; //DefaultFieldConstiuentClass;
-    objectPool = [] 
-    instancePool = []
-    constructor(MyFieldConstituentClass){
-        this.makesClass = MyFieldConstituentClass;
+    constructor(){
+        super(...arguments)
+        // todo: random color temp -> hex color
     }
-}
-const FieldOf = function(MyFieldConstituentClass){
-    let myClass = MyFieldConstituentClass;
-    return function(){
-        return new Field(myClass)
+    draw(){
+        super.draw(...arguments);
+
+        // draw a circle
+        fill(this.fillColor);
+        strokeWeight(0);
+        circle(0,0,10);
     }
 }
 
@@ -9502,6 +10589,34 @@ class StarField extends FieldOf(Star){
     
     // MaxInstancesPerObjectType int[]
     // 
+}
+
+
+
+class StarFieldWidget extends Widget {
+    get widgetSize(){
+        return {
+            x: innerWidth,
+            y: innerHeight
+        }
+    }
+
+    // placeholder Class data to be abstracted...
+    // this is a "Field" of "Stars"
+    stars = []
+    maxStars = 100;
+    constructor(){
+        super(...arguments);
+
+        for(let i = 0; i < this.maxStars; i++){
+            this.stars.push(new Star());
+        }
+    }
+
+    draw(){
+        super.draw(...arguments);
+
+    }
 }
 
 // while the pan momentum vector magnitude is greater than 0.1
@@ -9634,7 +10749,9 @@ function mouseReleased(){
 
 const max_blur = 100;
 let bgEl;
-zoomStepSize = (3 - 0.1) / 8;
+const MIN_ZOOM = 0.01;
+const MAX_ZOOM = 3;
+zoomStepSize = (MAX_ZOOM - MIN_ZOOM) / 8;
 
 const DefaultKeyBindings = {
     "cmd+/": "ToggleCommandPromptCommand",
@@ -9655,6 +10772,61 @@ class DebugPath {
     points = []
     constructor(){
     }
+
+    averageWindowOffset = 0
+    averageWindowSize = 9
+    averageIfDistSmallerThan = 50
+
+    stepPruner(){
+        this.averageNearbyPoints();
+    }
+
+    averageNearbyPoints(){
+        // if we don't have enough points to average, bail
+        if(this.points.length < this.averageWindowSize){
+            return;
+        }
+
+        // if the oldest point is older than 3 seconds, remove it
+        // if(Date.now() - this.points[0].t > 3000){
+        //     this.points.shift();
+        // }
+
+        // if the averageWindowOffset + the avgWinSize extends beyond the bounds of the points,
+        // reset it back to the beginning
+        let points = this.points.slice(this.averageWindowOffset, this.averageWindowOffset + this.averageWindowSize);
+        let avgX = 0;
+        let avgY = 0;
+        let avgZ = 0;
+        let avgT = 0;
+        let avgA = 0;
+        for(let i = 0; i < points.length; i++){
+            avgX += points[i].x;
+            avgY += points[i].y;
+            avgZ += points[i].z;
+            avgT += points[i].t;
+            avgA += points[i].a;
+        }
+        avgX /= points.length;
+        avgY /= points.length;
+        avgZ /= points.length;
+        avgT /= points.length;
+        avgA /= points.length;
+        if(Math.sqrt(Math.pow(avgX - this.points[this.points.length - 1].x, 2) + Math.pow(avgY - this.points[this.points.length - 1].y, 2)) < this.averageIfDistSmallerThan){
+            // Remove the points that are being averaged / combined
+            this.points.splice(this.averageWindowOffset, this.averageWindowSize);
+            // Add the new averaged point
+            this.points.push({x: avgX, y: avgY, z: avgZ, t: avgT, a: avgA});
+        }
+        // step the window
+        this.averageWindowOffset++;
+        // if we've stepped the window beyond the bounds of the points,
+        // reset it back to the beginning
+        if(this.averageWindowOffset > this.points.length){
+            this.averageWindowOffset = 0;
+        }
+    }
+
     addPoint(x,y,z){
         // if the most recent point is nearby, don't bother
         // adding a new point
@@ -9667,25 +10839,58 @@ class DebugPath {
                 return;
             }
         }
-        this.points.push({x,y,z});
+        this.points.push({x,y,z,t:Date.now(),a:255});
+        // prune as we add points
+        //this.stepPruner();
     }
 
     draw(_color){
+        this.stepPruner();
+        // @generateIfNeeded_clampedRange(0,360,1) // 1 step per frame
+        if(this.hueShift === undefined){this.hueShift = 0}
+        this.hueShift+=.01;
+        if(this.hueShift > 360){this.hueShift = 0;}
+
+
         let maxZ = Math.max(...this.points.map(point => point.z));
-        let lineColor = _color ?? 20;
-        let adjustedLineColor = lineColor
+        let lineColor = `hsl(${this.hueShift}, 100%, 100%)`; // Adjusted brightness to 50% to avoid white color
+        let adjustedLineColor = color(lineColor)
+
+        let weight = 3; //map(this.points[i].z, 0, maxZ, 0, 10);
+        let brightness = .5; //map(i, 0, this.points.length, 255, 0);
+        // Ensure brightness is applied to the color
+        // adjustedLineColor.setBrightness(brightness * 255);
         for(let i = 0; i < this.points.length - 1; i++) {
-            let weight = map(this.points[i].z, 0, maxZ, 0, 10);
 
             // adjust lineColor
-            let brightness = map(i, 0, this.points.length, 0, 255);
             
             // adjust adjustedLineColor based on derived brightness
-            adjustedLineColor = color(
-                red(lineColor) * (255/brightness),
-                green(lineColor) * (255/brightness),
-                blue(lineColor) * (255/brightness)
-            );
+            // adjustedLineColor = color(
+            //     red(lineColor) * (255/brightness),
+            //     green(lineColor) * (255/brightness),
+            //     blue(lineColor) * (255/brightness)
+            // );
+
+            // based on the points age, trend it's .a alpha to 0
+            this.points[i].a = map(Date.now() - this.points[i].t, 0, 3000, 255, 0);
+            adjustedLineColor.setAlpha(this.points[i].a);
+
+            if(this.colorTheme === "bw"){
+                //
+            }else{
+                // lineColor = color(255,255,255,1)
+                // adjustedLineColor = lineColor
+                // adjustedLineColor = color(
+                //     red(lineColor) + this.hueShift,
+                //     green(lineColor) + this.hueShift,
+                //     blue(lineColor) + this.hueShift
+                // );
+                // adjustedLineColor.setRed(red(lineColor) + this.hueShift);
+                // adjustedLineColor.setGreen(green(lineColor) + this.hueShift);
+                // adjustedLineColor.setBlue(blue(lineColor) + this.hueShift);
+                // set the lightness
+                // adjustedLineColor.setAlpha(100)
+            }
 
             stroke(adjustedLineColor);
             strokeWeight(weight);
@@ -9725,6 +10930,103 @@ const InputMap = {
     }
 }
 
+const sprites = [];
+class Sprite {
+    x = 0; 
+    y = 0;
+    radius = 20;
+    blur = 2;
+    drawSimple(){
+        fill(this.getRelativeColor())
+        let scaledRad = this.radius * zoom * (50 - this.z / 100);
+        const {x,y} = this.getRelativePosition()
+        ellipse(x, y, scaledRad, scaledRad);
+    }
+    getRelativePosition(){
+        // apply parallax based on depth
+        // impart pan and zoom to the sprite as well
+        let x = this.x + panX * (1 / this.z) * zoom;
+        let y = this.y + panY * (1 / this.z) * zoom;
+
+        // NOTE: we need to give the illusion of a lens, so we want outside to move faster than inside relative to the center of the viewport (this gives the illusion of a wider field of view)
+        x += (windowWidth / 2) * (1 - (1 / this.z)) * zoom;
+        y += (windowHeight / 2) * (1 - (1 / this.z)) * zoom;
+        return {x,y}
+    }
+    getRelativeColor(){
+        let startColor =  color(0, 0, 255); // Blue
+        let endColor = color(255, 0, 0); // Red
+
+        // Normalize the z value to a range between 0 and 1
+        if(this.z < store.minZ){
+            store.minZ = this.z;
+        }
+        if(this.z > store.maxZ){
+            store.maxZ = this.z;
+        }
+        let normalizedZ = map(this.z, store.minZ, store.maxZ, 0, 1);
+        if(Number.isNaN(normalizedZ)){
+            normalizedZ = 0;
+        }
+
+        // if(Number.isNaN(normalizedZ)){
+        //     console.error({
+        //         z: this.z,
+        //         minZ: store.minZ,
+        //         maxZ: store.maxZ,
+        //         normalizedZ
+        //     })
+        //     throw new Error("bad normalizedZ")
+        // }
+
+        // Use lerpColor to interpolate between the start and end colors based on z
+        let gradientColor = lerpColor(startColor, endColor, normalizedZ);
+        return gradientColor;
+    }
+    draw(){
+        // draw a circle
+        if(!store.cachedSprite){
+            // draw a circle to an offscreen buffer,
+            // blur it
+            // cache the blurred sprite for future use
+            store.cachedSprite = createGraphics(100,100);
+            store.cachedSprite.strokeWeight(0);
+            //store.cachedSprite.fill("red")
+            // center mode: center
+            store.cachedSprite.ellipseMode(CENTER);
+            store.cachedSprite.ellipse(this.radius,this.radius, this.radius, this.radius);
+            store.cachedSprite.filter(BLUR, this.blur);
+        }
+
+        const {x,y} = this.getRelativePosition()
+
+        // if we're out of viewports bounds, don't draw
+        if(
+            (x < 0 && y < 0)
+            || (x > windowWidth && y > windowHeight)
+        ){
+            return;
+        }
+
+        // scale the sprite based on z depth
+        let scale = map(1 / this.z, 0, 1, 1, 30);
+        // tint the image based on a gradient based on depth (nearer, bluer, mid white, far red)
+        // Define the start and end colors of your gradient
+        let gradientColor = this.getRelativeColor()
+
+        // Apply the gradient color
+        tint(gradientColor);
+        image(
+            store.cachedSprite, 
+            x, y, 
+            store.cachedSprite.width * scale, 
+            store.cachedSprite.height * scale
+        );
+        noTint(); // reset tint
+        
+    }
+}
+
 // Define the mouseWheel function
 function mouseWheel(event) {
     // TODO: if the mouse is over a scroll container,
@@ -9734,11 +11036,18 @@ function mouseWheel(event) {
 
         // IF ZOOM ON SCROLL ENABLED
         zoom -= -event.delta / 1000;
-        zoom = constrain(zoom, 0.1, 3);
+        zoom = constrain(zoom, MIN_ZOOM, MAX_ZOOM);
+        // make sure we offset the pan to account for the zoom messing with our center
+        // we should be passing _towards_ the mouse 
+        panX -= mouseX * (oldZoom - zoom);
+        panY -= mouseY * (oldZoom - zoom);
+
 
     }else{
-        panX -= event.deltaX;
-        panY -= event.deltaY;
+        // The zoom level affects the pan speed. When zoomed out (zoom = 0.1), we pan further.
+        // Conversely, when zoomed in (zoom = 1-3), we pan less far.
+        panX -= event.deltaX * (MAX_ZOOM-zoom);
+        panY -= event.deltaY * (MAX_ZOOM-zoom);
     }
     // else{
     //     panX -= event.deltaX;
@@ -9776,11 +11085,13 @@ function mouseWheel(event) {
 }
 
 function updateBlur(){
-    const blur = zoom < 1 
-        ? max_blur * (1 - zoom) 
-        : max_blur * (zoom - 1);
-        bgEl.style.filter = `blur(${blur}px)`;
+    const minBlur = 10;
+    const maxBlur = 100;
+    const blur = map(zoom, MIN_ZOOM, MAX_ZOOM, minBlur, maxBlur)
+    bgEl.style.filter = `blur(${blur}px)`;
 }
+
+
 
 // Define the deleteSelectedNode function
 function deleteSelectedNode() {
@@ -10003,11 +11314,18 @@ function handleAnalogStickInput(){
     // panY += store.averageThumbstickReading.y * store.thumbstickMomentumY;
 }
 
+
+
 // Define the draw function
 // Main Draw / Root Draw
 // Todo: system manager should loop over active systems,
 // and call draw on systems which have non empty render queues
 function draw() {
+
+    //
+
+
+    
 
     // check the current pinch scale factor
 
@@ -10028,6 +11346,67 @@ function draw() {
         clear()
     }
     //background(color(0,0,0,0));
+
+    /**
+    * @description Iterating over sprites array
+    * @type {Sprite[]} sprites - Each sprite is an instance of the Sprite class
+    */
+    push();
+    store.minZ = 1000;
+    store.maxZ = 0;
+
+    sprites.forEach((sprite,index)=>{
+        //sprite.drawSimple();
+        sprite.draw();
+
+        // push sprite in z space
+        // once it reaches a certain depth, snap it back to the other end of z space and a random x,y scaled by z
+        sprite.z -= 0.01;
+        if(sprite.z){
+            if(sprite.z < -10){
+                sprite.z = 10;
+                // sprite.x = Math.random() * windowWidth;
+                // sprite.y = Math.random() * windowHeight;
+            }
+            if(sprite.z > 10){
+                sprite.z = -10;
+                // sprite.x = Math.random() * windowWidth;
+                // sprite.y = Math.random() * windowHeight;
+            }
+        }
+        if(sprite.z > store.maxZ){
+            store.maxZ = sprite.z;
+        }
+        if(sprite.z < store.minZ){
+            store.minZ = sprite.z;
+        }
+
+        return;
+
+        // use some perlin noise to perterb the 
+        // sprite's position
+        // (in the future, we'll convert to flowfield influence)
+        let seed = Math.random();
+        let offsetX = sprite.x * 0.00001; // Decrease multiplier for smoother noise
+        let offsetY = sprite.y * 0.00001; // Decrease multiplier for smoother noise
+        let uniqueFactorX = sprite.x * 0.2; // Add offset for unique noise per region
+        let uniqueFactorY = sprite.y * 0.2; // Add offset for unique noise per region
+
+        // Update sprite's x position with noise-based perturbation
+        // noise() generates Perlin noise value at specified coordinates
+        // offsetX + frameCount * 0.01 + seed + uniqueFactorX gives unique noise coordinates for each frame and sprite
+        // noise() returns value between 0 and 1, so we subtract 0.5 to allow movement in both positive and negative directions
+        // Final value is multiplied by 20 to increase the effect and by Math.sin(frameCount * 0.01) for oscillating effect over time
+        sprite.x += (noise(offsetX + frameCount * 0.01 + seed + uniqueFactorX) - 0.5) * 2 * Math.sin(frameCount * 0.01);
+        
+        // Update sprite's y position with noise-based perturbation
+        // Similar to x position update, but uses Math.cos(frameCount * 0.01) for oscillation to create perpendicular movement
+        sprite.y += (noise(offsetY + frameCount * 0.01 + seed + uniqueFactorY) - 0.5) * 2 * Math.cos(frameCount * 0.01);
+        // make sure to keep them within window bounds
+        sprite.x = constrain(sprite.x, 0, windowWidth)
+        sprite.y = constrain(sprite.y, 0, windowHeight);
+    })
+    pop()
 
     // draw our bg image
     if(bgImage){
@@ -10095,13 +11474,17 @@ function draw() {
             mouseShifted.y, 
             zoom+0
         );
-        // DebugPathInstance.draw();
+        if(!store.DISABLE_DEBUG_PATHS){
+            DebugPathInstance.draw();
+        }
         DebugPathTwo.addPoint(
             targetX, 
             targetY,
             zoom+0
         )
-        // DebugPathTwo.draw(40);
+        if(!store.DISABLE_DEBUG_PATHS){
+            DebugPathTwo.draw(40);
+        }
         
 
         translate(mouseShifted.x, mouseShifted.y);
@@ -10165,11 +11548,11 @@ function draw() {
 }
 
 /** FIGHT ME */
-Object.prototype.forEach = function(callback){
-    return Object.entries(this).forEach(([key,value],index)=>{
-        callback(value,key,index);
-    })
-}
+// Object.prototype.forEach = function(callback){
+//     return Object.entries(this).forEach(([key,value],index)=>{
+//         callback(value,key,index);
+//     })
+// }
 
 let FPS;
 let frameTimes = [];
@@ -10198,6 +11581,10 @@ function renderDebugUI(){
 
         {
             text: `Touch Inputs: ${store.touchInputs.length}`,
+        },
+
+        {
+            text:`fov ${fov}`
         }
     ];
 
@@ -10213,7 +11600,7 @@ function renderDebugUI(){
     }
 
     // draw the status lights
-    store.status_lights.forEach((light)=>{
+    Object.entries(store.status_lights).forEach(([key,light])=>{
         light.draw();
     });
 
@@ -10611,7 +11998,7 @@ function setupDefaults(){
         // TODO: loop over definitions and infer from types what commands to expose
 
         let cmdName = `Toggle ${boolName}`
-        defaultSuggestedCommands.push(new Config({
+        baseCmds.push(new Config({
             name: cmdName,
             execute(){
                 store[boolName] = !store[boolName];
@@ -10621,23 +12008,103 @@ function setupDefaults(){
 
     // OLD
     // hand-register some default commands
-    defaultSuggestedCommands.push(new ShuffleDashboardWidgetPositionsCommand());
+    baseCmds.push(new ShuffleDashboardWidgetPositionsCommand());
 
-    // NEW
+    
+
+    // NEW InvokableCommands => baseCmds => availableCommands
+            // availableCommands => filteredCommands
+            // filteredCommands => selectedCommand
     // define in a config object
-    BasicCommands.forEach((def)=>{
-        let cmdName = def.command ?? def.name;
-        if(!InvokableCommands[cmdName]){
-            throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
-        }
-        defaultSuggestedCommands.push(new Config({
-            name: `Run Command: ${cmdName}`,
+    Object.entries(InvokableCommands).forEach(([key, def])=>{
+        let cmdName = key.split(' ').map((word, index) => index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        // if(!InvokableCommands[key]){
+        //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
+        // }
+        // TODO: if def is not a function, we have some resolving to do...
+        baseCmds.push(new Config({
+            name: `${cmdName}`,
             execute(){
-                InvokableCommands[cmdName].call(this);
+                console.log("base cmd execute: " + cmdName)
+                if(!InvokableCommands[cmdName]){
+                    throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
+                }
+                let result;
+                try{
+                    result = InvokableCommands[cmdName].call(this);
+                }catch(e){
+                }
+                // close the command prompt
+                store.CmdPromptVisible = false;
+                let tracks = [];
+                if(typeof result === 'object' && Array.isArray(result)){
+                    tracks = result;
+                }
+                else if(typeof result === 'string' && result.includes("youtube.")){
+                    tracks = [result];
+                }else{
+                    //
+                }
+                if(tracks.length){
+                    // if the result is a string youtube. or you.tu.be.
+                    system.get("toastManager")
+                    // spawned player
+                    // now playing widget keeps a playlist
+                        ?.showToast("Player Spawned!",{pinned:false})
+                    InvokableCommands["Center View"]();
+                    panX = 300;
+                    panY = 300;
+                    zoom = 0.9;
+                    system.get("Dashboard")
+                        ?.registerWidget?.(new YoutubePlayerWidget("Youtube"+Date.now()+Math.random,{
+                            widgetSize:{
+                                width: 1920,
+                                height: 1080
+                            },
+                            autoPlay: true,
+                            tracks
+                        }))
+                }
             }
         }))
     })
-    BasicWidgets.forEach((widget, key, index)=>{
+    console.warn('setupDefaults:',{
+        InvokableCommands,
+        baseCmds
+    })
+
+    const h1 = "h1";
+    const p = "p";
+    const ul = "ul";
+    let page = [
+        [h1,"Hello!"],
+        [p,"Uh-oh, I invented HTML + Javascript again!"],
+        [p,"Or is this Flash + Actionscript?"],
+        [p,"Or is this {Unreal|Unity|Other} => Three.js?"],
+        [p,"Flutter? React Native?"],
+        [p,"What could modern cross-platform application development look and FEEL like in {currentYear}?!"],
+        [ul,"given advancements in:",[
+            "AI","NLP","Machine Learning","Quantum Computing",
+            "AR","VR","MR","XR","3D","4D","5D","6D","7D","8D","9D","10D"
+        ]],
+        [p, "If bill gates and steve jobs were jacked up on all this shit, what would they have invented this time instead?!"],
+        [p, "The bicycle of the mind just with JET PACKS!"]
+    ];
+    console.warn({page})
+    page.forEach(([tag,text])=>{
+        // HAHA, NO, silly AI!...:
+        // let el = document.createElement(tag);
+        // Where we're going, we don't have a Document, we have an Infinitely Nested Fractal Field Manifold Manipulator!
+        // baseCmds.push([tag,{default:text}])
+        // simplifies to:
+        // console.warn({
+        //     tag,
+        //     text
+        // })
+        //baseCmds.push([tag,text])
+    })
+
+    CoreWidgets.forEach((widget, key, index)=>{
         // need to generate a basic config for the widget
         // need to register a command to intantiate the widget that is bound to the config class (so spawning the widget shows up in the default command suggestion list)
 
@@ -10645,44 +12112,57 @@ function setupDefaults(){
             console.warn("detected widget with classname",{
                 widget,
             })
-            defaultSuggestedCommands.push(new Config({
+
+            // make an option for spawning
+            // but also (until we get user profiles sorted out)
+            // just load all available widget types in the default dashboard
+            // TODO: make a WidgetRegistry viewer so we can offer a clean dashboard at startup
+            // and Dashboard profiles for switching dashboard instances, (even viewing them side by side OR overlapping)
+            baseCmds.push(new Config({
                 name: `Spawn Widget: ${widget.name}`,
                 description: `Spawns a new ${widget.name} widget`,
             }))
+
+            // now register an instance of the widget since it is a base widget
+            system.registerWidget(new window[widget.classname]());
             return;
+        }else if(typeof widget === "function"){
+            console.warn("detected widget as function",{
+                widget,
+            })
+            baseCmds.push(widget)
+        }else{
+            console.error("detected widget as object",{
+                widget,
+            })
         }
+        //system.get("Dashboard").registerWidget(widget.name, new widget());
 
         
         // register the command
-        console.warn("registering suggested command for widget",{
-            widget
-        })
-        defaultSuggestedCommands.push(getBasicSpawnWidgetConfig(widget));
+        // console.warn("registering suggested command for widget",{
+        //     widget
+        // })
+        baseCmds.push(getBasicSpawnWidgetConfig(widget));
     })
 }
-const PreloadedImages = {
-    "res/fine.gif": null,
-    "res/inspiration/001.png": null,
-    "res/inspiration/signs-of-yesterday.jpeg": null,
-};
-const PreloadedSVGs = {
-    "res/inspiration/Flag_of_Palestine.svg": null
-}
+const PreloadedImages = {};
+const PreloadedSVGs = {}
 function preload() {
-    PreloadedImages.forEach((_,imgName)=>{
+    Object.entries(PreloadedImages).forEach(([_,imgName])=>{
         PreloadedImages[imgName] = loadImage(imgName);
     })
-    PreloadedSVGs.forEach((_,name)=>{
+    Object.entries(PreloadedSVGs).forEach(([_,name])=>{
         PreloadedSVGs[name] = loadImage(name);
     })
 }
-class H1Widget extends Widget {
-    text = "H1 Widget"
+class DOMNode extends Widget {
+    get text(){
+        return this._text;
+    }
     constructor(opts){
-        super(...arguments)
-        this.text = opts?.text ?? this.text;
-        //this.name = this.text.substring(0,10) + "...";
-        this.options = opts;
+        this.opts = opts;
+        this._text = opts?.text ?? this.text;
     }
     draw(){
         push();
@@ -10691,6 +12171,16 @@ class H1Widget extends Widget {
         textAlign(CENTER,CENTER);
         text(`${this.text}`,0,0);
         pop();
+    }
+}
+
+class H1Widget extends DOMNode {
+    text = "H1 Widget"
+    constructor(opts){
+        super(...arguments)
+        this.text = opts?.text ?? this.text;
+        //this.name = this.text.substring(0,10) + "...";
+        this.options = opts;
     }
 }
 class Animation {
@@ -10715,8 +12205,100 @@ class Animation {
         }
     }
 }
+const CoreWidgets = [
+    // H1Widget,
+    //P53DLayer,
+    // ThreeJSViewer,
+    //IsometricPreview,
+    // Solitaire,
+    // // ya'know, for testing buttons and stuff
+    // UIDemoWidget,
+
+    // // display a basic manipulation gizmo cage
+    // Gizmo,
+
+    // ClientResolverDebugWidget,
+
+    // WizardForge,
+
+    // GiphyWidget,
+
+    // MandlebrotWidget,
+    // FileBrowserWidget,
+    // WebBrowserWidget, // iframeWidget wrapper
+    // IFTTTWidget, // IFTTT Integration
+
+    // ShaderToyWidget,
+    // PixelArtWidget,
+    // VectorArtWidget,
+    // TextEditorWidget,
+    // P5JSSketchWidget,
+    // DrawIOWidget,
+    // FigJamWidget,
+    // ChessWidget,
+    // WorkflowyWidget,
+
+    // // About, More Info... etc...
+    // // Legal, Privacy, Terms, etc...
+    // /* a "slideshow" of credits */
+    // CreditsWidget,
+
+    // JSONViewer,
+    // GraphVizDotLangViewer,
+    // ThreeJSViewer,
+    // //StickyNoteWidget,
+    // GlobeWidget,
+    // TimezoneClocksWidget,
+    // SplineEditorWidget,
+    // TimelineWidget,
+
+    // // palettes, rgb, hsl, hsv, cmyk, etc...
+    // ColorPickerWidget,
+
+    // NestedDragAndDropSortingWidget,
+    // // "Hypercard"
+    // FractalTreeGraphViewerWidget,
+
+    ComputerKeyboardPreview
+]
+
+let tabHistory = [];
+let lastFocusedElement = null;
+function focusHandler(e){
+    //console.warn('focusHandler',{e})
+    // if we're not already in the tab history, add it
+    if(tabHistory.indexOf(e.target) === -1){
+        tabHistory.push(e.target);
+    }
+    lastFocusedElement = e.target;
+    console.warn('tabHistory',{tabHistory})
+    console.warn('lastFocusedElement',{lastFocusedElement})
+    console.warn('e.target',{targ:e.target})
+}
+function blurHandler(e){
+    // let index = tabHistory.indexOf(e.target);
+    // if(index !== -1){
+    //     tabHistory.splice(index, 1);
+    // }
+    // if(lastFocusedElement === e.target){
+    //     lastFocusedElement = tabHistory[tabHistory.length - 1];
+    // }
+    lastFocusedElement = null;
+    console.warn('field blur',{e})
+}
+function refreshInputBindings(){
+    // prevent any double-binding
+    document.removeEventListener('focus', focusHandler, true);
+    document.removeEventListener('blur', blurHandler, true);
+
+    document.addEventListener('focus', focusHandler, true);
+    document.addEventListener('blur', blurHandler, true);
+}
+
 let cursor;
 function setup() {
+
+    refreshInputBindings();
     
     // overload mouseX and mouseY to be set to 0 if they're null or undefined (one at a time)
     // this is useful for when we're in a mode where we don't want the mouse to affect the canvas
@@ -10763,6 +12345,20 @@ function setup() {
     manager.boot(); rootSystem = system = manager.systems[0];
     console.info("booted");
 
+    //initTHREEMode();
+
+    // system.get("Dashboard").registerWidget(new IsometricPreview());
+
+    // spawn a bunch of BlurSprite
+    for(var i=0;i<20;i++){
+        let sprite = new Sprite();
+        sprite.x = random(-windowWidth,windowWidth);
+        sprite.y = random(-windowHeight,windowHeight);
+        sprite.z = random(-10,10)
+        sprite.radius = random(1,10)
+        sprites.push(sprite);
+    }
+
     cursor = new Cursor();
 
     let startZoom = 0.0001;
@@ -10773,6 +12369,8 @@ function setup() {
 
     const easeOutQuad = (t) => t * (2 - t);
 
+    // our nice zoom in effect
+    // TODO: camera path recording / playback system (slideshow presentation mode)
     const stepZoomAnimation = (timestamp) => {
         if (!startTime) startTime = timestamp;
         let progress = Math.min((timestamp - startTime) / duration, 1);
@@ -10788,7 +12386,6 @@ function setup() {
 
         
     }
-
     requestAnimationFrame(stepZoomAnimation);
 
     // define our lazy singletons
@@ -10830,15 +12427,35 @@ function setup() {
     // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
 
     document.addEventListener('keydown',(e)=>{
-        store.shiftIsPressed = e.shiftKey;
+        // console.warn('keydown',{e})
+        if(store.shiftIsMomentary){
+            store.shiftIsPressed = e.shiftKey;
+        }else{
+            // shiftIsToggle, not shiftIsMomentary
+            if(e.shiftKey){
+                store.shiftIsPressed = !store.shiftIsPressed;
+            }
+        }
 
 
         // if we're not focused on any fields
         if(store.focusedField === null){
 
         }
+
+        // if we're focused on the main command prompt input,,
+        //if(store.focusedField === CmdPromptInput.elt){
+            // arrow key down should cycle through the suggestion list
+            // call the input handler
+            cmdprompt = system.get('cmdprompt');
+            if(!cmdprompt){
+                system.warn("cmdprompt not ready");
+            }
+            cmdprompt?.onCmdPromptInput(e);
+        //}
     })
     document.addEventListener('keypress', (e)=>{
+        // console.warn('keypress',{e})
         // if the key is `f` and we don't have any inputs focused,
         // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
         if(e.key === 'f' && store.focusedField === null){
@@ -10851,9 +12468,62 @@ function setup() {
             requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
             requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
         }
+        let KeyboardPanInfluence = { x: 0, y: 0 };
+        let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
+        let maxInfluence = 100 * (1 / zoom);
+        let decayFactor = 0.9;
+        let lerpFactor = 0.1; // control the speed of lerp
+
+        switch(e.key) {
+            case 'w':
+                zoom += 0.1;
+                break;
+            case 's':
+                zoom -= 0.1;
+                break;
+            case 'a':
+            case 'ArrowLeft':
+                KeyboardPanInfluenceTarget.x = Math.max(KeyboardPanInfluenceTarget.x - 10 / zoom, -maxInfluence);
+                break;
+            case 'd':
+            case 'ArrowRight':
+                KeyboardPanInfluenceTarget.x = Math.min(KeyboardPanInfluenceTarget.x + 10 / zoom, maxInfluence);
+                break;
+            case 'q':
+            case 'ArrowUp':
+                KeyboardPanInfluenceTarget.y = Math.max(KeyboardPanInfluenceTarget.y - 10 / zoom, -maxInfluence);
+                break;
+            case 'e':
+            case 'ArrowDown':
+                KeyboardPanInfluenceTarget.y = Math.min(KeyboardPanInfluenceTarget.y + 10 / zoom, maxInfluence);
+                break;
+        }
+
+        // Lerp the influence values over time
+        KeyboardPanInfluence.x += (KeyboardPanInfluenceTarget.x - KeyboardPanInfluence.x) * lerpFactor;
+        KeyboardPanInfluence.y += (KeyboardPanInfluenceTarget.y - KeyboardPanInfluence.y) * lerpFactor;
+
+        // Decay the influence when the keyboard movement stops
+        KeyboardPanInfluence.x *= decayFactor;
+        KeyboardPanInfluence.y *= decayFactor;
+
+        // Apply the influence to the pan with lerp towards the target
+        panX += (KeyboardPanInfluence.x - panX) * lerpFactor;
+        panY += (KeyboardPanInfluence.y - panY) * lerpFactor;
     })
     document.addEventListener('keyup',(e)=>{
-        store.shiftIsPressed = false
+        if(store.shiftIsMomentary){
+            store.shiftIsPressed = false
+        }
+        // console.warn('keyup',{e})
+        // if the cmdprompt is active, pipe the event
+        if(store.CmdPromptVisible){
+            cmdprompt = system.get('cmdprompt');
+            if(!cmdprompt){
+                system.warn("cmdprompt not ready");
+            }
+            cmdprompt?.onCmdPromptInput(e);
+        }
     })
 
     // TODO: put this stuff in a CmdPrompt.setup() callback
@@ -10866,6 +12536,15 @@ function setup() {
         CmdPromptInput.position(10, 130);
         // focus the command palette input
         CmdPromptInput.elt.focus();
+
+        CmdPromptInput.elt.addEventListener('focus', (e)=>{
+            // store.focusedField = CmdPromptInput.elt;
+            store.focused = true
+        })
+        CmdPromptInput.elt.addEventListener('blur', (e)=>{
+            // store.focusedField = null;
+            store.focused = false;
+        })
     pop();
     // Listen for the 'keydown' event
     CmdPromptInput.elt.addEventListener('keypress', function(e) {
@@ -10883,6 +12562,14 @@ function setup() {
     });
 
     const WidgetsToRegister = [
+        "inspiration/Flag_of_Palestine.svg",
+        "milky-way-galaxy.gif",
+        "colorpickermockup.png",
+        "inspiration/001.png",
+        "inspiration/signs-of-yesterday.jpeg",
+        "fine.gif",
+        "video_731defd5b618ee03304ad345511f0e54.mp4",
+
         CalculatorWidget,
         CalendarWidget,
         ClockWidget,
@@ -10892,112 +12579,90 @@ function setup() {
         MoonPhaseWidget,
         PomodoroWidget,
         StickyNoteWidget,
-        TetrisWidget,
+        // TetrisWidget,
         TimerWidget,
         TimeToSunSetWidget,
         TodoWidget,
         UIDemoWidget,
         WeatherWidget,
         ZoomDependentWidget,
-
-        
-
-        "milky-way-galaxy.gif",
-        "colorpickermockup.png",
-        "inspiration/001.png",
-        "inspiration/signs-of-yesterday.jpeg",
-        "fine.gif",
-        "video_731defd5b618ee03304ad345511f0e54.mp4",
-        "inspiration/Flag_of_Palestine.svg"
+        ImageCubeRotatorWidget,
+        ImageRotatorWidget,        
     ]
 
     // "the big widget registration"
     // NEW: init the widget dashboard
     // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
-    //const grw = new GherkinRunnerWidget();
-    //grw.centerPosition();
+    const grw = new GherkinRunnerWidget();
+    grw.centerPosition();
     // attach the results of the self test runner to the widget
-    //grw.setResults(autorunFeatureTestResults);
+    grw.setResults(autorunFeatureTestResults);
     system.get("Dashboard").init()
         // add our first widget (todo: load state from dehydrated json)
         // DEFAULT WIDGET SET
+
+        system.get("Dashboard")
+        //     .registerWidget(new IsometricPreview())
+
+            // .registerWidget(new AIWidget())
+            // .registerWidget(new P53DLayer())
+            // .registerWidget(new ThreeJSViewer())
+
         
         // .registerWidget("Google Color Picker",
-
+        // .registerWidget(
+        //     new ImageViewerWidget("ukraine-flag.jpeg")
+        // )
         // .registerWidget(
         //     "SVGViewerWidget:PFlag",
-        //     new SVGViewerWidget()
+        //     new ImageViewerWidget("Flag_of_Palestine.svg")
         // )
         
-        .registerWidget(
-            "4SeasonsImg", 
-            new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
+        // .registerWidget(
+        //     "4SeasonsImg", 
+        //     new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
         
-        //.registerWidget("GherkinRunnerWidget",  grw)
-        //.registerWidget("ImageViewerWidget",    new ImageViewerWidget())
-        .registerWidget(
-            new ImageCubeRotatorWidget()
-        )
-        .registerWidget(
-            new ImageRotatorWidget()
-        )
-        .registerWidget(
-            new YoutubePlayerWidget(
-                "Focus Music",
-                {
-                    pickRandomOnPlay: true,
-                    autoPlay: true,
-                    shuffle: true,
-                    tracks: [
-                        "https://www.youtube.com/watch?v=tkgmYIsflSU",
-                        "https://www.youtube.com/watch?v=931PQwTA79k",
-                        "https://www.youtube.com/watch?v=LQUXuQ6Zd9w",
-                    ]
-                }
-            )
-        )
-        // intentionally on a separate line to make it easier to comment out last chained method
-        ;
-        WidgetsToRegister.forEach((widgetClassName)=>{
-            let theInstance = null;
-            const widgetTypes = {
-                ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
-                VideoPlayerWidget: [".mp4"],
-                YoutubePlayerWidget: [".youtube."]
-            };
-            if(typeof widgetClassName === 'string'){
-                for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
-                    if (extensions.some(ext => widgetClassName.includes(ext))) {
-                        if(!window[widgetType]){
-                            console.warn("missing widget type",{
-                                widgetType,
-                                extensions,
-                                widgetClassName
-                            })
-                            continue;
-                        }
+        // .registerWidget("GherkinRunnerWidget",  grw)
+        
+        // // intentionally on a separate line to make it easier to comment out last chained method
+        // ;
+        // WidgetsToRegister.forEach((widgetClassName)=>{
+        //     let theInstance = null;
+        //     const widgetTypes = {
+        //         ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
+        //         VideoPlayerWidget: [".mp4"],
+        //         YoutubePlayerWidget: [".youtube."]
+        //     };
+        //     if(typeof widgetClassName === 'string'){
+        //         for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
+        //             if (extensions.some(ext => widgetClassName.includes(ext))) {
+        //                 if(!window[widgetType]){
+        //                     console.warn("missing widget type",{
+        //                         widgetType,
+        //                         extensions,
+        //                         widgetClassName
+        //                     })
+        //                     continue;
+        //                 }
 
-                        theInstance = new window[widgetType](widgetClassName);
-                        break;
-                    }
-                }
-                if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
-                    theInstance = new iFrameWidget(widgetClassName);
-                }
-            }else{
-                if (!theInstance) {
-                    theInstance = new widgetClassName();
-                }
-            }
-            if(!theInstance){
-                console.warn(`failed to instantiate widget ${widgetClassName}`)
-                return;
-            }
-            system.get("Dashboard").registerWidget(theInstance)
-        })
-    
-    //system.get("Dashboard").widgets["MiniMapWidget"].centerPosition();
-    system.get("Dashboard").registerWidget(new H1Widget({text: "H1 Widget"}));
+        //                 theInstance = new window[widgetType](widgetClassName);
+        //                 break;
+        //             }
+        //         }
+        //         if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
+        //             theInstance = new iFrameWidget(widgetClassName);
+        //         }
+        //     }else{
+        //         if (!theInstance) {
+        //             theInstance = new widgetClassName();
+        //         }
+        //     }
+        //     if(!theInstance){
+        //         console.warn(`failed to instantiate widget ${widgetClassName}`)
+        //         return;
+        //     }
+        //     system.get("Dashboard").registerWidget(theInstance)
+        // })
 
             // shuffle widget order
             // system.get("Dashboard").shuffleWidgets()
@@ -11420,6 +13085,10 @@ class SuggestionList {
         }
     }
     onPressUp(event){
+        // ignore keyup events
+        if(event.type === 'keyup'){
+            return;
+        }
         // console.warn('SuggestionList.onPressUp',{
         //     selectedOptionIndex: this.selectedOptionIndex,
         //     allOptionsLength: this.allOptions.length,
@@ -11455,6 +13124,11 @@ class SuggestionList {
         }
     }
     onPressDown(event){
+        // ignore keyup events
+        if(event.type === 'keyup'){
+            return;
+        }
+
         // console.warn('SuggestionList.onPressDown',{
         //     selectedOptionIndex: this.selectedOptionIndex,
         //     allOptionsLength: this.allOptions.length,
@@ -11480,6 +13154,10 @@ class SuggestionList {
         //console.warn('selectedOptionIndex',this.selectedOptionIndex)
     }
     OnPressEnter(event){
+        // ignore keyup events
+        if(event.type === 'keyup'){
+            return;
+        }
         console.warn('SuggestionList:OnPressEnter');
         event.preventDefault();
 
@@ -11720,6 +13398,7 @@ class StateMachine {
     states = {}
     transitionMatrix = {}
     defaultStateID = null
+    nestedSMs = {}
     constructor({
         states, 
         defaultStateID, 
