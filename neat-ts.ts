@@ -1,4 +1,19 @@
 import * as p5 from 'p5';
+
+declare global {
+    interface Window {
+        draw?: () => void;
+    }
+    interface p5 {
+        resizeCanvas: any;
+        text: any;
+        textSize: any;
+        BOLD: any;
+        Text: any;
+    }
+}
+
+
 /**
  * We're using TypeScript for now instead of CoffeeScript or Elixir because TypeScript provides static typing,
  * which can help catch errors at compile time rather than at runtime. It also provides better tooling support
@@ -129,8 +144,10 @@ class Neat {
         this.keyEvents = new KeyboardCommandHandler();
     }
 
-    public registerKeymap(keymap: {[key: string]: Function}): void {
-        this.keyEvents.registerEventHandlerMap(keymap);
+    public get registerKeymap() {
+        return (keymap: {[key: string]: Function}): void => {
+            this.keyEvents.registerEventHandlerMap(keymap);
+        }
     }
 
     newSpace(){
@@ -390,7 +407,10 @@ document.addEventListener('DOMContentLoaded', function(){
             }
         }
     )
-
+    
+    (window as any).draw = function(){
+        newViewer.draw();
+    } as () => void;
     window.draw = function(){
         newViewer.draw();
     }

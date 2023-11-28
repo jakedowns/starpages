@@ -619,6 +619,10 @@ class SystemManager {
             level:TOAST_LEVELS.WARNING
         });
     }
+    registerWidget(name, instance){
+        // register a widget instance with the system
+        this.get("Dashboard").registerWidget(name, instance);
+    }
 }
 /** 
  * @TODO `@DecoratorManagedObject`
@@ -786,6 +790,7 @@ class Hello {
     }
 }
 
+// aka corecmds, core commands, system commands, root commands, global commands...
 let baseCmds = [
     // new Command("hello", {
     // }
@@ -823,7 +828,11 @@ const BaseCmds = function(command, wizardConfigInstance){
     //     singleton: s
     // })
     // early registration before instance is created
-    baseCmds.push(s);
+
+    console.error('warn: skipping auto-reg',{
+        command,wizardConfigInstance
+    })
+    // baseCmds.push(s);
     let index = baseCmds.length - 1;
     // console.warn(
     //     'baseCmdsArrayLen:',
@@ -958,12 +967,22 @@ class Command {
         if(this.options.execute){
             this.options.execute.call(this);
         }
-        console.warn("Command.execute typeof this.act", typeof this.act, {
-            act: this.act
-        })
+        if(typeof this.invoke === "function"){
+            this.invoke();
+        }
+        // if(
+        //     typeof this.act === 'undefined' 
+        //     && typeof this.invoke === 'undefined'
+        // ){
+        //     system.panic("bad command",this);
+        // }
+        // console.warn("Command.execute typeof this.act", typeof this.act, {
+        //     act: this.act
+        // })
         if(
             typeof this.act !== 'function'
             && !this.wizardConfig 
+            && typeof this.invoke !== 'function'
             && typeof this.options?.callback !== 'function' 
             && typeof this.options?.execute !== 'function'
         ){
@@ -974,6 +993,22 @@ class Command {
         }
         // reset command buffer
         store.commandBuffer = {};
+    }
+    tryExecute(){
+
+        // if this.___type === Config (somehow)
+        // and this.config.execute is a function,
+        // call it instead
+        if(this.__type === 'Config' && typeof this.config.execute === 'function'){
+            this.config.execute();
+            return;
+        }
+
+        try{
+            this.execute();
+        }catch(e){
+            system.panic("Command.tryExecute: ",e);
+        }
     }
     updateFromBuffer(){
         // update the current command based on the command buffer
@@ -2375,6 +2410,11 @@ class Widget extends UndoRedoComponent {
 
         pop()
     }
+    close(){
+        if(this.parentWidget){
+            console.warn("tell parent to close me!",this.parentWidget)
+        }
+    }
 }
 
 class FlashCard extends Widget {
@@ -2844,13 +2884,85 @@ class WeatherWidget extends Widget {
         });
     }
 }
+class RubiksCubeWidget extends Widget {
+    constructor(){
+        super(...arguments)
+        this.cube = [
+            Array(9).fill("white"),
+            Array(9).fill("red"),
+            Array(9).fill("blue"),
+            Array(9).fill("orange"),
+            Array(9).fill("green"),
+            Array(9).fill("yellow")
+        ];
+        this.fsm = new StateMachine({
+            init: 'unsolved',
+            moreSMConfigs: {
+                rotationFSM: {
+                    config:{
+                        init: 'origin',
+                        transitions: [
+                            { name: 'rotate', from: 'origin', to: 'quarter' },
+                            { name: 'rotate', from: 'quarter', to: 'half' },
+                            { name: 'rotate', from: 'half', to: 'threeQuarters' },
+                            { name: 'rotate', from: 'threeQuarters', to: 'full' },
+                            { name: 'rotate', from: 'full', to: 'origin', auto: true, instant: true },
+                        ]
+                    }
+                },
+            },
+            transitions: [
+                { name: 'solve',     from: 'unsolved',  to: 'solved' },
+                { name: 'scramble',  from: 'solved',    to: 'unsolved' },
+            ],
+            methods: {
+                init: function(){
+                    this.nestedSMs.rotationFSM = new StateMachine(this.moreSMConfigs['rotationFSM'].config);
+                },
+                onEnterState: function(lifecycle) {
+                    
+                },
+                rotate: function(){
+                    this.rotationFSM.rotate();
+                }
+            }
+        });
+    }
+    // update the fsm state when a face is rotated
+    rotateFace(face,numRotations=1){
+        for(let i = 0; i < numRotations; i++){
+            this.fsm.rotate();
+            this.rotationFSM.rotate();
+        }
+    }
+
+    //TODO
+    // draw3D(){
+    // }
+    draw(){
+        super.draw(...arguments)
+        push()
+
+            // draw the cube
+            for(var i = 0; i < 6; i++){
+                for(var j = 0; j < 9; j++){
+                    // get the color of the current square
+                    var color = this.cube[i][j];
+                    // set the fill color of the square
+                    fill(color);
+                    // draw the square
+                    rect(this.position.x + (j * 50), this.position.y + (i * 50), 50, 50);
+                }
+            }
+        pop();
+    }
+}
 class TetrisWidget extends Widget {
     widgetSize = { width: 300, height: 600 }
     draw(){
+        super.draw(...arguments)
         fill("red")
-        rect(
-
-        )
+        text("TETRIS!!!", this.position.x, this.position.y)
     }
 }
 class CalendarWidget extends Widget {
@@ -3879,7 +3991,7 @@ extends ImageViewerWidget {
 //     }
 // }
 
-class mglContextWindow extends Widget {
+class P53DLayer extends Widget {
     context = null
     widgetSize = { width: 800, height: 800 }
     updateCanvasAttributes(width, height, left, top, transform) {
@@ -4367,21 +4479,60 @@ class NewIFrameWidgetCommand extends BaseCmds(Command, {
         }
     ]
 }){}
+
+
+// contained in a widget holder
+// who must call our draw method for us to be drawn
+class BuildingBlock extends Widget {
+
+}
+
+
+// a place for building blocks to go
+// in the future, we can drag and drop them across MR contexts (between clients)
+// laptop > phone > tablet > desktop > ar > mr > vr > whatever
+class BuildingBlockWidgetHolder extends Widget {
+    widgetSize = {
+        width: 300,
+        height: 300
+    }
+    blocks = []
+    draw(){
+        super.draw(...arguments)
+
+        // draw the blocks
+        this.blocks.forEach((block)=>{
+            block.draw();
+        })
+    }
+}
+
 class iFrameWidget extends Widget {
     url = ""
     pinned = false
     constructor(url){
         super(...arguments);
         this.url = url ?? this.url;
-        this.widgetSize = { width: 300, height: 150 }
+        //this.widgetSize = { width: 300, height: 150 }
+
+            if(arguments[0]?.widgetSize){
+                this.widgetSize = arguments[0].widgetSize;
+            }
+            if(arguments[1]?.widgetSize){
+                this.widgetSize = arguments[1].widgetSize;
+            }
+
         const style = {
             'border-radius': '20px',
             'border': '3px solid red',
             'position': 'fixed',
-            'top': '100px',
-            'left': '100px',
+            'top': '0',
+            'left': '0',
             'z-index': '999999',
-            'display': 'block'
+            'display': 'block',
+            'width': this.widgetSize.width * zoom + 'px',
+            'height': this.widgetSize.height * zoom + 'px',
+            'transform': `translate(${this.smartPosition.x}px, ${this.smartPosition.y}px), scale(${zoom})`
         }
         const tagAttrs = {
             'id': 'iframe',
@@ -4389,8 +4540,8 @@ class iFrameWidget extends Widget {
             'allowfullscreen': 'true',
             'scrolling': 'no',
             'allow': 'autoplay; encrypted-media',
-            // 'height': `${this.widgetSize.width}px`,
-            // 'width': `${this.widgetSize.height}px`,
+            'height': `${this.widgetSize.width * zoom}px`,
+            'width': `${this.widgetSize.height * zoom}px`,
             'src': url ?? 'https://google.com/webhp?igu=1',
         }
         console.log({tagAttrs})
@@ -4460,7 +4611,7 @@ class iFrameWidget extends Widget {
 class YoutubePlayerWidget 
 extends iFrameWidget {
     name = "Youtube Player"
-    widgetSize = { width: 300, height: 150 }
+    //widgetSize = { width: 300, height: 150 }
     playedTracks = []
     _tracks = null
     tracksChanged = false
@@ -4468,6 +4619,9 @@ extends iFrameWidget {
     constructor(name, options){
         super(...arguments)
         this.options = options ?? {};
+        if(this.options.widgetSize){
+            this.widgetSize = this.options.widgetSize;
+        }
         this.setTrackList(this.getTrackList());
         this.updateUrl(this.getFirstTrack());
     }
@@ -4523,14 +4677,15 @@ extends iFrameWidget {
     }
     iframeSafeUrl(url){
         if(url.includes('/embed/')){
-            return url;
+            return url + "?autoplay=1";
         }
         let videoId = url.split('v=')[1];
         let ampersandPosition = videoId.indexOf('&');
         if(ampersandPosition != -1) {
             videoId = videoId.substring(0, ampersandPosition);
         }
-        return 'https://www.youtube.com/embed/' + videoId;
+        // Added "?autoplay=1" to enable autoplay in the embed URL
+        return 'https://www.youtube.com/embed/' + videoId + "?autoplay=1";
     }
 }
 
@@ -5643,6 +5798,7 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    focused: true,
     touchInputs: [],
     pinchScaleFactor: 1,
     cullOutOfBoundsWidgets: 1,
@@ -5758,6 +5914,7 @@ let store = {
     /* SimpleToggle() -> Invokable via CommandPrompt */
     displayWidgetLabels: true,
 };
+window.store = store;
 const mergeStateFromLocalStorage = function(state){
     if(!state || !Object.keys(state).length){
         return;
@@ -8708,13 +8865,65 @@ const InvokableCommands = {
     NotYetImplemented(){
         console.warn('NotYetImplemented!')
     },
+    ["Load THREE.js"](){
+        window.initTHREEMode();
+    },
+    ["Play Mindful Solutionism"](){
+        return "https://www.youtube.com/watch?v=T7jH-5YQLcE"
+    },
+    ["Play Glorious Dawn"](){
+        return "https://www.youtube.com/watch?v=zSgiXGELjbc";
+    },
+    ["Play Run The Jewels"](){ return "https://www.youtube.com/watch?v=AfuCLp8VEng" },
     ["Play Lovely Day"](){
-        system.get("Dashboard")
-            ?.registerWidget?.(new YoutubePlayerWidget("Lovely Daaaaa...",{
-                tracks: [
-                    "https://www.youtube.com/watch?v=bEeaS6fuUoA"
-                ]
-            }))
+        // console.warn("Play lovely day")
+        return "https://www.youtube.com/watch?v=A7SOY2M2jC0";
+    },
+    ["Play Pendulum  Hold your Colour Full Album"](){
+        return "https://www.youtube.com/watch?v=931PQwTA79k"
+    },
+    // ["Play: Black Sabbath > War Pigs"](){
+    //     return "https://www.youtube.com/watch?v=LQUXuQ6Zd9w"
+    // },
+    ["Play chillout study session"](){
+        return "https://www.youtube.com/watch?v=tkgmYIsflSU"
+    },
+    ["Music Player"](){
+        //system.registerWidget(new MusicPlayerWidget());
+        console.warn("TODO!")
+        // show warning toast
+        system.get("toastManager").showToast("TODO: Music Player Widget", {pinned: false});
+    },
+    ["Close All Players"](){
+
+    },
+    ["Close All Widgets"](){
+        system.widgets.forEach((widget)=>{
+            widget.close();
+        })
+    },
+    ["Open All Players"](){
+        let returns = []
+        // show a toast of the number of InvokableCommands that start with "play"
+        let filtered = Object.entries(InvokableCommands).filter(([key, value])=>{
+            return key.toLowerCase().startsWith("play")
+        });
+        console.warn("open all players",filtered.length,"players",filtered)
+        filtered.forEach(([key, value])=>{
+            if(key.toLowerCase().startsWith("play")){
+                let urls = value();
+                console.log("urls",urls)
+                system.registerWidget(new YoutubePlayerWidget({
+                    widgetSize:{
+                        width: 1920,
+                        height: 1080
+                    },
+                    autoPlay: true,
+                    tracks: typeof urls === 'string' ? [urls] : urls
+                }))
+            }
+        })
+        return;
     },
     /*
         type: "number",
@@ -8726,18 +8935,32 @@ const InvokableCommands = {
     // center field
     // center plane
     // return to origin again...
-    ["Center View"]:[
+    ["Center View"]: //[
         function(){
             console.warn("Center View...");
-            alert("Center View...");
+            panX = 0;
+            panY = 0;
+            zoom = 1;
         },
-        [
-            "Center {View|Viewport}: Center the current view or viewport",
-            "Center {View|Viewport} on Origin: Center the current view or viewport on the origin",
-            "{Center|Move} to {origin|home}: Center or move to the origin or home position",
-            "{?go} home: Optionally go to the home position"
-        ]
-    ],
+        // [
+        //     "Center {View|Viewport}: Center the current view or viewport",
+        //     "Center {View|Viewport} on Origin: Center the current view or viewport on the origin",
+        //     "{Center|Move} to {origin|home}: Center or move to the origin or home position",
+        //     "{?go} home: Optionally go to the home position"
+        // ]
+    //],
+    ["new rubiks cube widget"](){
+        system.registerWidget(new RubiksCubeWidget());
+        new HideCmdPromptCommand().execute();
+    },
+    // @see tetriswidget
+    ["new tetris widget"](){
+        console.warn("SPAWNING TETRIS!")
+        let instance = new TetrisWidget();
+        system.registerWidget(instance);
+        // hide the command prompt
+        new HideCmdPromptCommand().execute();
+    },
     /*
     {
         name: "Set Plax Exp Factor",
@@ -9599,25 +9822,24 @@ class CmdPrompt {
     }
 
     addDefaultCommands(){
-        let cmds = [
-            "new song",
-            "new piano widget",
-            "new music widget",
-            "new tetris widget",
-            "new widget widget",
-            "widget designer widget",
-        ]
-        cmds.forEach((cmd)=>{
-            this.availableCommands.push(new Command(cmd))
-        })
+        // let cmds = [
+        //     "new song",
+        //     "new piano widget",
+        //     "new music widget",
+        //     "new widget widget",
+        //     "widget designer widget",
+        // ]
+        // cmds.forEach((cmd)=>{
+        //     this.availableCommands.push(new Command(cmd))
+        // })
 
-        let cmds2 = [
-            SoftReloadCommand,
-            HardReloadCommand,
-        ];
-        cmds2.forEach((cmd)=>{
-            this.availableCommands.push(new cmd())
-        })
+        // let cmds2 = [
+        //     SoftReloadCommand,
+        //     HardReloadCommand,
+        // ];
+        // cmds2.forEach((cmd)=>{
+        //     this.availableCommands.push(new cmd())
+        // })
         // EVEN NEWER
         // [
         //     SoftReloadCommand
@@ -9647,15 +9869,20 @@ class CmdPrompt {
         // and if the Command definitions are responsible, no big CPU spike
         // will result in registering lots of available commands,
         // but if this becomes and issue, we need a classless, static datatype we can rely on as a replacement for near-zero-over Command availability registration
-        this.availableCommands.push(new Command("Start Pomodoro",{
-            execute: function(){
-                console.warn("starting pomodoro...");
-                setTimeout(()=>{
-                    alert('DONE!');
 
-                },1000)
-            }
-        }))
+
+        // TODO: this should default to a value, but also let you pick a duration
+        // this.availableCommands.push(new Command("Start Pomodoro",{
+        //     execute: function(){
+        //         console.warn("starting pomodoro...");
+        //         setTimeout(()=>{
+        //             alert('DONE!');
+
+        //         },1000)
+        //     }
+        // }))
+
+        /* TODO: re-intro as we define these 
         this.availableCommands.push(new Command("New REPL"))
         this.availableCommands.push(new Command("New Sandbox"))
         this.availableCommands.push(new SetMaxSuggestionsCommand());
@@ -9687,6 +9914,7 @@ class CmdPrompt {
         this.availableCommands.push(new Command("New Timer",{
             wizardConfig: new TimerWizardConfig("New Timer Wizard")
         }))
+        
         // this.availableCommands.push(new Command("New Error",{}))
         // this.availableCommands.push(new Command("New Graph",{}))
         // this.availableCommands.push(new Command("New Node Type",{}))
@@ -9703,34 +9931,36 @@ class CmdPrompt {
         //     wizardConfig: new CommandWizardConfig("New Command Wizard")
         // }));
 
+        */
+
         // List Self Tests
-        this.availableCommands.push(new Command("List Self Tests",{
-            callback: function(){
-                console.warn('listing self tests...')
-                system.dump({
-                    FEATURE_TESTS,
-                    autorunFeatureTests,
-                    autorunFeatureTestResults
-                })
-            }
-        }))
+        // this.availableCommands.push(new Command("List Self Tests",{
+        //     callback: function(){
+        //         console.warn('listing self tests...')
+        //         system.dump({
+        //             FEATURE_TESTS,
+        //             autorunFeatureTests,
+        //             autorunFeatureTestResults
+        //         })
+        //     }
+        // }))
 
         // Run Self Test
-        this.availableCommands.push(new Command("Run Self Test",{
-            keyBindings:[
-                // {
-                //     key: "cmd+shift+t",
-                // }
-            ],
-            aliases: [
-                "/test",
-                // "/t"
-            ],
-            callback: function(){
-                console.warn('running self test...')
-                new HideCmdPromptCommand().execute();
-            }
-        }))
+        // this.availableCommands.push(new Command("Run Self Test",{
+        //     keyBindings:[
+        //         // {
+        //         //     key: "cmd+shift+t",
+        //         // }
+        //     ],
+        //     aliases: [
+        //         "/test",
+        //         // "/t"
+        //     ],
+        //     callback: function(){
+        //         console.warn('running self test...')
+        //         new HideCmdPromptCommand().execute();
+        //     }
+        // }))
         
         // Clear Graph
         this.availableCommands.push(
@@ -9747,9 +9977,9 @@ class CmdPrompt {
                 callback: function(){
                     console.warn('clearing graph...')
                     // TODO: only warn if unsaved changes
-                    if(!confirm('Are you sure?')){
-                        return;
-                    }
+                    // if(!confirm('Are you sure?')){
+                    //     return;
+                    // }
                     store.currentGraph = null;
                     // hide the command palette
                     new HideCmdPromptCommand().execute();
@@ -9758,7 +9988,15 @@ class CmdPrompt {
         )
 
         // Load Graph
-        this.availableCommands.push(
+        this.availableCommands = this.availableCommands.concat([
+            new Command("Toggle Debug Cursor",{
+                //executeAsString: "window.store.debugCursor = !window.store.debugCursor"
+                callback: function(){
+                    window.store.debugCursor = !(window.store?.debugCursor ?? false);
+                }
+            }),
+
+
             new Command("Load Graph...",{
                 wizardConfig: {
                     name: "Load Graph Wizard",
@@ -9809,15 +10047,11 @@ class CmdPrompt {
                         }
                     ]
                 }
-            })
-        )
-
-        // Command Palette / Command Prompt Commands
-        this.availableCommands.push(new ShowCmdPromptCommand());
-        this.availableCommands.push(new HideCmdPromptCommand());
-        this.availableCommands.push(new ToggleCmdPromptCommand());
-
-
+            }),
+            new ShowCmdPromptCommand(),
+            new HideCmdPromptCommand(),
+            new ToggleCmdPromptCommand(),
+        ])
     }
 
     renderCommandPrompt(){
@@ -9887,10 +10121,18 @@ class CmdPrompt {
         store.commandBuffer = {
             name: CmdPromptInput.value()
         }
+
+        if(this.currentCommand?.constructor?.name === "Config"){
+            // turn it into an executable command instance
+            this.currentCommand = new Command(this.currentCommand.config.name,this.currentCommand.config);
+        }
+
         if(this.currentCommand === null){
             this.initCommand();
-        }else{
+        }else if(this.currentCommand.updateFromBuffer){
             this.currentCommand.updateFromBuffer();
+        }else{
+            system.panic(`unknown command type: ${this.currentCommand.constructor.name}`)
         }
 
         // console.warn(
@@ -9906,7 +10148,7 @@ class CmdPrompt {
         //console.warn('sanity check filtered count: ',this.filteredCommands.length);
 
         // if the cmd palette is not visible, show it
-        if(!store.CmdPromptVisible){
+        if(store.focused && !store.CmdPromptVisible && /^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]*$/.test(event.key)){
             new ShowCmdPromptCommand().execute();
         }
 
@@ -9959,6 +10201,12 @@ class CmdPrompt {
     }
 
     OnPressEnter(){
+
+        // system.success("ON PRESS ENTER! we will invoke!",{
+        //     // previously selected command
+        //     prevCommand: this.currentCommand,
+        // })
+
         // if we have a command selected, mark it as the current command
         if(
             this.selectedSuggestionIndex !== null
@@ -9988,8 +10236,18 @@ class CmdPrompt {
         try{
             // enter was pressed
             // execute the current command
-            this.currentCommand.execute.call(this.currentCommand);
+            //this.currentCommand.tryExecute.call(this.currentCommand);
+            if(this.currentCommand.__type === "Config"){
+                // turn it into an executable command instance
+                let cmd = new Command(this.currentCommand.config.name,this.currentCommand.config);
+                cmd.tryExecute();
+            }else if(typeof this.currentCommand.tryExecute === 'function'){
+                this.currentCommand.tryExecute();
+            }else{
+                system.panic("bad current command!")
+            }
         }catch(e){
+            console.error("CmdPrompt OnPressEnter Error executing command:",this.currentCommand)
             console.error(e)
         }
         // TODO: step the undo/redo history
@@ -10099,6 +10357,12 @@ class CmdPrompt {
                 // and then the wizard will take over
                 // and prompt for the rest of the details
                 let wiz = new NewCommandWizardConfig()
+
+                // if wiz.start is not a function, system.debug it
+                if(typeof wiz.start !== 'function'){
+                    system.debug({wiz,NewCommandWizardConfig});
+                }
+
                 wiz.start(); // sets store.activeWizard = wiz;
                 wiz.programmaticResponseToCurrentStep(currentInputBufferText);
                 
@@ -10486,7 +10750,7 @@ function mouseReleased(){
 const max_blur = 100;
 let bgEl;
 const MIN_ZOOM = 0.01;
-const MAX_ZOOM = 1; //3;
+const MAX_ZOOM = 3;
 zoomStepSize = (MAX_ZOOM - MIN_ZOOM) / 8;
 
 const DefaultKeyBindings = {
@@ -10821,8 +11085,8 @@ function mouseWheel(event) {
 }
 
 function updateBlur(){
-    const minBlur = 5;
-    const maxBlur = 10;
+    const minBlur = 10;
+    const maxBlur = 100;
     const blur = map(zoom, MIN_ZOOM, MAX_ZOOM, minBlur, maxBlur)
     bgEl.style.filter = `blur(${blur}px)`;
 }
@@ -11748,10 +12012,12 @@ function setupDefaults(){
 
     
 
-    // NEW
+    // NEW InvokableCommands => baseCmds => availableCommands
+            // availableCommands => filteredCommands
+            // filteredCommands => selectedCommand
     // define in a config object
     Object.entries(InvokableCommands).forEach(([key, def])=>{
-        let cmdName = key.split(' ').join('').split(/(?=[A-Z])/).join(' '); //def.command ?? def.name;
+        let cmdName = key.split(' ').map((word, index) => index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         // if(!InvokableCommands[key]){
         //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
         // }
@@ -11759,7 +12025,46 @@ function setupDefaults(){
         baseCmds.push(new Config({
             name: `${cmdName}`,
             execute(){
-                InvokableCommands[cmdName].call(this);
+                console.log("base cmd execute: " + cmdName)
+                if(!InvokableCommands[cmdName]){
+                    throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
+                }
+                let result;
+                try{
+                    result = InvokableCommands[cmdName].call(this);
+                }catch(e){
+                }
+                // close the command prompt
+                store.CmdPromptVisible = false;
+                let tracks = [];
+                if(typeof result === 'object' && Array.isArray(result)){
+                    tracks = result;
+                }
+                else if(typeof result === 'string' && result.includes("youtube.")){
+                    tracks = [result];
+                }else{
+                    //
+                }
+                if(tracks.length){
+                    // if the result is a string youtube. or you.tu.be.
+                    system.get("toastManager")
+                    // spawned player
+                    // now playing widget keeps a playlist
+                        ?.showToast("Player Spawned!",{pinned:false})
+                    InvokableCommands["Center View"]();
+                    panX = 300;
+                    panY = 300;
+                    zoom = 0.9;
+                    system.get("Dashboard")
+                        ?.registerWidget?.(new YoutubePlayerWidget("Youtube"+Date.now()+Math.random,{
+                            widgetSize:{
+                                width: 1920,
+                                height: 1080
+                            },
+                            autoPlay: true,
+                            tracks
+                        }))
+                }
             }
         }))
     })
@@ -11817,6 +12122,9 @@ function setupDefaults(){
                 name: `Spawn Widget: ${widget.name}`,
                 description: `Spawns a new ${widget.name} widget`,
             }))
+
+            // now register an instance of the widget since it is a base widget
+            system.registerWidget(new window[widget.classname]());
             return;
         }else if(typeof widget === "function"){
             console.warn("detected widget as function",{
@@ -11899,7 +12207,7 @@ class Animation {
 }
 const CoreWidgets = [
     // H1Widget,
-    mglContextWindow,
+    //P53DLayer,
     // ThreeJSViewer,
     //IsometricPreview,
     // Solitaire,
@@ -11951,10 +12259,46 @@ const CoreWidgets = [
     // // "Hypercard"
     // FractalTreeGraphViewerWidget,
 
-    // ComputerKeyboardPreview
+    ComputerKeyboardPreview
 ]
+
+let tabHistory = [];
+let lastFocusedElement = null;
+function focusHandler(e){
+    //console.warn('focusHandler',{e})
+    // if we're not already in the tab history, add it
+    if(tabHistory.indexOf(e.target) === -1){
+        tabHistory.push(e.target);
+    }
+    lastFocusedElement = e.target;
+    console.warn('tabHistory',{tabHistory})
+    console.warn('lastFocusedElement',{lastFocusedElement})
+    console.warn('e.target',{targ:e.target})
+}
+function blurHandler(e){
+    // let index = tabHistory.indexOf(e.target);
+    // if(index !== -1){
+    //     tabHistory.splice(index, 1);
+    // }
+    // if(lastFocusedElement === e.target){
+    //     lastFocusedElement = tabHistory[tabHistory.length - 1];
+    // }
+    lastFocusedElement = null;
+    console.warn('field blur',{e})
+}
+function refreshInputBindings(){
+    // prevent any double-binding
+    document.removeEventListener('focus', focusHandler, true);
+    document.removeEventListener('blur', blurHandler, true);
+
+    document.addEventListener('focus', focusHandler, true);
+    document.addEventListener('blur', blurHandler, true);
+}
+
 let cursor;
 function setup() {
+
+    refreshInputBindings();
     
     // overload mouseX and mouseY to be set to 0 if they're null or undefined (one at a time)
     // this is useful for when we're in a mode where we don't want the mouse to affect the canvas
@@ -12001,6 +12345,8 @@ function setup() {
     manager.boot(); rootSystem = system = manager.systems[0];
     console.info("booted");
 
+    //initTHREEMode();
+
     // system.get("Dashboard").registerWidget(new IsometricPreview());
 
     // spawn a bunch of BlurSprite
@@ -12023,6 +12369,8 @@ function setup() {
 
     const easeOutQuad = (t) => t * (2 - t);
 
+    // our nice zoom in effect
+    // TODO: camera path recording / playback system (slideshow presentation mode)
     const stepZoomAnimation = (timestamp) => {
         if (!startTime) startTime = timestamp;
         let progress = Math.min((timestamp - startTime) / duration, 1);
@@ -12038,7 +12386,6 @@ function setup() {
 
         
     }
-
     requestAnimationFrame(stepZoomAnimation);
 
     // define our lazy singletons
@@ -12080,11 +12427,14 @@ function setup() {
     // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
 
     document.addEventListener('keydown',(e)=>{
+        // console.warn('keydown',{e})
         if(store.shiftIsMomentary){
             store.shiftIsPressed = e.shiftKey;
         }else{
             // shiftIsToggle, not shiftIsMomentary
-            store.shiftIsPressed = !store.shiftIsPressed;
+            if(e.shiftKey){
+                store.shiftIsPressed = !store.shiftIsPressed;
+            }
         }
 
 
@@ -12092,8 +12442,20 @@ function setup() {
         if(store.focusedField === null){
 
         }
+
+        // if we're focused on the main command prompt input,,
+        //if(store.focusedField === CmdPromptInput.elt){
+            // arrow key down should cycle through the suggestion list
+            // call the input handler
+            cmdprompt = system.get('cmdprompt');
+            if(!cmdprompt){
+                system.warn("cmdprompt not ready");
+            }
+            cmdprompt?.onCmdPromptInput(e);
+        //}
     })
     document.addEventListener('keypress', (e)=>{
+        // console.warn('keypress',{e})
         // if the key is `f` and we don't have any inputs focused,
         // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
         if(e.key === 'f' && store.focusedField === null){
@@ -12153,6 +12515,15 @@ function setup() {
         if(store.shiftIsMomentary){
             store.shiftIsPressed = false
         }
+        // console.warn('keyup',{e})
+        // if the cmdprompt is active, pipe the event
+        if(store.CmdPromptVisible){
+            cmdprompt = system.get('cmdprompt');
+            if(!cmdprompt){
+                system.warn("cmdprompt not ready");
+            }
+            cmdprompt?.onCmdPromptInput(e);
+        }
     })
 
     // TODO: put this stuff in a CmdPrompt.setup() callback
@@ -12165,6 +12536,15 @@ function setup() {
         CmdPromptInput.position(10, 130);
         // focus the command palette input
         CmdPromptInput.elt.focus();
+
+        CmdPromptInput.elt.addEventListener('focus', (e)=>{
+            // store.focusedField = CmdPromptInput.elt;
+            store.focused = true
+        })
+        CmdPromptInput.elt.addEventListener('blur', (e)=>{
+            // store.focusedField = null;
+            store.focused = false;
+        })
     pop();
     // Listen for the 'keydown' event
     CmdPromptInput.elt.addEventListener('keypress', function(e) {
@@ -12199,7 +12579,7 @@ function setup() {
         MoonPhaseWidget,
         PomodoroWidget,
         StickyNoteWidget,
-        TetrisWidget,
+        // TetrisWidget,
         TimerWidget,
         TimeToSunSetWidget,
         TodoWidget,
@@ -12224,8 +12604,8 @@ function setup() {
         system.get("Dashboard")
         //     .registerWidget(new IsometricPreview())
 
-            //.registerWidget(new AIWidget())
-            .registerWidget(new mglContextWindow())
+            // .registerWidget(new AIWidget())
+            // .registerWidget(new P53DLayer())
             // .registerWidget(new ThreeJSViewer())
 
         
@@ -12243,21 +12623,7 @@ function setup() {
         //     new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
         
         // .registerWidget("GherkinRunnerWidget",  grw)
-        // .registerWidget(
-        //     new YoutubePlayerWidget(
-        //         "Focus Music",
-        //         {
-        //             pickRandomOnPlay: true,
-        //             autoPlay: true,
-        //             shuffle: true,
-        //             tracks: [
-        //                 "https://www.youtube.com/watch?v=tkgmYIsflSU",
-        //                 "https://www.youtube.com/watch?v=931PQwTA79k",
-        //                 "https://www.youtube.com/watch?v=LQUXuQ6Zd9w",
-        //             ]
-        //         }
-        //     )
-        // )
+        
         // // intentionally on a separate line to make it easier to comment out last chained method
         // ;
         // WidgetsToRegister.forEach((widgetClassName)=>{
@@ -12719,6 +13085,10 @@ class SuggestionList {
         }
     }
     onPressUp(event){
+        // ignore keyup events
+        if(event.type === 'keyup'){
+            return;
+        }
         // console.warn('SuggestionList.onPressUp',{
         //     selectedOptionIndex: this.selectedOptionIndex,
         //     allOptionsLength: this.allOptions.length,
@@ -12754,6 +13124,11 @@ class SuggestionList {
         }
     }
     onPressDown(event){
+        // ignore keyup events
+        if(event.type === 'keyup'){
+            return;
+        }
+
         // console.warn('SuggestionList.onPressDown',{
         //     selectedOptionIndex: this.selectedOptionIndex,
         //     allOptionsLength: this.allOptions.length,
@@ -12779,6 +13154,10 @@ class SuggestionList {
         //console.warn('selectedOptionIndex',this.selectedOptionIndex)
     }
     OnPressEnter(event){
+        // ignore keyup events
+        if(event.type === 'keyup'){
+            return;
+        }
         console.warn('SuggestionList:OnPressEnter');
         event.preventDefault();
 
@@ -13019,6 +13398,7 @@ class StateMachine {
     states = {}
     transitionMatrix = {}
     defaultStateID = null
+    nestedSMs = {}
     constructor({
         states, 
         defaultStateID, 
