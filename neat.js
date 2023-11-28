@@ -4521,6 +4521,12 @@ class iFrameWidget extends Widget {
             if(arguments[1]?.widgetSize){
                 this.widgetSize = arguments[1].widgetSize;
             }
+        
+        /*
+        if(arguments[1]?.fullTag?.length){
+                arguments[1]?.fullTag
+            }
+            */
 
         const style = {
             'border-radius': '20px',
@@ -8865,6 +8871,29 @@ const InvokableCommands = {
     NotYetImplemented(){
         console.warn('NotYetImplemented!')
     },
+    ["Play SNES Yoshi's Island"](){
+      system.registerWidget(new iFrameWidget(
+        "https://www.retrogames.cc/embed/44541-yoshis-island-no-crying-improved-sfx-and-red-coins.html",
+        {
+            widgetSize:{
+                width:600,height:450
+            }
+        //fullTag:`<iframe src="https://www.retrogames.cc/embed/44541-yoshis-island-no-crying-improved-sfx-and-red-coins.html" 
+        // width="600" 
+        // height="450" 
+        // frameborder="no" 
+        // allowfullscreen="true" 
+        // webkitallowfullscreen="true" 
+        // mozallowfullscreen="true" 
+        // scrolling="no"></iframe>`
+      }))  
+    },
+    ["Play SNES Super Mario World"](){
+
+    },
+    ["Play Battle Tetris"](){
+
+    },
     ["Load THREE.js"](){
         window.initTHREEMode();
     },
@@ -12607,6 +12636,9 @@ function setup() {
             // .registerWidget(new AIWidget())
             // .registerWidget(new P53DLayer())
             // .registerWidget(new ThreeJSViewer())
+
+            .registerWidget(new MoonPhaseWidget())
+            .registerWidget(new ComputerKeyboardPreview())
 
         
         // .registerWidget("Google Color Picker",
