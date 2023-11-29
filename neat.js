@@ -12,6 +12,8 @@
     ---
 */
 
+const testOpenAIServer = "http://127.0.0.1:4001/";
+
 let todos = [{
     "Overview of neat.js": {
       "Ambitions": "- The script aims to create a complex system with various functionalities such as synchronized music playback, web browsing, widget recommendation engine, and more.\n- It also aims to run headless in a node.js environment and communicate with a client version.\n- The script plans to implement a system that sends text, email, SMS, APN, web push notifications, etc.",
@@ -829,9 +831,9 @@ const BaseCmds = function(command, wizardConfigInstance){
     // })
     // early registration before instance is created
 
-    console.error('warn: skipping auto-reg',{
-        command,wizardConfigInstance
-    })
+    // console.error('warn: skipping auto-reg',{
+    //     command,wizardConfigInstance
+    // })
     // baseCmds.push(s);
     let index = baseCmds.length - 1;
     // console.warn(
@@ -2317,7 +2319,7 @@ class Widget extends UndoRedoComponent {
         store.frameDrawCount++;
 
         // debug print position
-        if(store.showWidgetPositions){
+        //if(store.showWidgetPositions){
             fill("red")
             text(`x:${
                 this.basePosition.x.toFixed(2)
@@ -2335,7 +2337,7 @@ class Widget extends UndoRedoComponent {
                 this.position.x,
                 this.position.y
             );
-        }
+        //}
 
         strokeWeight(1)
         stroke("darkblue")
@@ -4487,6 +4489,29 @@ class BuildingBlock extends Widget {
 
 }
 
+class ScratchPad extends Widget {
+    widgetSize = {
+        width: 300,
+        height: 300
+    }
+    nestedCanvas = null
+    constructor(){
+        super(...arguments)
+        this.nestedCanvas = createGraphics(this.widgetSize.width, this.widgetSize.height);
+        this.nestedCanvas.background(255, 0, 0);
+    }
+    draw(){
+        //super.preDraw();
+        super.draw(...arguments)
+
+        this.nestedCanvas.fill(255, 255, 0);
+        this.nestedCanvas.ellipse(this.nestedCanvas.width / 2, this.nestedCanvas.height / 2, 50, 50);
+
+
+        image(this.nestedCanvas, this.position.x, this.position.y);
+    }
+}
+
 
 // a place for building blocks to go
 // in the future, we can drag and drop them across MR contexts (between clients)
@@ -4573,21 +4598,25 @@ class iFrameWidget extends Widget {
         super.draw(...arguments)
         if(this.doNotDraw){
             this.iframe.hide();
+            return;
         }else{
             this.iframe.show();
         }
-        if(this.pinned){
-            this.corrected.x = 0//(this.position.x + (mouseShifted.x*zoom))
-            this.corrected.y = windowHeight - this.widgetSize.height//(this.position.y + (mouseShifted.y*zoom))
-        }else{
-            this.corrected.x = (this.position.x - panX) * zoom;
-            this.corrected.y = (this.position.y - panY) * zoom;
-        }
+        // if(this.pinned){
+        //     this.corrected.x = 0//(this.position.x + (mouseShifted.x*zoom))
+        //     this.corrected.y = windowHeight - this.widgetSize.height//(this.position.y + (mouseShifted.y*zoom))
+        // }else{
+            this.corrected.x = (-this.position.x - panX) * zoom;
+            this.corrected.y = (-this.position.y - panY) * zoom;
+
+        //     this.corrected = this.smartPosition;
+        // }
+        // this.corrected = {...this.position};
         // corrected.x *= zoom;
         // corrected.y *= zoom;
         this.iframe.position(
-            this.corrected.x,
-            this.corrected.y
+            -this.corrected.x,
+            -this.corrected.y
         );
         // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
         // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
@@ -6610,11 +6639,93 @@ class Refactor extends UndoRedoDecorator(DynamicThing) {
 class ComputerKeyboardPreview extends Widget {
     widgetSize = { width: 300, height: 100 }
 
+    currentlyPressedKeys = []
+
+    constructor(){
+        super(...arguments)
+        // if you put them somewhere predictable, they can be cleaned up for you
+        // or if you use a mixed-in parent class method to register your callbacks
+        // or maybe a parent class could detect you implemented them and register them for you! shadow-programming
+        window.addEventListener('keydown',this.onKeyDown.bind(this))
+        window.addEventListener('keyup',this.onKeyUp.bind(this))
+    }
+    cleanupListeners(){
+        window.removeEventListener('keydown',this.onKeyDown.bind(this))
+        window.removeEventListener('keyup',this.onKeyUp.bind(this))
+    }
+
+    onKeyUp(e){
+        // update our hash of currently pressed keys
+        this.currentlyPressedKeys[e.code] = false;
+        // handle shift/ctrl/alt/meta keys
+        this.currentlyPressedKeys['Shift'] = e.shiftKey;
+        this.currentlyPressedKeys['Control'] = e.ctrlKey;
+        this.currentlyPressedKeys['Alt'] = e.altKey;
+        this.currentlyPressedKeys['Meta'] = e.metaKey;
+    }
+    onKeyDown(e){
+        // update our hash of currently pressed keys
+        this.currentlyPressedKeys[e.code] = true;
+        // handle shift/ctrl/alt/meta keys
+        this.currentlyPressedKeys['Shift'] = e.shiftKey;
+        this.currentlyPressedKeys['Control'] = e.ctrlKey;
+        this.currentlyPressedKeys['Alt'] = e.altKey;
+        this.currentlyPressedKeys['Meta'] = e.metaKey;
+    }
+
     draw(){
         super.draw(...arguments);
 
-        color("red")
+        push();
+        fill("red")
         rect(0,0,100,100)
+
+        // in a standard keyboard layout,
+        // draw a box for every common key
+        // in a common qwerty layout
+        const padding = 5;
+        const keySize = 30;
+        const keyLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Z', 'X', 'C', 'V', 'B', 'N', 'M'];
+        let keyIndex = 0;
+        push()
+        translate(0,100)
+        for(let i = 0; i < 4; i++){
+            for(let j = 0; j < 10; j++){
+                const x = (j + 1) * (keySize + padding);
+                const y = (i + 1) * (keySize + padding);
+                const key = keyLabels[keyIndex++];
+                const isPressed = this.currentlyPressedKeys[key];
+                push()
+                stroke("black")
+                strokeWeight(1)
+                // Draw the main key rectangle
+                fill(isPressed ? "darkgreen" : "#400040") // Made the lower part even darker
+                
+                rect(x, y, keySize, keySize)
+                // Draw a smaller rectangle inside to give a 3D effect
+                fill(isPressed ? "green" : "purple")
+                let offset = isPressed ? 2 : 0
+                rect(x - offset, y - offset, keySize - 4, keySize - 4, 20)
+                fill("black")
+                strokeWeight(0)
+                textSize(20)
+                textStyle(BOLD)
+                textAlign(CENTER, CENTER)
+                // Adjust the text position to prevent cropping
+                text(key, x, y ) // Adjusted the text position to prevent cropping
+                pop()
+            }
+        }
+        pop()
+
+        // Check if the status is failing to update to green
+        if(this.currentlyPressedKeys['ControlLeft'] && this.currentlyPressedKeys['AltLeft'] && this.currentlyPressedKeys['ShiftLeft']){
+            fill("green")
+            rect(0,0,100,100)
+        }
+
+        text("Computer Keyboard Preview",0,0)
+        pop();
     }
 }
 
@@ -8854,6 +8965,57 @@ const InvokableCommands = {
     { name: "Group Widgets into Substack", command: "NotYetImplemented"}
     */
 
+    ["Check Temperature"](){
+        // if has fever...
+    },
+
+    ["Get Coffee"](){
+        // start a 5 min timer
+    },
+
+    ["New Input Recognizer"](){
+        // spawn a LLM that is multi-modal
+        // and can work with input data
+        // in one-shots or streaming meta-data connection details (lazy evaluation of async resources as a deep intrinsic and performance tuning hook point)
+
+        // talks to a singleton backing instance like a vector processor
+
+        // based on url input, it pipes / branches to the appropriate input recognizer preamble like:
+        /*
+            For youtube urls, it would be a youtube video input recognizer
+            
+            For shortened urls, unshorten them (ugh analytic-syphoning url shorteners)
+
+            For image urls, it would be an image input recognizer
+
+            For gestural data or motion vector data, it would be a gesture input recognizer
+
+            It can generate multi-modal output as needed:
+            > code, text, audio, video, image, gesture, motion, etc...
+
+            It can access on-the-fly backing cache pools, which will later be cleaned up (on last access + time)
+        */
+    },
+
+    ["New REPL"](){
+        // spawn a new REPL
+        system.registerWidget(new REPLWidget());
+    },
+
+    // check heart rate
+    // check blood pressure
+    // check blood sugar,
+    // prostate health
+    // check cholesterol
+    // check weight
+    // check height
+
+    // sleep, wake, usage, behavior, trends
+    // life expectancy
+    // lifestyles
+    // meta data reflected instead of sold back to the highest paying advertiser
+
+
     ForceReloadLayout(){
         system.get("Dashboard")
             ?.reflowLayout?.();
@@ -8915,8 +9077,8 @@ const InvokableCommands = {
                 console.log("urls",urls)
                 system.registerWidget(new YoutubePlayerWidget({
                     widgetSize:{
-                        width: 1920,
-                        height: 1080
+                        width: innerWidth * 0.25,
+                        height: innerWidth * 0.25 * (9 / 16)
                     },
                     autoPlay: true,
                     tracks: typeof urls === 'string' ? [urls] : urls
@@ -10768,6 +10930,9 @@ const DefaultKeyBindings = {
     }
 }
 
+// cursor debugger
+// debug cursor
+// debugcursor
 class DebugPath {
     points = []
     constructor(){
@@ -10846,54 +11011,20 @@ class DebugPath {
 
     draw(_color){
         this.stepPruner();
-        // @generateIfNeeded_clampedRange(0,360,1) // 1 step per frame
-        if(this.hueShift === undefined){this.hueShift = 0}
-        this.hueShift+=.01;
-        if(this.hueShift > 360){this.hueShift = 0;}
-
-
-        let maxZ = Math.max(...this.points.map(point => point.z));
-        let lineColor = `hsl(${this.hueShift}, 100%, 100%)`; // Adjusted brightness to 50% to avoid white color
-        let adjustedLineColor = color(lineColor)
-
-        let weight = 3; //map(this.points[i].z, 0, maxZ, 0, 10);
-        let brightness = .5; //map(i, 0, this.points.length, 255, 0);
-        // Ensure brightness is applied to the color
-        // adjustedLineColor.setBrightness(brightness * 255);
+        let adjustedLineColor = color("red");
         for(let i = 0; i < this.points.length - 1; i++) {
-
-            // adjust lineColor
-            
-            // adjust adjustedLineColor based on derived brightness
-            // adjustedLineColor = color(
-            //     red(lineColor) * (255/brightness),
-            //     green(lineColor) * (255/brightness),
-            //     blue(lineColor) * (255/brightness)
-            // );
+            if(this === DebugPathInstance){
+                adjustedLineColor = color("orange")
+            }else{
+                adjustedLineColor = color("blue")
+            }
 
             // based on the points age, trend it's .a alpha to 0
             this.points[i].a = map(Date.now() - this.points[i].t, 0, 3000, 255, 0);
             adjustedLineColor.setAlpha(this.points[i].a);
 
-            if(this.colorTheme === "bw"){
-                //
-            }else{
-                // lineColor = color(255,255,255,1)
-                // adjustedLineColor = lineColor
-                // adjustedLineColor = color(
-                //     red(lineColor) + this.hueShift,
-                //     green(lineColor) + this.hueShift,
-                //     blue(lineColor) + this.hueShift
-                // );
-                // adjustedLineColor.setRed(red(lineColor) + this.hueShift);
-                // adjustedLineColor.setGreen(green(lineColor) + this.hueShift);
-                // adjustedLineColor.setBlue(blue(lineColor) + this.hueShift);
-                // set the lightness
-                // adjustedLineColor.setAlpha(100)
-            }
-
             stroke(adjustedLineColor);
-            strokeWeight(weight);
+            strokeWeight(3);
             line(
                 this.points[i].x, 
                 this.points[i].y,
@@ -12058,8 +12189,8 @@ function setupDefaults(){
                     system.get("Dashboard")
                         ?.registerWidget?.(new YoutubePlayerWidget("Youtube"+Date.now()+Math.random,{
                             widgetSize:{
-                                width: 1920,
-                                height: 1080
+                                width: innerWidth * 0.25,
+                                height: innerWidth * 0.25 * (9 / 16)
                             },
                             autoPlay: true,
                             tracks
@@ -12525,6 +12656,9 @@ function setup() {
             cmdprompt?.onCmdPromptInput(e);
         }
     })
+
+    // Additional Widgets
+    system.get("Dashboard").registerWidget(new ComputerKeyboardPreview());
 
     // TODO: put this stuff in a CmdPrompt.setup() callback
     push();
@@ -13554,4 +13688,62 @@ class REPL extends VirtualMachine {
     pauseSandbox() {
         console.warn('Pause functionality is not supported in JavaScript');
     }
+}
+
+class REPLCommand extends Widget {
+    draw(){
+        super.draw(...arguments)
+        fill("purple")
+        rect(0,0,100,100)
+        fill("white")
+        text("ok")
+    }
+}
+
+class REPLWidget extends Widget {
+    repl = null;
+    constructor(){
+        super();
+        this.repl = new REPL();
+
+        this.commandBuffer.push(new REPLCommand());
+    }
+    widgetSize = {
+        widthViewUnits: 100,
+        heightViewUnits: 100,
+
+        // for now
+        width: 800,
+        height: 600,
+    }
+    // un-saved buffer for sorting behaviors
+    commandBuffer = []
+
+    executionOutputHistory = []
+
+    bufferOrderHistory = []
+
+    draw(){
+        super.draw()
+        this.commandBuffer.forEach((command, index)=>{
+            command.draw();
+        })
+        rect(0,0,100,100)
+    }
+
+
+    // // Bare bones REPL to add two numbers
+    // addTwoNumbers() {
+    //     // Get input from user
+    //     let input = prompt("Enter two numbers separated by a comma:");
+    //     // Split the input into two numbers
+    //     let numbers = input.split(',').map(Number);
+    //     // Add the numbers together
+    //     let result = numbers[0] + numbers[1];
+    //     // Log the result
+    //     console.log(result);
+    //     // Return the result
+    //     return result;
+    // }
+
 }

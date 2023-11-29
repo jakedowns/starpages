@@ -2,6 +2,25 @@
 <html lang="en">
   <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', (event) => {
+        var socketIO = io();
+        console.warn('socketIO', socketIO)
+        // connect to "testOpenAIServer" and send a prompt message
+        socketIO.on('message', function(data){
+          // This event listener will trigger for any type of message received from the server
+          console.log("received message from server", data);
+        });
+        socketIO.on('connect', function(){
+          console.log("connected to socket.io server");
+          socketIO.emit('prompt', "hello world");
+        });
+        socketIO.on('result', function(data){
+          console.log("received result from server", data);
+        });
+      });
+    </script>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/addons/p5.sound.min.js"></script> -->
 
     <script type="module">
