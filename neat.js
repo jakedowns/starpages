@@ -13161,7 +13161,7 @@ let cursor, MainCanvasContextThing = function(p){
 }
 let mainCanvasContext = new p5(MainCanvasContextThing, "main-canvas-context");
 window.mctx = mainCanvasContext;
-const properties = ['TWO_PI', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'LEFT', 'RIGHT', 'TOP', 'alpha', 'beginShape', 'endShape', 'cos', 'sin', 'vertex', 'line', 'color', 'createGraphics', 'circle', 'ellipse', 'rectMode', 'fill', 'frameCount', 'image', 'innerHeight', 'innerWidth', 'lerp', 'lerpColor', 'loadImage', 'millis', 'map', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pop', 'push', 'text', 'textAlign', 'textSize', 'textStyle', 'tint', 'translate', 'rect', 'scale', 'stroke', 'strokeWeight', 'windowHeight', 'windowWidth'];
+const properties = ['TWO_PI', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'LEFT', 'RIGHT', 'TOP', 'alpha', 'beginShape', 'endShape', 'cos', 'sin', 'vertex', 'line', 'color', 'createGraphics', 'circle', 'ellipse', 'rectMode', 'fill', 'frameCount', 'image', 'innerHeight', 'innerWidth', 'lerp', 'lerpColor', 'loadImage', 'millis', 'map', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pop', 'push', 'text', 'textAlign', 'textSize', 'textStyle', 'tint', 'translate', 'rect', 'scale', 'stroke', 'strokeWeight', 'windowHeight', 'windowWidth', 'createElement'];
 properties.forEach(prop => {
     if(typeof mainCanvasContext[prop] === 'function'){
         window[prop] = mainCanvasContext[prop].bind(mainCanvasContext);
