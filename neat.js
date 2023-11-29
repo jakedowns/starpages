@@ -10025,12 +10025,14 @@ class ToastNotification {
                 targetCloneCount = Math.round(Math.sin(this.importantCloneAnimationSequenceFrame / 10) * 10);
             }
         }
+        push();
         for(let i = 0; i < targetCloneCount; i++){
             // shift the drawing context with each i
-            mctx.translate(10 * i, 10 * i);
+            mctx.translate(-10 * i, 10 * i);
 
             this.drawOneInstance(index)
         }
+        pop();
     }
 
     drawOneInstance(index){
