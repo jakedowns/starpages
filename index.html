@@ -14,7 +14,9 @@
         });
         socketIO.on('connect', function(){
           console.log("connected to socket.io server");
-          socketIO.emit('prompt', "hello world");
+
+          // don't do that on boot, it costs money!
+          // socketIO.emit('prompt', "hello world");
         });
         socketIO.on('result', function(data){
           console.log("received result from server", data);
@@ -46,8 +48,15 @@
               // init();
               // animate();
             // }, 1000);
-
+            function deinit(){
+              document.body.removeChild( _renderer.domElement ); 
+              _renderer, _scene, _camera, _cube, _sphere, _stars = null;
+            }
+            window.disableTHREEMode = function(){
+              window.three_mode_initialized = false;
+            }
             window.initTHREEMode = function(){
+              window.three_mode_initialized = true;
               init(); 
               // kickstart renderer:
               animate();
@@ -245,7 +254,7 @@
           let rotationSpace = (distanceFromCenter / window.innerWidth) * 360;
           distanceFromCenter *= (window.mouseX < window.innerWidth/2 ? 1 : -1);
           let rotationFactor = distanceFromCenter / (window.innerWidth / 2);
-          rotationFactor = rotationFactor * 1e-8;
+          rotationFactor = rotationFactor * 1e-9;
           _camera.position.x = 2 * Math.sin(Date.now() * 0.001 * rotationFactor) * (1/window.zoom);
           _camera.position.z = 2 * Math.cos(Date.now() * 0.001 * rotationFactor) * (1/window.zoom);
           //_camera.position.y = (-panY - mouseY) * 0.0001;
@@ -298,7 +307,9 @@
           }
           
           // Request the next frame at the end of the function to ensure all updates are rendered before the next frame is requested
-          requestAnimationFrame( animate );
+          if(window.three_mode_initialized){
+            requestAnimationFrame( animate );
+          }
 
         }
 
