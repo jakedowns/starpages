@@ -5531,7 +5531,7 @@ document.addEventListener('keydown', function(event) {
             new HideCmdPromptCommand().execute();
         }
     }
-    if (event.code === 'Slash' && event.ctrlKey) {
+    if (event.code === 'Slash' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         if(!store.CmdPromptVisible){
             new ShowCmdPromptCommand().execute();
