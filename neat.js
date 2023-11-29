@@ -1873,11 +1873,11 @@ function drawDashedRect(
     fillColor,
     x, y, w, h, dashLength
 ){
-    strokeWeight(_strokeWeight)
-    stroke(_strokeColor)
-    fill(fillColor)
-    rect(10, 10, innerWidth - 20, innerHeight - 20)
-    rect(20, 20, windowWidth - 40, windowHeight - 40)
+    mctx.strokeWeight(_strokeWeight)
+    mctx.stroke(_strokeColor)
+    mctx.fill(fillColor)
+    mctx.rect(10, 10, mctx.innerWidth - 20, mctx.innerHeight - 20)
+    mctx.rect(20, 20, mctx.windowWidth - 40, mctx.windowHeight - 40)
     // draw a rect comprised of 4 dashed lines
     drawDashedLine(x, y, x + w, y, dashLength);  // Top side
     drawDashedLine(x + w, y, x + w, y + h, dashLength);  // Right side
@@ -1886,7 +1886,7 @@ function drawDashedRect(
 
 }
 function drawDashedLine(x1, y1, x2, y2, dashLength = 10) {
-    let distance = dist(x1, y1, x2, y2);
+    let distance = mctx.dist(x1, y1, x2, y2);
     let dashCount = Math.floor(distance / dashLength);
     let xStep = (x2 - x1) / dashCount;
     let yStep = (y2 - y1) / dashCount;
@@ -1894,7 +1894,7 @@ function drawDashedLine(x1, y1, x2, y2, dashLength = 10) {
     for (let i = 0; i < dashCount; i += 2) {
         let x = x1 + i * xStep;
         let y = y1 + i * yStep;
-        line(x, y, x + xStep, y + yStep);
+        mctx.line(x, y, x + xStep, y + yStep);
     }
 }
 let fov = 100;
@@ -1951,8 +1951,6 @@ class Widget extends UndoRedoComponent {
         return this?.widgetSize ?? {width:100,height:100};
     }
 
-    debugColor = color("red")
-
     getPosition(thing){
         return thing.basePosition ?? thing.position;
     }
@@ -2008,17 +2006,18 @@ class Widget extends UndoRedoComponent {
     
     constructor(name){
         super(name);
-        this.debugColor = color(
-            random(0,255),
-            random(0,255),
-            random(0,255)
+
+        this.debugColor = mctx.color(
+            mctx.random(0,255),
+            mctx.random(0,255),
+            mctx.random(0,255)
         )
 
         this.halfDepthRange = this.depthRange / 2;
 
         // assign a random z-depth for fun
         // we'll make this more static // meaningful soon
-        this.zDepth = Math.round(random(
+        this.zDepth = Math.round(mctx.random(
             minWidgetDepth,
             maxWidgetDepth
         ))
@@ -2040,12 +2039,12 @@ class Widget extends UndoRedoComponent {
     }
     isHovered(){
 
-        let realMouseX = (mouseX + panX)/zoom;
-        let realMouseY = (mouseY + panY)/zoom;
+        let realMouseX = (mctx.mouseX + panX)/zoom;
+        let realMouseY = (mctx.mouseY + panY)/zoom;
 
         let screenSpaceToWorldSpace = {
-            x: mouseX - panX,
-            y: mouseY - panY,
+            x: mctx.mouseX - panX,
+            y: mctx.mouseY - panY,
         }
         screenSpaceToWorldSpace.x *= zoom;
         screenSpaceToWorldSpace.y *= zoom;
@@ -2067,25 +2066,25 @@ class Widget extends UndoRedoComponent {
                 + (this.position.y ?? 0),
         }
 
-        push()
+        mctx.push()
 
-            fill("blue"); strokeWeight(0); ellipse(screenSpaceToWorldSpace.x,screenSpaceToWorldSpace.y,20)
+            mctx.fill("blue"); mctx.strokeWeight(0); mctx.ellipse(screenSpaceToWorldSpace.x,screenSpaceToWorldSpace.y,20)
             if(store.showWidgetPositions){
-                text("ssTWS",
+                mctx.text("ssTWS",
                 screenSpaceToWorldSpace.x,
                 screenSpaceToWorldSpace.y)
             }
 
-            strokeWeight(0)
-            fill("red")
-            ellipse(
+            mctx.strokeWeight(0)
+            mctx.fill("red")
+            mctx.ellipse(
                 realMouseX,
                 realMouseY,
                 10,
             )
             if(store.showWidgetPositions){
-                strokeWeight(3); stroke(0); fill(255)
-                text(
+                mctx.strokeWeight(3); mctx.stroke(0); mctx.fill(255)
+                mctx.text(
                     "real: x:"+realMouseX.toFixed(0)+" y:"+realMouseY.toFixed(0),
                     realMouseX,
                     realMouseY
@@ -2094,13 +2093,13 @@ class Widget extends UndoRedoComponent {
             
             
             let debug = {
-                x: mouseX * zoom,
-                y: mouseY * zoom,
+                x: mctx.mouseX * zoom,
+                y: mctx.mouseY * zoom,
             }
             
-            strokeWeight(0)
-            fill("yellow")
-            ellipse(
+            mctx.strokeWeight(0)
+            mctx.fill("yellow")
+            mctx.ellipse(
                 debug.x,
                 debug.y,
                 5
@@ -2117,12 +2116,12 @@ class Widget extends UndoRedoComponent {
             //     debug.y
             // )
 
-            stroke(this.hovered ? "yellow" : this.debugColor) //"green")
-            strokeWeight(3)
-            fill(color(0,0,0,0))
+            mctx.stroke(this.hovered ? "yellow" : this.debugColor) //"green")
+            mctx.strokeWeight(3)
+            mctx.fill(mctx.color(0,0,0,0))
 
             // debug bounds (base position)
-            rect(
+            mctx.rect(
                 this.deepPosition.x + this.widgetSize.width / 2,
                 this.deepPosition.y + this.widgetSize.height / 2,
                 this.widgetSize.width,
@@ -2130,9 +2129,9 @@ class Widget extends UndoRedoComponent {
             )
 
             //stroke("red")
-            strokeWeight(1)
-            stroke(this.hovered ? "yellow" : this.debugColor) //"green")
-            rect(
+            mctx.strokeWeight(1)
+            mctx.stroke(this.hovered ? "yellow" : this.debugColor) //"green")
+            mctx.rect(
                 this.parallaxedPosition.x + this.widgetSize.width / 2,
                 this.parallaxedPosition.y + this.widgetSize.height / 2,
                 this.widgetSize.width,
@@ -2157,7 +2156,7 @@ class Widget extends UndoRedoComponent {
             //     createVector(rectB_x1 + wS.width / 2, rectB_y1 + wS.height / 2),
             // )
 
-        pop();
+            mctx.pop();
         
         // check if the mouse is intersecting the widget bounding box
         // account for offset of zoom and panX,panY
@@ -2175,7 +2174,7 @@ class Widget extends UndoRedoComponent {
     getParallaxedPosition(){
         let apparentDepth = this.zDepth;
         // squash depth as zoom [0-3] approaches 3
-        apparentDepth = lerp(apparentDepth, apparentDepth * 0.5, zoom / 3);
+        apparentDepth = mctx.lerp(apparentDepth, apparentDepth * 0.5, zoom / 3);
 
         // Based on zDepth, we'll affect the position to emulate parallax
         // Depth currently ranges from minDepth maxDepth
@@ -2188,10 +2187,10 @@ class Widget extends UndoRedoComponent {
 
         // dampen the pFactor when the zoom is increased to simulate flattening of perspective
         // use lerp to account for the zoom range being 0-3, not 0-1
-        parallaxFactor *= lerp(1, 0, zoom / 3);
+        parallaxFactor *= mctx.lerp(1, 0, zoom / 3);
 
         this.targetExpFactor = this.hovered ? parallaxFactor : 0;
-        this.tweenExpFactor = lerp(this.tweenExpFactor, this.targetExpFactor, 0.1);
+        this.tweenExpFactor = mctx.lerp(this.tweenExpFactor, this.targetExpFactor, 0.1);
         
         // Calculate the new x and y positions of the widget, taking into account the parallax factor.
         // The parallax effect is achieved by slightly shifting the position of the widget based on the parallax factor.
@@ -2209,7 +2208,7 @@ class Widget extends UndoRedoComponent {
          : minWidgetDepth;
 
         // lerp to targetRenderDepth
-        this.tweenedDepth = lerp(this.tweenedDepth, this.targetRenderDepth, 0.1);
+        this.tweenedDepth = mctx.lerp(this.tweenedDepth, this.targetRenderDepth, 0.1);
 
         let affectedX = this.basePosition.x
             + (exponentialParallaxFactor * mouseShifted.x);
@@ -2218,11 +2217,11 @@ class Widget extends UndoRedoComponent {
             + (exponentialParallaxFactor * mouseShifted.y);
 
         // scale the parallax based on the distance from the center of the screen
-        let distanceFromCenter = dist(affectedX, affectedY, innerWidth / 2, innerHeight / 2);
+        let distanceFromCenter = mctx.dist(affectedX, affectedY, innerWidth / 2, innerHeight / 2);
         let distanceFactor = distanceFromCenter / (innerWidth / 2);
-        distanceFactor = lerp(1, distanceFactor, zoom / 6); // Reduced the effect by dividing zoom by 6 instead of 3
-        affectedX = lerp(affectedX, innerWidth / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
-        affectedY = lerp(affectedY, innerHeight / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
+        distanceFactor = mctx.lerp(1, distanceFactor, zoom / 6); // Reduced the effect by dividing zoom by 6 instead of 3
+        affectedX = mctx.lerp(affectedX, innerWidth / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
+        affectedY = mctx.lerp(affectedY, innerHeight / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
         
         // Update the position of the widget to the newly calculated values.
         // this.position.x = affectedX;
@@ -2256,8 +2255,8 @@ class Widget extends UndoRedoComponent {
             this.basePosition.x !== this.targetPosition.x
             || this.basePosition.y !== this.targetPosition.y
         ){
-            this.basePosition.x = lerp(this.basePosition.x, this.targetPosition.x, 0.1);
-            this.basePosition.y = lerp(this.basePosition.y, this.targetPosition.y, 0.1);
+            this.basePosition.x = mctx.lerp(this.basePosition.x, this.targetPosition.x, 0.1);
+            this.basePosition.y = mctx.lerp(this.basePosition.y, this.targetPosition.y, 0.1);
 
             // if it's close enough in x direction, snap to end
             if(Math.abs(this.basePosition.x - this.targetPosition.x) < 0.1){
@@ -2277,9 +2276,15 @@ class Widget extends UndoRedoComponent {
     // which widgets were drawn, and which were culled
     // and which are taking the most wall time
     draw(widgetID, canvasContext){
+        if(!canvasContext){
+            canvasContext = mainCanvasContext;
+        }
+        if(!canvasContext){
+            return
+        }
         // update fov using Sin wave
         //fov = 100 + (sin(frameCount / 100) * 100);
-        fov = lerp(60, 200, map(zoom, MIN_ZOOM, MAX_ZOOM, 0, 1));
+        fov = mctx.lerp(60, 200, mctx.map(zoom, MIN_ZOOM, MAX_ZOOM, 0, 1));
 
         // do physics updates n such, 
         // need to know where things are to know if we can draw them
@@ -2302,7 +2307,7 @@ class Widget extends UndoRedoComponent {
 
         drawDashedRect(
             3, "chartreuse",
-            color(0,0,0,0),
+            mctx.color(0,0,0,0),
             deepLeftPXBound,
             deepTopPXBound,
             deepRightPXBound - deepLeftPXBound,
@@ -2356,11 +2361,11 @@ class Widget extends UndoRedoComponent {
 
         // lerp bright and alpha, 
         // to range of min=50% max=80% (in terms of 255 levels)
-        _brightness = lerp(127.5, 204, _brightness / 255)
-        _alpha = lerp(127.5, 204, _alpha / 255)
+        _brightness = mctx.lerp(127.5, 204, _brightness / 255)
+        _alpha = mctx.lerp(127.5, 204, _alpha / 255)
 
         if(this.hovered){
-            _brightness = color(0,255,0)
+            _brightness = mctx.color(0,255,0)
         }
 
         //let fillcolor = color(0) 
@@ -2440,16 +2445,16 @@ class FlashCard extends Widget {
         this.back = back;
     }
     draw(){
-        push()
-        strokeWeight(1)
-        color("red")
-        rect(
+        mctx.push()
+        mctx.strokeWeight(1)
+        mctx.color("red")
+        mctx.rect(
             this.position.x,
             this.position.y,
             this.size.width,
             this.size.height
         )
-        pop()
+        mctx.pop()
     }
 }
 class FlashCardWidget extends Widget {
@@ -2717,7 +2722,7 @@ class MessengerWidget extends Widget {
             textSize(20)
             textAlign(CENTER, CENTER)
             text("Messenger!", tpx,tpy,tsx,tsy)
-        pop()
+        mctx.pop()
     }
 }
 
@@ -3630,8 +3635,8 @@ class ZoomDependentWidget extends Widget {
 
     draw(){
         super.draw(...arguments)
-        push()
-            textSize(50)
+        mctx.push()
+        mctx.textSize(50)
             this.center = {
                 x: this.position.x + (this.widgetSize.width / 2),
                 y: this.position.y + (this.widgetSize.height / 2)
@@ -3654,14 +3659,14 @@ class ZoomDependentWidget extends Widget {
     }
     drawSmall(){
         // draw a small icon
-        text(`🪐\n${this.roundedZoom}`,this.center.x,this.center.y - 25)
+        mctx.text(`🪐\n${this.roundedZoom}`,this.center.x,this.center.y - 25)
     }
     drawMed(){
         // draw a medium icon
-        text(`🏠\n${this.roundedZoom}`,this.center.x,this.center.y - 25)
+        mctx.text(`🏠\n${this.roundedZoom}`,this.center.x,this.center.y - 25)
     }
     drawLarge(){
-        text(`🦠\n${this.roundedZoom}`,this.center.x,this.center.y - 25)
+        mctx.text(`🦠\n${this.roundedZoom}`,this.center.x,this.center.y - 25)
     }
 }
 // register the widget with the command system as instantiatable
@@ -3854,19 +3859,19 @@ class Cursor {
     draw(){
         // debug draw a line from the center of the screen to where we think the mouse is,
         // to help debug the mouse position
-        push();
-        strokeWeight(1)
-        stroke("red")
-        fill(0,0)
-        drawDashedLine(mouseX, mouseY, innerWidth / 2, innerHeight / 2)
+        mctx.push();
+        mctx.strokeWeight(1)
+        mctx.stroke("red")
+        mctx.fill(0,0)
+        drawDashedLine(mctx.mouseX, mctx.mouseY, mctx.innerWidth / 2, mctx.innerHeight / 2)
         
-        stroke("purple")
-        line(mouseX, mouseY, pmouseX, pmouseY)
+        mctx.stroke("purple")
+        mctx.line(mctx.mouseX, mctx.mouseY, mctx.pmouseX, mctx.pmouseY)
 
         // draw a crosshair at the mouse position
-        drawCrosshair("blue", {x: mouseX, y: mouseY})
+        drawCrosshair("blue", {x: mctx.mouseX, y: mctx.mouseY})
 
-        stroke("green")
+        mctx.stroke("green")
 
         // represents 0,0 top/left of the "world" canvas
         // corrected for zoom, and pan
@@ -3875,18 +3880,18 @@ class Cursor {
             y: panY * zoom
         }
         drawDashedLine(
-            mouseX, mouseY,
+            mctx.mouseX, mctx.mouseY,
             worldOriginInScreenSpace.x, worldOriginInScreenSpace.y,
         )
         // seriously tho, how do we map the "Center" of the "virtualCanvas" (dashboard)
         // to screenspace and vice versa?
         let worldOriginAttempt2 = {
-            x: (panX + (windowWidth/2)) * zoom,
-            y: (panY + (windowHeight/2)) * zoom
+            x: (panX + (mctx.windowWidth/2)) * zoom,
+            y: (panY + (mctx.windowHeight/2)) * zoom
         }
 
         drawCrosshair("red", worldOriginInScreenSpace);
-        stroke("yellow")
+        mctx.stroke("yellow")
         drawDashedLine(
             worldOriginInScreenSpace.x,
             worldOriginInScreenSpace.y,
@@ -3894,9 +3899,17 @@ class Cursor {
             worldOriginAttempt2.y
         )
         drawCrosshair("green", worldOriginAttempt2);
+
+        mctx.stroke("blue")
+        drawDashedLine(
+            worldOriginAttempt2.x,
+            worldOriginAttempt2.y,
+            mctx.innerWidth/2,
+            mctx.innerHeight/2
+        )
         
         
-        pop();
+        mctx.pop();
     }
 }
 
@@ -4900,7 +4913,7 @@ class TodoWidget extends Widget {
     widgetSize = { width: 300, height: 150 }
     constructor(){
         super();
-        this.input = createInput("");
+        this.input = mctx.createInput("");
         this.input.elt.placeholder = "Add Todo";
         this.input.elt.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -5478,7 +5491,8 @@ let debounce = function(func, wait, immediate, options = {}) {
     }
 }
 let onResize = function(){
-    resizeCanvas(windowWidth, windowHeight);
+    mctx.resizeCanvas(windowWidth, windowHeight);
+    // TODO: call resize on DeepCanvasManager
     system.get("Dashboard")?.reflowLayout()
 }
 let onResizeDebounced = debounce(onResize);
@@ -5486,6 +5500,8 @@ let onResizeDebounced = debounce(onResize);
 window.addEventListener('resize', function() {
     onResizeDebounced();
 });
+
+
 
 const MODES = {
     SELECT: 'select',
@@ -5560,7 +5576,7 @@ class LayereredCanvasRenderer {
                                 // && widget.visible 
                                 // && !widget.doNotDraw
                             ){
-                                widget.draw(widgetID, this.canvases[widget.canvasID+1]);
+                                widget.draw(widgetID, this.canvases ? this.canvases[(widget.canvasID ?? -1) + 1] : undefined);
                             }
                         }
                     })
@@ -5893,7 +5909,8 @@ class Dashboard {
             this.widgets[widgetID]
                 .setTargetPosition(this.layout[widgetID])
                 // NOTE: draw is disabled, testing 3 layered canvases!
-                // ?.draw(widgetID);
+                // NOTE: disable this when testing deepCanvasManager
+                ?.draw(widgetID);
         });
         // if there's at least one hovered widget, set the cursor to pointer
         document.body.style.cursor = hoveredArray?.length 
@@ -7102,10 +7119,10 @@ class WizardController {
         this.wizardSuggestionList.draw();
     }
     drawStepProgressBreadcrumbs(){
-        push()
+        mctx.push()
         // center
-        translate(
-            windowWidth / 2 - ((this.config.steps.length / 2) * 10),
+        mctx.translate(
+            mctx.windowWidth / 2 - ((this.config.steps.length / 2) * 10),
             30
         )
         let spacing = 30;
@@ -7113,9 +7130,9 @@ class WizardController {
         this.config.steps.forEach((step, stepIndex) => {
             if (stepIndex > 0) {
                 let c = stepIndex <= this.currentStepIndex ? color(0, 255, 0) : color(255, 0, 0);
-                stroke(c);
-                strokeWeight(4);
-                line(
+                mctx.stroke(c);
+                mctx.strokeWeight(4);
+                mctx.line(
                     spacing + (stepIndex * spacing), spacing,
                     spacing + ((stepIndex - 1) * spacing), spacing
                 );
@@ -7127,13 +7144,13 @@ class WizardController {
             let c = stepIndex == this.currentStepIndex 
                 ? "yellow" 
                 : stepIndex <= this.currentStepIndex 
-                    ? color(0, 255, 0) 
-                    : color(255, 0, 0);
-            fill(c);
-            strokeWeight(0);
-            circle(spacing + (stepIndex * spacing), spacing, 20);
+                    ? mctx.color(0, 255, 0) 
+                    : mctx.color(255, 0, 0);
+            mctx.fill(c);
+            mctx.strokeWeight(0);
+            mctx.circle(spacing + (stepIndex * spacing), spacing, 20);
         });
-        pop()
+        mctx.pop()
     }
     drawCurrentStep(){
         this.drawStepProgressBreadcrumbs();
@@ -7147,18 +7164,18 @@ class WizardController {
         // });
 
         // render the name of the current command in the top right
-        textAlign(RIGHT,TOP);
-        textStyle(BOLD)
-        text(`${this.name}`, windowWidth - 20, 20);
+        mctx.textAlign(RIGHT,TOP);
+        mctx.textStyle(BOLD)
+        mctx.text(`${this.name}`, mctx.windowWidth - 20, 20);
 
         // render the question
         let offsetY = 30;
-        fill(255)
-        textAlign(LEFT,TOP);
-        textStyle(BOLD)
-        text(`${questionTitle}`, 20, offsetY + 20);
-        textStyle(NORMAL)
-        text(`${question}`, 20, offsetY + 50);
+        mctx.fill(255)
+        mctx.textAlign(LEFT,TOP);
+        mctx.textStyle(BOLD)
+        mctx.text(`${questionTitle}`, 20, offsetY + 20);
+        mctx.textStyle(NORMAL)
+        mctx.text(`${question}`, 20, offsetY + 50);
     }
     OnPressEscape(event){
         if(confirm('Are you sure?')){
@@ -9219,6 +9236,9 @@ const InvokableCommands = {
     },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?v=931PQwTA79k";
+    },
+    ["New Moon Phase Widget"](){
+        system.registerWidget(new MoonPhaseWidget());
     },
     // ["Play: Black Sabbath > War Pigs"](){
     //     return "https://www.youtube.com/watch?v=LQUXuQ6Zd9w"
@@ -11334,11 +11354,12 @@ class Sprite {
     }
 }
 
+let oldZoom = zoom;
 // Define the mouseWheel function
 function mouseWheel(event) {
     // TODO: if the mouse is over a scroll container,
     // scroll it
-    let oldZoom = zoom;
+    
     if(store.shiftIsPressed){
 
         // IF ZOOM ON SCROLL ENABLED
@@ -11346,8 +11367,30 @@ function mouseWheel(event) {
         zoom = constrain(zoom, MIN_ZOOM, MAX_ZOOM);
         // make sure we offset the pan to account for the zoom messing with our center
         // we should be passing _towards_ the mouse 
-        panX -= mouseX * (oldZoom - zoom);
-        panY -= mouseY * (oldZoom - zoom);
+        // panX += (mouseX - innerWidth / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
+        // panY += (mouseY - innerHeight / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
+
+        // Implementing simple nudge based on logic
+        // If panX > 0, we're panning right, so we need to nudge left
+        let delta = deltaTime * (oldZoom - newZoom);
+        let delta2 = Math.abs(panX) - 0;
+        let delta3 = Math.abs(panY) - 0;
+        delta*=1.0 - (delta2+delta3);
+        if(panX > 0) {
+            panX -= 1.1 * delta;
+        }
+        // If panX < 0, we're panning left, so we need to nudge right
+        if(panX < 0) {
+            panX += 1.1 * delta;
+        }
+        // If panY > 0, we're panning down, so we need to nudge up
+        if(panY > 0) {
+            panY -= 1.1 * delta;
+        }
+        // If panY < 0, we're panning up, so we need to nudge down
+        if(panY < 0) {
+            panY += 1.1 * delta;
+        }
 
 
     }else{
@@ -11369,6 +11412,7 @@ function mouseWheel(event) {
         if(zoomChanged){
             onResizeDebounced();
         }
+        oldZoom = zoom;
 
     //}else{
         //panX -= event.deltaX;
@@ -11391,10 +11435,10 @@ function mouseWheel(event) {
     //panX += (windowWidth / 2) * (oldZoom - zoom);
 }
 
-function updateBlur(){
+function updateBlur(p){
     const minBlur = 10;
     const maxBlur = 100;
-    const blur = map(zoom, MIN_ZOOM, MAX_ZOOM, minBlur, maxBlur)
+    const blur = p.map(zoom, MIN_ZOOM, MAX_ZOOM, minBlur, maxBlur)
     bgEl.style.filter = `blur(${blur}px)`;
 }
 
@@ -11623,243 +11667,8 @@ function handleAnalogStickInput(){
 
 
 
-// Define the draw function
-// Main Draw / Root Draw
-// Todo: system manager should loop over active systems,
-// and call draw on systems which have non empty render queues
-function draw() {
-
-    //
-    deepCanvasManager.draw();
-
-    
-
-    // check the current pinch scale factor
 
 
-    store.frameDrawCount = 0;
-    store.frameDrawCount++;
-
-    handleAnalogStickInput();
-
-    // this value updates instantly
-    // then we lerp our viewport's cursor vec3 torwards it
-    whatTheCenterIs.x = mouseX;
-    whatTheCenterIs.y = mouseY;
-    
-
-    // clear the canvas
-    if(store.clearMode){
-        clear()
-    }
-    //background(color(0,0,0,0));
-
-    /**
-    * @description Iterating over sprites array
-    * @type {Sprite[]} sprites - Each sprite is an instance of the Sprite class
-    */
-    push();
-    store.minZ = 1000;
-    store.maxZ = 0;
-
-    sprites.forEach((sprite,index)=>{
-        //sprite.drawSimple();
-        sprite.draw();
-
-        // push sprite in z space
-        // once it reaches a certain depth, snap it back to the other end of z space and a random x,y scaled by z
-        sprite.z -= 0.01;
-        if(sprite.z){
-            if(sprite.z < -10){
-                sprite.z = 10;
-                // sprite.x = Math.random() * windowWidth;
-                // sprite.y = Math.random() * windowHeight;
-            }
-            if(sprite.z > 10){
-                sprite.z = -10;
-                // sprite.x = Math.random() * windowWidth;
-                // sprite.y = Math.random() * windowHeight;
-            }
-        }
-        if(sprite.z > store.maxZ){
-            store.maxZ = sprite.z;
-        }
-        if(sprite.z < store.minZ){
-            store.minZ = sprite.z;
-        }
-
-        return;
-
-        // use some perlin noise to perterb the 
-        // sprite's position
-        // (in the future, we'll convert to flowfield influence)
-        let seed = Math.random();
-        let offsetX = sprite.x * 0.00001; // Decrease multiplier for smoother noise
-        let offsetY = sprite.y * 0.00001; // Decrease multiplier for smoother noise
-        let uniqueFactorX = sprite.x * 0.2; // Add offset for unique noise per region
-        let uniqueFactorY = sprite.y * 0.2; // Add offset for unique noise per region
-
-        // Update sprite's x position with noise-based perturbation
-        // noise() generates Perlin noise value at specified coordinates
-        // offsetX + frameCount * 0.01 + seed + uniqueFactorX gives unique noise coordinates for each frame and sprite
-        // noise() returns value between 0 and 1, so we subtract 0.5 to allow movement in both positive and negative directions
-        // Final value is multiplied by 20 to increase the effect and by Math.sin(frameCount * 0.01) for oscillating effect over time
-        sprite.x += (noise(offsetX + frameCount * 0.01 + seed + uniqueFactorX) - 0.5) * 2 * Math.sin(frameCount * 0.01);
-        
-        // Update sprite's y position with noise-based perturbation
-        // Similar to x position update, but uses Math.cos(frameCount * 0.01) for oscillation to create perpendicular movement
-        sprite.y += (noise(offsetY + frameCount * 0.01 + seed + uniqueFactorY) - 0.5) * 2 * Math.cos(frameCount * 0.01);
-        // make sure to keep them within window bounds
-        sprite.x = constrain(sprite.x, 0, windowWidth)
-        sprite.y = constrain(sprite.y, 0, windowHeight);
-    })
-    pop()
-
-    // draw our bg image
-    if(bgImage){
-        image(bgImage, 0, 0, windowWidth, windowHeight);
-    }
-    // center our coordinate system
-    push();
-        const halfWidth = windowWidth / 2;
-        const halfHeight = windowHeight / 2;
-        translate(halfWidth, halfHeight)
-
-        // every second update the url with the current location
-        // pan,zoom
-        if(frameCount % 60 === 0){
-            let url = new URL(window.location.href);
-            url.searchParams.set("panX", store.panX);
-            url.searchParams.set("panY", store.panY);
-            url.searchParams.set("zoom", store.zoom);
-
-            // update the url
-            window.history.replaceState({}, '', url);
-        }
-        
-        // NOTE: there is an issuer where when you're zoomed in,
-        // it's relative from the top left of the whole screen
-        // we want zoom to pull the center towards where the mouse is
-        // so 1 we need to calculate where the "center" is by getting
-        // the value offset negative of any current pan
-        // then find the difference between the mouse position and the center
-        // if there's a difference > 0.01 between the center and the mouse
-        // AND zoomChanged === true, then shift toward the center by nudging panX and panY
-        // by a fraction of the difference between the mouse and the center
-        // if(zoomChanged){
-        //     let center = {
-        //         x: panX * -1 * zoom,
-        //         y: panY * -1 * zoom
-        //     };
-        //     let mouseToCenter = {
-        //         x: mouseX - center.x,
-        //         y: mouseY - center.y
-        //     };
-        //     let distance = Math.sqrt(mouseToCenter.x * mouseToCenter.x + mouseToCenter.y * mouseToCenter.y);
-        //     const stepSize = -0.005;
-        //     if (distance > 0.01) {
-        //         panX += mouseToCenter.x < 0 
-        //         ? mouseToCenter.x * stepSize 
-        //         : mouseToCenter.x * -stepSize;
-        //         panY += mouseToCenter.y < 0 
-        //         ? mouseToCenter.y * stepSize 
-        //         : mouseToCenter.y * -stepSize;
-        //     }
-        //     zoomChanged = false;
-        // }
-
-        // lerp mouseShifted towards a target
-        let targetX = -mouseX + halfWidth;
-        let targetY = -mouseY + halfHeight;
-        if(!panningBG){
-            mouseShifted.x = lerp(mouseShifted.x, targetX, 0.1);
-            mouseShifted.y = lerp(mouseShifted.y, targetY, 0.1);
-        }
-
-        DebugPathInstance.addPoint(
-            mouseShifted.x, 
-            mouseShifted.y, 
-            zoom+0
-        );
-        if(!store.DISABLE_DEBUG_PATHS){
-            DebugPathInstance.draw();
-        }
-        DebugPathTwo.addPoint(
-            targetX, 
-            targetY,
-            zoom+0
-        )
-        if(!store.DISABLE_DEBUG_PATHS){
-            DebugPathTwo.draw(40);
-        }
-        
-
-        translate(mouseShifted.x, mouseShifted.y);
-        scale(zoom);
-        // translate(mouseX, mouseY);
-        translate(
-            panX - (halfWidth*zoom), 
-            panY -(halfHeight*zoom)
-        );
-
-        if(
-            store.currentGraph 
-            //&& !store.CmdPromptVisible
-        ){
-            store.currentGraph.renderGraph();
-        }
-        
-        if (panningBG) {
-            panX += mouseX - dragStartX;
-            panY += mouseY - dragStartY;
-            dragStartX = mouseX;
-            dragStartY = mouseY;
-        }
-
-        if(gherkinStudio && gherkinStudio.draw){
-            gherkinStudio.draw();
-        }
-
-        
-
-        //drawModeSwitcher();
-
-        // render all widgets on the widget dashboard
-        // TODO: move pop() BEFORE DB Manager and let DBMan have it's own inner contextual Pan/Zoom
-        //system.get("Dashboard")?.draw?.();
-
-    // reset any transforms
-    pop();
-
-    // render toast notifications
-    system.get("toastManager")?.draw?.();
-
-    // ^^^ below the command palette
-
-    // if the command palette is visible, draw it
-    if(store.CmdPromptVisible){
-        cmdprompt?.renderCommandPrompt?.();
-    }
-
-    // display the current wizard (if any)
-    store.activeWizard?.onDraw?.();
-
-    
-
-    
-
-    renderDebugUI();
-
-    // cursor is last to render
-    cursor?.draw()    
-}
-
-/** FIGHT ME */
-// Object.prototype.forEach = function(callback){
-//     return Object.entries(this).forEach(([key,value],index)=>{
-//         callback(value,key,index);
-//     })
-// }
 
 let FPS;
 let frameTimes = [];
@@ -12325,7 +12134,7 @@ function setupDefaults(){
     // define in a config object
     Object.entries(InvokableCommands).forEach(([key, def])=>{
         let cmdName = key.split(' ').map((word, index) => index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-        console.warn('key->cmdName',{key,cmdName})
+        // console.warn('key->cmdName',{key,cmdName})
 
         // TODO: if def is not a function, we have some resolving to do...
         baseCmds.push(new Config({
@@ -12609,511 +12418,761 @@ function refreshInputBindings(){
     document.addEventListener('blur', blurHandler, true);
 }
 
-let cursor;
-function setup() {
-
-    refreshInputBindings();
-    
-    // overload mouseX and mouseY to be set to 0 if they're null or undefined (one at a time)
-    // this is useful for when we're in a mode where we don't want the mouse to affect the canvas
-    // e.g. when we're in a mode where we're typing in a text field
-
-
-// load pan,zoom from query params (if any)
-    let params = new URLSearchParams(window.location.search);
-    panX = parseFloat(params.get('panX')) || 0;
-    panY = parseFloat(params.get('panY')) || 0;
-    
+let cursor, MainCanvasContextThing = function(p){
+    p.setup = function(){
+        refreshInputBindings();
+        
+        // overload mouseX and mouseY to be set to 0 if they're null or undefined (one at a time)
+        // this is useful for when we're in a mode where we don't want the mouse to affect the canvas
+        // e.g. when we're in a mode where we're typing in a text field
 
 
-    /*
-        it's a spectrum
-    */
-    whatTheCenterIs = {
-        x: windowWidth / 2,
-        y: windowHeight / 2,
-        z: 0
-    }
-    
-    setupDefaults();
+    // load pan,zoom from query params (if any)
+        let params = new URLSearchParams(window.location.search);
+        panX = parseFloat(params.get('panX')) || 0;
+        panY = parseFloat(params.get('panY')) || 0;
+        
 
 
-    deepCanvasManager = new LayereredCanvasRenderer();
-    bgEl = document.getElementById('bg-image');
-    // loadImage('bg-1.jpg', img => {
-    //     bgImage = img;
-    //     // bgImage.filter(BLUR, 10);
-    // });
+        /*
+            it's a spectrum
+        */
+        whatTheCenterIs = {
+            x: this.windowWidth / 2,
+            y: this.windowHeight / 2,
+            z: 0
+        }
+        
+        setupDefaults();
 
-    // offset panX panY to center the graph
-    //panX = 0; //windowWidth / 2;
-    //panY = 0; //windowHeight / 2;
 
-    ensureHeadTag();
-    createCanvas(windowWidth, windowHeight);
+        deepCanvasManager = new LayereredCanvasRenderer();
+        bgEl = document.getElementById('bg-image');
+        // loadImage('bg-1.jpg', img => {
+        //     bgImage = img;
+        //     // bgImage.filter(BLUR, 10);
+        // });
 
-    // boot the root system manager & root system
-    // search for booting... to jump here :D
-    // boot routine
-    console.info("booting...");
-    manager.boot(); rootSystem = system = manager.systems[0];
-    console.info("booted");
+        // offset panX panY to center the graph
+        //panX = 0; //windowWidth / 2;
+        //panY = 0; //windowHeight / 2;
 
-    //initTHREEMode();
+        ensureHeadTag();
+        //mainCanvasContext = this.createCanvas(this.windowWidth, this.windowHeight);
+        
 
-    // system.get("Dashboard").registerWidget(new IsometricPreview());
+        // boot the root system manager & root system
+        // search for booting... to jump here :D
+        // boot routine
+        console.info("booting...");
+        manager.boot(); rootSystem = system = manager.systems[0];
+        console.info("booted");
 
-    // spawn a bunch of BlurSprite
-    for(var i=0;i<20;i++){
-        let sprite = new Sprite();
-        sprite.x = random(-windowWidth,windowWidth);
-        sprite.y = random(-windowHeight,windowHeight);
-        sprite.z = random(-10,10)
-        sprite.radius = random(1,10)
-        sprites.push(sprite);
-    }
+        //initTHREEMode();
 
-    cursor = new Cursor();
+        // system.get("Dashboard").registerWidget(new IsometricPreview());
 
-    let startZoom = 0.0001;
-    let endZoom;// = 1.12;
-    endZoom = parseFloat(params.get('zoom')) || 1.12;
-    let duration = 3000; // Duration in milliseconds
-    let startTime = null;
-
-    const easeOutQuad = (t) => t * (2 - t);
-
-    // our nice zoom in effect
-    // TODO: camera path recording / playback system (slideshow presentation mode)
-    const stepZoomAnimation = (timestamp) => {
-        if (!startTime) startTime = timestamp;
-        let progress = Math.min((timestamp - startTime) / duration, 1);
-        let easedProgress = easeOutQuad(progress);
-        zoom = startZoom + (endZoom - startZoom) * easedProgress;
-        updateBlur();
-        if (Math.abs(zoom - endZoom) > 0.0001) {
-            requestAnimationFrame(stepZoomAnimation);
-        } else {
-            // snap to end value
-            zoom = endZoom;
+        // spawn a bunch of BlurSprite
+        for(var i=0;i<20;i++){
+            let sprite = new Sprite();
+            sprite.x = p.random(-p.windowWidth,p.windowWidth);
+            sprite.y = p.random(-p.windowHeight,p.windowHeight);
+            sprite.z = p.random(-10,10)
+            sprite.radius = p.random(1,10)
+            sprites.push(sprite);
         }
 
-        
-    }
-    requestAnimationFrame(stepZoomAnimation);
+        cursor = new Cursor();
 
-    // define our lazy singletons
-    // will be instantiated upon first access attempt via system.get('toastManager')
-    system.lazySingleton('timeManager',     TimeManager);
-    system.lazySingleton('toastManager',    ToastNotificationManager);
-    system.lazySingleton('cmdprompt',       CmdPrompt);
-    system.lazySingleton('Dashboard', Dashboard);
-    
-    /// === region: Self Test Mode ===
-    // TODO: parallelize with Promise.all([])
-    autorunFeatureTestResults.length = 0; // reset results
-    autorunFeatureTests.forEach((FeatureTestConfigOrInstance)=>{
-        runFeatureTest(FeatureTestConfigOrInstance);
-    })
-    // a different approach
-    Object.entries(FEATURE_TESTS).forEach(([name, definition])=>{
-        console.warn('instantiating and running feature tests',{
-            name,definition
+        let startZoom = 0.0001;
+        let endZoom;// = 1.12;
+        endZoom = parseFloat(params.get('zoom')) || 1.12;
+        let duration = 3000; // Duration in milliseconds
+        let startTime = null;
+
+        const easeOutQuad = (t) => t * (2 - t);
+
+        // our nice zoom in effect
+        // TODO: camera path recording / playback system (slideshow presentation mode)
+        const stepZoomAnimation = (timestamp) => {
+            if (!startTime) startTime = timestamp;
+            let progress = Math.min((timestamp - startTime) / duration, 1);
+            let easedProgress = easeOutQuad(progress);
+            zoom = startZoom + (endZoom - startZoom) * easedProgress;
+            updateBlur(p);
+            if (Math.abs(zoom - endZoom) > 0.0001) {
+                requestAnimationFrame(stepZoomAnimation);
+            } else {
+                // snap to end value
+                zoom = endZoom;
+            }
+
+            
+        }
+        requestAnimationFrame(stepZoomAnimation);
+
+        // define our lazy singletons
+        // will be instantiated upon first access attempt via system.get('toastManager')
+        system.lazySingleton('timeManager',     TimeManager);
+        system.lazySingleton('toastManager',    ToastNotificationManager);
+        system.lazySingleton('cmdprompt',       CmdPrompt);
+        system.lazySingleton('Dashboard', Dashboard);
+        
+        /// === region: Self Test Mode ===
+        // TODO: parallelize with Promise.all([])
+        autorunFeatureTestResults.length = 0; // reset results
+        autorunFeatureTests.forEach((FeatureTestConfigOrInstance)=>{
+            runFeatureTest(FeatureTestConfigOrInstance);
         })
-        runFeatureTest(new FEATURE_TESTS[name]());
-    })
-    // our alternative attempt at auto-class registration using
-    // a decorator:
-    // Object.entries(SELF_TEST_CLASSES).forEach(([name, definition])=>{
-    //     console.warn('instantiating and running self test classes',{
-    //         name,
-    //         definition,
-    //         stis:Object.keys(SELF_TEST_INSTANCES),
-    //         stcs:Object.keys(SELF_TEST_CLASSES)
-    //     })
-    //     SELF_TEST_INSTANCES[name] = new SELF_TEST_CLASSES[name](SELF_TEST_CLASS_ARGS[name]);
-    //     runFeatureTest(SELF_TEST_INSTANCES[name]);
-    // });
-    /// === endRegion: Self Test Mode ===
-
-    // let testSeq = getTestGherkinSequence();
-    // // bootstrap our self-test
-    // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
-
-    document.addEventListener('keydown',(e)=>{
-        // console.warn('keydown',{e})
-        if(store.shiftIsMomentary){
-            store.shiftIsPressed = e.shiftKey;
-        }else{
-            // shiftIsToggle, not shiftIsMomentary
-            if(e.shiftKey){
-                store.shiftIsPressed = !store.shiftIsPressed;
-            }
-        }
-
-
-        // if we're not focused on any fields
-        if(store.focusedField === null){
-
-        }
-
-        // if we're focused on the main command prompt input,,
-        //if(store.focusedField === CmdPromptInput.elt){
-            // arrow key down should cycle through the suggestion list
-            // call the input handler
-            cmdprompt = system.get('cmdprompt');
-            if(!cmdprompt){
-                system.warn("cmdprompt not ready");
-            }
-            cmdprompt?.onCmdPromptInput(e);
-        //}
-    })
-    document.addEventListener('keypress', (e)=>{
-        // console.warn('keypress',{e})
-        // if the key is `f` and we don't have any inputs focused,
-        // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
-        if(e.key === 'f' && store.focusedField === null){
-            // Instantiate and start the animations
-            const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
-            const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
-            const zoomAnimation = new Animation(zoom, 1, 1000, value => zoom = value);
-
-            requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
-            requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
-            requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
-        }
-        let KeyboardPanInfluence = { x: 0, y: 0 };
-        let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
-        let maxInfluence = 100 * (1 / zoom);
-        let decayFactor = 0.9;
-        let lerpFactor = 0.1; // control the speed of lerp
-
-        switch(e.key) {
-            case 'w':
-                zoom += 0.1;
-                break;
-            case 's':
-                zoom -= 0.1;
-                break;
-            case 'a':
-            case 'ArrowLeft':
-                KeyboardPanInfluenceTarget.x = Math.max(KeyboardPanInfluenceTarget.x - 10 / zoom, -maxInfluence);
-                break;
-            case 'd':
-            case 'ArrowRight':
-                KeyboardPanInfluenceTarget.x = Math.min(KeyboardPanInfluenceTarget.x + 10 / zoom, maxInfluence);
-                break;
-            case 'q':
-            case 'ArrowUp':
-                KeyboardPanInfluenceTarget.y = Math.max(KeyboardPanInfluenceTarget.y - 10 / zoom, -maxInfluence);
-                break;
-            case 'e':
-            case 'ArrowDown':
-                KeyboardPanInfluenceTarget.y = Math.min(KeyboardPanInfluenceTarget.y + 10 / zoom, maxInfluence);
-                break;
-        }
-
-        // Lerp the influence values over time
-        KeyboardPanInfluence.x += (KeyboardPanInfluenceTarget.x - KeyboardPanInfluence.x) * lerpFactor;
-        KeyboardPanInfluence.y += (KeyboardPanInfluenceTarget.y - KeyboardPanInfluence.y) * lerpFactor;
-
-        // Decay the influence when the keyboard movement stops
-        KeyboardPanInfluence.x *= decayFactor;
-        KeyboardPanInfluence.y *= decayFactor;
-
-        // Apply the influence to the pan with lerp towards the target
-        panX += (KeyboardPanInfluence.x - panX) * lerpFactor;
-        panY += (KeyboardPanInfluence.y - panY) * lerpFactor;
-    })
-    document.addEventListener('keyup',(e)=>{
-        if(store.shiftIsMomentary){
-            store.shiftIsPressed = false
-        }
-        // console.warn('keyup',{e})
-        // if the cmdprompt is active, pipe the event
-        if(store.CmdPromptVisible){
-            cmdprompt = system.get('cmdprompt');
-            if(!cmdprompt){
-                system.warn("cmdprompt not ready");
-            }
-            cmdprompt?.onCmdPromptInput(e);
-        }
-    })
-
-    // Additional Widgets
-    system.get("Dashboard").registerWidget(new ComputerKeyboardPreview());
-
-    // TODO: put this stuff in a CmdPrompt.setup() callback
-    push();
-        textSize(50);
-        CmdPromptInput = createInput('');
-        CmdPromptInput.elt.style.backgroundColor = 'black';
-        CmdPromptInput.elt.style.color = 'white';
-        CmdPromptInput.size(windowWidth - 20);
-        CmdPromptInput.position(10, 130);
-        // focus the command palette input
-        CmdPromptInput.elt.focus();
-
-        CmdPromptInput.elt.addEventListener('focus', (e)=>{
-            // store.focusedField = CmdPromptInput.elt;
-            store.focused = true
+        // a different approach
+        Object.entries(FEATURE_TESTS).forEach(([name, definition])=>{
+            console.warn('instantiating and running feature tests',{
+                name,definition
+            })
+            runFeatureTest(new FEATURE_TESTS[name]());
         })
-        CmdPromptInput.elt.addEventListener('blur', (e)=>{
-            // store.focusedField = null;
-            store.focused = false;
-        })
-    pop();
-    // Listen for the 'keydown' event
-    CmdPromptInput.elt.addEventListener('keypress', function(e) {
-        // Check if the Enter key was pressed
-        // if (e.key === 'Enter') {
-            // Call the onCmdPromptInput method
-            cmdprompt = system.get('cmdprompt');
-            if(!cmdprompt){
-                system.warn("cmdprompt not ready");
+        // our alternative attempt at auto-class registration using
+        // a decorator:
+        // Object.entries(SELF_TEST_CLASSES).forEach(([name, definition])=>{
+        //     console.warn('instantiating and running self test classes',{
+        //         name,
+        //         definition,
+        //         stis:Object.keys(SELF_TEST_INSTANCES),
+        //         stcs:Object.keys(SELF_TEST_CLASSES)
+        //     })
+        //     SELF_TEST_INSTANCES[name] = new SELF_TEST_CLASSES[name](SELF_TEST_CLASS_ARGS[name]);
+        //     runFeatureTest(SELF_TEST_INSTANCES[name]);
+        // });
+        /// === endRegion: Self Test Mode ===
+
+        // let testSeq = getTestGherkinSequence();
+        // // bootstrap our self-test
+        // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
+
+        document.addEventListener('keydown',(e)=>{
+            // console.warn('keydown',{e})
+            if(store.shiftIsMomentary){
+                store.shiftIsPressed = e.shiftKey;
+            }else{
+                // shiftIsToggle, not shiftIsMomentary
+                if(e.shiftKey){
+                    store.shiftIsPressed = !store.shiftIsPressed;
+                }
             }
-            cmdprompt?.onCmdPromptInput(e);
-        // }
 
-        // If you 
-    });
 
-    const WidgetsToRegister = [
-        "inspiration/Flag_of_Palestine.svg",
-        "milky-way-galaxy.gif",
-        "colorpickermockup.png",
-        "inspiration/001.png",
-        "inspiration/signs-of-yesterday.jpeg",
-        "fine.gif",
-        "video_731defd5b618ee03304ad345511f0e54.mp4",
+            // if we're not focused on any fields
+            if(store.focusedField === null){
 
-        CalculatorWidget,
-        CalendarWidget,
-        ClockWidget,
+            }
 
-        MessengerWidget,
-        MiniMapWidget,
-        MoonPhaseWidget,
-        PomodoroWidget,
-        StickyNoteWidget,
-        // TetrisWidget,
-        TimerWidget,
-        TimeToSunSetWidget,
-        TodoWidget,
-        UIDemoWidget,
-        WeatherWidget,
-        ZoomDependentWidget,
-        ImageCubeRotatorWidget,
-        ImageRotatorWidget,        
-    ]
+            // if we're focused on the main command prompt input,,
+            //if(store.focusedField === CmdPromptInput.elt){
+                // arrow key down should cycle through the suggestion list
+                // call the input handler
+                cmdprompt = system.get('cmdprompt');
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            //}
+        })
+        document.addEventListener('keypress', (e)=>{
+            // console.warn('keypress',{e})
+            // if the key is `f` and we don't have any inputs focused,
+            // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
+            if(e.key === 'f' && store.focusedField === null){
+                // Instantiate and start the animations
+                const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
+                const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
+                const zoomAnimation = new Animation(zoom, 1, 1000, value => zoom = value);
 
-    // "the big widget registration"
-    // NEW: init the widget dashboard
-    // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
-    const grw = new GherkinRunnerWidget();
-    grw.centerPosition();
-    // attach the results of the self test runner to the widget
-    grw.setResults(autorunFeatureTestResults);
-    system.get("Dashboard").init()
-        // add our first widget (todo: load state from dehydrated json)
-        // DEFAULT WIDGET SET
+                requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
+                requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
+                requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
+            }
+            let KeyboardPanInfluence = { x: 0, y: 0 };
+            let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
+            let maxInfluence = 100 * (1 / zoom);
+            let decayFactor = 0.9;
+            let lerpFactor = 0.1; // control the speed of lerp
 
-    // OnDashboardReady OnDashboardLoaded OnDashboardInit
-    // OnDashboardStarted
-    system.get("Dashboard")
+            switch(e.key) {
+                case 'w':
+                    zoom += 0.1;
+                    break;
+                case 's':
+                    zoom -= 0.1;
+                    break;
+                case 'a':
+                case 'ArrowLeft':
+                    KeyboardPanInfluenceTarget.x = Math.max(KeyboardPanInfluenceTarget.x - 10 / zoom, -maxInfluence);
+                    break;
+                case 'd':
+                case 'ArrowRight':
+                    KeyboardPanInfluenceTarget.x = Math.min(KeyboardPanInfluenceTarget.x + 10 / zoom, maxInfluence);
+                    break;
+                case 'q':
+                case 'ArrowUp':
+                    KeyboardPanInfluenceTarget.y = Math.max(KeyboardPanInfluenceTarget.y - 10 / zoom, -maxInfluence);
+                    break;
+                case 'e':
+                case 'ArrowDown':
+                    KeyboardPanInfluenceTarget.y = Math.min(KeyboardPanInfluenceTarget.y + 10 / zoom, maxInfluence);
+                    break;
+            }
 
-        // Main Widget Registration Area
-        // TODO: consolidate all other widget registration methods
-        .registerWidget(new CalculatorWidget())
+            // Lerp the influence values over time
+            KeyboardPanInfluence.x += (KeyboardPanInfluenceTarget.x - KeyboardPanInfluence.x) * lerpFactor;
+            KeyboardPanInfluence.y += (KeyboardPanInfluenceTarget.y - KeyboardPanInfluence.y) * lerpFactor;
 
-            //     .registerWidget(new IsometricPreview())
+            // Decay the influence when the keyboard movement stops
+            KeyboardPanInfluence.x *= decayFactor;
+            KeyboardPanInfluence.y *= decayFactor;
 
-            .registerWidget(new AIWidget())
-            // .registerWidget(new P53DLayer())
-            // .registerWidget(new ThreeJSViewer())
+            // Apply the influence to the pan with lerp towards the target
+            panX += (KeyboardPanInfluence.x - panX) * lerpFactor;
+            panY += (KeyboardPanInfluence.y - panY) * lerpFactor;
+        })
+        document.addEventListener('keyup',(e)=>{
+            if(store.shiftIsMomentary){
+                store.shiftIsPressed = false
+            }
+            // console.warn('keyup',{e})
+            // if the cmdprompt is active, pipe the event
+            if(store.CmdPromptVisible){
+                cmdprompt = system.get('cmdprompt');
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            }
+        })
 
-            .registerWidget(new MoonPhaseWidget())
-            .registerWidget(new ComputerKeyboardPreview())
+        // Additional Widgets
+        system.get("Dashboard").registerWidget(new ComputerKeyboardPreview());
 
-        
-        // .registerWidget("Google Color Picker",
-        .registerWidget(
-            new ImageViewerWidget("ukraine-flag.jpeg")
-        )
-        .registerWidget(
-            "SVGViewerWidget:PFlag",
-            new ImageViewerWidget("Flag_of_Palestine.svg")
-        )
-        
-        .registerWidget(
-            "4SeasonsImg", 
-            new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
+        // TODO: put this stuff in a CmdPrompt.setup() callback
+        mctx.push();
+        mctx.textSize(50);
+            CmdPromptInput = mctx.createInput('');
+            CmdPromptInput.elt.style.backgroundColor = 'black';
+            CmdPromptInput.elt.style.color = 'white';
+            CmdPromptInput.size(mctx.windowWidth - 20);
+            CmdPromptInput.position(10, 130);
+            // focus the command palette input
+            CmdPromptInput.elt.focus();
 
-        .registerWidget(
-            new ImageViewerWidget("fine.gif")
-        )
-        
-        // .registerWidget("GherkinRunnerWidget",  grw)
-        
-        // // intentionally on a separate line to make it easier to comment out last chained method
-        // ;
-        // WidgetsToRegister.forEach((widgetClassName)=>{
-        //     let theInstance = null;
-        //     const widgetTypes = {
-        //         ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
-        //         VideoPlayerWidget: [".mp4"],
-        //         YoutubePlayerWidget: [".youtube."]
-        //     };
-        //     if(typeof widgetClassName === 'string'){
-        //         for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
-        //             if (extensions.some(ext => widgetClassName.includes(ext))) {
-        //                 if(!window[widgetType]){
-        //                     console.warn("missing widget type",{
-        //                         widgetType,
-        //                         extensions,
-        //                         widgetClassName
-        //                     })
-        //                     continue;
-        //                 }
+            CmdPromptInput.elt.addEventListener('focus', (e)=>{
+                // store.focusedField = CmdPromptInput.elt;
+                store.focused = true
+            })
+            CmdPromptInput.elt.addEventListener('blur', (e)=>{
+                // store.focusedField = null;
+                store.focused = false;
+            })
+        mctx.pop();
+        // Listen for the 'keydown' event
+        CmdPromptInput.elt.addEventListener('keypress', function(e) {
+            // Check if the Enter key was pressed
+            // if (e.key === 'Enter') {
+                // Call the onCmdPromptInput method
+                cmdprompt = system.get('cmdprompt');
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            // }
 
-        //                 theInstance = new window[widgetType](widgetClassName);
-        //                 break;
-        //             }
-        //         }
-        //         if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
-        //             theInstance = new iFrameWidget(widgetClassName);
-        //         }
-        //     }else{
-        //         if (!theInstance) {
-        //             theInstance = new widgetClassName();
-        //         }
-        //     }
-        //     if(!theInstance){
-        //         console.warn(`failed to instantiate widget ${widgetClassName}`)
-        //         return;
-        //     }
-        //     system.get("Dashboard").registerWidget(theInstance)
-        // })
+            // If you 
+        });
 
-            // shuffle widget order
-            // system.get("Dashboard").shuffleWidgets()
-            // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
+        // const WidgetsToRegister = [
+        //     "inspiration/Flag_of_Palestine.svg",
+        //     "milky-way-galaxy.gif",
+        //     "colorpickermockup.png",
+        //     "inspiration/001.png",
+        //     "inspiration/signs-of-yesterday.jpeg",
+        //     "fine.gif",
+        //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
-    // POST-REGISTRATION-WIDGET-MUNGING-OPERATIONS
-    // set all widgets to canvasID 1 so they're in the "BG" deep canvas
-    // then pick one at random and set it to 0 so it's focused
-    // then pick another couple at random and set to -1 so it's in the "FG" deep canvas
-    Object.values(system.get("Dashboard").widgets).forEach((widget)=>{
-        widget.canvasID = 1;
-    })
-    let widgetKeys = Object.keys(system.get("Dashboard").widgets);
-    let randomWidgetKey = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
-    system.get("Dashboard").widgets[randomWidgetKey].canvasID = 0;
-    let randomWidgetKey2 = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
-    system.get("Dashboard").widgets[randomWidgetKey2].canvasID = -1;
+        //     CalculatorWidget,
+        //     CalendarWidget,
+        //     ClockWidget,
 
-    const protoLists = {}
-    protoLists.about = {
-        type: "protoListItem",
-        name: "About",
-        // tracks own index into parent data struct for fast lookup with no loops
-        address: "protoLists.about",
-        items: [{
+        //     MessengerWidget,
+        //     MiniMapWidget,
+        //     MoonPhaseWidget,
+        //     PomodoroWidget,
+        //     StickyNoteWidget,
+        //     // TetrisWidget,
+        //     TimerWidget,
+        //     TimeToSunSetWidget,
+        //     TodoWidget,
+        //     UIDemoWidget,
+        //     WeatherWidget,
+        //     ZoomDependentWidget,
+        //     ImageCubeRotatorWidget,
+        //     ImageRotatorWidget,        
+        // ]
+
+        // "the big widget registration"
+        // NEW: init the widget dashboard
+        // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
+        const grw = new GherkinRunnerWidget();
+        grw.centerPosition();
+        // attach the results of the self test runner to the widget
+        grw.setResults(autorunFeatureTestResults);
+        system.get("Dashboard").init()
+            // add our first widget (todo: load state from dehydrated json)
+            // DEFAULT WIDGET SET
+
+        // OnDashboardReady OnDashboardLoaded OnDashboardInit
+        // OnDashboardStarted
+        system.get("Dashboard")
+
+            // Main Widget Registration Area
+            // TODO: consolidate all other widget registration methods
+            .registerWidget(new CalculatorWidget())
+
+            .registerWidget(new ZoomDependentWidget())
+
+                //     .registerWidget(new IsometricPreview())
+
+                .registerWidget(new AIWidget())
+                // .registerWidget(new P53DLayer())
+                // .registerWidget(new ThreeJSViewer())
+
+                .registerWidget(new MoonPhaseWidget())
+                .registerWidget(new ComputerKeyboardPreview())
+
+            
+            // .registerWidget("Google Color Picker",
+            .registerWidget(
+                new ImageViewerWidget("ukraine-flag.jpeg")
+            )
+            .registerWidget(
+                new ImageViewerWidget("insp.png")
+            )
+            .registerWidget(
+                "SVGViewerWidget:PFlag",
+                new ImageViewerWidget("Flag_of_Palestine.svg")
+            )
+            
+            .registerWidget(
+                "4SeasonsImg", 
+                new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
+
+            .registerWidget(
+                new ImageViewerWidget("fine.gif")
+            )
+            
+            // .registerWidget("GherkinRunnerWidget",  grw)
+            
+            // // intentionally on a separate line to make it easier to comment out last chained method
+            // ;
+            // WidgetsToRegister.forEach((widgetClassName)=>{
+            //     let theInstance = null;
+            //     const widgetTypes = {
+            //         ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
+            //         VideoPlayerWidget: [".mp4"],
+            //         YoutubePlayerWidget: [".youtube."]
+            //     };
+            //     if(typeof widgetClassName === 'string'){
+            //         for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
+            //             if (extensions.some(ext => widgetClassName.includes(ext))) {
+            //                 if(!window[widgetType]){
+            //                     console.warn("missing widget type",{
+            //                         widgetType,
+            //                         extensions,
+            //                         widgetClassName
+            //                     })
+            //                     continue;
+            //                 }
+
+            //                 theInstance = new window[widgetType](widgetClassName);
+            //                 break;
+            //             }
+            //         }
+            //         if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
+            //             theInstance = new iFrameWidget(widgetClassName);
+            //         }
+            //     }else{
+            //         if (!theInstance) {
+            //             theInstance = new widgetClassName();
+            //         }
+            //     }
+            //     if(!theInstance){
+            //         console.warn(`failed to instantiate widget ${widgetClassName}`)
+            //         return;
+            //     }
+            //     system.get("Dashboard").registerWidget(theInstance)
+            // })
+
+                // shuffle widget order
+                // system.get("Dashboard").shuffleWidgets()
+                // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
+
+        // POST-REGISTRATION-WIDGET-MUNGING-OPERATIONS
+        // set all widgets to canvasID 1 so they're in the "BG" deep canvas
+        // then pick one at random and set it to 0 so it's focused
+        // then pick another couple at random and set to -1 so it's in the "FG" deep canvas
+        Object.values(system.get("Dashboard").widgets).forEach((widget)=>{
+            widget.canvasID = 1;
+        })
+        let widgetKeys = Object.keys(system.get("Dashboard").widgets);
+        let randomWidgetKey = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
+        system.get("Dashboard").widgets[randomWidgetKey].canvasID = 0;
+        let randomWidgetKey2 = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
+        system.get("Dashboard").widgets[randomWidgetKey2].canvasID = -1;
+
+        const protoLists = {}
+        protoLists.about = {
             type: "protoListItem",
-        }],
-        description: `at the base level of the system, we need something, some data atom, and it could either be literals (fastest) or literals with sugar: protoListItem.
+            name: "About",
+            // tracks own index into parent data struct for fast lookup with no loops
+            address: "protoLists.about",
+            items: [{
+                type: "protoListItem",
+            }],
+            description: `at the base level of the system, we need something, some data atom, and it could either be literals (fastest) or literals with sugar: protoListItem.
+            
+            inevitably, a time will come when we don't want to type that out for speed,
+
+            so protoItem > pItem > p 
+            who knows, our base class probably shouldn't be "p"
+            but we can find a more suitable name later...
+
+            so, from there, you can attach properties, they themselves, also being "p"'s and groups of "p"'s which are in turn, just "p"'s themselves, with pointers that _refer_ to the other "p"'s they're "collecting" or "representing" (think pointers, references)
+
+            the nice thing is, programming has gotten so abstracted away, that programmers no longer need to concern themselves with low level abstractions
+
+            of course, having a working knowledge and healthy appreciation for them goes a long way
+
+            but for the new comer just diving in, or for the person trying to get something done before their newborn wakes up from their nap, the less barriers between "thought" and "application" the better.
+
+            with advanced BCI interfaces, like neuralink coming online in the very near future, it's important to...
+
+            * 
+            `
+        }
+
+        const todoNames = {
+            "AM: shower": 1,
+            "AM: walk bear": 1, 
+            "AM: feed bear": 1,
+            "AM: eat bfast": 1,
+            "PM: lunch": 1,
+            "PM: dinner": 0,
+            "PM: feed bear": 0,
+            "PM: walk bear": 0,
+            "PM: dishes": 0,
+            "PM: brush teeth": 0,
+            "---":0,
+            "resizable widgets": 0,
+            "theme system": 0,
+            "kanban viewer": 0,
+            "---":0,
+
+
+            "---[HIGH-PRIORITY]---": -1,
+
+            // repeats daily for ever
+            "🚿 AM: shower": -99,
+            "🦷 AM: brush teeth": -99,
+            "🚶‍♂️ AM: walk bear": -99,
+            "🥣 AM: feed bear": -99,
+            "🍽️ PM: lunch": -99,
+            "🐻 PM: feed bear": -99,
+            "🚶‍♂️ PM: walk bear at sunset": -99,
+            "🍽️ PM: dinner": -99,
+
+            // -1 === SEPARATOR
+            "---[]---": -1, 
+
+            // repeats weekly for ever
+            // repeats daily
+            "📅 Daily: check bills": -99,
+
+            // repeats weekly
+            "📅 Weekly: finance weekly check-in": -99,
+
+            // repeats monthly
+            "📅 Monthly: finance monthly check-in": -99,
+
+            // "🌞 AM: study mathematics": 0,
+            // "🌞 AM: study physics": 0,
+            // "🌞 AM: study engineering": 0,
+            // "🌞 AM: power point": 0,
+            // "🌤️ NO: study mathematics": 0,
+            // "🌤️ NO: study physics": 0,
+            // "🌤️ NO: study engineering": 0,
+            // "🌤️ NO: power point": 0,
+            // "🌆 PM: study mathematics": 0,
+            // "🌆 PM: study physics": 0,
+            // "🌆 PM: study engineering": 0,
+            // "🌆 PM: power point": 0,
+            // "🌙 NI: study mathematics": 0,
+            // "🌙 NI: study physics": 0,
+            // "🌙 NI: study engineering": 0,
+            // "🌙 NI: power point": 0,
+        }
+        const todoWidget = system.get("Dashboard").widgets["TodoWidget"];
+        if(!todoWidget){
+            console.warn("todo widget missing?")
+        }else{
+            todoNames.forEach((status,name,index)=>{
+                todoWidget.addTodo(name)
+                todoWidget.setTodoStatus(todoWidget.todos.length-1, status)
+            })
+        }
+    }
+    // Define the draw function
+    // Main Draw / Root Draw
+    // Todo: system manager should loop over active systems,
+    // and call draw on systems which have non empty render queues
+    p.draw = function() {
+        mainCanvasContext = p;
+    
+        // disabled for now (does work in principle)
+        //deepCanvasManager.draw();
+    
         
-        inevitably, a time will come when we don't want to type that out for speed,
-
-        so protoItem > pItem > p 
-        who knows, our base class probably shouldn't be "p"
-        but we can find a more suitable name later...
-
-        so, from there, you can attach properties, they themselves, also being "p"'s and groups of "p"'s which are in turn, just "p"'s themselves, with pointers that _refer_ to the other "p"'s they're "collecting" or "representing" (think pointers, references)
-
-        the nice thing is, programming has gotten so abstracted away, that programmers no longer need to concern themselves with low level abstractions
-
-        of course, having a working knowledge and healthy appreciation for them goes a long way
-
-        but for the new comer just diving in, or for the person trying to get something done before their newborn wakes up from their nap, the less barriers between "thought" and "application" the better.
-
-        with advanced BCI interfaces, like neuralink coming online in the very near future, it's important to...
-
-        * 
-        `
-    }
-
-    const todoNames = {
-        "AM: shower": 1,
-        "AM: walk bear": 1, 
-        "AM: feed bear": 1,
-        "AM: eat bfast": 1,
-        "PM: lunch": 1,
-        "PM: dinner": 0,
-        "PM: feed bear": 0,
-        "PM: walk bear": 0,
-        "PM: dishes": 0,
-        "PM: brush teeth": 0,
-        "---":0,
-        "resizable widgets": 0,
-        "theme system": 0,
-        "kanban viewer": 0,
-        "---":0,
-
-
-        "---[HIGH-PRIORITY]---": -1,
-
-        // repeats daily for ever
-        "🚿 AM: shower": -99,
-        "🦷 AM: brush teeth": -99,
-        "🚶‍♂️ AM: walk bear": -99,
-        "🥣 AM: feed bear": -99,
-        "🍽️ PM: lunch": -99,
-        "🐻 PM: feed bear": -99,
-        "🚶‍♂️ PM: walk bear at sunset": -99,
-        "🍽️ PM: dinner": -99,
-
-        // -1 === SEPARATOR
-        "---[]---": -1, 
-
-        // repeats weekly for ever
-        // repeats daily
-        "📅 Daily: check bills": -99,
-
-        // repeats weekly
-        "📅 Weekly: finance weekly check-in": -99,
-
-        // repeats monthly
-        "📅 Monthly: finance monthly check-in": -99,
-
-        // "🌞 AM: study mathematics": 0,
-        // "🌞 AM: study physics": 0,
-        // "🌞 AM: study engineering": 0,
-        // "🌞 AM: power point": 0,
-        // "🌤️ NO: study mathematics": 0,
-        // "🌤️ NO: study physics": 0,
-        // "🌤️ NO: study engineering": 0,
-        // "🌤️ NO: power point": 0,
-        // "🌆 PM: study mathematics": 0,
-        // "🌆 PM: study physics": 0,
-        // "🌆 PM: study engineering": 0,
-        // "🌆 PM: power point": 0,
-        // "🌙 NI: study mathematics": 0,
-        // "🌙 NI: study physics": 0,
-        // "🌙 NI: study engineering": 0,
-        // "🌙 NI: power point": 0,
-    }
-    const todoWidget = system.get("Dashboard").widgets["TodoWidget"];
-    if(!todoWidget){
-        console.warn("todo widget missing?")
-    }else{
-        todoNames.forEach((status,name,index)=>{
-            todoWidget.addTodo(name)
-            todoWidget.setTodoStatus(todoWidget.todos.length-1, status)
+    
+        // check the current pinch scale factor
+    
+    
+        store.frameDrawCount = 0;
+        store.frameDrawCount++;
+    
+        handleAnalogStickInput();
+    
+        // this value updates instantly
+        // then we lerp our viewport's cursor vec3 torwards it
+        whatTheCenterIs.x = mctx.mouseX;
+        whatTheCenterIs.y = mctx.mouseY;
+        
+    
+        // clear the canvas
+        if(store.clearMode){
+            this.clear()
+        }
+        //background(color(0,0,0,0));
+    
+        /**
+        * @description Iterating over sprites array
+        * @type {Sprite[]} sprites - Each sprite is an instance of the Sprite class
+        */
+        this.push();
+        store.minZ = 1000;
+        store.maxZ = 0;
+    
+        sprites.forEach((sprite,index)=>{
+            //sprite.drawSimple();
+            sprite.draw();
+    
+            // push sprite in z space
+            // once it reaches a certain depth, snap it back to the other end of z space and a random x,y scaled by z
+            sprite.z -= 0.01;
+            if(sprite.z){
+                if(sprite.z < -10){
+                    sprite.z = 10;
+                    // sprite.x = Math.random() * windowWidth;
+                    // sprite.y = Math.random() * windowHeight;
+                }
+                if(sprite.z > 10){
+                    sprite.z = -10;
+                    // sprite.x = Math.random() * windowWidth;
+                    // sprite.y = Math.random() * windowHeight;
+                }
+            }
+            if(sprite.z > store.maxZ){
+                store.maxZ = sprite.z;
+            }
+            if(sprite.z < store.minZ){
+                store.minZ = sprite.z;
+            }
+    
+            return;
+    
+            // use some perlin noise to perterb the 
+            // sprite's position
+            // (in the future, we'll convert to flowfield influence)
+            let seed = Math.random();
+            let offsetX = sprite.x * 0.00001; // Decrease multiplier for smoother noise
+            let offsetY = sprite.y * 0.00001; // Decrease multiplier for smoother noise
+            let uniqueFactorX = sprite.x * 0.2; // Add offset for unique noise per region
+            let uniqueFactorY = sprite.y * 0.2; // Add offset for unique noise per region
+    
+            // Update sprite's x position with noise-based perturbation
+            // noise() generates Perlin noise value at specified coordinates
+            // offsetX + frameCount * 0.01 + seed + uniqueFactorX gives unique noise coordinates for each frame and sprite
+            // noise() returns value between 0 and 1, so we subtract 0.5 to allow movement in both positive and negative directions
+            // Final value is multiplied by 20 to increase the effect and by Math.sin(frameCount * 0.01) for oscillating effect over time
+            sprite.x += (noise(offsetX + frameCount * 0.01 + seed + uniqueFactorX) - 0.5) * 2 * Math.sin(frameCount * 0.01);
+            
+            // Update sprite's y position with noise-based perturbation
+            // Similar to x position update, but uses Math.cos(frameCount * 0.01) for oscillation to create perpendicular movement
+            sprite.y += (noise(offsetY + frameCount * 0.01 + seed + uniqueFactorY) - 0.5) * 2 * Math.cos(frameCount * 0.01);
+            // make sure to keep them within window bounds
+            sprite.x = constrain(sprite.x, 0, windowWidth)
+            sprite.y = constrain(sprite.y, 0, windowHeight);
         })
+        mctx.pop()
+    
+        // draw our bg image
+        if(bgImage){
+            mctx.image(bgImage, 0, 0, windowWidth, windowHeight);
+        }
+        // center our coordinate system
+        mctx.push();
+            const halfWidth = mctx.windowWidth / 2;
+            const halfHeight = mctx.windowHeight / 2;
+            mctx.translate(halfWidth, halfHeight)
+    
+            // every second update the url with the current location
+            // pan,zoom
+            if(frameCount % 60 === 0){
+                let url = new URL(window.location.href);
+                url.searchParams.set("panX", store.panX);
+                url.searchParams.set("panY", store.panY);
+                url.searchParams.set("zoom", store.zoom);
+    
+                // update the url
+                window.history.replaceState({}, '', url);
+            }
+            
+            // NOTE: there is an issuer where when you're zoomed in,
+            // it's relative from the top left of the whole screen
+            // we want zoom to pull the center towards where the mouse is
+            // so 1 we need to calculate where the "center" is by getting
+            // the value offset negative of any current pan
+            // then find the difference between the mouse position and the center
+            // if there's a difference > 0.01 between the center and the mouse
+            // AND zoomChanged === true, then shift toward the center by nudging panX and panY
+            // by a fraction of the difference between the mouse and the center
+            // if(zoomChanged){
+            //     let center = {
+            //         x: panX * -1 * zoom,
+            //         y: panY * -1 * zoom
+            //     };
+            //     let mouseToCenter = {
+            //         x: mouseX - center.x,
+            //         y: mouseY - center.y
+            //     };
+            //     let distance = Math.sqrt(mouseToCenter.x * mouseToCenter.x + mouseToCenter.y * mouseToCenter.y);
+            //     const stepSize = -0.005;
+            //     if (distance > 0.01) {
+            //         panX += mouseToCenter.x < 0 
+            //         ? mouseToCenter.x * stepSize 
+            //         : mouseToCenter.x * -stepSize;
+            //         panY += mouseToCenter.y < 0 
+            //         ? mouseToCenter.y * stepSize 
+            //         : mouseToCenter.y * -stepSize;
+            //     }
+            //     zoomChanged = false;
+            // }
+    
+            // lerp mouseShifted towards a target
+            let targetX = -mctx.mouseX + halfWidth;
+            let targetY = -mctx.mouseY + halfHeight;
+            if(!panningBG){
+                mouseShifted.x = mctx.lerp(mouseShifted.x, targetX, 0.1);
+                mouseShifted.y = mctx.lerp(mouseShifted.y, targetY, 0.1);
+            }
+    
+            DebugPathInstance.addPoint(
+                mouseShifted.x, 
+                mouseShifted.y, 
+                zoom+0
+            );
+            if(!store.DISABLE_DEBUG_PATHS){
+                DebugPathInstance.draw();
+            }
+            DebugPathTwo.addPoint(
+                targetX, 
+                targetY,
+                zoom+0
+            )
+            if(!store.DISABLE_DEBUG_PATHS){
+                DebugPathTwo.draw(40);
+            }
+            
+    
+            translate(mouseShifted.x, mouseShifted.y);
+            scale(zoom);
+            // translate(mouseX, mouseY);
+            translate(
+                panX - (halfWidth*zoom), 
+                panY -(halfHeight*zoom)
+            );
+    
+            if(
+                store.currentGraph 
+                //&& !store.CmdPromptVisible
+            ){
+                store.currentGraph.renderGraph();
+            }
+            
+            if (panningBG) {
+                panX += mctx.mouseX - dragStartX;
+                panY += mctx.mouseY - dragStartY;
+                dragStartX = mctx.mouseX;
+                dragStartY = mctx.mouseY;
+            }
+    
+            if(gherkinStudio && gherkinStudio.draw){
+                gherkinStudio.draw();
+            }
+    
+            
+    
+            //drawModeSwitcher();
+    
+            // render all widgets on the widget dashboard
+            // TODO: move pop() BEFORE DB Manager and let DBMan have it's own inner contextual Pan/Zoom
+            //system.get("Dashboard")?.draw?.();
+    
+        // reset any transforms
+        pop();
+    
+        // render toast notifications
+        system.get("toastManager")?.draw?.();
+    
+        // ^^^ below the command palette
+    
+        // if the command palette is visible, draw it
+        if(store.CmdPromptVisible){
+            cmdprompt?.renderCommandPrompt?.();
+        }
+    
+        // display the current wizard (if any)
+        store.activeWizard?.onDraw?.();
+    
+        
+    
+        
+    
+        renderDebugUI();
+    
+        // cursor is last to render
+        cursor?.draw()    
     }
-
 }
+let mainCanvasContext = new p5(MainCanvasContextThing, "main-canvas-context");
+window.mctx = mainCanvasContext;
+const properties = ['TWO_PI', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'LEFT', 'RIGHT', 'TOP', 'alpha', 'beginShape', 'endShape', 'cos', 'sin', 'vertex', 'line', 'color', 'createGraphics', 'circle', 'ellipse', 'rectMode', 'fill', 'frameCount', 'image', 'innerHeight', 'innerWidth', 'lerp', 'lerpColor', 'loadImage', 'millis', 'map', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pop', 'push', 'text', 'textAlign', 'textSize', 'textStyle', 'tint', 'translate', 'rect', 'scale', 'stroke', 'strokeWeight', 'windowHeight', 'windowWidth'];
+properties.forEach(prop => {
+    if(typeof mainCanvasContext[prop] === 'function'){
+        window[prop] = mainCanvasContext[prop].bind(mainCanvasContext);
+    }else{
+        Object.defineProperty(window, prop, {
+            get: () => mainCanvasContext[prop],
+            set: (value) => mainCanvasContext[prop] = value
+        });
+    }
+});
+
 
 function generateRandomString(){
     let result = '';
@@ -13150,7 +13209,7 @@ class FluxExampleGraph extends Graph {
             // used when viewing model versions of our Living Graphs / Graph Snapshots / Graph Traversal Debugger / REPL, thing...
             // Codename Status Trees
             if(_n.id === 0){
-                const input = createInput('');
+                const input = mctx.createInput('');
                 // name the input element and give it a throw-off autocomplete value too so it doesn't try to auto suggest anything
                 input.elt.name = generateRandomString();
                 input.elt.setAttribute('autocomplete', generateRandomString());
@@ -13337,8 +13396,8 @@ class SuggestionList {
                 console.warn('suggestion is null?',{suggestion,i})
                 continue;
             }
-            let suggestionWidth = windowWidth * .66;
-            let x = ( windowWidth / 2 ) - (suggestionWidth/2);
+            let suggestionWidth = mctx.windowWidth * .66;
+            let x = ( mctx.windowWidth / 2 ) - (suggestionWidth/2);
             let y = 10 + (i * 50);
             let w = suggestionWidth;
             let h = 50;
@@ -13556,15 +13615,15 @@ class SuggestionList {
         })
     }
     renderSuggestionOption(x,y,w,h,label,selected){
-        strokeWeight(selected ? 3 : 1);
+        mctx.strokeWeight(selected ? 3 : 1);
         // draw box
-        fill(selected ? "purple" : color(20))
-        rect(x,y,w,h);
-        strokeWeight(1);
+        mctx.fill(selected ? "purple" : mctx.color(20))
+        mctx.rect(x,y,w,h);
+        mctx.strokeWeight(1);
         // draw label
-        fill(200)
-        textAlign(CENTER,CENTER);
-        text(label, x + (w/2), y + (h/2));
+        mctx.fill(200)
+        mctx.textAlign(CENTER,CENTER);
+        mctx.text(label, x + (w/2), y + (h/2));
     }
 }
 
@@ -13957,3 +14016,8 @@ class REPLWidget extends Widget {
     // }
 
 }
+
+// domready
+document.addEventListener('DOMContentLoaded', function() {
+    onResizeDebounced();
+});
