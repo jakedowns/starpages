@@ -1928,6 +1928,11 @@ AI: I feel like you're not listening to me.
 
 class Widget extends UndoRedoComponent {
     hovered = false
+    // allow forcing a widget to draw on a specific canvas for a cool depth of field effect
+    // default to the "confocal" canvas (the focal point of the camera)
+    // zero offset in the focal plane
+    canvasID = 0 
+
     // relative base position
     basePosition = {x:0,y:0}
     get widgetPosition (){
@@ -2271,7 +2276,7 @@ class Widget extends UndoRedoComponent {
     // with perf metrics, and then check at the end of the frame
     // which widgets were drawn, and which were culled
     // and which are taking the most wall time
-    draw(widgetID){
+    draw(widgetID, canvasContext){
         // update fov using Sin wave
         //fov = 100 + (sin(frameCount / 100) * 100);
         fov = lerp(60, 200, map(zoom, MIN_ZOOM, MAX_ZOOM, 0, 1));
@@ -2320,8 +2325,8 @@ class Widget extends UndoRedoComponent {
 
         // debug print position
         //if(store.showWidgetPositions){
-            fill("red")
-            text(`x:${
+            canvasContext.fill("red")
+            canvasContext.text(`x:${
                 this.basePosition.x.toFixed(2)
             } y:${
                 this.basePosition.y.toFixed(2)
@@ -2339,8 +2344,8 @@ class Widget extends UndoRedoComponent {
             );
         //}
 
-        strokeWeight(1)
-        stroke("darkblue")
+        canvasContext.strokeWeight(1)
+        canvasContext.stroke("darkblue")
         let shiftedZDepth = this.zDepth + (this.halfDepthRange);
         // The brightness and alpha values are calculated based on the shiftedZDepth.
         // The shiftedZDepth is divided by 6 and subtracted from 1 to get a value between 0 and 1.
@@ -2362,10 +2367,10 @@ class Widget extends UndoRedoComponent {
         // let fillcolor = color(_brightness)
         let fillcolor = this.debugColor
         fillcolor.setAlpha(_alpha);
-        fill(fillcolor)
+        canvasContext.fill(fillcolor)
 
-        rectMode(CENTER);
-        rect(
+        canvasContext.rectMode(CENTER);
+        canvasContext.rect(
             this.position.x + this.widgetSize.width / 2, 
             this.position.y + this.widgetSize.height / 2, 
             this.widgetSize.width, 
@@ -2374,25 +2379,25 @@ class Widget extends UndoRedoComponent {
         );
 
         // draw the widget's name and id when we're editing the dashboard...
-        strokeWeight(0)
+        canvasContext.strokeWeight(0)
         //if(system.editingDashboard){
-            fill(255)
-            textAlign(CENTER, TOP)        
+            canvasContext.fill(255)
+            canvasContext.textAlign(CENTER, TOP)        
             // widget id
-            text(
+            canvasContext.text(
                 widgetID, 
                 this.position.x + (this.widgetSize.width / 2), 
                 this.position.y + this.widgetSize.height + 20
             )
             // widget name
-            text(
+            canvasContext.text(
                 this.name, 
                 this.position.x + (this.widgetSize.width / 2), 
                 this.position.y + this.widgetSize.height + 40
             )
         //}
 
-        push()
+        canvasContext.push()
 
         // Calculate scale factor based on depth and field of view
         let scaleFactor = fov / (fov + this.zDepth);
@@ -2403,14 +2408,14 @@ class Widget extends UndoRedoComponent {
         let scaledWidth = this.widgetSize.width * scaleFactor;
         let scaledHeight = this.widgetSize.height * scaleFactor;
 
-        stroke("red")
-        strokeWeight(3)
-        fill(color(0,0,0,0))
+        canvasContext.stroke("red")
+        canvasContext.strokeWeight(3)
+        canvasContext.fill(color(0,0,0,0))
 
         // Draw the object
-        rect(scaledX, scaledY, scaledWidth, scaledHeight);
+        canvasContext.rect(scaledX, scaledY, scaledWidth, scaledHeight);
 
-        pop()
+        canvasContext.pop()
     }
     close(){
         if(this.parentWidget){
@@ -5526,18 +5531,42 @@ class StatusLight {
     }
 }
 
+// deepCanvasManager
 class LayereredCanvasRenderer {
     canvases = []
     maxRendered = 1 // todo extend
     globalPan = {x:0,y:0}
     globalZoom = 0
+    onClick(e){
+        // go through the debug shapes and move the last one to the front of the array
+        this.debugShapes.unshift(this.debugShapes.pop());
+    }
     // for now, we assume we are working with 3 visible simultaneous canvases
     constructor(){
+        window.addEventListener("click",this.onClick.bind(this))
+        this.canvases = [];
         for(let i = 0; i < 3; i++){
-            let myP5Canvas = createCanvas(innerWidth, innerHeight);
-            myP5Canvas.id(`deep-canvas-${i+1}`);
-            myP5Canvas.parent(`deep-canvas-${i+1}`);
-            this.canvases.push(myP5Canvas);
+            let sketch = function(p) {
+                p.setup = function() {
+                    p.createCanvas(innerWidth, innerHeight);
+                }
+                p.draw = function() {
+                    // draw all widgets for this depth
+                    system.get("Dashboard").widgetDepthOrder.forEach((widgetID)=>{
+                        let widget = system.get("Dashboard").widgets[widgetID];
+                        if(widget.canvasID+1 === i){
+                            if(
+                                widget 
+                                // && widget.visible 
+                                // && !widget.doNotDraw
+                            ){
+                                widget.draw(widgetID, this.canvases[widget.canvasID+1]);
+                            }
+                        }
+                    })
+                }
+            };
+            this.canvases.push(new p5(sketch, `deep-canvas-${i+1}`));
         }
         // bind a window resize event handler
         document.addEventListener('resize',this.onResize.bind(this))
@@ -5553,15 +5582,19 @@ class LayereredCanvasRenderer {
     debugShapes = [
         {
             name: "rect",
+            color: "red",
             args: [0,0,100,100]
         },
         {
             name: "ellipse",
+            color: "blue",
             args: [0,0,100,100,5]
         },
         {
             name: "triangle",
+            color: "green",
             // arg order === p5.js triangle arg order
+            // x1,y1,x2,y2,x3,y3
             args: [0,0,100,100,0,100]
         }
     ]
@@ -5569,18 +5602,81 @@ class LayereredCanvasRenderer {
         this.canvases.forEach((canvas,index)=>{
             this.drawDebugShapeToDeepCanvasLayer(index)
         })
+        // set the blur on the foreground layer canvas and the background canvas
+        // for now we hard-code, but eventually we can make this dynamic
+        // or just fully move to shader/three.js land
+        this.canvases.forEach((canvas, index) => {
+            if(index === 0 || index === 2) {
+                document.getElementById(`deep-canvas-${index+1}`).style.filter = 'blur(10px)';
+            }else{
+                // enforce 0 blur for now
+                // we'll eventually make this a dynamic property of each canvas
+                document.getElementById(`deep-canvas-${index+1}`).style.filter = 'blur(0px)';
+            }
+        });
     }
+    angles = [];
     drawDebugShapeToDeepCanvasLayer(canvasIndex){
         const canvas = this.canvases[canvasIndex];
         canvas.clear();
+
+
+        if(!this.angles[canvasIndex]){
+            this.angles[canvasIndex] = 0;
+        }
+
+        canvas.push();
+        canvas.scale(zoom);
         const shape = this.debugShapes[canvasIndex];
         // p5.js automatically knows which canvas to draw on based on the canvas object we're calling the methods on.
         // There's no need to call setcontext or currentCanvas.
         // The canvas object encapsulates its own context.
         canvas.strokeWeight(5);
         canvas.stroke("black");
-        canvas.fill("red");
-        canvas[shape.name](...shape.args);
+        canvas.fill(shape.color);
+
+        //canvas.rect(0,0,100,100);
+        let inargs = [...shape.args]
+        let angle = this.angles[canvasIndex];
+        //  invert the angle if the index is odd
+        if(canvasIndex % 2 === 1){
+            angle = -angle;
+        }
+        let radius = 20;
+        // x
+        inargs[0] += (panX * zoom) + (radius * Math.cos(angle));
+        // y
+        inargs[1] += (panY * zoom) + (radius * Math.sin(angle));
+        if(shape.name === "triangle"){
+            // x2
+            inargs[2] += (panX * zoom) + (radius * Math.cos(angle));
+            // y2
+            inargs[3] += (panY * zoom) + (radius * Math.sin(angle));
+            // x3
+            inargs[4] += (panX * zoom) + (radius * Math.cos(angle));
+            // y3
+            inargs[5] += (panY * zoom) + (radius * Math.sin(angle));
+        }
+        this.angles[canvasIndex] += .01;
+        // if angle is 2pi, reset to 0
+        if(this.angles[canvasIndex] >= Math.PI * 2){
+            this.angles[canvasIndex] = 0;
+        }
+        canvas[shape.name](...inargs);
+        canvas.pop();
+
+    }
+}
+
+currentDrawingContext = null;
+function mySpecialDrawingContext(canvasIndex){
+    // switches between the 3 canvases based on .canvasID
+    if(canvasIndex === -1){
+        // -> foreground, 0
+    }else if(canvasIndex === 0){
+        // -> midground, 1
+    }else if(canvasIndex === 1){
+        // -> background, 2
     }
 }
 
@@ -5793,10 +5889,11 @@ class Dashboard {
                 //system.warn('Dashboard.draw: widget not found',widgetID)
                 return;
             }
-            // widget.draw()
+            // aka widget.draw()
             this.widgets[widgetID]
                 .setTargetPosition(this.layout[widgetID])
-                ?.draw(widgetID);
+                // NOTE: draw is disabled, testing 3 layered canvases!
+                // ?.draw(widgetID);
         });
         // if there's at least one hovered widget, set the cursor to pointer
         document.body.style.cursor = hoveredArray?.length 
@@ -8054,7 +8151,27 @@ class ConsoleWidget extends ScrollableWidget {
     }
 }
 
-class ChatGPTWidget extends Widget {
+class AIWidget extends Widget {
+    promptHistory
+    preamble = "You are helpful bot. you're super kind, friendly, and helpful. you like to help others expand their creative thinking and self-awareness and emotional intelligence. while helping them with various tasks anchored around scientifically backed theories and formulations for various tasks and goalsets"
+    remoteBackedHistory = null;
+    constructor(keyname){
+        super(...arguments);
+        this._keyname = keyname;
+        if(!keyname){
+            keyname = performance.now() + Math.random();
+            console.warn('starting fresh brain with id: brain_'+keyname)
+        }else{
+            // load any history we have from localstorage
+            this.promptHistory = store.get("brain_"+keyname) ?? [];
+        }
+    }
+    fromJSON(json){
+        return new this.constructor(json.keyname, json);
+    }
+}
+
+class ChatGPTWidget extends AIWidget {
     constructor(){
         super(...arguments);
 
@@ -8971,6 +9088,18 @@ const InvokableCommands = {
     { name: "Group Widgets into Substack", command: "NotYetImplemented"}
     */
 
+    ["Netflix"](){
+        system.registerWidget(new iFrameWidget(
+            "https://www.netflix.com/",
+            {
+                widgetSize:{
+                    width:600,height:400
+                }
+            }
+        ))
+        // return "https://www.netflix.com/"
+    },
+
     ["Check Temperature"](){
         // if has fever...
     },
@@ -9021,7 +9150,10 @@ const InvokableCommands = {
     // lifestyles
     // meta data reflected instead of sold back to the highest paying advertiser
 
-
+    ["Study Greek Alphabet Flashcards"](){
+        // spawn a new flashcard widget
+        system.registerWidget(new GreekAlphabetWidget());
+    },
     ForceReloadLayout(){
         system.get("Dashboard")
             ?.reflowLayout?.();
@@ -9081,6 +9213,9 @@ const InvokableCommands = {
     },
     ["Play Pure Imagination"](){
         return "https://www.youtube.com/watch?v=4qEF95LMaWA";
+    },
+    ["Play Inside - TJ Mack"](){
+        return "https://www.youtube.com/watch?v=evwGhEyjIRs";
     },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?v=931PQwTA79k";
@@ -11495,7 +11630,7 @@ function handleAnalogStickInput(){
 function draw() {
 
     //
-
+    deepCanvasManager.draw();
 
     
 
@@ -11691,7 +11826,7 @@ function draw() {
 
         // render all widgets on the widget dashboard
         // TODO: move pop() BEFORE DB Manager and let DBMan have it's own inner contextual Pan/Zoom
-        system.get("Dashboard")?.draw?.();
+        //system.get("Dashboard")?.draw?.();
 
     // reset any transforms
     pop();
@@ -12755,7 +12890,7 @@ function setup() {
         CalculatorWidget,
         CalendarWidget,
         ClockWidget,
-        GreekAlphabetWidget,
+
         MessengerWidget,
         MiniMapWidget,
         MoonPhaseWidget,
@@ -12783,10 +12918,17 @@ function setup() {
         // add our first widget (todo: load state from dehydrated json)
         // DEFAULT WIDGET SET
 
-        system.get("Dashboard")
-        //     .registerWidget(new IsometricPreview())
+    // OnDashboardReady OnDashboardLoaded OnDashboardInit
+    // OnDashboardStarted
+    system.get("Dashboard")
 
-            // .registerWidget(new AIWidget())
+        // Main Widget Registration Area
+        // TODO: consolidate all other widget registration methods
+        .registerWidget(new CalculatorWidget())
+
+            //     .registerWidget(new IsometricPreview())
+
+            .registerWidget(new AIWidget())
             // .registerWidget(new P53DLayer())
             // .registerWidget(new ThreeJSViewer())
 
@@ -12795,17 +12937,21 @@ function setup() {
 
         
         // .registerWidget("Google Color Picker",
-        // .registerWidget(
-        //     new ImageViewerWidget("ukraine-flag.jpeg")
-        // )
-        // .registerWidget(
-        //     "SVGViewerWidget:PFlag",
-        //     new ImageViewerWidget("Flag_of_Palestine.svg")
-        // )
+        .registerWidget(
+            new ImageViewerWidget("ukraine-flag.jpeg")
+        )
+        .registerWidget(
+            "SVGViewerWidget:PFlag",
+            new ImageViewerWidget("Flag_of_Palestine.svg")
+        )
         
-        // .registerWidget(
-        //     "4SeasonsImg", 
-        //     new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
+        .registerWidget(
+            "4SeasonsImg", 
+            new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
+
+        .registerWidget(
+            new ImageViewerWidget("fine.gif")
+        )
         
         // .registerWidget("GherkinRunnerWidget",  grw)
         
@@ -12852,6 +12998,19 @@ function setup() {
             // shuffle widget order
             // system.get("Dashboard").shuffleWidgets()
             // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
+
+    // POST-REGISTRATION-WIDGET-MUNGING-OPERATIONS
+    // set all widgets to canvasID 1 so they're in the "BG" deep canvas
+    // then pick one at random and set it to 0 so it's focused
+    // then pick another couple at random and set to -1 so it's in the "FG" deep canvas
+    Object.values(system.get("Dashboard").widgets).forEach((widget)=>{
+        widget.canvasID = 1;
+    })
+    let widgetKeys = Object.keys(system.get("Dashboard").widgets);
+    let randomWidgetKey = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
+    system.get("Dashboard").widgets[randomWidgetKey].canvasID = 0;
+    let randomWidgetKey2 = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
+    system.get("Dashboard").widgets[randomWidgetKey2].canvasID = -1;
 
     const protoLists = {}
     protoLists.about = {
