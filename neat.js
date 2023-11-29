@@ -9048,13 +9048,15 @@ const InvokableCommands = {
         // webkitallowfullscreen="true" 
         // mozallowfullscreen="true" 
         // scrolling="no"></iframe>`
-      }))  
+      }))
     },
+    // ["Play SNES Super Mario Kart"]
+    // ["Play SNES Pac Attack"]
     ["Play SNES Super Mario World"](){
-
+        alert("TODO: SNES Mario World")
     },
     ["Play Battle Tetris"](){
-
+        alert("TODO: Battle Tetris")
     },
     ["Load THREE.js"](){
         window.initTHREEMode();
@@ -9065,13 +9067,23 @@ const InvokableCommands = {
     ["Play Glorious Dawn"](){
         return "https://www.youtube.com/watch?v=zSgiXGELjbc";
     },
-    ["Play Run The Jewels"](){ return "https://www.youtube.com/watch?v=AfuCLp8VEng" },
+    ["Play Run The Jewels"](){ 
+        return "https://www.youtube.com/watch?v=AfuCLp8VEng";
+    },
     ["Play Lovely Day"](){
-        // console.warn("Play lovely day")
         return "https://www.youtube.com/watch?v=A7SOY2M2jC0";
     },
+    ["Play Powers of Ten"](){
+        return "https://www.youtube.com/watch?v=0fKBhvDjuy0";
+    },
+    ["Play The Mother of All Demos"](){
+        return "https://www.youtube.com/watch?v=yJDv-zdhzMY";
+    },
+    ["Play Pure Imagination"](){
+        return "https://www.youtube.com/watch?v=4qEF95LMaWA";
+    },
     ["Play Pendulum  Hold your Colour Full Album"](){
-        return "https://www.youtube.com/watch?v=931PQwTA79k"
+        return "https://www.youtube.com/watch?v=931PQwTA79k";
     },
     // ["Play: Black Sabbath > War Pigs"](){
     //     return "https://www.youtube.com/watch?v=LQUXuQ6Zd9w"
@@ -9079,15 +9091,15 @@ const InvokableCommands = {
     ["Play chillout study session"](){
         return "https://www.youtube.com/watch?v=tkgmYIsflSU"
     },
-    ["Music Player"](){
-        //system.registerWidget(new MusicPlayerWidget());
-        console.warn("TODO!")
-        // show warning toast
-        system.get("toastManager").showToast("TODO: Music Player Widget", {pinned: false});
-    },
-    ["Close All Players"](){
+    // ["Music Player"](){
+    //     //system.registerWidget(new MusicPlayerWidget());
+    //     console.warn("TODO!")
+    //     // show warning toast
+    //     system.get("toastManager").showToast("TODO: Music Player Widget", {pinned: false});
+    // },
+    // ["Close All Players"](){
 
-    },
+    // },
     ["Close All Widgets"](){
         system.widgets.forEach((widget)=>{
             widget.close();
@@ -12178,9 +12190,8 @@ function setupDefaults(){
     // define in a config object
     Object.entries(InvokableCommands).forEach(([key, def])=>{
         let cmdName = key.split(' ').map((word, index) => index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-        // if(!InvokableCommands[key]){
-        //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
-        // }
+        console.warn('key->cmdName',{key,cmdName})
+
         // TODO: if def is not a function, we have some resolving to do...
         baseCmds.push(new Config({
             name: `${cmdName}`,
@@ -12193,6 +12204,14 @@ function setupDefaults(){
                 try{
                     result = InvokableCommands[cmdName].call(this);
                 }catch(e){
+                    console.error('failed to execute command!',e)
+                    // what to do if call can't be 
+                    // invoked in this context in strict mode?
+                    // Log the error and notify the user
+                    console.error(`Command execution failed: ${e.message}`);
+                    system.get("toastManager").showToast(`Command execution failed: ${e.message}`, {
+                        level: "error"
+                    });
                 }
                 // close the command prompt
                 store.CmdPromptVisible = false;
