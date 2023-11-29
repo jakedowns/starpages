@@ -4579,16 +4579,22 @@ class BuildingBlockWidgetHolder extends Widget {
 class iFrameWidget extends Widget {
     url = ""
     pinned = false
-    constructor(url){
+    constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
         super(...arguments);
         this.url = url ?? this.url;
+
         //this.widgetSize = { width: 300, height: 150 }
 
             if(arguments[0]?.widgetSize){
                 this.widgetSize = arguments[0].widgetSize;
             }
-            if(arguments[1]?.widgetSize){
+            else if(arguments[1]?.widgetSize){
                 this.widgetSize = arguments[1].widgetSize;
+            }else if(pxHeightOrNull){
+                this.widgetSize = {
+                    width: pxWidthOrOptsOrNull,
+                    height: pxHeightOrNull
+                }
             }
         
         /*
@@ -9361,6 +9367,11 @@ const InvokableCommands = {
         prompt("Set Deep Canvas Blur Level",store.deepCanvasBlurLevel).then((value)=>{
             store.deepCanvasBlurLevel = value;
         })
+    },
+    ["New Egg Timer"](){
+        //return "https://e.ggtimer.com/5";
+        system.registerWidget(new iFrameWidget("https://e.ggtimer.com/5",300,300))
+        return;
     },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
