@@ -14,26 +14,24 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-import Peer from 'peerjs';
+// import Peer from 'simple-peer';
 
-const peer = new Peer();
+// const peer = new Peer({
+//   initiator: true
+// });
 
-peer.on('open', (id) => {
-  console.log('My peer ID is: ' + id);
-});
+// peer.on('signal', data => {
+//   // When we have the signal data, we need to send it to the other peer
+//   // You can do this over any kind of data transfer, a WebSocket is a good choice
+//   sendSignalToOtherPeer(data);
+// });
 
-peer.on('connection', (conn) => {
-  conn.on('data', (data) => {
-    console.log('Received', data);
-  });
-});
+// peer.on('data', data => {
+//   console.log('Received', data);
+// });
 
-// Connect to another peer
-const conn = peer.connect('another-peers-id');
-
-conn.on('open', () => {
-  conn.send('Hello!');
-});
+// // When the other peer returns their signal data, we can use it to establish a connection
+// peer.signal(receivedSignalData);
 
 
 

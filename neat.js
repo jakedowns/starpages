@@ -2295,14 +2295,27 @@ class Widget extends UndoRedoComponent {
     flagDoNotDraw(bool){
         this.doNotDraw = bool;
     }
+    getCurrentContext(){
+        let ctx = this.canvasID 
+            && !store.disableDeepCanvas 
+            && deepCanvasManager.canvases?.[this.canvasID] 
+            ? deepCanvasManager.canvases[this.canvasID]
+            : mainCanvasContext;
+        //mctx = ctx;
+        if(!ctx){
+            console.warn('no context',{ctx,id:this.canvasID});
+        }
+        this.ctx = ctx;
+        return ctx;
+    }
     // NOTE: we can instrument this widget
     // with perf metrics, and then check at the end of the frame
     // which widgets were drawn, and which were culled
     // and which are taking the most wall time
-    draw(widgetID, canvasContext){
-        if(!canvasContext){
-            canvasContext = mainCanvasContext;
-        }
+    draw(widgetID){
+        //if(!canvasContext){
+        let canvasContext = mainCanvasContext;
+        //}
         if(!canvasContext){
             return
         }
@@ -2323,11 +2336,13 @@ class Widget extends UndoRedoComponent {
             this.onDraw();
         }
 
-        rectMode(CORNER);
-        strokeWeight(1)
-        stroke("darkblue")
-        fill(color(0,0,0,100))
-        rect(
+        this.ctx = this.getCurrentContext();
+        let ctx = this.ctx;
+        ctx.rectMode(CORNER);
+        ctx.strokeWeight(1)
+        ctx.stroke("darkblue")
+        ctx.fill(color(0,0,0,100))
+        ctx.rect(
             this.smartPosition.x + this.widgetSize.width / 2,
             this.smartPosition.y + this.widgetSize.height / 2,
             this.widgetSize.width,
@@ -3851,9 +3866,9 @@ class ImageViewerWidget extends Widget {
     draw(){
         super.draw(...arguments)
         if(this.doNotDraw){ return; }
-        push();
+        this.ctx.push();
             
-            image(
+        this.ctx.image(
                 this.image, 
                 this.smartPosition.x + (this.widgetSize.width - this.newWidth) / 2,
                 this.smartPosition.y + (this.widgetSize.height - this.newHeight) / 2,
@@ -3861,7 +3876,7 @@ class ImageViewerWidget extends Widget {
                 this.widgetSize.height
             );
         
-        pop();
+        this.ctx.pop();
     }
 }
 
@@ -4630,7 +4645,7 @@ class iFrameWidget extends Widget {
             'display': 'block',
             'width': this.widgetSize.width * zoom + 'px',
             'height': this.widgetSize.height * zoom + 'px',
-            'transform': `translate(${this.smartPosition.x}px, ${this.smartPosition.y}px), scale(${zoom})`,
+            'transform': `translate(${this.smartPosition.x}px, ${this.smartPosition.y}px) scale(${zoom})`,
             // pointer-events none when pan momentum is > 0
             'pointer-events': Math.abs(panMomentumVector.x ?? panMomentumVector.y) > 0 ? 'none' : 'auto',
         }
@@ -4698,8 +4713,8 @@ class iFrameWidget extends Widget {
         // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
         // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
         // this.iframe.elt.id = this.id;
-        // translate(${this.smartPosition.x}px,${this.smartPosition.y}px)
-        this.iframe.elt.style.transform = `scale(${zoom})`;
+        // t
+        this.iframe.elt.style.transform = `translate(${this.smartPosition.x}px,${this.smartPosition.y}px) scale(${zoom})`;
     }
 }
 /* 
@@ -5644,7 +5659,7 @@ class LayereredCanvasRenderer {
                                 // && widget.visible 
                                 // && !widget.doNotDraw
                             ){
-                                widget.draw(widgetID, this.canvases ? this.canvases[(widget.canvasID ?? -1) + 1] : undefined);
+                                widget.draw(widgetID);
                             }
                         }
                     })
@@ -6044,8 +6059,8 @@ class Dashboard {
 // Define the initial state of the store
 let store = {
     windowHasFocus: true,
-    disableDeepCanvas: true,
-    deepCanvasBlurLevel: 0, // in px for now: make relative
+    disableDeepCanvas: 0,
+    deepCanvasBlurLevel: 10, // in px for now: make relative
     focused: true,
     touchInputs: [],
     pinchScaleFactor: 1,
@@ -9377,17 +9392,20 @@ const InvokableCommands = {
         return "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
     },
     ["Send Message To Server"](){
-        prompt("What would you like to say to the server?", (value)=>{
-            const sanitized = value
-            // Check if the message is empty
-            if (!sanitized.trim()) {
-                alert('Message cannot be empty');
-                return;
-            }
-            // Sanitize the input to make it safe for RPC
-            sanitized = sanitized.replace(/[^a-zA-Z0-9 ]/g, "");
-            io.emit('message', sanitized);
-        })
+        let response = prompt("What would you like to say to the server?")
+        // Check if the message is empty
+        if (!response.trim()?.length) {
+            alert('Message cannot be empty');
+            return;
+        }
+        let sanitized = response
+        // Sanitize the input to make it safe for RPC
+        sanitized = sanitized.replace(/[^a-zA-Z0-9 ]/g, "");
+        if (!sanitized.trim()?.length) {
+            alert('no valid chars given');
+            return;
+        }
+        io.emit('message', sanitized);
     },
     ["Toggle Clear BG Flag "](){
         // clear the cmd palette first, wait a tick THEN unset the flag
@@ -10169,17 +10187,39 @@ function isEmptyOrUndefined(thing){
 // }
 const vertexShaderSource = `
 attribute vec4 aVertexPosition;
-attribute vec2 aTextureCoord;
-
-varying highp vec2 vTextureCoord;
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-
+varying vec4 vColor;
+varying vec2 vTexCoord;
 void main(void) {
-    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-    vTextureCoord = aTextureCoord;
+    gl_Position = aVertexPosition;
+    vColor = vec4(1.0, 0.0, 0.0, 1.0); // example color
 }
 `
+
+// domready
+document.addEventListener('DOMContentLoaded', (event) => {
+    // TODO: await Peer to become available...
+
+    // call the server and try to establish a p2p webrtc connection with another client
+    const peer = new Peer({key: 'your_api_key_here'});
+
+    peer.on('open', function(id) {
+        console.log('My peer ID is: ' + id);
+    });
+
+    peer.on('connection', function(conn) {
+        conn.on('data', function(data){
+            console.log('Received', data);
+        });
+    });
+
+    let conn = peer.connect('another-peers-id');
+    conn.on('open', function(){
+        conn.send('hi!');
+    });
+});
+
+
+
 class CanvasCompositor {
     canvases = []
     constructor(canvases, shaderProgramSource, topCanvas) {
@@ -10198,10 +10238,22 @@ class CanvasCompositor {
         gl.shaderSource(vertexShader, vertexShaderSource);
         gl.compileShader(vertexShader);
 
+        // Check if the vertex shader compiled successfully
+        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+            console.error('An error occurred compiling the vertex shader: ' + gl.getShaderInfoLog(vertexShader));
+            return null;
+        }
+
         // Create a fragment shader
         let fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
         gl.shaderSource(fragmentShader, shaderProgramSource);
         gl.compileShader(fragmentShader);
+
+        // Check if the fragment shader compiled successfully
+        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+            console.error('An error occurred compiling the fragment shader: ' + gl.getShaderInfoLog(fragmentShader));
+            return null;
+        }
 
         // Attach the shaders to the program
         gl.attachShader(_shaderProgram, vertexShader);
@@ -10210,8 +10262,12 @@ class CanvasCompositor {
         // Link the program
         gl.linkProgram(_shaderProgram);
 
+        this.shaderProgram = _shaderProgram;
+
+        // Check if the program linked successfully
         if (!gl.getProgramParameter(_shaderProgram, gl.LINK_STATUS)) {
-        console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(_shaderProgram));
+            console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(_shaderProgram));
+            return null;
         }
         this.topCanvas = topCanvas// || this.createTopCanvas();
         this.glContexts = this.canvases.map(canvas => this.getContext(canvas));
@@ -13115,16 +13171,23 @@ let cursor, MainCanvasContextThing = function(p){
             deepCanvasManager.canvases[1],
             deepCanvasManager.canvases[2],
         ]
-        const shaderProgram = 
-`#version 300 es
-precision mediump float;
-in vec2 a_position;
-uniform float u_time;
+        const fragmentShaderSource = 
+`precision mediump float;
+varying vec2 vTexCoord;
 
-void main() {
-  float twist = a_position.x + sin(u_time);
-  gl_Position = vec4(a_position.x * twist, a_position.y, 0, 1);
-}`;
+void main(void) {
+    float stripeWidth = 0.1; // Width of each stripe
+    float frequency = 10.0;  // How many stripes there will be
+    float pattern = abs(sin(vTexCoord.x * frequency * 3.1415)); // Create a sinusoidal pattern
+    bool isStripe = pattern < stripeWidth; // Determine if the current fragment is in a stripe
+
+    if (isStripe) {
+        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); // Red color for stripes
+    } else {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black for non-stripes
+    }
+}
+`;
 let topCanvas = document.createElement('canvas');
 topCanvas.width = window.innerWidth;
 topCanvas.height = window.innerHeight;
@@ -13134,7 +13197,7 @@ topCanvas.style.left = 0;
 topCanvas.style.zIndex = 90001; // over 9000
 // topCanvas.style.pointerEvents = 'none';
 document.body.appendChild(topCanvas);
-        window.iCanvasCompositor = new CanvasCompositor(canvases, shaderProgram, topCanvas);
+        window.iCanvasCompositor = new CanvasCompositor(canvases, fragmentShaderSource, topCanvas);
 
         //initTHREEMode();
 
@@ -13410,7 +13473,9 @@ document.body.appendChild(topCanvas);
                 new ImageViewerWidget("ukraine-flag.jpeg")
             )
             .registerWidget(
-                new ImageViewerWidget("insp.png")
+                new ImageViewerWidget("insp.png",{
+                    widgetSize:{width:2880,height:1580}
+                })
             )
             .registerWidget(
                 //"SVGViewerWidget:PFlag",
@@ -13480,14 +13545,16 @@ document.body.appendChild(topCanvas);
         // set all widgets to canvasID 1 so they're in the "BG" deep canvas
         // then pick one at random and set it to 0 so it's focused
         // then pick another couple at random and set to -1 so it's in the "FG" deep canvas
-        // Object.values(system.get("Dashboard").widgets).forEach((widget)=>{
-        //     widget.canvasID = 1;
-        // })
+        Object.values(system.get("Dashboard").widgets).forEach((widget)=>{
+            widget.canvasID = -1;
+        })
         // let widgetKeys = Object.keys(system.get("Dashboard").widgets);
         // let randomWidgetKey = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
         // system.get("Dashboard").widgets[randomWidgetKey].canvasID = 0;
         // let randomWidgetKey2 = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
         // system.get("Dashboard").widgets[randomWidgetKey2].canvasID = -1;
+
+
 
         const protoLists = {}
         protoLists.about = {
