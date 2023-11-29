@@ -1970,10 +1970,13 @@ class Widget extends UndoRedoComponent {
     }
 
     get smartPosition(){
-        if(this.pinned || this?.options?.pinned){
-            return this.basePosition;
-        }
-        return this._absolutePosition;
+        // let base = this.getCurrentBase();
+
+        // TODO: sometimes we _dont_ apply it
+        // if(!false){
+        //     return base;
+        // }
+        return this.parallaxedPosition;
     }
 
     get _absolutePosition(){
@@ -2024,6 +2027,8 @@ class Widget extends UndoRedoComponent {
             minWidgetDepth,
             maxWidgetDepth
         ))
+
+        //this.updatePlax();
 
         // should we decorate this class with any functionality?
     }
@@ -2174,74 +2179,45 @@ class Widget extends UndoRedoComponent {
     targetRenderDepth = 0
     targetExpFactor = 0
     tweenExpFactor = 0
-    getParallaxedPosition(){
+    updatePlax() {
         let apparentDepth = this.zDepth;
-        
-        // squash depth as zoom [0-3] approaches 3
-        //apparentDepth = mctx.lerp(apparentDepth, apparentDepth * 0.5, zoom / 3);
+        let parallaxFactor = (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
+        parallaxFactor *= (1 - zoom / MAX_ZOOM); // Flatten effect at higher zoom
 
-        // Based on zDepth, we'll affect the position to emulate parallax
-        // Depth currently ranges from minDepth maxDepth
-        // Calculate the parallax factor based on the zDepth of the widget.
-        // The parallax effect will be more pronounced for widgets with a higher zDepth.
-        // The effect should flip signs when the sign of the current depth is negative
-        // i.e. things closer to camera should move the opposite direction as things past the zDepth 0 focal point
-        let parallaxFactor = 0; //(apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
+        parallaxFactor *= 0.1
 
-        // dampen the pFactor when the zoom is increased to simulate flattening of perspective
-        // use lerp to account for the zoom range being 0-3, not 0-1
-        //parallaxFactor *= mctx.lerp(1, 0, zoom / 3);
+        if (store.DISABLE_PARALLAX) {
+            parallaxFactor = 0;
+        }
 
-        //parallaxFactor *= this.parallaxMultiplier
+        let cBase = this.getCurrentBase();
 
-        // this.targetExpFactor = this.hovered ? parallaxFactor : 0;
-        // this.tweenExpFactor = mctx.lerp(this.tweenExpFactor, this.targetExpFactor, 0.1);
-        
-        // Calculate the new x and y positions of the widget, taking into account the parallax factor.
-        // The parallax effect is achieved by slightly shifting the position of the widget based on the parallax factor.
+        // Apply parallax to base position
+        let affectedX = cBase.x + (parallaxFactor * mouseShifted.x);
+        let affectedY = cBase.y + (parallaxFactor * mouseShifted.y);
 
-        // Apply exponential scaling to the parallax factor to achieve non-linear movement.
-        // Things in the background (negative zDepth) will move slower, and things in the foreground (positive zDepth) will move faster.
-        // let exponentialParallaxFactor = 1; //Math.pow(store.currentPlaxExpFactor, parallaxFactor);
+        // Distance-based scaling
+        let distanceFromCenter = Math.hypot(cBase.x - window.innerWidth / 2, cBase.y - window.innerHeight / 2);
+        let distanceFactor = distanceFromCenter / (window.innerWidth / 2);
+        distanceFactor = (1 - distanceFactor) * (1 - zoom / 6);
+        affectedX = (cBase.x - window.innerWidth / 2) * distanceFactor + window.innerWidth / 2;
+        affectedY = (cBase.y - window.innerHeight / 2) * distanceFactor + window.innerHeight / 2;
 
-        // if(store.DISABLE_PARALLAX){
-        //     exponentialParallaxFactor = 0;
-        // }
-
-        // this.targetRenderDepth = this.hovered 
-        //  ? this.zDepth + (this.halfDepthRange)
-        //  : minWidgetDepth;
-
-        // lerp to targetRenderDepth
-        // this.tweenedDepth = mctx.lerp(this.tweenedDepth, this.targetRenderDepth, 0.1);
-
-        // let affectedX = this.basePosition.x
-        //     + (exponentialParallaxFactor * mouseShifted.x);
-
-        // let affectedY = this.basePosition.y
-        //     + (exponentialParallaxFactor * mouseShifted.y);
-
-        // // scale the parallax based on the distance from the center of the screen
-        // if (isNaN(affectedX) || isNaN(affectedY) || isNaN(innerWidth / 2) || isNaN(innerHeight / 2)) {
-        //     debugger;
-        // }
-
-        // let distanceFromCenter = mctx.dist(affectedX, affectedY, innerWidth / 2, innerHeight / 2);
-        // let distanceFactor = distanceFromCenter / (innerWidth / 2);
-        // distanceFactor = mctx.lerp(1, distanceFactor, zoom / 6); // Reduced the effect by dividing zoom by 6 instead of 3
-        // affectedX = mctx.lerp(affectedX, innerWidth / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
-        // affectedY = mctx.lerp(affectedY, innerHeight / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
-        
-        // Update the position of the widget to the newly calculated values.
+        // Update position
         // this.position.x = affectedX;
         // this.position.y = affectedY;
-        return {
-            x: this.smartPosition.x,
-            y: this.smartPosition.y,
+        this.parallaxedPosition = {
+            x: affectedX, y: affectedY
         }
+    }
+    getCurrentBase(){
+        return this._absolutePosition;
+        // return (this?.pinned === 1 || this?.pinned === true)
+            // ? this.basePosition : this._absolutePosition
     }
     preDraw(){
         this.moveToTarget();
+        this.updatePlax();
 
         this.hovered = this.isHovered();
         if(this.hovered){
@@ -2300,15 +2276,13 @@ class Widget extends UndoRedoComponent {
         // need to know where things are to know if we can draw them
         this?.preDraw?.()
 
-        // this.position = this.getParallaxedPosition();
-
-        rectMode(CENTER);
+        rectMode(CORNER);
         strokeWeight(1)
         stroke("darkblue")
         fill(color(0,0,0,100))
         rect(
-            this.basePosition.x + this.widgetSize.width / 2,
-            this.basePosition.y + this.widgetSize.height / 2,
+            this.smartPosition.x + this.widgetSize.width / 2,
+            this.smartPosition.y + this.widgetSize.height / 2,
             this.widgetSize.width,
             this.widgetSize.height
         )
@@ -2782,19 +2756,21 @@ class CalculatorWidget extends Widget {
                     let buttonHeight = (this.widgetSize.height - (padding * this.buttons.length)) / this.buttons.length;
                     rectMode(CENTER);
                     fill("white")
+                    stroke("black")
+                    strokeWeight(3)
                     rect(
-                        this.position.x + (buttonWidth * buttonIndex) + buttonWidth / 2,
-                        this.position.y + (buttonHeight * rowIndex) + buttonHeight / 2,
+                        this.smartPosition.x + (buttonWidth * buttonIndex) + buttonWidth / 2,
+                        this.smartPosition.y + (buttonHeight * rowIndex) + buttonHeight / 2,
                         buttonWidth,
                         buttonHeight,
                         20 // this is the radius for the rounded corners
                     );
 
                     fill("black")
-                    let tpx = this.position.x + (buttonWidth * buttonIndex) + buttonWidth / 2;
-                    let tpy = this.position.y + (buttonHeight * rowIndex) + buttonHeight / 2;
-                    let tsx = buttonWidth;
-                    let tsy = buttonHeight;
+                    let tpx = this.smartPosition.x + (buttonWidth * buttonIndex) + buttonWidth / 2;
+                    let tpy = this.smartPosition.y + (buttonHeight * rowIndex) + buttonHeight / 2;
+                    let tsx = 0;//buttonWidth;
+                    let tsy = 0;//buttonHeight;
                     textSize(20)
                     textAlign(CENTER, CENTER)
                     text(button, tpx,tpy,tsx,tsy)
@@ -3233,30 +3209,6 @@ class CreateRootTestTableCommand extends Command {
     execute(){
     }
 }
-
-class NewTimeToSunSetWidgetCommand extends BaseCmds(Command,{
-    name: "New Time to Sunset Widget...",
-    steps: [
-        {
-            question: "Loading...",
-            toastOnSuccess: ()=>{
-                return this.name + " Widget Added!";
-            },
-            onStepLoaded: (wiz)=>{
-                console.warn(`New ${this.name}: onStepLoaded`, {wiz})
-                // add a new instance of the Todo Widget
-                //new NewTodoWidgetCommand().execute();
-                system.get("Dashboard")
-                .registerWidget("WidgetInstance"+performance.now(), new TimeToSunSetWidget());
-
-                // end the wizard
-                wiz.end();
-                // hide the command prompt
-                system.get("cmdprompt").hide();
-            }
-        }
-    ]
-}) {}
 
 // New Pomodoro Widget Command
 class NewPomodoroWidgetCommand extends BaseCmds(Command,{
@@ -3883,8 +3835,8 @@ class ImageViewerWidget extends Widget {
             
             image(
                 this.image, 
-                this.position.x + (this.widgetSize.width - this.newWidth) / 2,
-                this.position.y + (this.widgetSize.height - this.newHeight) / 2,
+                this.smartPosition.x + (this.widgetSize.width - this.newWidth) / 2,
+                this.smartPosition.y + (this.widgetSize.height - this.newHeight) / 2,
                 this.widgetSize.width,
                 this.widgetSize.height
             );
@@ -4619,12 +4571,12 @@ class BuildingBlockWidgetHolder extends Widget {
 class iFrameWidget extends Widget {
     url = ""
     pinned = false
-    constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
+    
     widgetSize = {
         width: Math.min(window.innerWidth * 0.2, 800),
         height: Math.min(window.innerHeight * 0.2, 800)
     }
-    constructor(url){
+    constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
         super(...arguments);
         this.url = url ?? this.url;
 
@@ -4718,14 +4670,16 @@ class iFrameWidget extends Widget {
         // this.corrected = {...this.position};
         // corrected.x *= zoom;
         // corrected.y *= zoom;
-        // this.iframe.position(
-        //     -this.smartPosition.x,
-        //     -this.smartPosition.y
-        // );
+        this.iframe.position(
+            this.smartPosition.x,
+            this.smartPosition.y
+        );
+        //this.iframe.scale(zoom)
         // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
         // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
-        this.iframe.elt.id = this.id;
-        this.iframe.elt.style.transform = `translate(${this.smartPosition.x}px,${this.smartPosition.y}px), scale(${zoom})`;
+        // this.iframe.elt.id = this.id;
+        // translate(${this.smartPosition.x}px,${this.smartPosition.y}px)
+        //this.iframe.elt.style.transform = `scale(${zoom})`;
     }
 }
 /* 
@@ -9357,7 +9311,17 @@ const InvokableCommands = {
         return "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
     },
     ["Send Message To Server"](){
-        socket.emit('message', 'Hello Server!');
+        prompt("What would you like to say to the server?", (value)=>{
+            const sanitized = value
+            // Check if the message is empty
+            if (!sanitized.trim()) {
+                alert('Message cannot be empty');
+                return;
+            }
+            // Sanitize the input to make it safe for RPC
+            sanitized = sanitized.replace(/[^a-zA-Z0-9 ]/g, "");
+            io.emit('message', sanitized);
+        })
     },
     ["Toggle Clear BG Flag "](){
         // clear the cmd palette first, wait a tick THEN unset the flag
@@ -9415,7 +9379,7 @@ const InvokableCommands = {
         //     max: 1,
         //     step: 1
         // }
-        prompt("Set Deep Canvas Blur Level",store.deepCanvasBlurLevel).then((value)=>{
+        prompt("Set Deep Canvas Blur Level",store.deepCanvasBlurLevel,(value)=>{
             store.deepCanvasBlurLevel = value;
         })
     },
@@ -9423,6 +9387,9 @@ const InvokableCommands = {
         //return "https://e.ggtimer.com/5";
         system.registerWidget(new iFrameWidget("https://e.ggtimer.com/5",300,300))
         return;
+    },
+    ["New Time To Sunset Widget"](){
+        system.registerWidget(new TimeToSunSetWidget());
     },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
@@ -12976,7 +12943,6 @@ let cursor, MainCanvasContextThing = function(p){
         //     StickyNoteWidget,
         //     // TetrisWidget,
         //     TimerWidget,
-        //     TimeToSunSetWidget,
         //     TodoWidget,
         //     UIDemoWidget,
         //     WeatherWidget,
@@ -13236,20 +13202,21 @@ let cursor, MainCanvasContextThing = function(p){
             let delta2 = Math.abs(panX) - 0;
             let delta3 = Math.abs(panY) - 0;
             delta*=1.0 - (delta2+delta3);
+            let stepFactor = .09; //1.001;
             if(panX > 0) {
-                panX -= 1.1 * delta;
+                panX -= stepFactor * delta;
             }
             // If panX < 0, we're panning left, so we need to nudge right
             if(panX < 0) {
-                panX += 1.1 * delta;
+                panX += stepFactor * delta;
             }
             // If panY > 0, we're panning down, so we need to nudge up
             if(panY > 0) {
-                panY -= 1.1 * delta;
+                panY -= stepFactor * delta;
             }
             // If panY < 0, we're panning up, so we need to nudge down
             if(panY < 0) {
-                panY += 1.1 * delta;
+                panY += stepFactor * delta;
             }
     
     
