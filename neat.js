@@ -10022,13 +10022,13 @@ class ToastNotification {
 
                 // use rounded sin wave to define number of clones (int)
                 // and their position (float)
-                targetCloneCount = Math.round(Math.sin(this.importantCloneAnimationSequenceFrame / 10) * 10);
+                targetCloneCount = Math.abs(Math.round(Math.sin(this.importantCloneAnimationSequenceFrame / 40) * 10));
             }
         }
         push();
         for(let i = 0; i < targetCloneCount; i++){
             // shift the drawing context with each i
-            mctx.translate(-10 * i, 10 * i);
+            mctx.translate(-2 * i, 2 * i);
 
             this.drawOneInstance(index)
         }
