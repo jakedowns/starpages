@@ -688,6 +688,7 @@ class System {
         }else{
             if(!this.singletonFactories[name]){
                 this.panic("System.lazySingleton: no factory defined for singleton named: " + name);
+                throw new Error("hi");
             }
             this.singletons[name] = new this.singletonFactories[name]();
             return this.singletons[name];
@@ -735,9 +736,14 @@ class System {
         this.dump(...arguments);
     }
     errorToast(message){
-        this.get("toastManager").showToast(message, {
-            level: "error"
-        })
+        try{
+            this.get("toastManager").showToast(message, {
+                level: "error"
+            })
+        }catch(e){
+            console.error(message,e);
+        }
+        console.error(message);
     }
     hideCmdPrompt(){
         new HideCmdPromptCommand().execute();
@@ -9973,6 +9979,138 @@ function isEmptyOrUndefined(thing){
     ) ? true : false;
 }
 
+// class CanvasCompositor {
+//     constructor(canvases, shaderProgram) {
+//         this.canvases = canvases;
+//         this.shaderProgram = shaderProgram;
+//         this.glContexts = this.canvases.map(canvas => {
+//             // Check if the context is a p5.js instance
+//             if (canvas instanceof p5) {
+//                 // If it is, return the 2D context
+//                 return canvas.drawingContext;
+//             } else {
+//                 // If it's not, return the WebGL context
+//                 return canvas.getContext('webgl');
+//             }
+//         });
+//         this.framebuffers = this.glContexts.map(gl => this.createFramebuffer(gl));
+//     }
+
+//     createFramebuffer(gl) {
+        
+//     }
+
+//     render() {
+//         this.glContexts.forEach((gl, i) => {
+//             gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[i].framebuffer);
+//             // Render your scene here
+//             if (this.canvases[i] instanceof p5) {
+//                 // If it's a p5 context, bind a callback for baking the state to a cached image texture
+//                 this.canvases[i].drawingContext.drawImage(this.canvases[i].canvas, 0, 0);
+//                 // Push the current state of the p5 context to the WebGL context
+//                 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.canvases[i].drawingContext.getImageData(0, 0, this.canvases[i].width, this.canvases[i].height).data), gl.STATIC_DRAW);
+//             }
+//         });
+
+//         // Now bind the main framebuffer (null) and use the textures from the framebuffers
+//         this.glContexts.forEach((gl, i) => {
+//             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//             gl.bindTexture(gl.TEXTURE_2D, this.framebuffers[i].texture);
+//             // Render your scene with the distortion shader here
+//             // Swap the buffer values from the p5 context to the WebGL context
+//             gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(this.canvases[i].drawingContext.getImageData(0, 0, this.canvases[i].width, this.canvases[i].height).data));
+//         });
+//         // Apply the shader program after the layers have been stacked / composited / layered together in the buffer
+//         this.glContexts.forEach((gl, i) => {
+//             gl.useProgram(this.shaderProgram);
+//             // Draw the final output
+//             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+//         });
+//     }
+// }
+class CanvasCompositor {
+    canvases = []
+    constructor(canvases, shaderProgram, topCanvas) {
+        // this.canvases = canvases.sort((a, b) => {
+        //     // Normalize for the fact that some "a" or "b" may have .elt sub key
+        //     let getZIndex = obj => obj.elt?.style?.zIndex || obj.style?.zIndex || 0;
+        //     return getZIndex(a) - getZIndex(b);
+        // }); // Sort by z-index
+        this.shaderProgram = shaderProgram;
+        this.topCanvas = topCanvas || this.createTopCanvas();
+        this.glContexts = this.canvases.map(canvas => this.getContext(canvas));
+        this.framebuffers = this.glContexts.map(gl => this.createFramebuffer(gl));
+    }
+
+    getContext(canvas) {
+        if (canvas instanceof p5) {
+            return canvas.drawingContext;
+        } else if (canvas instanceof THREE.WebGLRenderer) {
+            return canvas.getContext();
+        } else {
+            return canvas.getContext('webgl');
+        }
+    }
+
+    createTopCanvas() {
+        let topCanvas = document.createElement('canvas');
+        document.body.appendChild(topCanvas);
+        return topCanvas;
+    }
+
+    createFramebuffer(gl) {
+        let framebuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+
+        let texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.drawingBufferWidth, gl.drawingBufferHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+        return { framebuffer, texture };
+    }
+
+    captureCanvasState(gl, canvas, i) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[i].framebuffer);
+        if (canvas instanceof p5) {
+            canvas.drawingContext.drawImage(canvas.canvas, 0, 0);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(canvas.drawingContext.getImageData(0, 0, canvas.width, canvas.height).data), gl.STATIC_DRAW);
+        } else if (canvas instanceof THREE.WebGLRenderer) {
+            // Capture THREE.js canvas state
+            // This will depend on your specific THREE.js setup
+        } else {
+            // Capture WebGL canvas state
+            // This will depend on your specific WebGL setup
+        }
+    }
+
+    compositeCanvases() {
+        this.glContexts.forEach((gl, i) => {
+            this.captureCanvasState(gl, this.canvases[i], i);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.bindTexture(gl.TEXTURE_2D, this.framebuffers[i].texture);
+            gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(this.canvases[i].drawingContext.getImageData(0, 0, this.canvases[i].width, this.canvases[i].height).data));
+        });
+    }
+
+    applyShaderAndRender() {
+        let gl = this.topCanvas.getContext('webgl');
+        gl.useProgram(this.shaderProgram);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    render() {
+        //window.myMainDrawFN()
+        this.compositeCanvases();
+        this.applyShaderAndRender();
+    }
+}
+
 // ToastMessage
 class ToastNotification {
     message = ''
@@ -10025,12 +10163,13 @@ class ToastNotification {
                 targetCloneCount = Math.abs(Math.round(Math.sin(this.importantCloneAnimationSequenceFrame / 40) * 10));
             }
         }
+        this.targetCloneCount = targetCloneCount;
         push();
         for(let i = 0; i < targetCloneCount; i++){
             // shift the drawing context with each i
             mctx.translate(-2 * i, 2 * i);
 
-            this.drawOneInstance(index)
+            this.drawOneInstance(index+i)
         }
         pop();
     }
@@ -10073,6 +10212,10 @@ class ToastNotification {
             }
         }
         text(line, windowWidth - 10 - tBoxW + 10, y);
+        // darken by the lowest index so shadow effect
+        let shadowEffect = map(index, 0, this.options.important ? this.targetCloneCount : 1, 0, 50);
+        fill(0, 0, 0, shadowEffect);
+        rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
         alpha(255);
     }
 }
@@ -12725,6 +12868,23 @@ let cursor, MainCanvasContextThing = function(p){
         manager.boot(); rootSystem = system = manager.systems[0];
         console.info("booted");
 
+        let canvases = [
+            mctx,
+            deepCanvasManager.canvases[0],
+            deepCanvasManager.canvases[1],
+            deepCanvasManager.canvases[2],
+        ]
+        const shaderProgram = 
+        `#version 300 es`
+        `precision mediump float;`
+        `in vec2 a_position;`
+        `uniform float u_time;`
+        `void main() {`
+        `  float twist = a_position.x + sin(u_time);`
+        `  gl_Position = vec4(a_position.x * twist, a_position.y, 0, 1);`
+        `}`;
+        window.iCanvasCompositor = new CanvasCompositor(canvases, shaderProgram);
+
         //initTHREEMode();
 
         // system.get("Dashboard").registerWidget(new IsometricPreview());
@@ -13295,7 +13455,11 @@ let cursor, MainCanvasContextThing = function(p){
     // Main Draw / Root Draw
     // Todo: system manager should loop over active systems,
     // and call draw on systems which have non empty render queues
-    p.draw = function() {
+    p.draw = function(){
+        //myMainDrawFN();
+        window.iCanvasCompositor.render();
+    }
+    window.myMainDrawFN = function() {
         if(!store.windowHasFocus){
             return;
         }
