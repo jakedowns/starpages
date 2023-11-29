@@ -26,6 +26,16 @@ let todos = [{
     }
   }]
 
+  /* listen for the return message once the tweet has been loaded */
+window.addEventListener("message", function(e) {
+    var oe = e;
+    if (oe.origin != "https://twitframe.com")
+        return;
+	
+    if (oe.data.height && oe.data.element.match(/^tweet_/))
+        document.getElementById(oe.data.element).style.height = parseInt(oe.data.height) + "px";
+});
+
 // TODO: mother of all demos
 // credits: brett victor worrydream
 // 
@@ -661,12 +671,21 @@ class System {
     // outside of the store, to distinguish them from the state and reduce circular references
     singletons = {};
     singletonFactories = {};
+    invokeWith(theClass){
+        return new theClass(...arguments.slice(1))
+    }
     constructor(manager){
         this.manager = manager;
     }
     get(singletonName){
         return this.lazySingleton(singletonName);
         //return this.singletons[singletonName] ?? null;
+    }
+    get dashboard(){
+        return this.get("Dashboard")
+    }
+    get cmdprompt(){
+        return this.get("cmdprompt")
     }
     lazySingleton(name, factory){
         // if(name === "toastManager"){
@@ -745,8 +764,11 @@ class System {
     get time(){
         // returns either passthrough time or modified time
     }
-    registerWidget(nameOrInstance, instanceIfNamed){
-        return this.get("Dashboard").registerWidget(nameOrInstance, instanceIfNamed);
+    registerWidgetInstance(){
+        return this.get("Dashboard").registerWidget(...arguments);
+    }
+    registerWidget(){
+        return this.registerWidgetInstance(...arguments)
     }
 }
 const rootSystemManager = new SystemManager();
@@ -1976,7 +1998,7 @@ class Widget extends UndoRedoComponent {
         // if(!false){
         //     return base;
         // }
-        return this.parallaxedPosition;
+        return this?.parallaxedPosition ?? this.getCurrentBase();
     }
 
     get _absolutePosition(){
@@ -2067,12 +2089,12 @@ class Widget extends UndoRedoComponent {
             y: parentPosition.y + selfBasePosition.y,
         } : selfBasePosition;
 
-        this.parallaxedPosition = {
-            x: (this?.parentWidget?.position?.x ?? 0)
-                + (this.position.x ?? 0),
-            y: (this?.parentWidget?.position?.y ?? 0)
-                + (this.position.y ?? 0),
-        }
+        // this.parallaxedPosition = {
+        //     x: (this?.parentWidget?.position?.x ?? 0)
+        //         + (this.position.x ?? 0),
+        //     y: (this?.parentWidget?.position?.y ?? 0)
+        //         + (this.position.y ?? 0),
+        // }
 
         // mctx.push()
 
@@ -2275,6 +2297,14 @@ class Widget extends UndoRedoComponent {
         // do physics updates n such, 
         // need to know where things are to know if we can draw them
         this?.preDraw?.()
+
+        if(this?.onUpdate){
+            this.onUpdate();
+        }
+        if(this?.onDraw & !this.doNotDraw){
+            // call extending method
+            this.onDraw();
+        }
 
         rectMode(CORNER);
         strokeWeight(1)
@@ -4775,6 +4805,11 @@ extends iFrameWidget {
         // Added "?autoplay=1" to enable autoplay in the embed URL
         return 'https://www.youtube.com/embed/' + videoId + "?autoplay=1";
     }
+    // use update() instead if you want to ignore draw method culling
+    onDraw(){
+        // when visible and being drawn...
+
+    }
 }
 
 
@@ -5125,15 +5160,15 @@ class ClockWidget extends Widget {
         textStyle(BOLD);
         text(
             this.dateFormatted + "\n" + this.timeFormatted, 
-            this.position.x + (this.widgetSize.width/2), 
-            this.position.y + (this.widgetSize.height/2)
+            this.smartPosition.x + (this.widgetSize.width/2), 
+            this.smartPosition.y + (this.widgetSize.height/2)
         )
         // white overlay
         fill(255)
         text(
             this.dateFormatted + "\n" + this.timeFormatted, 
-            this.position.x + (this.widgetSize.width/2) - 3, 
-            this.position.y + (this.widgetSize.height/2) - 3
+            this.smartPosition.x + (this.widgetSize.width/2) - 3, 
+            this.smartPosition.y + (this.widgetSize.height/2) - 3
         )
         pop()
     }
@@ -5182,8 +5217,8 @@ class TimeToSunSetWidget extends ClockWidget {
             strokeWeight(0)
             fill(color);
             rect(
-                this.position.x, 
-                this.position.y + (i * (this.widgetSize.height / lines)), 
+                this.smartPosition.x, 
+                this.smartPosition.y + (i * (this.widgetSize.height / lines)), 
                 this.widgetSize.width, 
                 this.widgetSize.height / lines
             )
@@ -5755,6 +5790,12 @@ class Dashboard {
     layout = {}
     visible = true
     collapsed = false
+    clear(){
+        this.visible = false
+        // this.widgets = {}
+        // this.widgetLayoutOrder.length = 0
+        // this.widgetDepthOrder.length = 0
+    }
     init(){
         // TODO: extend an entity component system where components have active state as boolean
         this.active = true;
@@ -5835,21 +5876,34 @@ class Dashboard {
             }
         })
     }
-    registerWidget(widgetID,widgetInstance){
-        if(typeof arguments[0] !== "string"){
-            //system.panic('Dashboard.registerWidget: widgetID must be a string',widgetID)
-            if(typeof arguments[1] === `undefined`){
-                // assign an ID
-                widgetInstance = widgetID; // swap
-                widgetID = "WidgetInstance"+performance.now();
-            }
+    registerWidget(widgetIDOrInstance,instanceOrNull){
+        console.warn("registerWidget",{
+            widgetIDOrInstance,
+            instanceOrNull
+        })
+        // if widgetIDOrInstance contains youtube.com, return a new youtube widget instance instead
+        if(widgetIDOrInstance?.includes?.("youtube.com")){
+            // it's a youtube url!
+            return this.registerWidget(new YoutubePlayerWidget("",{tracks:[widgetIDOrInstance]}))
         }
-        if(!widgetInstance || typeof widgetInstance !== "object"){// || !(widgetInstance instanceof Widget)){
-            system.panic('Dashboard.registerWidget: widgetInstance must be a Widget',{widgetInstance})
+        if(widgetIDOrInstance?.includes?.("://")){
+            // it's an iframe, chuck!
+            return this.registerWidget(new iFrameWidget(widgetIDOrInstance))
+        }
+        let widgetID, widgetInstance = widgetIDOrInstance;
+        if(typeof widgetIDOrInstance !== "string"){
+            //system.panic('Dashboard.registerWidget: widgetID must be a string',widgetID)
+            if(typeof instanceOrNull === `undefined`){
+                // assign an ID
+                //widgetInstance = widgetIDOrInstance; // swap
+                widgetID = "WidgetInstance"+performance.now();
+            }else{
+                widgetInstance = instanceOrNull
+            }
         }
         // require both args
         if(!widgetID || !widgetInstance){
-            system.panic('Dashboard.registerWidget: missing required args',{widgetID,widgetInstance})
+            system.panic('Dashboard.registerWidget: missing required args',{widgetID,widgetInstance,arguments})
         }
         // define a back reference
         widgetInstance.dashboard = this; 
@@ -6802,7 +6856,12 @@ class Refactor extends UndoRedoDecorator(DynamicThing) {
     // - setTestConfiguration() // override the current configuration table with new values
 }
 
-class ComputerKeyboardPreview extends Widget {
+/* for previewing a gamepad input */
+class GamePadWidget extends Widget {
+
+}
+
+class KeyboardWidget extends Widget {
     widgetSize = { width: 300, height: 100 }
 
     currentlyPressedKeys = []
@@ -6839,6 +6898,10 @@ class ComputerKeyboardPreview extends Widget {
         this.currentlyPressedKeys['Meta'] = e.metaKey;
     }
 
+    close(){
+        this.cleanupListeners();
+    }
+
     draw(){
         super.draw(...arguments);
 
@@ -6854,7 +6917,7 @@ class ComputerKeyboardPreview extends Widget {
         const keyLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Z', 'X', 'C', 'V', 'B', 'N', 'M'];
         let keyIndex = 0;
         push()
-        translate(0,100)
+        translate(this.smartPosition.x,this.smartPosition.y)
         for(let i = 0; i < 4; i++){
             for(let j = 0; j < 10; j++){
                 const x = (j + 1) * (keySize + padding);
@@ -9273,6 +9336,10 @@ const InvokableCommands = {
             }
         ))
     },
+    ["3"](){
+        // 3 toggles 3 js mode
+        InvokableCommands["Load THREE.js"]()
+    },
     ["Load THREE.js"](){
         if(window.three_mode_initialized){
             window.disableTHREEMode();
@@ -9347,6 +9414,17 @@ const InvokableCommands = {
     [`dislike song "x"`](x){
         console.warn('TODO: dislike song: x: ',{x})
     },
+    ["lock"](){
+        // puts the system in lock screen, screen save mode
+        InvokableCommands["Clear Dashboard"]
+        InvokableCommands["Enable Deep Renderer"]
+    },
+    ["enable deep renderer"](){
+        store.disableDeepCanvas = false;
+    },
+    ["disable deep renderer"](){
+        store.disableDeepCanvas = true;
+    },
     ["toggle deep renderer"](){
         store.disableDeepCanvas = !store.disableDeepCanvas;
 
@@ -9357,6 +9435,53 @@ const InvokableCommands = {
     ["New sketchpad"](){},
     [""](){},
     ["new idea"](){},
+    ["new tab"](){
+        InvokableCommands["new browser bubble"]()
+    },
+    ["new synthesizer"](){
+        // spawn a Synth Widget :D
+        alert("Todo: spawn a synthesizer widget on the intergalactic hyperdimensional breadboard!")
+    },
+    ["TODO: make it remember when deep rendering and three rendering were last on when you restart the page"](){
+        // maybe just add it to the url continually?
+    },
+    ["add song"](){
+        prompt("Which song?! (youtube urls for now, soon: NLP)",(value)=>{
+            system.invokeWith(YoutubePlayerWidget, value)
+        })
+    },
+    ["play next"](){
+
+    },
+    ["undo"](){
+
+    },
+    ["redo"](){
+
+    },
+    ["select all"](){
+        
+    },
+    ["de-select all"](){
+        
+    },
+    ["invert selection"](){
+        
+    },
+    ["thoughts from 11/29/2023 > 3:59 PM "](){
+        // golf culture is... weird!
+        system.showToast("watching https://www.youtube.com/watch?v=Z0hDnmQPH4g")
+        system.registerWidgetInstance(new YoutubePlayerWidget(null,{tracks:["https://www.youtube.com/watch?v=Z0hDnmQPH4g"]}))
+    },
+    ["new iframe widget"](){
+        // todo: PinnedIFrameWidgetInstantiator / factory?
+        prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here",(value)=>{
+            system.registerWidgetInstance(new iFrameWidget(value))
+        })
+    },
+    ["new browser bubble"](){
+        InvokableCommands["new iframe widget"]()
+    },
     ["new mind map"](){},
     ["new todo"](){},
     ["new timer"](){},
@@ -9388,8 +9513,28 @@ const InvokableCommands = {
         system.registerWidget(new iFrameWidget("https://e.ggtimer.com/5",300,300))
         return;
     },
+    ["New Calculator Widget"](){
+        system.registerWidgetInstance(new CalculatorWidget())
+    },
     ["New Time To Sunset Widget"](){
         system.registerWidget(new TimeToSunSetWidget());
+    },
+    ["Embed Tweet"](){
+        // return "<blockquote class="twitter-tweet" data-dnt="true" data-theme="dark"><p lang="en" dir="ltr">copy that <a href="https://t.co/cNI0UDfPtt">pic.twitter.com/cNI0UDfPtt</a></p>&mdash; Jacob Downs (@jakedowns) <a href="https://twitter.com/jakedowns/status/1724611135209455721?ref_src=twsrc%5Etfw">November 15, 2023</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>"
+
+        // <iframe border=0 frameborder=0 height=250 width=550
+        //  src="https://twitframe.com/show?url=https%3A%2F%2Ftwitter.com%2Fjack%2Fstatus%2F20"></iframe>
+        // https://twitter.com/jakedowns/status/1724611135209455721
+        // https%3A%2F%2Ftwitter.com%2Fjakedowns%2Fstatus%2F1724611135209455721
+        let urlSafeUrl = 
+        encodeURIComponent("https://twitter.com/jakedowns/status/1724611135209455721");
+        system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+    },
+    ["UI Inspiration > Minority Report UI"](){
+        return "https://www.youtube.com/watch?v=NwVBzx0LMNQ"
+    },
+    ["UI Inspiration > HER Game"](){
+        return "https://www.youtube.com/watch?v=c8zDDPP3REE"
     },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
@@ -9420,10 +9565,14 @@ const InvokableCommands = {
 
     // },
     ["Close All Widgets"](){
-        system.widgets.forEach((widget)=>{
-            widget.close();
-        })
+        Object.entries(system.get("Dashboard").widgets).forEach(([key, widget]) => {
+            widget?.close?.();
+        });
+        // clear the dashboard
+        system.dashboard.clear();
     },
+    // TODO: make aliases and weighting/ranking easier
+    ["Clear Dashboard"](){ InvokableCommands["Close All Widgets"]() },
     ["Open All Players"](){
         let returns = []
         // show a toast of the number of InvokableCommands that start with "play"
@@ -10383,7 +10532,7 @@ function levenshteinDistance(a, b) {
     return matrix[b.length][a.length];
 };
 
-class CmdPrompt {
+class CmdPrompt extends Widget {
     // the current "Command" being constructed
     currentCommand = null; 
     // the list of available commands
@@ -10393,6 +10542,69 @@ class CmdPrompt {
 
     get visible(){
         return store.CmdPromptVisible;
+    }
+
+    afterSetup(){
+        mctx.push();
+        mctx.textSize(50);
+            CmdPromptInput = mctx.createInput('');
+            CmdPromptInput.elt.style.backgroundColor = 'black';
+            CmdPromptInput.elt.style.color = 'white';
+            CmdPromptInput.size(mctx.windowWidth - 20);
+            CmdPromptInput.position(10, 130);
+            // focus the command palette input
+            CmdPromptInput.elt.focus();
+
+            CmdPromptInput.elt.addEventListener('focus', (e)=>{
+                // store.focusedField = CmdPromptInput.elt;
+                store.focused = true
+            })
+            CmdPromptInput.elt.addEventListener('blur', (e)=>{
+                // store.focusedField = null;
+                store.focused = false;
+            })
+        mctx.pop();
+        // Listen for the 'keydown' event
+        CmdPromptInput.elt.addEventListener('keypress', function(e) {
+            // Check if the Enter key was pressed
+            // if (e.key === 'Enter') {
+                // Call the onCmdPromptInput method
+                cmdprompt = system.get('cmdprompt');
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            // }
+
+            // If you 
+        });
+    }
+
+    // draw(){
+    //     super.draw(...arguments)
+    // }
+
+    // use update() instead if you want to ignore draw method culling
+    // use beforePhysics or afterPhysics to add artistic control and influence / art-direction over simulations and behaviors at runtime
+    onDraw(){
+        // when visible and being drawn...
+        // super.draw() already happened here
+
+        // Draw the command prompt as a 16 bit or 8 bit or even 1 bit input box with chunky rounded borders using squares in a grid layout
+        mctx.push();
+        mctx.strokeWeight(2);
+        mctx.stroke(255);
+        mctx.fill(0);
+        mctx.rectMode(mctx.CENTER);
+        let gridSize = 16; // Change this to 8 or 1 for different bit styles
+        let gridWidth = mctx.windowWidth / gridSize;
+        let gridHeight = (mctx.windowHeight - 130) / gridSize;
+        for (let i = 0; i < gridSize; i++) {
+            for (let j = 0; j < gridSize; j++) {
+                mctx.rect(i * gridWidth, 130 + j * gridHeight, gridWidth, gridHeight);
+            }
+        }
+        mctx.pop();
     }
 
     registerCommand(
@@ -10417,6 +10629,7 @@ class CmdPrompt {
     }
     
     constructor(){
+        super(...arguments)
         cmdprompt = this;
         this.commandSuggestionList = new SuggestionList();
         this.addDefaultCommands();
@@ -12579,7 +12792,7 @@ const CoreWidgets = [
     // // "Hypercard"
     // FractalTreeGraphViewerWidget,
 
-    ComputerKeyboardPreview
+    KeyboardWidget
 ]
 
 let tabHistory = [];
@@ -12886,42 +13099,10 @@ let cursor, MainCanvasContextThing = function(p){
         })
 
         // Additional Widgets
-        system.get("Dashboard").registerWidget(new ComputerKeyboardPreview());
+        system.get("Dashboard").registerWidget(new KeyboardWidget());
 
-        // TODO: put this stuff in a CmdPrompt.setup() callback
-        mctx.push();
-        mctx.textSize(50);
-            CmdPromptInput = mctx.createInput('');
-            CmdPromptInput.elt.style.backgroundColor = 'black';
-            CmdPromptInput.elt.style.color = 'white';
-            CmdPromptInput.size(mctx.windowWidth - 20);
-            CmdPromptInput.position(10, 130);
-            // focus the command palette input
-            CmdPromptInput.elt.focus();
-
-            CmdPromptInput.elt.addEventListener('focus', (e)=>{
-                // store.focusedField = CmdPromptInput.elt;
-                store.focused = true
-            })
-            CmdPromptInput.elt.addEventListener('blur', (e)=>{
-                // store.focusedField = null;
-                store.focused = false;
-            })
-        mctx.pop();
-        // Listen for the 'keydown' event
-        CmdPromptInput.elt.addEventListener('keypress', function(e) {
-            // Check if the Enter key was pressed
-            // if (e.key === 'Enter') {
-                // Call the onCmdPromptInput method
-                cmdprompt = system.get('cmdprompt');
-                if(!cmdprompt){
-                    system.warn("cmdprompt not ready");
-                }
-                cmdprompt?.onCmdPromptInput(e);
-            // }
-
-            // If you 
-        });
+        //system.get("cmdprompt")
+        system.cmdprompt.afterSetup()
 
         // const WidgetsToRegister = [
         //     "inspiration/Flag_of_Palestine.svg",
@@ -12932,7 +13113,6 @@ let cursor, MainCanvasContextThing = function(p){
         //     "fine.gif",
         //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
-        //     CalculatorWidget,
         //     CalendarWidget,
         //     ClockWidget,
 
@@ -12962,6 +13142,15 @@ let cursor, MainCanvasContextThing = function(p){
             // add our first widget (todo: load state from dehydrated json)
             // DEFAULT WIDGET SET
 
+        InvokableCommands["New Time To Sunset Widget"]()
+        InvokableCommands["New Calculator Widget"]()
+        InvokableCommands["New Egg Timer"]()
+        InvokableCommands["Play Glorious Dawn"]()
+
+        InvokableCommands["UI Inspiration > Minority Report UI"]()
+
+        InvokableCommands["Embed Tweet"]()
+
         // OnDashboardReady OnDashboardLoaded OnDashboardInit
         // OnDashboardStarted
         system
@@ -12972,8 +13161,7 @@ let cursor, MainCanvasContextThing = function(p){
             // what if you could remote desktop in here?!
             // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
 
-            .registerWidget(new CalculatorWidget())
-
+            .registerWidget(new ClockWidget())
             .registerWidget(new MarchingCubesDemoWidget())
 
             .registerWidget(new AStarPathfindingDemoWidget())
@@ -12989,7 +13177,7 @@ let cursor, MainCanvasContextThing = function(p){
                 // .registerWidget(new ThreeJSViewer())
 
                 .registerWidget(new MoonPhaseWidget())
-                .registerWidget(new ComputerKeyboardPreview())
+                .registerWidget(new KeyboardWidget())
 
             
             // .registerWidget("Google Color Picker",
@@ -13000,17 +13188,17 @@ let cursor, MainCanvasContextThing = function(p){
                 new ImageViewerWidget("insp.png")
             )
             .registerWidget(
-                "SVGViewerWidget:PFlag",
+                //"SVGViewerWidget:PFlag",
                 new ImageViewerWidget("Flag_of_Palestine.svg")
             )
             .registerWidget(
-                "milky-way-galaxy.gif",
+                //"milky-way-galaxy.gif",
                 new ImageViewerWidget("milky-way-galaxy.gif")
             )
 
             
             .registerWidget(
-                "4SeasonsImg", 
+                //"4SeasonsImg", 
                 new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
 
             .registerWidget(
@@ -13506,7 +13694,7 @@ const properties = [
     'rectMode', 'fill', 'frameCount', 'image', 'lerp', 
     'lerpColor', 'loadImage', 'millis', 'map', 
     'mouseX', 'mouseY', 'noFill', 'noTint', 'pop', 
-    'push', 'text', 'textAlign', 'textSize', 'textStyle', 
+    'push', 'text', 'textAlign', 'textSize', 'textFont', 'textStyle', 
     'tint', 'translate', 'rect', 'scale', 'stroke', 
     'strokeWeight', 'windowHeight', 'windowWidth', 
     'createElement'

@@ -5,7 +5,8 @@
 	"main": "server.js",
 	"type": "module",
 	"scripts": {
-		"start": "node --harmony server.mjs"
+		"start": "node --harmony server.mjs",
+		"serve": "http-server -c-1 --cors='*' -o"
 	},
 	"keywords": [],
 	"author": "",
