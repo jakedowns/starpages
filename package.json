@@ -5,7 +5,8 @@
 	"main": "server.js",
 	"type": "module",
 	"scripts": {
-		"start": "node --harmony server.mjs"
+		"start": "node --harmony server.mjs",
+		"serve": "http-server -c-1 --cors='*' -o"
 	},
 	"keywords": [],
 	"author": "",
@@ -19,6 +20,7 @@
 		"express": "^4.18.2",
 		"open-graph-scraper": "^6.3.2",
 		"openai": "^4.20.1",
+		"peerjs": "^1.5.1",
 		"socket.io": "^4.7.2"
 	}
 }

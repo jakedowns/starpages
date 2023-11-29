@@ -14,6 +14,27 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+import Peer from 'peerjs';
+
+const peer = new Peer();
+
+peer.on('open', (id) => {
+  console.log('My peer ID is: ' + id);
+});
+
+peer.on('connection', (conn) => {
+  conn.on('data', (data) => {
+    console.log('Received', data);
+  });
+});
+
+// Connect to another peer
+const conn = peer.connect('another-peers-id');
+
+conn.on('open', () => {
+  conn.send('Hello!');
+});
+
 
 
 const app = express();

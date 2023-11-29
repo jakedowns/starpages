@@ -15,6 +15,7 @@
 const testOpenAIServer = "http://127.0.0.1:4001/";
 
 
+
 let todos = [{
     "Overview of neat.js": {
       "Ambitions": "- The script aims to create a complex system with various functionalities such as synchronized music playback, web browsing, widget recommendation engine, and more.\n- It also aims to run headless in a node.js environment and communicate with a client version.\n- The script plans to implement a system that sends text, email, SMS, APN, web push notifications, etc.",
@@ -25,6 +26,16 @@ let todos = [{
       "Constants": "- MOON_PHASE_EMOJIS, MOON_PHASE_ORDER: Constants to define moon phases.\n- HALT_ON_PANIC, SHOW_DEV_WARNINGS, MAX_SUGGESTED_SCENARIOS_PER_FEATURE: Constants to define system behaviors.\n- tsmc_machine_states: Constant to define machine states.\n- DefaultKeyBindings: Constant to define default key bindings."
     }
   }]
+
+  /* listen for the return message once the tweet has been loaded */
+window.addEventListener("message", function(e) {
+    var oe = e;
+    if (oe.origin != "https://twitframe.com")
+        return;
+	
+    if (oe.data.height && oe.data.element.match(/^tweet_/))
+        document.getElementById(oe.data.element).style.height = parseInt(oe.data.height) + "px";
+});
 
 // TODO: mother of all demos
 // credits: brett victor worrydream
@@ -661,12 +672,21 @@ class System {
     // outside of the store, to distinguish them from the state and reduce circular references
     singletons = {};
     singletonFactories = {};
+    invokeWith(theClass){
+        return new theClass(...arguments.slice(1))
+    }
     constructor(manager){
         this.manager = manager;
     }
     get(singletonName){
         return this.lazySingleton(singletonName);
         //return this.singletons[singletonName] ?? null;
+    }
+    get dashboard(){
+        return this.get("Dashboard")
+    }
+    get cmdprompt(){
+        return this.get("cmdprompt")
     }
     lazySingleton(name, factory){
         // if(name === "toastManager"){
@@ -751,8 +771,11 @@ class System {
     get time(){
         // returns either passthrough time or modified time
     }
-    registerWidget(nameOrInstance, instanceIfNamed){
-        return this.get("Dashboard").registerWidget(nameOrInstance, instanceIfNamed);
+    registerWidgetInstance(){
+        return this.get("Dashboard").registerWidget(...arguments);
+    }
+    registerWidget(){
+        return this.registerWidgetInstance(...arguments)
     }
 }
 const rootSystemManager = new SystemManager();
@@ -1976,10 +1999,13 @@ class Widget extends UndoRedoComponent {
     }
 
     get smartPosition(){
-        if(this.pinned || this?.options?.pinned){
-            return this.basePosition;
-        }
-        return this._absolutePosition;
+        // let base = this.getCurrentBase();
+
+        // TODO: sometimes we _dont_ apply it
+        // if(!false){
+        //     return base;
+        // }
+        return this?.parallaxedPosition ?? this.getCurrentBase();
     }
 
     get _absolutePosition(){
@@ -2031,6 +2057,8 @@ class Widget extends UndoRedoComponent {
             maxWidgetDepth
         ))
 
+        //this.updatePlax();
+
         // should we decorate this class with any functionality?
     }
     setTargetPosition(vector){
@@ -2068,12 +2096,12 @@ class Widget extends UndoRedoComponent {
             y: parentPosition.y + selfBasePosition.y,
         } : selfBasePosition;
 
-        this.parallaxedPosition = {
-            x: (this?.parentWidget?.position?.x ?? 0)
-                + (this.position.x ?? 0),
-            y: (this?.parentWidget?.position?.y ?? 0)
-                + (this.position.y ?? 0),
-        }
+        // this.parallaxedPosition = {
+        //     x: (this?.parentWidget?.position?.x ?? 0)
+        //         + (this.position.x ?? 0),
+        //     y: (this?.parentWidget?.position?.y ?? 0)
+        //         + (this.position.y ?? 0),
+        // }
 
         // mctx.push()
 
@@ -2180,74 +2208,45 @@ class Widget extends UndoRedoComponent {
     targetRenderDepth = 0
     targetExpFactor = 0
     tweenExpFactor = 0
-    getParallaxedPosition(){
+    updatePlax() {
         let apparentDepth = this.zDepth;
-        
-        // squash depth as zoom [0-3] approaches 3
-        //apparentDepth = mctx.lerp(apparentDepth, apparentDepth * 0.5, zoom / 3);
+        let parallaxFactor = (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
+        parallaxFactor *= (1 - zoom / MAX_ZOOM); // Flatten effect at higher zoom
 
-        // Based on zDepth, we'll affect the position to emulate parallax
-        // Depth currently ranges from minDepth maxDepth
-        // Calculate the parallax factor based on the zDepth of the widget.
-        // The parallax effect will be more pronounced for widgets with a higher zDepth.
-        // The effect should flip signs when the sign of the current depth is negative
-        // i.e. things closer to camera should move the opposite direction as things past the zDepth 0 focal point
-        let parallaxFactor = 0; //(apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
+        parallaxFactor *= 0.1
 
-        // dampen the pFactor when the zoom is increased to simulate flattening of perspective
-        // use lerp to account for the zoom range being 0-3, not 0-1
-        //parallaxFactor *= mctx.lerp(1, 0, zoom / 3);
+        if (store.DISABLE_PARALLAX) {
+            parallaxFactor = 0;
+        }
 
-        //parallaxFactor *= this.parallaxMultiplier
+        let cBase = this.getCurrentBase();
 
-        // this.targetExpFactor = this.hovered ? parallaxFactor : 0;
-        // this.tweenExpFactor = mctx.lerp(this.tweenExpFactor, this.targetExpFactor, 0.1);
-        
-        // Calculate the new x and y positions of the widget, taking into account the parallax factor.
-        // The parallax effect is achieved by slightly shifting the position of the widget based on the parallax factor.
+        // Apply parallax to base position
+        let affectedX = cBase.x + (parallaxFactor * mouseShifted.x);
+        let affectedY = cBase.y + (parallaxFactor * mouseShifted.y);
 
-        // Apply exponential scaling to the parallax factor to achieve non-linear movement.
-        // Things in the background (negative zDepth) will move slower, and things in the foreground (positive zDepth) will move faster.
-        // let exponentialParallaxFactor = 1; //Math.pow(store.currentPlaxExpFactor, parallaxFactor);
+        // Distance-based scaling
+        let distanceFromCenter = Math.hypot(cBase.x - window.innerWidth / 2, cBase.y - window.innerHeight / 2);
+        let distanceFactor = distanceFromCenter / (window.innerWidth / 2);
+        distanceFactor = (1 - distanceFactor) * (1 - zoom / 6);
+        affectedX = (cBase.x - window.innerWidth / 2) * distanceFactor + window.innerWidth / 2;
+        affectedY = (cBase.y - window.innerHeight / 2) * distanceFactor + window.innerHeight / 2;
 
-        // if(store.DISABLE_PARALLAX){
-        //     exponentialParallaxFactor = 0;
-        // }
-
-        // this.targetRenderDepth = this.hovered 
-        //  ? this.zDepth + (this.halfDepthRange)
-        //  : minWidgetDepth;
-
-        // lerp to targetRenderDepth
-        // this.tweenedDepth = mctx.lerp(this.tweenedDepth, this.targetRenderDepth, 0.1);
-
-        // let affectedX = this.basePosition.x
-        //     + (exponentialParallaxFactor * mouseShifted.x);
-
-        // let affectedY = this.basePosition.y
-        //     + (exponentialParallaxFactor * mouseShifted.y);
-
-        // // scale the parallax based on the distance from the center of the screen
-        // if (isNaN(affectedX) || isNaN(affectedY) || isNaN(innerWidth / 2) || isNaN(innerHeight / 2)) {
-        //     debugger;
-        // }
-
-        // let distanceFromCenter = mctx.dist(affectedX, affectedY, innerWidth / 2, innerHeight / 2);
-        // let distanceFactor = distanceFromCenter / (innerWidth / 2);
-        // distanceFactor = mctx.lerp(1, distanceFactor, zoom / 6); // Reduced the effect by dividing zoom by 6 instead of 3
-        // affectedX = mctx.lerp(affectedX, innerWidth / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
-        // affectedY = mctx.lerp(affectedY, innerHeight / 2, distanceFactor / 2); // Reduced the effect by dividing distanceFactor by 2
-        
-        // Update the position of the widget to the newly calculated values.
+        // Update position
         // this.position.x = affectedX;
         // this.position.y = affectedY;
-        return {
-            x: this.smartPosition.x,
-            y: this.smartPosition.y,
+        this.parallaxedPosition = {
+            x: affectedX, y: affectedY
         }
+    }
+    getCurrentBase(){
+        return this._absolutePosition;
+        // return (this?.pinned === 1 || this?.pinned === true)
+            // ? this.basePosition : this._absolutePosition
     }
     preDraw(){
         this.moveToTarget();
+        this.updatePlax();
 
         this.hovered = this.isHovered();
         if(this.hovered){
@@ -2306,15 +2305,21 @@ class Widget extends UndoRedoComponent {
         // need to know where things are to know if we can draw them
         this?.preDraw?.()
 
-        // this.position = this.getParallaxedPosition();
+        if(this?.onUpdate){
+            this.onUpdate();
+        }
+        if(this?.onDraw & !this.doNotDraw){
+            // call extending method
+            this.onDraw();
+        }
 
-        rectMode(CENTER);
+        rectMode(CORNER);
         strokeWeight(1)
         stroke("darkblue")
         fill(color(0,0,0,100))
         rect(
-            this.basePosition.x + this.widgetSize.width / 2,
-            this.basePosition.y + this.widgetSize.height / 2,
+            this.smartPosition.x + this.widgetSize.width / 2,
+            this.smartPosition.y + this.widgetSize.height / 2,
             this.widgetSize.width,
             this.widgetSize.height
         )
@@ -2788,19 +2793,21 @@ class CalculatorWidget extends Widget {
                     let buttonHeight = (this.widgetSize.height - (padding * this.buttons.length)) / this.buttons.length;
                     rectMode(CENTER);
                     fill("white")
+                    stroke("black")
+                    strokeWeight(3)
                     rect(
-                        this.position.x + (buttonWidth * buttonIndex) + buttonWidth / 2,
-                        this.position.y + (buttonHeight * rowIndex) + buttonHeight / 2,
+                        this.smartPosition.x + (buttonWidth * buttonIndex) + buttonWidth / 2,
+                        this.smartPosition.y + (buttonHeight * rowIndex) + buttonHeight / 2,
                         buttonWidth,
                         buttonHeight,
                         20 // this is the radius for the rounded corners
                     );
 
                     fill("black")
-                    let tpx = this.position.x + (buttonWidth * buttonIndex) + buttonWidth / 2;
-                    let tpy = this.position.y + (buttonHeight * rowIndex) + buttonHeight / 2;
-                    let tsx = buttonWidth;
-                    let tsy = buttonHeight;
+                    let tpx = this.smartPosition.x + (buttonWidth * buttonIndex) + buttonWidth / 2;
+                    let tpy = this.smartPosition.y + (buttonHeight * rowIndex) + buttonHeight / 2;
+                    let tsx = 0;//buttonWidth;
+                    let tsy = 0;//buttonHeight;
                     textSize(20)
                     textAlign(CENTER, CENTER)
                     text(button, tpx,tpy,tsx,tsy)
@@ -3239,30 +3246,6 @@ class CreateRootTestTableCommand extends Command {
     execute(){
     }
 }
-
-class NewTimeToSunSetWidgetCommand extends BaseCmds(Command,{
-    name: "New Time to Sunset Widget...",
-    steps: [
-        {
-            question: "Loading...",
-            toastOnSuccess: ()=>{
-                return this.name + " Widget Added!";
-            },
-            onStepLoaded: (wiz)=>{
-                console.warn(`New ${this.name}: onStepLoaded`, {wiz})
-                // add a new instance of the Todo Widget
-                //new NewTodoWidgetCommand().execute();
-                system.get("Dashboard")
-                .registerWidget("WidgetInstance"+performance.now(), new TimeToSunSetWidget());
-
-                // end the wizard
-                wiz.end();
-                // hide the command prompt
-                system.get("cmdprompt").hide();
-            }
-        }
-    ]
-}) {}
 
 // New Pomodoro Widget Command
 class NewPomodoroWidgetCommand extends BaseCmds(Command,{
@@ -3889,8 +3872,8 @@ class ImageViewerWidget extends Widget {
             
             image(
                 this.image, 
-                this.position.x + (this.widgetSize.width - this.newWidth) / 2,
-                this.position.y + (this.widgetSize.height - this.newHeight) / 2,
+                this.smartPosition.x + (this.widgetSize.width - this.newWidth) / 2,
+                this.smartPosition.y + (this.widgetSize.height - this.newHeight) / 2,
                 this.widgetSize.width,
                 this.widgetSize.height
             );
@@ -4625,20 +4608,27 @@ class BuildingBlockWidgetHolder extends Widget {
 class iFrameWidget extends Widget {
     url = ""
     pinned = false
+    
     widgetSize = {
         width: Math.min(window.innerWidth * 0.2, 800),
         height: Math.min(window.innerHeight * 0.2, 800)
     }
-    constructor(url){
+    constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
         super(...arguments);
         this.url = url ?? this.url;
+
         //this.widgetSize = { width: 300, height: 150 }
 
             if(arguments[0]?.widgetSize){
                 this.widgetSize = arguments[0].widgetSize;
             }
-            if(arguments[1]?.widgetSize){
+            else if(arguments[1]?.widgetSize){
                 this.widgetSize = arguments[1].widgetSize;
+            }else if(pxHeightOrNull){
+                this.widgetSize = {
+                    width: pxWidthOrOptsOrNull,
+                    height: pxHeightOrNull
+                }
             }
         
         /*
@@ -4717,14 +4707,16 @@ class iFrameWidget extends Widget {
         // this.corrected = {...this.position};
         // corrected.x *= zoom;
         // corrected.y *= zoom;
-        // this.iframe.position(
-        //     -this.smartPosition.x,
-        //     -this.smartPosition.y
-        // );
+        this.iframe.position(
+            this.smartPosition.x,
+            this.smartPosition.y
+        );
+        //this.iframe.scale(zoom)
         // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
         // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
-        this.iframe.elt.id = this.id;
-        this.iframe.elt.style.transform = `translate(${this.smartPosition.x}px,${this.smartPosition.y}px), scale(${zoom})`;
+        // this.iframe.elt.id = this.id;
+        // translate(${this.smartPosition.x}px,${this.smartPosition.y}px)
+        this.iframe.elt.style.transform = `scale(${zoom})`;
     }
 }
 /* 
@@ -4819,6 +4811,11 @@ extends iFrameWidget {
         }
         // Added "?autoplay=1" to enable autoplay in the embed URL
         return 'https://www.youtube.com/embed/' + videoId + "?autoplay=1";
+    }
+    // use update() instead if you want to ignore draw method culling
+    onDraw(){
+        // when visible and being drawn...
+
     }
 }
 
@@ -5170,15 +5167,15 @@ class ClockWidget extends Widget {
         textStyle(BOLD);
         text(
             this.dateFormatted + "\n" + this.timeFormatted, 
-            this.position.x + (this.widgetSize.width/2), 
-            this.position.y + (this.widgetSize.height/2)
+            this.smartPosition.x + (this.widgetSize.width/2), 
+            this.smartPosition.y + (this.widgetSize.height/2)
         )
         // white overlay
         fill(255)
         text(
             this.dateFormatted + "\n" + this.timeFormatted, 
-            this.position.x + (this.widgetSize.width/2) - 3, 
-            this.position.y + (this.widgetSize.height/2) - 3
+            this.smartPosition.x + (this.widgetSize.width/2) - 3, 
+            this.smartPosition.y + (this.widgetSize.height/2) - 3
         )
         pop()
     }
@@ -5227,8 +5224,8 @@ class TimeToSunSetWidget extends ClockWidget {
             strokeWeight(0)
             fill(color);
             rect(
-                this.position.x, 
-                this.position.y + (i * (this.widgetSize.height / lines)), 
+                this.smartPosition.x, 
+                this.smartPosition.y + (i * (this.widgetSize.height / lines)), 
                 this.widgetSize.width, 
                 this.widgetSize.height / lines
             )
@@ -5800,6 +5797,12 @@ class Dashboard {
     layout = {}
     visible = true
     collapsed = false
+    clear(){
+        this.visible = false
+        // this.widgets = {}
+        // this.widgetLayoutOrder.length = 0
+        // this.widgetDepthOrder.length = 0
+    }
     init(){
         // TODO: extend an entity component system where components have active state as boolean
         this.active = true;
@@ -5880,21 +5883,34 @@ class Dashboard {
             }
         })
     }
-    registerWidget(widgetID,widgetInstance){
-        if(typeof arguments[0] !== "string"){
-            //system.panic('Dashboard.registerWidget: widgetID must be a string',widgetID)
-            if(typeof arguments[1] === `undefined`){
-                // assign an ID
-                widgetInstance = widgetID; // swap
-                widgetID = "WidgetInstance"+performance.now();
-            }
+    registerWidget(widgetIDOrInstance,instanceOrNull){
+        console.warn("registerWidget",{
+            widgetIDOrInstance,
+            instanceOrNull
+        })
+        // if widgetIDOrInstance contains youtube.com, return a new youtube widget instance instead
+        if(widgetIDOrInstance?.includes?.("youtube.com")){
+            // it's a youtube url!
+            return this.registerWidget(new YoutubePlayerWidget("",{tracks:[widgetIDOrInstance]}))
         }
-        if(!widgetInstance || typeof widgetInstance !== "object"){// || !(widgetInstance instanceof Widget)){
-            system.panic('Dashboard.registerWidget: widgetInstance must be a Widget',{widgetInstance})
+        if(widgetIDOrInstance?.includes?.("://")){
+            // it's an iframe, chuck!
+            return this.registerWidget(new iFrameWidget(widgetIDOrInstance))
+        }
+        let widgetID, widgetInstance = widgetIDOrInstance;
+        if(typeof widgetIDOrInstance !== "string"){
+            //system.panic('Dashboard.registerWidget: widgetID must be a string',widgetID)
+            if(typeof instanceOrNull === `undefined`){
+                // assign an ID
+                //widgetInstance = widgetIDOrInstance; // swap
+                widgetID = "WidgetInstance"+performance.now();
+            }else{
+                widgetInstance = instanceOrNull
+            }
         }
         // require both args
         if(!widgetID || !widgetInstance){
-            system.panic('Dashboard.registerWidget: missing required args',{widgetID,widgetInstance})
+            system.panic('Dashboard.registerWidget: missing required args',{widgetID,widgetInstance,arguments})
         }
         // define a back reference
         widgetInstance.dashboard = this; 
@@ -6847,7 +6863,12 @@ class Refactor extends UndoRedoDecorator(DynamicThing) {
     // - setTestConfiguration() // override the current configuration table with new values
 }
 
-class ComputerKeyboardPreview extends Widget {
+/* for previewing a gamepad input */
+class GamePadWidget extends Widget {
+
+}
+
+class KeyboardWidget extends Widget {
     widgetSize = { width: 300, height: 100 }
 
     currentlyPressedKeys = []
@@ -6884,6 +6905,10 @@ class ComputerKeyboardPreview extends Widget {
         this.currentlyPressedKeys['Meta'] = e.metaKey;
     }
 
+    close(){
+        this.cleanupListeners();
+    }
+
     draw(){
         super.draw(...arguments);
 
@@ -6899,7 +6924,7 @@ class ComputerKeyboardPreview extends Widget {
         const keyLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Z', 'X', 'C', 'V', 'B', 'N', 'M'];
         let keyIndex = 0;
         push()
-        translate(0,100)
+        translate(this.smartPosition.x,this.smartPosition.y)
         for(let i = 0; i < 4; i++){
             for(let j = 0; j < 10; j++){
                 const x = (j + 1) * (keySize + padding);
@@ -9318,6 +9343,10 @@ const InvokableCommands = {
             }
         ))
     },
+    ["3"](){
+        // 3 toggles 3 js mode
+        InvokableCommands["Load THREE.js"]()
+    },
     ["Load THREE.js"](){
         if(window.three_mode_initialized){
             window.disableTHREEMode();
@@ -9356,7 +9385,17 @@ const InvokableCommands = {
         return "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
     },
     ["Send Message To Server"](){
-        socket.emit('message', 'Hello Server!');
+        prompt("What would you like to say to the server?", (value)=>{
+            const sanitized = value
+            // Check if the message is empty
+            if (!sanitized.trim()) {
+                alert('Message cannot be empty');
+                return;
+            }
+            // Sanitize the input to make it safe for RPC
+            sanitized = sanitized.replace(/[^a-zA-Z0-9 ]/g, "");
+            io.emit('message', sanitized);
+        })
     },
     ["Toggle Clear BG Flag "](){
         // clear the cmd palette first, wait a tick THEN unset the flag
@@ -9382,6 +9421,17 @@ const InvokableCommands = {
     [`dislike song "x"`](x){
         console.warn('TODO: dislike song: x: ',{x})
     },
+    ["lock"](){
+        // puts the system in lock screen, screen save mode
+        InvokableCommands["Clear Dashboard"]
+        InvokableCommands["Enable Deep Renderer"]
+    },
+    ["enable deep renderer"](){
+        store.disableDeepCanvas = false;
+    },
+    ["disable deep renderer"](){
+        store.disableDeepCanvas = true;
+    },
     ["toggle deep renderer"](){
         store.disableDeepCanvas = !store.disableDeepCanvas;
 
@@ -9392,6 +9442,56 @@ const InvokableCommands = {
     ["New sketchpad"](){},
     [""](){},
     ["new idea"](){},
+    // start a random favorite or similar youtube video
+    ["enter chore mode"](){},
+    ["enter vacuuming mode"](){},
+    ["new tab"](){
+        InvokableCommands["new browser bubble"]()
+    },
+    ["new synthesizer"](){
+        // spawn a Synth Widget :D
+        alert("Todo: spawn a synthesizer widget on the intergalactic hyperdimensional breadboard!")
+    },
+    ["TODO: make it remember when deep rendering and three rendering were last on when you restart the page"](){
+        // maybe just add it to the url continually?
+    },
+    ["add song"](){
+        prompt("Which song?! (youtube urls for now, soon: NLP)",(value)=>{
+            system.invokeWith(YoutubePlayerWidget, value)
+        })
+    },
+    ["play next"](){
+
+    },
+    ["undo"](){
+
+    },
+    ["redo"](){
+
+    },
+    ["select all"](){
+        
+    },
+    ["de-select all"](){
+        
+    },
+    ["invert selection"](){
+        
+    },
+    ["thoughts from 11/29/2023 > 3:59 PM "](){
+        // golf culture is... weird!
+        system.showToast("watching https://www.youtube.com/watch?v=Z0hDnmQPH4g")
+        system.registerWidgetInstance(new YoutubePlayerWidget(null,{tracks:["https://www.youtube.com/watch?v=Z0hDnmQPH4g"]}))
+    },
+    ["new iframe widget"](){
+        // todo: PinnedIFrameWidgetInstantiator / factory?
+        prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here",(value)=>{
+            system.registerWidgetInstance(new iFrameWidget(value))
+        })
+    },
+    ["new browser bubble"](){
+        InvokableCommands["new iframe widget"]()
+    },
     ["new mind map"](){},
     ["new todo"](){},
     ["new timer"](){},
@@ -9414,17 +9514,38 @@ const InvokableCommands = {
         //     max: 1,
         //     step: 1
         // }
-        prompt("Set Deep Canvas Blur Level",store.deepCanvasBlurLevel).then((value)=>{
-            store.deepCanvasBlurLevel = value;
-        })
+        let response = prompt("Set Deep Canvas Blur Level",store.deepCanvasBlurLevel ?? 10)
+        //(value)=>{
+            store.deepCanvasBlurLevel = response;
+        //}
     },
-    ["new remote desktop widget"](){
-        system.registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
+    ["New Egg Timer"](){
+        //return "https://e.ggtimer.com/5";
+        system.registerWidget(new iFrameWidget("https://e.ggtimer.com/5",300,300))
+        return;
     },
-    ["new iframe widget"](){
-        confirm("Enter URL for iFrame Widget").then((url)=>{
-            system.registerWidget(new iFrameWidget(url))
-        })
+    ["New Calculator Widget"](){
+        system.registerWidgetInstance(new CalculatorWidget())
+    },
+    ["New Time To Sunset Widget"](){
+        system.registerWidget(new TimeToSunSetWidget());
+    },
+    ["Embed Tweet"](){
+        // return "<blockquote class="twitter-tweet" data-dnt="true" data-theme="dark"><p lang="en" dir="ltr">copy that <a href="https://t.co/cNI0UDfPtt">pic.twitter.com/cNI0UDfPtt</a></p>&mdash; Jacob Downs (@jakedowns) <a href="https://twitter.com/jakedowns/status/1724611135209455721?ref_src=twsrc%5Etfw">November 15, 2023</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>"
+
+        // <iframe border=0 frameborder=0 height=250 width=550
+        //  src="https://twitframe.com/show?url=https%3A%2F%2Ftwitter.com%2Fjack%2Fstatus%2F20"></iframe>
+        // https://twitter.com/jakedowns/status/1724611135209455721
+        // https%3A%2F%2Ftwitter.com%2Fjakedowns%2Fstatus%2F1724611135209455721
+        let urlSafeUrl = 
+        encodeURIComponent("https://twitter.com/jakedowns/status/1724611135209455721");
+        system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+    },
+    ["UI Inspiration > Minority Report UI"](){
+        return "https://www.youtube.com/watch?v=NwVBzx0LMNQ"
+    },
+    ["UI Inspiration > HER Game"](){
+        return "https://www.youtube.com/watch?v=c8zDDPP3REE"
     },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
@@ -9455,10 +9576,14 @@ const InvokableCommands = {
 
     // },
     ["Close All Widgets"](){
-        system.widgets.forEach((widget)=>{
-            widget.close();
-        })
+        Object.entries(system.get("Dashboard").widgets).forEach(([key, widget]) => {
+            widget?.close?.();
+        });
+        // clear the dashboard
+        system.dashboard.clear();
     },
+    // TODO: make aliases and weighting/ranking easier
+    ["Clear Dashboard"](){ InvokableCommands["Close All Widgets"]() },
     ["Open All Players"](){
         let returns = []
         // show a toast of the number of InvokableCommands that start with "play"
@@ -10555,7 +10680,7 @@ function levenshteinDistance(a, b) {
     return matrix[b.length][a.length];
 };
 
-class CmdPrompt {
+class CmdPrompt extends Widget {
     // the current "Command" being constructed
     currentCommand = null; 
     // the list of available commands
@@ -10565,6 +10690,69 @@ class CmdPrompt {
 
     get visible(){
         return store.CmdPromptVisible;
+    }
+
+    afterSetup(){
+        mctx.push();
+        mctx.textSize(50);
+            CmdPromptInput = mctx.createInput('');
+            CmdPromptInput.elt.style.backgroundColor = 'black';
+            CmdPromptInput.elt.style.color = 'white';
+            CmdPromptInput.size(mctx.windowWidth - 20);
+            CmdPromptInput.position(10, 130);
+            // focus the command palette input
+            CmdPromptInput.elt.focus();
+
+            CmdPromptInput.elt.addEventListener('focus', (e)=>{
+                // store.focusedField = CmdPromptInput.elt;
+                store.focused = true
+            })
+            CmdPromptInput.elt.addEventListener('blur', (e)=>{
+                // store.focusedField = null;
+                store.focused = false;
+            })
+        mctx.pop();
+        // Listen for the 'keydown' event
+        CmdPromptInput.elt.addEventListener('keypress', function(e) {
+            // Check if the Enter key was pressed
+            // if (e.key === 'Enter') {
+                // Call the onCmdPromptInput method
+                cmdprompt = system.get('cmdprompt');
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            // }
+
+            // If you 
+        });
+    }
+
+    // draw(){
+    //     super.draw(...arguments)
+    // }
+
+    // use update() instead if you want to ignore draw method culling
+    // use beforePhysics or afterPhysics to add artistic control and influence / art-direction over simulations and behaviors at runtime
+    onDraw(){
+        // when visible and being drawn...
+        // super.draw() already happened here
+
+        // Draw the command prompt as a 16 bit or 8 bit or even 1 bit input box with chunky rounded borders using squares in a grid layout
+        mctx.push();
+        mctx.strokeWeight(2);
+        mctx.stroke(255);
+        mctx.fill(0);
+        mctx.rectMode(mctx.CENTER);
+        let gridSize = 16; // Change this to 8 or 1 for different bit styles
+        let gridWidth = mctx.windowWidth / gridSize;
+        let gridHeight = (mctx.windowHeight - 130) / gridSize;
+        for (let i = 0; i < gridSize; i++) {
+            for (let j = 0; j < gridSize; j++) {
+                mctx.rect(i * gridWidth, 130 + j * gridHeight, gridWidth, gridHeight);
+            }
+        }
+        mctx.pop();
     }
 
     registerCommand(
@@ -10589,6 +10777,7 @@ class CmdPrompt {
     }
     
     constructor(){
+        super(...arguments)
         cmdprompt = this;
         this.commandSuggestionList = new SuggestionList();
         this.addDefaultCommands();
@@ -12751,7 +12940,7 @@ const CoreWidgets = [
     // // "Hypercard"
     // FractalTreeGraphViewerWidget,
 
-    ComputerKeyboardPreview
+    KeyboardWidget
 ]
 
 let tabHistory = [];
@@ -13075,42 +13264,10 @@ let cursor, MainCanvasContextThing = function(p){
         })
 
         // Additional Widgets
-        system.get("Dashboard").registerWidget(new ComputerKeyboardPreview());
+        system.get("Dashboard").registerWidget(new KeyboardWidget());
 
-        // TODO: put this stuff in a CmdPrompt.setup() callback
-        mctx.push();
-        mctx.textSize(50);
-            CmdPromptInput = mctx.createInput('');
-            CmdPromptInput.elt.style.backgroundColor = 'black';
-            CmdPromptInput.elt.style.color = 'white';
-            CmdPromptInput.size(mctx.windowWidth - 20);
-            CmdPromptInput.position(10, 130);
-            // focus the command palette input
-            CmdPromptInput.elt.focus();
-
-            CmdPromptInput.elt.addEventListener('focus', (e)=>{
-                // store.focusedField = CmdPromptInput.elt;
-                store.focused = true
-            })
-            CmdPromptInput.elt.addEventListener('blur', (e)=>{
-                // store.focusedField = null;
-                store.focused = false;
-            })
-        mctx.pop();
-        // Listen for the 'keydown' event
-        CmdPromptInput.elt.addEventListener('keypress', function(e) {
-            // Check if the Enter key was pressed
-            // if (e.key === 'Enter') {
-                // Call the onCmdPromptInput method
-                cmdprompt = system.get('cmdprompt');
-                if(!cmdprompt){
-                    system.warn("cmdprompt not ready");
-                }
-                cmdprompt?.onCmdPromptInput(e);
-            // }
-
-            // If you 
-        });
+        //system.get("cmdprompt")
+        system.cmdprompt.afterSetup()
 
         // const WidgetsToRegister = [
         //     "inspiration/Flag_of_Palestine.svg",
@@ -13121,7 +13278,6 @@ let cursor, MainCanvasContextThing = function(p){
         //     "fine.gif",
         //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
-        //     CalculatorWidget,
         //     CalendarWidget,
         //     ClockWidget,
 
@@ -13132,7 +13288,6 @@ let cursor, MainCanvasContextThing = function(p){
         //     StickyNoteWidget,
         //     // TetrisWidget,
         //     TimerWidget,
-        //     TimeToSunSetWidget,
         //     TodoWidget,
         //     UIDemoWidget,
         //     WeatherWidget,
@@ -13152,6 +13307,15 @@ let cursor, MainCanvasContextThing = function(p){
             // add our first widget (todo: load state from dehydrated json)
             // DEFAULT WIDGET SET
 
+        InvokableCommands["New Time To Sunset Widget"]()
+        InvokableCommands["New Calculator Widget"]()
+        InvokableCommands["New Egg Timer"]()
+        InvokableCommands["Play Glorious Dawn"]()
+
+        InvokableCommands["UI Inspiration > Minority Report UI"]()
+
+        InvokableCommands["Embed Tweet"]()
+
         // OnDashboardReady OnDashboardLoaded OnDashboardInit
         // OnDashboardStarted
         system
@@ -13162,8 +13326,7 @@ let cursor, MainCanvasContextThing = function(p){
             // what if you could remote desktop in here?!
             // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
 
-            .registerWidget(new CalculatorWidget())
-
+            .registerWidget(new ClockWidget())
             .registerWidget(new MarchingCubesDemoWidget())
 
             .registerWidget(new AStarPathfindingDemoWidget())
@@ -13179,7 +13342,7 @@ let cursor, MainCanvasContextThing = function(p){
                 // .registerWidget(new ThreeJSViewer())
 
                 .registerWidget(new MoonPhaseWidget())
-                .registerWidget(new ComputerKeyboardPreview())
+                .registerWidget(new KeyboardWidget())
 
             
             // .registerWidget("Google Color Picker",
@@ -13190,17 +13353,17 @@ let cursor, MainCanvasContextThing = function(p){
                 new ImageViewerWidget("insp.png")
             )
             .registerWidget(
-                "SVGViewerWidget:PFlag",
+                //"SVGViewerWidget:PFlag",
                 new ImageViewerWidget("Flag_of_Palestine.svg")
             )
             .registerWidget(
-                "milky-way-galaxy.gif",
+                //"milky-way-galaxy.gif",
                 new ImageViewerWidget("milky-way-galaxy.gif")
             )
 
             
             .registerWidget(
-                "4SeasonsImg", 
+                //"4SeasonsImg", 
                 new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
 
             .registerWidget(
@@ -13392,20 +13555,21 @@ let cursor, MainCanvasContextThing = function(p){
             let delta2 = Math.abs(panX) - 0;
             let delta3 = Math.abs(panY) - 0;
             delta*=1.0 - (delta2+delta3);
+            let stepFactor = .09; //1.001;
             if(panX > 0) {
-                panX -= 1.1 * delta;
+                panX -= stepFactor * delta;
             }
             // If panX < 0, we're panning left, so we need to nudge right
             if(panX < 0) {
-                panX += 1.1 * delta;
+                panX += stepFactor * delta;
             }
             // If panY > 0, we're panning down, so we need to nudge up
             if(panY > 0) {
-                panY -= 1.1 * delta;
+                panY -= stepFactor * delta;
             }
             // If panY < 0, we're panning up, so we need to nudge down
             if(panY < 0) {
-                panY += 1.1 * delta;
+                panY += stepFactor * delta;
             }
     
     
@@ -13699,7 +13863,7 @@ const properties = [
     'rectMode', 'fill', 'frameCount', 'image', 'lerp', 
     'lerpColor', 'loadImage', 'millis', 'map', 
     'mouseX', 'mouseY', 'noFill', 'noTint', 'pop', 
-    'push', 'text', 'textAlign', 'textSize', 'textStyle', 
+    'push', 'text', 'textAlign', 'textSize', 'textFont', 'textStyle', 
     'tint', 'translate', 'rect', 'scale', 'stroke', 
     'strokeWeight', 'windowHeight', 'windowWidth', 
     'createElement'
