@@ -3241,33 +3241,6 @@ class CreateRootTestTableCommand extends Command {
     }
 }
 
-// New Pomodoro Widget Command
-class NewPomodoroWidgetCommand extends BaseCmds(Command,{
-    name: "New Pomodoro Widget",
-    steps: [
-        {
-            question: "Loading...",
-            toastOnSuccess: ()=>{
-                return this.name + " Widget Added!";
-            },
-            onStepLoaded: (wiz)=>{
-                console.warn(`New ${this.name}: onStepLoaded`, {wiz})
-                // add a new instance of the Todo Widget
-                //new NewTodoWidgetCommand().execute();
-                system.get("Dashboard")
-                .registerWidget("WidgetInstance"+performance.now(), new PomodoroWidget());
-
-                // end the wizard
-                wiz.end();
-                // hide the command prompt
-                system.get("cmdprompt").hide();
-            }
-        }
-    ]
-}) {
-    name = "New Todo Widget"
-}
-
 class NewTodoWidgetCommand extends BaseCmds(Command,{
     name: "New Todo Widget",
     steps: [
@@ -5532,9 +5505,18 @@ class Argument {
 
 let cmdprompt;
 
-// Add a keyboard listener for cmd shift p
+// Add a keyboard listener for cmd shift p shift+p
 document.addEventListener('keydown', function(event) {
     if (event.code === 'KeyP' && event.shiftKey && event.metaKey) {
+        event.preventDefault();
+        if(!store.CmdPromptVisible){
+            new ShowCmdPromptCommand().execute();
+        }else{
+            new HideCmdPromptCommand().execute();
+        }
+    }
+    if (event.code === 'Slash' && event.ctrlKey) {
+        event.preventDefault();
         if(!store.CmdPromptVisible){
             new ShowCmdPromptCommand().execute();
         }else{
@@ -9541,6 +9523,25 @@ const InvokableCommands = {
     ["UI Inspiration > HER Game"](){
         return "https://www.youtube.com/watch?v=c8zDDPP3REE"
     },
+
+
+    ["new todo"](){
+        let result = prompt("What?","something...")
+          if (!store.currentFocusedTodoWidgetID) {
+              let newTodoWidget = new TodoWidget();
+              system.registerWidget(newTodoWidget);
+              store.currentFocusedTodoWidgetID = newTodoWidget.id;
+          }
+          system.getWidget(store.currentFocusedTodoWidgetID).addTodo(result);
+    },
+
+    // todo: [...aliases] || this.aliases
+    ["start pomodoro timer"](){ InvokableCommands["new pomodoro timer"](); },
+    ["new pomodoro session"](){ InvokableCommands["new pomodoro timer"](); },
+    ["new pomodoro timer"](){
+        //system.invokeWith()
+        system.registerWidgetInstance(new PomodoroWidget())
+    },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
         // the one i want is restricted
@@ -9554,9 +9555,12 @@ const InvokableCommands = {
     ["New AI Chat Widget"](){
         system.registerWidget(new AIChatWidget());
     },
-    // ["Play: Black Sabbath > War Pigs"](){
-    //     return "https://www.youtube.com/watch?v=LQUXuQ6Zd9w"
-    // },
+    ["Play: Black Sabbath > War Pigs"](){
+        return "https://www.youtube.com/watch?v=bc5Nk1DXyEY"
+        // blocked:
+        // return "https://www.youtube.com/watch?v=PrZFscfJxXc"
+        // return "https://www.youtube.com/watch?v=LQUXuQ6Zd9w"
+    },
     ["Play chillout study session"](){
         return "https://www.youtube.com/watch?v=tkgmYIsflSU"
     },
@@ -13123,8 +13127,6 @@ let cursor, MainCanvasContextThing = function(p){
 
         //     MessengerWidget,
         //     MiniMapWidget,
-        //     MoonPhaseWidget,
-        //     PomodoroWidget,
         //     StickyNoteWidget,
         //     // TetrisWidget,
         //     TimerWidget,
