@@ -707,8 +707,11 @@ class System {
             this.singletonFactories[name] = factory;
         }else{
             if(!this.singletonFactories[name]){
-                this.panic("System.lazySingleton: no factory defined for singleton named: " + name);
-                throw new Error("hi");
+                // this.panic("System.lazySingleton: no factory defined for singleton named: " + name);
+                // throw new Error("hi");
+                this.singletonFactories[name] = function(){
+                    console.warn('System.lazySingleton: no factory defined for singleton named: ' + name);
+                }
             }
             this.singletons[name] = new this.singletonFactories[name]();
             return this.singletons[name];
@@ -724,7 +727,14 @@ class System {
         console.warn('assiging System singleton',{name,instance})
     }
     panic(){
-        this.manager.panic(this.tag + ": ",...arguments);
+        try{
+            this.manager.panic(this.tag + ": ",...
+            arguments);
+        }catch(e){
+            console.error(e)
+            // rethrow
+            throw e;
+        }
     }
     error(){
         console.error(this.tag + ": ", ...arguments);
@@ -5644,7 +5654,7 @@ class LayereredCanvasRenderer {
                 }
                 p.draw = function() {
                     // draw all widgets for this depth
-                    system.get("Dashboard").widgetDepthOrder.forEach((widgetID)=>{
+                    system.get("Dashboard")?.widgetDepthOrder?.forEach?.((widgetID)=>{
                         let widget = system.get("Dashboard").widgets[widgetID];
                         if(widget.canvasID+1 === i){
                             if(
@@ -10153,16 +10163,53 @@ function isEmptyOrUndefined(thing){
 //         });
 //     }
 // }
+const vertexShaderSource = `
+attribute vec4 aVertexPosition;
+attribute vec2 aTextureCoord;
+
+varying highp vec2 vTextureCoord;
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+
+void main(void) {
+    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+    vTextureCoord = aTextureCoord;
+}
+`
 class CanvasCompositor {
     canvases = []
-    constructor(canvases, shaderProgram, topCanvas) {
+    constructor(canvases, shaderProgramSource, topCanvas) {
         // this.canvases = canvases.sort((a, b) => {
         //     // Normalize for the fact that some "a" or "b" may have .elt sub key
         //     let getZIndex = obj => obj.elt?.style?.zIndex || obj.style?.zIndex || 0;
         //     return getZIndex(a) - getZIndex(b);
         // }); // Sort by z-index
-        this.shaderProgram = shaderProgram;
-        this.topCanvas = topCanvas || this.createTopCanvas();
+        let gl = topCanvas.getContext('webgl');
+
+        // Create a shader program
+        let _shaderProgram = gl.createProgram();
+
+        // Create a vertex shader
+        let vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, vertexShaderSource);
+        gl.compileShader(vertexShader);
+
+        // Create a fragment shader
+        let fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader, shaderProgramSource);
+        gl.compileShader(fragmentShader);
+
+        // Attach the shaders to the program
+        gl.attachShader(_shaderProgram, vertexShader);
+        gl.attachShader(_shaderProgram, fragmentShader);
+
+        // Link the program
+        gl.linkProgram(_shaderProgram);
+
+        if (!gl.getProgramParameter(_shaderProgram, gl.LINK_STATUS)) {
+        console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(_shaderProgram));
+        }
+        this.topCanvas = topCanvas// || this.createTopCanvas();
         this.glContexts = this.canvases.map(canvas => this.getContext(canvas));
         this.framebuffers = this.glContexts.map(gl => this.createFramebuffer(gl));
     }
@@ -10230,7 +10277,8 @@ class CanvasCompositor {
     }
 
     render() {
-        //window.myMainDrawFN()
+        // debugger;
+        window.myMainDrawFN()
         this.compositeCanvases();
         this.applyShaderAndRender();
     }
@@ -13064,15 +13112,25 @@ let cursor, MainCanvasContextThing = function(p){
             deepCanvasManager.canvases[2],
         ]
         const shaderProgram = 
-        `#version 300 es`
-        `precision mediump float;`
-        `in vec2 a_position;`
-        `uniform float u_time;`
-        `void main() {`
-        `  float twist = a_position.x + sin(u_time);`
-        `  gl_Position = vec4(a_position.x * twist, a_position.y, 0, 1);`
-        `}`;
-        window.iCanvasCompositor = new CanvasCompositor(canvases, shaderProgram);
+`#version 300 es
+precision mediump float;
+in vec2 a_position;
+uniform float u_time;
+
+void main() {
+  float twist = a_position.x + sin(u_time);
+  gl_Position = vec4(a_position.x * twist, a_position.y, 0, 1);
+}`;
+let topCanvas = document.createElement('canvas');
+topCanvas.width = window.innerWidth;
+topCanvas.height = window.innerHeight;
+topCanvas.style.position = 'absolute';
+topCanvas.style.top = 0;
+topCanvas.style.left = 0;
+topCanvas.style.zIndex = 90001; // over 9000
+// topCanvas.style.pointerEvents = 'none';
+document.body.appendChild(topCanvas);
+        window.iCanvasCompositor = new CanvasCompositor(canvases, shaderProgram, topCanvas);
 
         //initTHREEMode();
 
