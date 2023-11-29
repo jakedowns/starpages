@@ -746,7 +746,7 @@ class System {
         // returns either passthrough time or modified time
     }
     registerWidget(nameOrInstance, instanceIfNamed){
-        this.get("Dashboard").registerWidget(nameOrInstance, instanceIfNamed);
+        return this.get("Dashboard").registerWidget(nameOrInstance, instanceIfNamed);
     }
 }
 const rootSystemManager = new SystemManager();
@@ -1984,7 +1984,7 @@ class Widget extends UndoRedoComponent {
         //     ?? {x:0,y:0};
         // let selfBasePosition = this.basePosition ?? this.position;
 
-        return this.getPositionRecursive(this?.parentWidget ?? this);
+        return this.getPositionRecursive(this?.parentWidget ?? this, this.basePosition);
 
         // this.deepPosition = this?.parentWidget ? {
         //     x: parentPosition.x + selfBasePosition.x,
@@ -2756,6 +2756,12 @@ class CalculatorWidget extends Widget {
         width: 300,
         height: 400
     }
+    buttons = [[
+        ["7","8","9","/"],
+        ["4","5","6","*"],
+        ["1","2","3","-"],
+        ["0",".","=","+"],
+    ]]
     draw(){
         super.draw(...arguments)
         push()
@@ -2768,14 +2774,42 @@ class CalculatorWidget extends Widget {
                 this.widgetSize.height,
                 20 // this is the radius for the rounded corners
             );
-            fill("black")
-            let tpx = this.position.x + this.widgetSize.width / 2;
-            let tpy = this.position.y + this.widgetSize.height / 2;
-            let tsx = this.widgetSize.width;
-            let tsy = this.widgetSize.height;
-            textSize(20)
-            textAlign(CENTER, CENTER)
-            text("Calculator!", tpx,tpy,tsx,tsy)
+
+            this.buttons.forEach((row, rowIndex)=>{
+                row.forEach((button, buttonIndex)=>{
+                    let padding = 20;
+                    let buttonWidth = (this.widgetSize.width - padding) / row.length;
+                    let buttonHeight = (this.widgetSize.height - (padding * this.buttons.length)) / this.buttons.length;
+                    rectMode(CENTER);
+                    fill("white")
+                    rect(
+                        this.position.x + (buttonWidth * buttonIndex) + buttonWidth / 2,
+                        this.position.y + (buttonHeight * rowIndex) + buttonHeight / 2,
+                        buttonWidth,
+                        buttonHeight,
+                        20 // this is the radius for the rounded corners
+                    );
+
+                    fill("black")
+                    let tpx = this.position.x + (buttonWidth * buttonIndex) + buttonWidth / 2;
+                    let tpy = this.position.y + (buttonHeight * rowIndex) + buttonHeight / 2;
+                    let tsx = buttonWidth;
+                    let tsy = buttonHeight;
+                    textSize(20)
+                    textAlign(CENTER, CENTER)
+                    text(button, tpx,tpy,tsx,tsy)
+                })
+            })
+            
+
+            // fill("black")
+            // let tpx = this.position.x + this.widgetSize.width / 2;
+            // let tpy = this.position.y + this.widgetSize.height / 2;
+            // let tsx = this.widgetSize.width;
+            // let tsy = this.widgetSize.height;
+            // textSize(20)
+            // textAlign(CENTER, CENTER)
+            // text("Calculator!", tpx,tpy,tsx,tsy)
         pop()
     }
 }
@@ -3799,16 +3833,18 @@ class ImageViewerWidget extends Widget {
             // function to loadImage. The callback function will be executed once the image is fully loaded.
             PreloadedImages[this.src] = loadImage(this.src, (img) => {
                 this.image = img;
+                this.updateSizeBasedOnImage();
             });
             this.image = PreloadedImages[this.src];
         }
         return this;
     }
-    draw(){
-        super.draw(...arguments)
-        if(this.doNotDraw){ return; }
-        push();
-            // beginShape();
+    updateSizeBasedOnImage(){
+        if(!this.image){
+            console.warn("needed to update size based on image, but image is not loaded yet!")
+            return;
+        }
+        // beginShape();
             // fill(255, 204, 0); // Add color to the shape. Here, it's set to yellow.
             // // Create a star shape instead of a pentagon
             // for (let i = 0; i < 10; i++) {
@@ -3839,15 +3875,19 @@ class ImageViewerWidget extends Widget {
             this.widgetSize.width = this.newWidth;
             this.widgetSize.height = this.newHeight;
             // Draw the image stretched to the new width and height
+    }
+    draw(){
+        super.draw(...arguments)
+        if(this.doNotDraw){ return; }
+        push();
+            
             image(
                 this.image, 
                 this.position.x + (this.widgetSize.width - this.newWidth) / 2,
                 this.position.y + (this.widgetSize.height - this.newHeight) / 2,
-                this.newWidth,
-                this.newHeight
+                this.widgetSize.width,
+                this.widgetSize.height
             );
-            // exit clip mode p5
-        // });
         
         pop();
     }
@@ -4579,6 +4619,10 @@ class BuildingBlockWidgetHolder extends Widget {
 class iFrameWidget extends Widget {
     url = ""
     pinned = false
+    widgetSize = {
+        width: Math.min(window.innerWidth * 0.2, 800),
+        height: Math.min(window.innerHeight * 0.2, 800)
+    }
     constructor(url){
         super(...arguments);
         this.url = url ?? this.url;
@@ -5577,7 +5621,11 @@ class LayereredCanvasRenderer {
     globalZoom = 0
     onClick(e){
         // go through the debug shapes and move the last one to the front of the array
-        this.debugShapes.unshift(this.debugShapes.pop());
+        //this.debugShapes.unshift(this.debugShapes.pop());
+        this.focusedIndex++
+        if(this.focusedIndex >= this.canvases.length){
+            this.focusedIndex = 0;
+        }
     }
     // for now, we assume we are working with 3 visible simultaneous canvases
     constructor(){
@@ -5643,6 +5691,7 @@ class LayereredCanvasRenderer {
             args: [0,0,100,100,0,100]
         }
     ]
+    focusedIndex = 0;
     draw(){
         if(store.disableDeepCanvas){
             return;
@@ -5653,8 +5702,9 @@ class LayereredCanvasRenderer {
         // set the blur on the foreground layer canvas and the background canvas
         // for now we hard-code, but eventually we can make this dynamic
         // or just fully move to shader/three.js land
+        // todo: cache / dirty-check updates
         this.canvases.forEach((canvas, index) => {
-            if(index === 0 || index === 2) {
+            if(index !== this.focusedIndex) {
                 document.getElementById(`deep-canvas-${index+1}`).style.filter = `blur(${store.deepCanvasBlurLevel}px)`;
             }else{
                 // enforce 0 blur for now
@@ -9362,6 +9412,14 @@ const InvokableCommands = {
             store.deepCanvasBlurLevel = value;
         })
     },
+    ["new remote desktop widget"](){
+        system.registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
+    },
+    ["new iframe widget"](){
+        confirm("Enter URL for iFrame Widget").then((url)=>{
+            system.registerWidget(new iFrameWidget(url))
+        })
+    },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
         // the one i want is restricted
@@ -9528,6 +9586,11 @@ class Gizmo extends Widget {
         console.warn('todo draw'+this.constructor.name)
     }
 }
+
+class MarchingCubesDemoWidget extends Widget {}
+class AStarPathfindingDemoWidget extends Widget {}
+class BasicPlatformerDemoWidget extends Widget {}
+
 class WidgetForge extends Widget {}
 class WizardForge extends WidgetForge {}
 class GiphyWidget extends Widget {}
@@ -10636,16 +10699,19 @@ class CmdPrompt {
     }
 
     renderCommandPrompt(){
+        push();
         const cmdpPosY = 0;
         fill(0,0,0,200)
         strokeWeight(0)
         stroke("white")
+        rectMode(CORNER);
         rect(0, cmdpPosY, windowWidth, windowHeight);
 
         // draw a large text input in the command palette
         fill(0,0,0,200)
         strokeWeight(0)
         stroke("black")
+        rectMode(CORNER);
         rect(10, cmdpPosY + 10, windowWidth - 20, 100);
         fill("black")
 
@@ -10654,6 +10720,7 @@ class CmdPrompt {
         if(!store.activeWizard){
             cmdprompt.renderSuggestedCommands();
         }
+        pop();
     }
 
     renderSuggestedCommands(){
@@ -12931,7 +12998,7 @@ let cursor, MainCanvasContextThing = function(p){
             // TODO: consolidate all other widget registration methods
 
             // what if you could remote desktop in here?!
-            .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
+            // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
 
             .registerWidget(new CalculatorWidget())
 
