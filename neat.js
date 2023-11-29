@@ -15,6 +15,7 @@
 const testOpenAIServer = "http://127.0.0.1:4001/";
 
 
+
 let todos = [{
     "Overview of neat.js": {
       "Ambitions": "- The script aims to create a complex system with various functionalities such as synchronized music playback, web browsing, widget recommendation engine, and more.\n- It also aims to run headless in a node.js environment and communicate with a client version.\n- The script plans to implement a system that sends text, email, SMS, APN, web push notifications, etc.",
@@ -4709,7 +4710,7 @@ class iFrameWidget extends Widget {
         // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
         // this.iframe.elt.id = this.id;
         // translate(${this.smartPosition.x}px,${this.smartPosition.y}px)
-        //this.iframe.elt.style.transform = `scale(${zoom})`;
+        this.iframe.elt.style.transform = `scale(${zoom})`;
     }
 }
 /* 
@@ -9435,6 +9436,9 @@ const InvokableCommands = {
     ["New sketchpad"](){},
     [""](){},
     ["new idea"](){},
+    // start a random favorite or similar youtube video
+    ["enter chore mode"](){},
+    ["enter vacuuming mode"](){},
     ["new tab"](){
         InvokableCommands["new browser bubble"]()
     },
@@ -9504,9 +9508,10 @@ const InvokableCommands = {
         //     max: 1,
         //     step: 1
         // }
-        prompt("Set Deep Canvas Blur Level",store.deepCanvasBlurLevel,(value)=>{
-            store.deepCanvasBlurLevel = value;
-        })
+        let response = prompt("Set Deep Canvas Blur Level",store.deepCanvasBlurLevel ?? 10)
+        //(value)=>{
+            store.deepCanvasBlurLevel = response;
+        //}
     },
     ["New Egg Timer"](){
         //return "https://e.ggtimer.com/5";
