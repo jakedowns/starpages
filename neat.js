@@ -5975,10 +5975,10 @@ class Dashboard {
         return this.registerWidget(...arguments)
     }
     registerWidget(widgetIDOrInstance,instanceOrNull){
-        console.warn("registerWidget",{
-            widgetIDOrInstance,
-            instanceOrNull
-        })
+        // console.warn("registerWidget",{
+        //     widgetIDOrInstance,
+        //     instanceOrNull
+        // })
         // if widgetIDOrInstance contains youtube.com, return a new youtube widget instance instead
         if(widgetIDOrInstance?.includes?.("youtube.com")){
             // it's a youtube url!
@@ -9679,7 +9679,7 @@ const InvokableCommands = {
     },
 
     ["go to gather"](){
-        "https://app.gather.town/"
+        system.newWidget(new iFrameWidget("https://app.gather.town/"))
     },
 
     ["new shared piano"](){
@@ -9771,16 +9771,21 @@ const InvokableCommands = {
     ["Set Dashboard Friction"](){
         console.warn("Set Dashboard Friction...");
     },
+    ["recenter"](){
+        InvokableCommands["Center View"]();
+    },
+    ["focus"](){
+        InvokableCommands["Center View"]();
+    },
     // center field
     // center plane
     // return to origin again...
-    ["Center View"]: //[
-        function(){
-            console.warn("Center View...");
-            panX = 0;
-            panY = 0;
-            zoom = 1;
-        },
+    ["Center View"](){
+        console.warn("Center View...");
+        panX = 0;
+        panY = 0;
+        zoom = 1;
+    },
         // [
         //     "Center {View|Viewport}: Center the current view or viewport",
         //     "Center {View|Viewport} on Origin: Center the current view or viewport on the origin",
@@ -10466,6 +10471,10 @@ class CanvasCompositor {
         window.myMainDrawFN()
         this.compositeCanvases();
         this.applyShaderAndRender();
+        // // display the output on the top canvas
+        // let outputCanvas = document.getElementById('outputCanvas');
+        // let ctx = outputCanvas.getContext('2d');
+        // ctx.drawImage(this.topCanvas, 0, 0);
     }
 }
 
@@ -12137,7 +12146,8 @@ class Sprite {
     }
     getRelativeColor(){
         let startColor =  color(0, 0, 255); // Blue
-        let endColor = color(255, 0, 0); // Red
+        let middleColor = color(255, 255, 0); // Yellow
+        let endColor = color(255, 0, 255); // Pink
 
         // Normalize the z value to a range between 0 and 1
         if(this.z < store.minZ){
@@ -12161,8 +12171,13 @@ class Sprite {
         //     throw new Error("bad normalizedZ")
         // }
 
-        // Use lerpColor to interpolate between the start and end colors based on z
-        let gradientColor = lerpColor(startColor, endColor, normalizedZ);
+        // Use lerpColor to interpolate between the start, middle, and end colors based on z
+        let gradientColor;
+        if (normalizedZ < 0.5) {
+            gradientColor = lerpColor(startColor, middleColor, normalizedZ * 2);
+        } else {
+            gradientColor = lerpColor(middleColor, endColor, (normalizedZ - 0.5) * 2);
+        }
         return gradientColor;
     }
     draw(){
@@ -13211,6 +13226,26 @@ function refreshInputBindings(){
 
 const easeOutQuad = (t) => t * (2 - t);
 
+/*
+based on 
+const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
+const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
+const zoomAnimation = new Animation(zoom, 1, 1000, value => zoom = value);
+
+requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
+requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
+requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
+*/
+function animateVector(from,to){
+    // assume x,y,z for now
+    let xAnimation = new Animation(from.x, to.x, 1000, value => from.x = value);
+    let yAnimation = new Animation(from.y, to.y, 1000, value => from.y = value);
+    let zAnimation = new Animation(from.z, to.z, 1000, value => from.z = value);
+    requestAnimationFrame(xAnimation.animate.bind(xAnimation));
+    requestAnimationFrame(yAnimation.animate.bind(yAnimation));
+    requestAnimationFrame(zAnimation.animate.bind(zAnimation));
+}
+
 let cursor, MainCanvasContextThing = function(p){
     let _onResize = function(){
         mctx.resizeCanvas(windowWidth, windowHeight);
@@ -13433,19 +13468,25 @@ document.body.appendChild(topCanvas);
                 cmdprompt?.onCmdPromptInput(e);
             //}
         })
-        document.addEventListener('keypress', (e)=>{
+        document.addEventListener('keydown', (e)=>{
             // console.warn('keypress',{e})
             // if the key is `f` and we don't have any inputs focused,
             // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
+            if(e.key === 'f' && store.focusedField !== null){
+                console.warn("focus blocked by",store.focusedField)
+            }
             if(e.key === 'f' && store.focusedField === null){
-                // Instantiate and start the animations
-                const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
-                const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
-                const zoomAnimation = new Animation(zoom, 1, 1000, value => zoom = value);
+                alert('focus!');
+                // // Instantiate and start the animations
+                // const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
+                // const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
+                // const zoomAnimation = new Animation(zoom, 1, 1000, value => zoom = value);
 
-                requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
-                requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
-                requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
+                // requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
+                // requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
+                // requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
+
+                animateVector(whatTheCenterIs, {x:0,y:0,z:0});
             }
             
             let KeyboardPanInfluence = { x: 0, y: 0 };
@@ -13560,9 +13601,8 @@ document.body.appendChild(topCanvas);
         InvokableCommands["New Egg Timer"]()
         InvokableCommands["Play Glorious Dawn"]()
 
-        InvokableCommands["UI Inspiration > Minority Report UI"]()
-
-        InvokableCommands["Embed Tweet"]()
+        //InvokableCommands["UI Inspiration > Minority Report UI"]()
+        //InvokableCommands["Embed Tweet"]()
 
         // OnDashboardReady OnDashboardLoaded OnDashboardInit
         // OnDashboardStarted
@@ -13584,7 +13624,7 @@ document.body.appendChild(topCanvas);
             // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
 
             // 5-calls widget:
-            // https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/
+            .newWidget(new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/"))
 
             // dental services in my dental coverage network?!
             // x-ray services that work when i travel a lot for work?
@@ -13592,15 +13632,25 @@ document.body.appendChild(topCanvas);
             // ...
 
             // thomas and friends for SNES: minigame: 
-            // https://youtu.be/mQcR04RROUQ?si=9kpOTXAd9rQZ_QLa&t=482
+            .newWidget("https://youtu.be/mQcR04RROUQ?si=9kpOTXAd9rQZ_QLa&t=482")
+            .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
 
             // dark side of the moon, mario 64 sound font
             .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
+
+            // recommended related stuff...
+            // https://www.reddit.com/r/SuperMario64/
+
             // can you use chat gpt in an iframe?
-            .newWidget("https://chat.openai.com/")
+            // .newWidget(new iFrameWidget("https://chat.openai.com/",{
+            //     widgetSize:{
+            //         width:800,
+            //         height:600
+            //     }
+            // }))
 
 
-            .registerWidgetInstance(new GithubCardWidget())
+            .newWidget(new GithubCardWidget())
             .registerWidget(new ClockWidget())
             .registerWidget(new MarchingCubesDemoWidget())
 
@@ -13905,6 +13955,7 @@ document.body.appendChild(topCanvas);
     // and call draw on systems which have non empty render queues
     p.draw = function(){
         //myMainDrawFN();
+        //console.warn('calling compositor render',performance.now())
         window.iCanvasCompositor.render();
     }
     window.myMainDrawFN = function() {
