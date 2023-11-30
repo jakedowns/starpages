@@ -5918,6 +5918,31 @@ class Dashboard {
             }
         })
     }
+    centerView(){
+        // Instantiate and start the animations
+        // const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
+        // const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
+        // const zoomAnimation = new Animation(zoom, 1, 1000, value => zoom = value);
+
+        // requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
+        // requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
+        // requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
+
+        animateVector(
+            /* from */ 
+            {x:panX,y:panY,z:zoom},
+            /* to */ 
+            {x:0,y:0,z:1}, 
+            /*onUpdate*/
+            (vector)=>{   
+                panX = vector.x;
+                panY = vector.y;
+                zoom = vector.z;
+            }, 
+            /* duration ms */ 
+            3000
+        );
+    }
     toggleVisibility(){
         this.visible = !this.visible;
     }
@@ -9782,9 +9807,7 @@ const InvokableCommands = {
     // return to origin again...
     ["Center View"](){
         console.warn("Center View...");
-        panX = 0;
-        panY = 0;
-        zoom = 1;
+        system.dashboard.centerView();
     },
         // [
         //     "Center {View|Viewport}: Center the current view or viewport",
@@ -13236,11 +13259,17 @@ requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
 requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
 requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
 */
-function animateVector(from,to){
+function animateVector(from,to, onUpdate, duration = 1000){
     // assume x,y,z for now
-    let xAnimation = new Animation(from.x, to.x, 1000, value => from.x = value);
-    let yAnimation = new Animation(from.y, to.y, 1000, value => from.y = value);
-    let zAnimation = new Animation(from.z, to.z, 1000, value => from.z = value);
+    let xAnimation = new Animation(from.x, to.x, duration, 
+        (value) => {from.x = value; onUpdate(value); });
+    
+    let yAnimation = new Animation(from.y, to.y, duration, 
+        (value) => {from.y = value; onUpdate(value); });
+    
+    let zAnimation = new Animation(from.z, to.z, duration, 
+        (value) => {from.z = value; onUpdate(value); });
+
     requestAnimationFrame(xAnimation.animate.bind(xAnimation));
     requestAnimationFrame(yAnimation.animate.bind(yAnimation));
     requestAnimationFrame(zAnimation.animate.bind(zAnimation));
@@ -13469,24 +13498,16 @@ document.body.appendChild(topCanvas);
             //}
         })
         document.addEventListener('keydown', (e)=>{
-            // console.warn('keypress',{e})
+            console.warn('keypress',{e})
             // if the key is `f` and we don't have any inputs focused,
             // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
             if(e.key === 'f' && store.focusedField !== null){
-                console.warn("focus blocked by",store.focusedField)
+                console.error("focus blocked by",store.focusedField)
             }
             if(e.key === 'f' && store.focusedField === null){
                 alert('focus!');
-                // // Instantiate and start the animations
-                // const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
-                // const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
-                // const zoomAnimation = new Animation(zoom, 1, 1000, value => zoom = value);
-
-                // requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
-                // requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
-                // requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
-
-                animateVector(whatTheCenterIs, {x:0,y:0,z:0});
+                // animated
+                system.dashboard.centerView();
             }
             
             let KeyboardPanInfluence = { x: 0, y: 0 };
