@@ -690,7 +690,7 @@ class System {
     singletons = {};
     singletonFactories = {};
     invokeWith(theClass){
-        return new theClass(...arguments.slice(1))
+        return new theClass(...Array.from(arguments).slice(1))
     }
     invoke(name){
         return InvokableCommands[name]();
@@ -2429,6 +2429,9 @@ class Widget extends UndoRedoComponent {
         if(!ctx){
             console.warn('no context',{ctx,id:this.canvasID});
         }
+        if(ctx){
+            mctx = ctx;
+        }
         this.ctx = ctx;
         return ctx;
     }
@@ -4050,9 +4053,9 @@ class ImageViewerWidget extends Widget {
         // super.draw(...arguments)
         super.onDraw(...arguments)
         // if(this.doNotDraw){ return; }
-        this.ctx = this.getCurrentContext()
+
         this.ctx.push();
-            
+        this.ctx.scale(zoom,zoom)
         this.ctx.image(
             this.image, 
             this.smartPosition.x + (this.widgetSize.width - this.newWidth) / 2,
@@ -4807,30 +4810,7 @@ class iFrameWidget extends Widget {
             this.iframe.remove()
         }
     }
-    constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
-        super(...arguments);
-        this.url = url ?? this.url;
-
-        //this.widgetSize = { width: 300, height: 150 }
-
-            if(arguments[0]?.widgetSize){
-                this.widgetSize = arguments[0].widgetSize;
-            }
-            else if(arguments[1]?.widgetSize){
-                this.widgetSize = arguments[1].widgetSize;
-            }else if(pxHeightOrNull){
-                this.widgetSize = {
-                    width: pxWidthOrOptsOrNull,
-                    height: pxHeightOrNull
-                }
-            }
-        
-        /*
-        if(arguments[1]?.fullTag?.length){
-                arguments[1]?.fullTag
-            }
-            */
-
+    createIFrame(){
         const style = {
             'border-radius': '20px',
             'border': '3px solid red',
@@ -4851,7 +4831,7 @@ class iFrameWidget extends Widget {
             'allow': 'autoplay; encrypted-media',
             'height': `${this.widgetSize.width}px`,
             'width': `${this.widgetSize.height}px`,
-            'src': url ?? 'https://google.com/webhp?igu=1',
+            'src': this.url ?? 'https://google.com/webhp?igu=1',
             'crossorigin': 'anonymous',
         }
         // console.log({tagAttrs})
@@ -4878,6 +4858,32 @@ class iFrameWidget extends Widget {
         // since we just spawned an iframe, focus on deep layer 1 (instead of 0)
         //deepCanvasManager.setActiveLayer(1);
         deepCanvasManager.focusedIndex = 1;
+    }
+    constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
+        super(...arguments);
+        this.url = url ?? this.url;
+
+        //this.widgetSize = { width: 300, height: 150 }
+
+            if(arguments[0]?.widgetSize){
+                this.widgetSize = arguments[0].widgetSize;
+            }
+            else if(arguments[1]?.widgetSize){
+                this.widgetSize = arguments[1].widgetSize;
+            }else if(pxHeightOrNull){
+                this.widgetSize = {
+                    width: pxWidthOrOptsOrNull,
+                    height: pxHeightOrNull
+                }
+            }
+        
+        /*
+        if(arguments[1]?.fullTag?.length){
+                arguments[1]?.fullTag
+            }
+            */
+
+        this.createIFrame()
     }
     updateUrl(url){
         if(isEmptyOrUndefined(url)){
@@ -4926,7 +4932,7 @@ class iFrameWidget extends Widget {
         this.ctx.rectMode(CORNER)
         this.ctx.fill("green");
         this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
-        this.ctx.rectMode(CENTER, CENTER)
+        this.ctx.rectMode(CENTER)
         this.ctx.fill("white");
         this.ctx.rect(halfButtonSize, negYOffset + halfButtonSize, 30, 10, borderRadius);
         this.ctx.rect(halfButtonSize, negYOffset + halfButtonSize, 10, 30, borderRadius);
@@ -4940,7 +4946,7 @@ class iFrameWidget extends Widget {
                         buttonSize, 
                         buttonSize, 
                         borderRadius);
-        this.ctx.rectMode(CENTER, CENTER);
+        this.ctx.rectMode(CENTER);
         this.ctx.fill("white");
         this.ctx.rect(
                         halfButtonSize + buttonSize + 10, 
@@ -5412,12 +5418,13 @@ class ClockWidget extends Widget {
     get time(){
         return Date.now();
     }
-    draw(widgetID){
-        super.draw(...arguments); // todo: split into super.preDraw/super.postDraw
+    onDraw(widgetID){
+        super.onDraw(...arguments); // todo: split into super.preDraw/super.postDraw
         // just render the current time for now
+        
+        this.ctx.push()
         this.ctx.fill("darkblue")
         this.ctx.textAlign(CENTER, CENTER);
-        this.ctx.push()
         this.ctx.textFont('Georgia');
         this.ctx.textSize(32);
         this.ctx.textStyle(BOLD);
@@ -5455,10 +5462,18 @@ class TimeToSunSetWidget extends ClockWidget {
     get timeFormatted(){
         return ''
     }
-    draw(widgetID){
-        // todo: split into super.preDraw/super.postDraw
-        super.draw(...arguments); 
+    draw(){
+        super.draw(...arguments)
 
+        this.drawSunsetGradient();
+    }
+    onDraw(widgetID){
+        // todo: split into super.preDraw/super.postDraw
+        super.onDraw(...arguments); 
+
+        
+    }
+    drawSunsetGradient(){
         // // draw a sunset themed background gradient
         // // from yellow to orange to red
         let lines = 10;
@@ -5477,9 +5492,9 @@ class TimeToSunSetWidget extends ClockWidget {
             // draw rects to represent the gradient
             let colorIndex = Math.floor((i/lines) * colorsToLerp.length);
             let color = colorsToLerp[colorIndex];
-            strokeWeight(0)
-            fill(color);
-            rect(
+            this.ctx.strokeWeight(0)
+            this.ctx.fill(color);
+            this.ctx.rect(
                 this.smartPosition.x, 
                 this.smartPosition.y + (i * (this.widgetSize.height / lines)), 
                 this.widgetSize.width, 
@@ -5798,9 +5813,19 @@ document.addEventListener('mousedown', function(event) {
     // if we clicked an iFrame, focus the top layer
     if (event.target.tagName === 'IFRAME') {
         console.warn('clicked an iframe',{event})
-        deepCanvasManager.focusedIndex = 1;
+        //deepCanvasManager.focusedIndex = 1;
+
+        // keep the focus, just swap the top layer
     }
+    deepCanvasManager.canvases.unshift(deepCanvasManager.canvases.pop());
 })
+// double-click
+document.addEventListener
+('dblclick', function(event) {
+    // Code to be executed on double click
+    system.todo("respond to double click!")
+});
+
 
 // Add a keyboard listener for cmd shift p shift+p
 document.addEventListener('keydown', function(event) {
@@ -6237,7 +6262,8 @@ class Dashboard {
             /* from */ 
             {x:panX,y:panY,z:zoom},
             /* to */ 
-            {x:0,y:0,z:1}, 
+            // retain zoom
+            {x:0,y:0,z:zoom}, 
             /*onUpdate*/
             (value, fieldName)=>{
                 // console.warn('onupdate',{value,fieldName})
@@ -6255,13 +6281,17 @@ class Dashboard {
                 }
             }, 
             /* duration ms */ 
-            3000
+            500
         );
     }
     toggleVisibility(){
         this.visible = !this.visible;
     }
     reflowLayout(){
+        // make sure the body, html els did not scroll away from 0,0
+        // this is a hack to fix a bug where the body scrolls away from 0,0
+        document.body.scrollTo(0,0,{behavior:"instant"})
+
         // let the widgets redefine their sizes
         this.widgetLayoutOrder.forEach((widgetID)=>{
             this.widgets[widgetID]?.recalcDimensions?.();
@@ -6327,8 +6357,19 @@ class Dashboard {
             || widgetIDOrInstance?.includes?.(".jpeg")
         ) {
             // it's an image!
-            return this.registerWidget(new ImageWidget(widgetIDOrInstance))
+            return this.registerWidget(new ImageViewerWidget(widgetIDOrInstance))
         }
+
+        // if it's a soundcloud url, return a new soundcloud widget instance instead
+        if(
+            widgetIDOrInstance?.includes?.("soundcloud.com")
+        ) {
+            const MySoundCloudClass = class extends SoundCloudWidget {
+                url = "widgetIDOrInstance"
+            } 
+            return this.registerWidget(new MySoundCloudClass())
+        }
+
         if(widgetIDOrInstance?.includes?.("youtube.com")){
             let updatedUrl = widgetIDOrInstance;
             try {
@@ -6394,16 +6435,25 @@ class Dashboard {
 
         return this; // chainable
     }
-    clearAllWidgets(){
+    closeAllWidgets(){
+        Object.entries(this.widgets)
+        .forEach(([key, widget]) => {
+            widget?.close?.();
+        });
+        this.widgets = {}
         this.widgetDepthOrder.length = 0;
         this.widgetLayoutOrder.length = 0;
-        console.warn("Dashboard.clearAllWidgets",{
-            depthLen: this.widgetDepthOrder.length,
-            layoutLen: this.widgetLayoutOrder.length,
-        })
+
+        // console.warn("Dashboard.closeAllWidgets",{
+        //     depthLen: this.widgetDepthOrder.length,
+        //     layoutLen: this.widgetLayoutOrder.length,
+        // })
 
         // reflow widget layout
         this.reflowLayout();
+
+        // center the view
+        this.centerView();
 
         return this; // chainable
     }
@@ -9756,10 +9806,11 @@ const InvokableCommands = {
     // check heart rate
     // check blood pressure
     // check blood sugar,
+
+    // record blood sugar, oxygen, heart rate, blood pressure, weight, height, etc...
+
     // prostate health
     // check cholesterol
-    // check weight
-    // check height
 
     // sleep, wake, usage, behavior, trends
     // life expectancy
@@ -9770,9 +9821,10 @@ const InvokableCommands = {
         // spawn a new flashcard widget
         system.registerWidget(new GreekAlphabetWidget());
     },
-    ForceReloadLayout(){
-        system.get("Dashboard")
-            ?.reflowLayout?.();
+    ["reflow"](){
+        window.dispatchEvent(new Event("resize"));
+        //system.get("Dashboard")
+        //    ?.reflowLayout?.();
     },
     FocusWidget(id){
         system.get("Dashboard")
@@ -9937,6 +9989,7 @@ const InvokableCommands = {
             "enter the lock screen", 
             "enter lock screen", 
             "lock the screen", 
+            "lock screen",
             "enter screensaver", 
             "start screensaver", 
             "enter screensaver mode"
@@ -9948,11 +10001,22 @@ const InvokableCommands = {
         // puts the system in lock screen, screen save mode
         InvokableCommands["CLOSE_ALL_WIDGETS"]()
 
+        // center the view
+        system.invoke("CENTER_VIEW")
 
         system.invoke("ENABLE_DEEP_RENDERER")
+        system.invoke("ENABLE_SPRITES")
         // display the lock screen widget
         system.invoke("NEW_CLOCK_WIDGET")
         system.invoke("NEW_TIME_TO_SUNSET_WIDGET")
+
+    },
+    // BG Effects
+    ["disable sprites"](){
+        store.disableSprites = true;
+    },
+    ["enable sprites"](){
+        store.disableSprites = false;
     },
     ["enable deep renderer"](){
         store.disableDeepCanvas = false;
@@ -9966,6 +10030,24 @@ const InvokableCommands = {
         this.getLabel = function(){
             return `${!bool ? 'Enable' : 'Disable'} Deep Canvas Renderer`
         }
+    },
+    ["set zoom"](){
+        store.zoom = parseInt(prompt("what level? (number)", store.zoom) ?? 0)
+    },
+    ["new test runner"](){
+        //system.invokeWith(TestRunnerWidget)
+        //system.registerWidget(new TestRunnerWidget());
+        system.todo("instance a test runner widget!")
+    },
+    ["new fish"](){
+        system.todo("instance a fish!")
+    },
+    ["new dog"](){
+        // reminders to take care of your pet!
+        system.todo("instance a dog!")
+    },
+    ["new cat"](){
+        system.todo("instance a cat!")
     },
     ["New sketchpad"](){},
     [""](){},
@@ -10032,6 +10114,11 @@ const InvokableCommands = {
     ["conversation freefall"](){},
     ["new conversation map"](){},
     ["new mind map"](){},
+    ["new timeline"](){},
+    ["new project"](){},
+    ["new sketchfab viewer"](){
+        system.invokeWith(SketchfabEmbedWidget)
+    },
     ["hello"](){
         system.get("toastManager").showToast("🐶 HHH WOOOAHW!", {pinned: false, important: true});
     },
@@ -10119,6 +10206,13 @@ const InvokableCommands = {
     },
     // TODO: extract metadata and cache it (about youtube and other fetched urls)
     ["Play BAMBOO WATER FOUNTAIN | Relax & Get Your Zen On | White Noise"]: "https://www.youtube.com/watch?v=aJaZc4E8Y4U",
+
+    ["Play Redbone"](){
+        return "https://soundcloud.com/childish-gambino/redbone"
+        //return "https://www.youtube.com/watch?v=Kp7eSUU9oy8"
+    },
+
+
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
         // the one i want is restricted
@@ -10155,12 +10249,8 @@ const InvokableCommands = {
 
     // },
     ["Close All Widgets"](){
-        Object.entries(system.get("Dashboard").widgets).forEach(([key, widget]) => {
-            widget?.close?.();
-        });
-        // clear the dashboard
-        //system.dashboard.clear();
-        system.dashboard.clearAllWidgets();
+        /** @see Dashboard.closeAllWidgets */
+        system.dashboard.closeAllWidgets();
     },
     ["Fresh Start"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
     ["Close All"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
@@ -10221,6 +10311,7 @@ const InvokableCommands = {
     // return to origin again...
     ["Center View"](){
         console.warn("Center View...");
+        /** @see Dashboard.centerView */
         system.dashboard.centerView();
     },
         // [
@@ -10794,11 +10885,12 @@ class CanvasCompositor {
 
     getContext(canvas) {
         if (canvas instanceof p5) {
-            return canvas.drawingContext;
+            //return canvas.drawingContext;
+            return canvas.getContext('2d', { willReadFrequently: true })
         } else if (canvas instanceof THREE.WebGLRenderer) {
-            return canvas.getContext();
+            return canvas.getContext('webgl', { willReadFrequently: true });
         } else {
-            return canvas.getContext('webgl');
+            return canvas.getContext('webgl', { willReadFrequently: true });
         }
     }
 
@@ -10857,8 +10949,9 @@ class CanvasCompositor {
     render() {
         // debugger;
         window.myMainDrawFN()
-        this.compositeCanvases();
-        this.applyShaderAndRender();
+        // TODO: re-enable this:
+        // this.compositeCanvases();
+        // this.applyShaderAndRender();
         // // display the output on the top canvas
         // let outputCanvas = document.getElementById('outputCanvas');
         // let ctx = outputCanvas.getContext('2d');
@@ -12847,6 +12940,7 @@ function renderDebugUI(){
     ctx.textAlign(RIGHT, BOTTOM);
     const debugTexts = [
         { text: `FPS: ${FPS.toFixed(2)}` },
+        { text: `current widget count ${Object.keys(system.dashboard.widgets).length}` },
         { text: `DrawCalls: ${store.frameDrawCount}` },
         { text: `center:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
         // todo: zoom momentum / z-momentum
@@ -12892,7 +12986,7 @@ function renderDebugUI(){
     ctx.textAlign(RIGHT, BOTTOM);
     // Render text that lists the current zoom, panX, panY
     ctx.text(
-        `zoom: ${zoom.toFixed(2)} panX: ${panX.toFixed(2)} panY: ${panY.toFixed(2)}`, 
+        `zoom: ${(zoom??0).toFixed(2)} panX: ${panX.toFixed(2)} panY: ${panY.toFixed(2)}`, 
         windowWidth - 20, 
         windowHeight - 10);
     // render red text that shows the current interaction mode
@@ -13336,7 +13430,8 @@ function setupDefaults(){
                 if(typeof result === 'object' && Array.isArray(result)){
                     tracks = result;
                 }
-                else if(typeof result === 'string' && result.includes("youtube")){
+                else if(typeof result === 'string'){
+
 
                     // see if the url includes ?width or ?height,
                     // feed that to widgetSize
@@ -13374,18 +13469,27 @@ function setupDefaults(){
                     // now playing widget keeps a playlist
                         ?.showToast("Player Spawned!",{pinned:false})
                     InvokableCommands["Center View"]();
-                    panX = 300;
-                    panY = 300;
-                    zoom = 0.9;
-                    system.get("Dashboard")
-                        ?.registerWidget?.(new YoutubePlayerWidget("Youtube"+Date.now()+Math.random,{
-                            widgetSize:{
-                                width: requestedWidth,
-                                height: requestedHeight
-                            },
-                            autoPlay: true,
-                            tracks
-                        }))
+                    // panX = 300;
+                    // panY = 300;
+                    // zoom = 0.9;
+
+                    system.registerWidget(tracks.length>1?tracks:tracks[0],{
+                        widgetSize:{
+                            width: requestedWidth,
+                            height: requestedHeight
+                        },
+                        tracks
+                    })
+
+                    // system.get("Dashboard")
+                    //     ?.registerWidget?.(new YoutubePlayerWidget("Youtube"+Date.now()+Math.random,{
+                    //         widgetSize:{
+                    //             width: requestedWidth,
+                    //             height: requestedHeight
+                    //         },
+                    //         autoPlay: true,
+                    //         tracks
+                    //     }))
                 }
             }
         }))
@@ -13584,6 +13688,62 @@ const CoreWidgets = [
     KeyboardWidget
 ]
 
+class SoundCloudWidget extends iFrameWidget {
+}
+
+class SketchfabEmbedWidget extends iFrameWidget {
+    /*
+    <div class="sketchfab-embed-wrapper"> 
+        <iframe title="Robot" 
+                frameborder="0" 
+                allowfullscreen 
+                mozallowfullscreen="true" 
+                webkitallowfullscreen="true" 
+                allow="autoplay; fullscreen; xr-spatial-tracking" 
+                xr-spatial-tracking 
+                execution-while-out-of-viewport 
+                execution-while-not-rendered 
+                web-share 
+                src="https://sketchfab.com/models/ff93ae5114ef4beb8c2a1d48ccc9f3a6/embed?camera=0&ui_theme=dark"> 
+                </iframe> 
+                
+                <p style="font-size: 13px; font-weight: normal; margin: 5px; color: #4A4A4A;"> 
+                <a href="https://sketchfab.com/3d-models/robot-ff93ae5114ef4beb8c2a1d48ccc9f3a6?utm_medium=embed&utm_campaign=share-popup&utm_content=ff93ae5114ef4beb8c2a1d48ccc9f3a6" target="_blank" rel="nofollow" style="font-weight: bold; color: #1CAAD9;"> Robot </a> by <a href="https://sketchfab.com/jakedowns?utm_medium=embed&utm_campaign=share-popup&utm_content=ff93ae5114ef4beb8c2a1d48ccc9f3a6" target="_blank" rel="nofollow" style="font-weight: bold; color: #1CAAD9;"> jakedowns </a> on <a href="https://sketchfab.com?utm_medium=embed&utm_campaign=share-popup&utm_content=ff93ae5114ef4beb8c2a1d48ccc9f3a6" target="_blank" rel="nofollow" style="font-weight: bold; color: #1CAAD9;">Sketchfab</a></p></div>
+    */
+   // set the iframe src to the sketchfab embed url
+   url = "https://sketchfab.com/models/ff93ae5114ef4beb8c2a1d48ccc9f3a6/embed?camera=0&ui_theme=dark";
+//    constructor(){
+//     super(...arguments)
+//     // this.element = mctx.createDiv();
+//     // this.element.parent('under-ui-elms')
+//     // this.element.style('position:absolute;')
+//     // //this.element.size(300,300);
+//     // let iframe = document.createElement('iframe');
+//     // iframe.title = "Robot";
+//     // iframe.allowFullscreen = true;
+//     // iframe.mozallowfullscreen = "true";
+//     // iframe.webkitallowfullscreen = "true";
+//     // iframe.allow = "autoplay; fullscreen; xr-spatial-tracking";
+//     // iframe.setAttribute('execution-while-out-of-viewport', '');
+//     // iframe.setAttribute('execution-while-not-rendered', '');
+//     // iframe.setAttribute('web-share', '');
+//     // iframe.src = "https://sketchfab.com/models/ff93ae5114ef4beb8c2a1d48ccc9f3a6/embed?camera=0&ui_theme=dark";
+//     // this.element.elt.appendChild(iframe);
+
+    
+//    }
+   onDraw(){
+    super.onDraw(...arguments)
+   }
+//    onDraw(){
+//     super.onDraw(...arguments)
+//     this.element.position(
+//         this.smartPosition.x,
+//         this.smartPosition.y
+//     );
+//    }
+}
+
 let tabHistory = [];
 let lastFocusedElement = null;
 function focusHandler(e){
@@ -13724,7 +13884,6 @@ let cursor, MainCanvasContextThing = function(p){
         //panY = 0; //windowHeight / 2;
 
         ensureHeadTag();
-        //mainCanvasContext = this.createCanvas(this.windowWidth, this.windowHeight);
         
 
         // boot the root system manager & root system
@@ -14017,21 +14176,27 @@ document.body.appendChild(topCanvas);
             // add our first widget (todo: load state from dehydrated json)
             // DEFAULT WIDGET SET
 
+        // Spawn Some Widgets
         InvokableCommands["New Time To Sunset Widget"]()
         InvokableCommands["New Calculator Widget"]()
         InvokableCommands["New Egg Timer"]()
         InvokableCommands["Play Glorious Dawn"]()
 
+        //InvokableCommands["NEW_SKETCHFAB_VIEWER"]()
+        system.invoke("NEW_SKETCHFAB_VIEWER")
+
+        system.invoke("NEW_FISH")
+        system.invoke("NEW_DOG")
+        system.invoke("NEW_CAT")
+
         //InvokableCommands["UI Inspiration > Minority Report UI"]()
-        //InvokableCommands["Embed Tweet"]()
+        system.invoke("EMBED_TWEET")
 
         // OnDashboardReady OnDashboardLoaded OnDashboardInit
         // OnDashboardStarted
         system
 
             // Main Widget Registration Area
-            
-
             
 
 
@@ -14442,16 +14607,25 @@ document.body.appendChild(topCanvas);
         store.frameDrawCount++;
     
         handleAnalogStickInput();
+
+        // if(!window.mainCanvasContext?.clear){
+        //     return;
+        // }
     
         // this value updates instantly
         // then we lerp our viewport's cursor vec3 torwards it
         whatTheCenterIs.x = mctx.mouseX;
         whatTheCenterIs.y = mctx.mouseY;
-        
+
+        if(!mainCanvasContext){
+            system.panic("need mainCanvasContext", {
+                mctx
+            })
+        }
     
         // clear the canvas
         if(store.clearMode){
-            p.clear()
+            mainCanvasContext.clear()
         }
         //background(color(0,0,0,0));
     
@@ -14459,84 +14633,87 @@ document.body.appendChild(topCanvas);
         * @description Iterating over sprites array
         * @type {Sprite[]} sprites - Each sprite is an instance of the Sprite class
         */
-        p.push();
+        mainCanvasContext.push();
         store.minZ = 1000;
         store.maxZ = 0;
-    
-        sprites.forEach((sprite,index)=>{
-            //sprite.drawSimple();
-            sprite.draw();
-    
-            // push sprite in z space
-            // once it reaches a certain depth, snap it back to the other end of z space and a random x,y scaled by z
-            sprite.z -= 0.01;
-            if(sprite.z){
-                if(sprite.z < -10){
-                    sprite.z = 10;
-                    // sprite.x = Math.random() * windowWidth;
-                    // sprite.y = Math.random() * windowHeight;
+        
+        if(!store.disableSprites){
+            sprites.forEach((sprite,index)=>{
+                //sprite.drawSimple();
+                sprite.draw();
+        
+                // push sprite in z space
+                // once it reaches a certain depth, snap it back to the other end of z space and a random x,y scaled by z
+                sprite.z -= 0.01;
+                if(sprite.z){
+                    if(sprite.z < -10){
+                        sprite.z = 10;
+                        // sprite.x = Math.random() * windowWidth;
+                        // sprite.y = Math.random() * windowHeight;
+                    }
+                    if(sprite.z > 10){
+                        sprite.z = -10;
+                        // sprite.x = Math.random() * windowWidth;
+                        // sprite.y = Math.random() * windowHeight;
+                    }
                 }
-                if(sprite.z > 10){
-                    sprite.z = -10;
-                    // sprite.x = Math.random() * windowWidth;
-                    // sprite.y = Math.random() * windowHeight;
+                if(sprite.z > store.maxZ){
+                    store.maxZ = sprite.z;
                 }
-            }
-            if(sprite.z > store.maxZ){
-                store.maxZ = sprite.z;
-            }
-            if(sprite.z < store.minZ){
-                store.minZ = sprite.z;
-            }
-    
-            return;
-    
-            // use some perlin noise to perterb the 
-            // sprite's position
-            // (in the future, we'll convert to flowfield influence)
-            let seed = Math.random();
-            let offsetX = sprite.x * 0.00001; // Decrease multiplier for smoother noise
-            let offsetY = sprite.y * 0.00001; // Decrease multiplier for smoother noise
-            let uniqueFactorX = sprite.x * 0.2; // Add offset for unique noise per region
-            let uniqueFactorY = sprite.y * 0.2; // Add offset for unique noise per region
-    
-            // Update sprite's x position with noise-based perturbation
-            // noise() generates Perlin noise value at specified coordinates
-            // offsetX + frameCount * 0.01 + seed + uniqueFactorX gives unique noise coordinates for each frame and sprite
-            // noise() returns value between 0 and 1, so we subtract 0.5 to allow movement in both positive and negative directions
-            // Final value is multiplied by 20 to increase the effect and by Math.sin(frameCount * 0.01) for oscillating effect over time
-            sprite.x += (noise(offsetX + frameCount * 0.01 + seed + uniqueFactorX) - 0.5) * 2 * Math.sin(frameCount * 0.01);
-            
-            // Update sprite's y position with noise-based perturbation
-            // Similar to x position update, but uses Math.cos(frameCount * 0.01) for oscillation to create perpendicular movement
-            sprite.y += (noise(offsetY + frameCount * 0.01 + seed + uniqueFactorY) - 0.5) * 2 * Math.cos(frameCount * 0.01);
-            // make sure to keep them within window bounds
-            sprite.x = constrain(sprite.x, 0, windowWidth)
-            sprite.y = constrain(sprite.y, 0, windowHeight);
-        })
-        p.pop()
+                if(sprite.z < store.minZ){
+                    store.minZ = sprite.z;
+                }
+        
+                return;
+        
+                // use some perlin noise to perterb the 
+                // sprite's position
+                // (in the future, we'll convert to flowfield influence)
+                let seed = Math.random();
+                let offsetX = sprite.x * 0.00001; // Decrease multiplier for smoother noise
+                let offsetY = sprite.y * 0.00001; // Decrease multiplier for smoother noise
+                let uniqueFactorX = sprite.x * 0.2; // Add offset for unique noise per region
+                let uniqueFactorY = sprite.y * 0.2; // Add offset for unique noise per region
+        
+                // Update sprite's x position with noise-based perturbation
+                // noise() generates Perlin noise value at specified coordinates
+                // offsetX + frameCount * 0.01 + seed + uniqueFactorX gives unique noise coordinates for each frame and sprite
+                // noise() returns value between 0 and 1, so we subtract 0.5 to allow movement in both positive and negative directions
+                // Final value is multiplied by 20 to increase the effect and by Math.sin(frameCount * 0.01) for oscillating effect over time
+                sprite.x += (noise(offsetX + frameCount * 0.01 + seed + uniqueFactorX) - 0.5) * 2 * Math.sin(frameCount * 0.01);
+                
+                // Update sprite's y position with noise-based perturbation
+                // Similar to x position update, but uses Math.cos(frameCount * 0.01) for oscillation to create perpendicular movement
+                sprite.y += (noise(offsetY + frameCount * 0.01 + seed + uniqueFactorY) - 0.5) * 2 * Math.cos(frameCount * 0.01);
+                // make sure to keep them within window bounds
+                sprite.x = constrain(sprite.x, 0, windowWidth)
+                sprite.y = constrain(sprite.y, 0, windowHeight);
+            })
+        }
+        mainCanvasContext.pop()
     
         // draw our bg image
         if(bgImage){
             p.image(bgImage, 0, 0, windowWidth, windowHeight);
         }
         // center our coordinate system
-        p.push();
+        mainCanvasContext.push();
             const halfWidth = p.windowWidth / 2;
             const halfHeight = p.windowHeight / 2;
-            p.translate(halfWidth, halfHeight)
+            mainCanvasContext.translate(halfWidth, halfHeight)
     
             // every second update the url with the current location
             // pan,zoom
-            if(frameCount % 60 === 0){
-                let url = new URL(window.location.href);
-                url.searchParams.set("panX", store.panX);
-                url.searchParams.set("panY", store.panY);
-                url.searchParams.set("zoom", store.zoom);
+            // TODO: put this in the background
+            // if(frameCount % 60 === 0){
+            //     let url = new URL(window.location.href);
+            //     url.searchParams.set("panX", store.panX);
+            //     url.searchParams.set("panY", store.panY);
+            //     url.searchParams.set("zoom", store.zoom);
     
-                // update the url
-                window.history.replaceState({}, '', url);
-            }
+            //     // update the url
+            //     window.history.replaceState({}, '', url);
+            // }
             
             // NOTE: there is an issuer where when you're zoomed in,
             // it's relative from the top left of the whole screen
@@ -14595,10 +14772,10 @@ document.body.appendChild(topCanvas);
             }
             
     
-            p.translate(mouseShifted.x, mouseShifted.y);
-            p.scale(zoom);
+            mainCanvasContext.translate(mouseShifted.x, mouseShifted.y);
+            mainCanvasContext.scale(zoom);
             // translate(mouseX, mouseY);
-            p.translate(
+            mainCanvasContext.translate(
                 panX - (halfWidth*zoom), 
                 panY -(halfHeight*zoom)
             );
@@ -14621,15 +14798,15 @@ document.body.appendChild(topCanvas);
                 gherkinStudio.draw();
             }
     
-            
-    
             //drawModeSwitcher();
     
-            // render all widgets on the widget dashboard
-            system.get("Dashboard")?.draw?.();
-    
+        // render all widgets on the widget dashboard
+        system.dashboard.draw();
+        
+        // jump back to the main canvas context
+        
         // reset any transforms
-        p.pop();
+        mainCanvasContext.pop();
     
         // render toast notifications
         system.get("toastManager")?.draw?.();
@@ -14656,6 +14833,7 @@ document.body.appendChild(topCanvas);
 }
 let mainCanvasContext = new p5(MainCanvasContextThing, "main-canvas-context");
 window.mctx = mainCanvasContext;
+// bind the global api so it can shift contexts
 const properties = [
     'TWO_PI', 'BOLD', 'NORMAL', 'BOTTOM', 'BLUR', 'CENTER', 'LEFT', 'RIGHT', 'TOP', 
     'CORNER', 'alpha', 'beginShape', 'endShape', 'cos', 
@@ -14663,7 +14841,7 @@ const properties = [
     'color', 'createGraphics', 'circle', 'ellipse', 
     'rectMode', 'fill', 'frameCount', 'image', 'lerp', 
     'lerpColor', 'loadImage', 'millis', 'map', 
-    'mouseX', 'mouseY', 'noFill', 'noTint', 'pop', 
+    'mouseX', 'mouseY', 'pmouseX', 'pmouseY', 'noFill', 'noTint', 'pop', 
     'push', 'text', 'textAlign', 'textSize', 'textFont', 'textStyle', 
     'tint', 'translate', 'rect', 'scale', 'stroke', 
     'strokeWeight', 'windowHeight', 'windowWidth', 
@@ -14673,12 +14851,12 @@ properties.forEach(prop => {
         Object.defineProperty(window, prop, {
             get: () => {
                 // if it's a function pre-bind it
-                if(typeof mainCanvasContext[prop] === 'function'){
-                    return mainCanvasContext[prop].bind(mainCanvasContext);
+                if(typeof window.mctx[prop] === 'function'){
+                    return window.mctx[prop].bind(window.mctx);
                 }
-                return mainCanvasContext[prop];
+                return window.mctx[prop];
             },
-            set: (value) => mainCanvasContext[prop] = value
+            set: (value) => window.mctx[prop] = value
         });
 });
 
