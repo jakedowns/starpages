@@ -14,6 +14,34 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+/*
+*/
+const anger_management_course = [
+    [
+        "Welcome to a journey of self-discovery and transformation with our Anger Management Course. Designed to empower individuals from all walks of life, this course offers an in-depth understanding of anger, its causes, and its impact on both personal and professional relationships. Through a blend of theoretical knowledge and practical exercises, participants will learn to recognize their anger triggers, develop effective communication skills, and master techniques for stress management and problem-solving. Our interactive sessions, including role-playing and personal reflections, provide a safe space for growth and learning. Join us to harness the power of emotional intelligence, improve your relationships, and navigate life with greater calmness and control.",
+    ],
+    [
+        "Master Your Emotions: Transformative Anger Management Course",
+        "Unlock the secrets to controlling anger and improving relationships with our short, impactful Anger Management Course. Gain essential skills for emotional intelligence and a calmer life.",
+    ],
+    [
+        
+    ],
+    [
+        "1. understanding anger",
+        "2. triggers & warning signs",
+        "3. communication skills",
+            // active listening
+            // peaceful conflict resolution
+        "",
+            // relaxation, mindfulness, deep-breathing
+        "6. anger control plans",
+        "7. role playing and scenarios",
+            // duke gunsten puppets
+    ]
+    // grief
+]
+
 // import Peer from 'simple-peer';
 
 // const peer = new Peer({

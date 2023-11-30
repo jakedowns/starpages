@@ -781,8 +781,11 @@ class System {
     get time(){
         // returns either passthrough time or modified time
     }
+    newWidget(){
+        return this.registerWidgetInstance(...arguments)
+    }
     registerWidgetInstance(){
-        return this.get("Dashboard").registerWidget(...arguments);
+        return this.dashboard.registerWidget(...arguments);
     }
     registerWidget(){
         return this.registerWidgetInstance(...arguments)
@@ -795,7 +798,8 @@ const manager = rootManager; // alias
 // construct our root system and attach our root manager
 
 // more singletons
-let system;
+let system = new System();
+
 let rootSystem; // alias
 
 // Array of tests that will run during self-test mode
@@ -2255,6 +2259,7 @@ class Widget extends UndoRedoComponent {
             // ? this.basePosition : this._absolutePosition
     }
     preDraw(){
+        this.getCurrentContext()
         this.moveToTarget();
         this.updatePlax();
 
@@ -2308,17 +2313,18 @@ class Widget extends UndoRedoComponent {
         this.ctx = ctx;
         return ctx;
     }
+    // draw calls onDraw when not culled
     // NOTE: we can instrument this widget
     // with perf metrics, and then check at the end of the frame
     // which widgets were drawn, and which were culled
     // and which are taking the most wall time
     draw(widgetID){
-        //if(!canvasContext){
-        let canvasContext = mainCanvasContext;
-        //}
-        if(!canvasContext){
-            return
-        }
+        // //if(!canvasContext){
+        // let canvasContext = mainCanvasContext;
+        // //}
+        // if(!canvasContext){
+        //     return
+        // }
 
         // update fov using Sin wave
         //fov = 100 + (sin(frameCount / 100) * 100);
@@ -2551,7 +2557,7 @@ class FlashCardWidget extends Widget {
         this.shownCardIDs.length = 0;
         this.remainingCardIDs = Array.from({length: this.cards.length}, (_, i) => i);
         // shuffle
-        this.remainingCardIDs = shuffle(this.remainingCardIDs);
+        this.remainingCardIDs = mctx.shuffle(this.remainingCardIDs);
         // update the internal index in the cards...
         this.remainingCardIDs.forEach((cardIndex, index)=>{
             this.cards[cardIndex].index = index;
@@ -3765,6 +3771,48 @@ however, only recently [has ai begun to : have the compute power to : train and 
     
 }
 
+class GithubCardWidget extends Widget {
+    constructor(){
+        super(...arguments)
+        let repos = [
+            "aranscope/magnet",
+            "hacsbcu/mesahub",
+            "ptruscott/traintracks",
+            "bedekelly/minitools",
+            "aranscope/aran.site"
+        ];
+        this.results = {};
+
+        for(let repo of repos) {
+          let url = 'https://api.github.com/repos/' + repo;
+          
+          fetch(url, {method: 'GET'}).then(resp => {
+            return resp.json();
+          }).then(json => {
+            // cache the json results
+            this.results[repo] = json
+          }).catch(err => {
+            console.log(err);
+          });
+        }
+    }
+    onDraw(){
+        if(!this.results.length){
+            // loading...
+            this.ctx.fill("yellow")
+            this.ctx.text("loading",10,10)
+            return;
+        }
+        Object.entries(this.results).map(([k,v])=>{
+            this.ctx.rect(this.smartPosition.x + (v * 30),
+            )
+            this.ctx.rect(this.smartPosition.x + (v * 30), this.smartPosition.y, 50, 50);
+        })
+
+        
+    }
+}
+
 class SVGViewerWidget extends Widget {
     widgetSize = {
         width: 1200,
@@ -3866,6 +3914,7 @@ class ImageViewerWidget extends Widget {
     draw(){
         super.draw(...arguments)
         if(this.doNotDraw){ return; }
+        this.ctx = this.getCurrentContext()
         this.ctx.push();
             
         this.ctx.image(
@@ -4611,6 +4660,13 @@ class iFrameWidget extends Widget {
         width: Math.min(window.innerWidth * 0.2, 800),
         height: Math.min(window.innerHeight * 0.2, 800)
     }
+    close(){
+        super.close(...arguments)
+        // delete this iframe
+        if(this.iframe){
+            this.iframe.remove()
+        }
+    }
     constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
         super(...arguments);
         this.url = url ?? this.url;
@@ -4681,18 +4737,19 @@ class iFrameWidget extends Widget {
         this.iframe.elt.src = url;
     }
     
-    draw(){
-        if(system.get("cmdprompt").visible){
-            this.iframe.hide();
-            return
-        }
-        super.draw(...arguments)
-        if(this.doNotDraw){
-            this.iframe.hide();
-            return;
-        }else{
-            this.iframe.show();
-        }
+    onDraw(){
+        // if(system.get("cmdprompt").visible){
+        //     this.iframe.hide();
+        //     return
+        // }
+        // super.draw(...arguments)
+        // if(this.doNotDraw){
+        //     this.iframe.hide();
+        //     return;
+        // }else{
+        //     this.iframe.show();
+        // }
+
         // if(this.pinned){
         //     this.corrected.x = 0//(this.position.x + (mouseShifted.x*zoom))
         //     this.corrected.y = windowHeight - this.widgetSize.height//(this.position.y + (mouseShifted.y*zoom))
@@ -4709,12 +4766,13 @@ class iFrameWidget extends Widget {
             this.smartPosition.x,
             this.smartPosition.y
         );
+        debugger;
         //this.iframe.scale(zoom)
         // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
         // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
         // this.iframe.elt.id = this.id;
         // t
-        this.iframe.elt.style.transform = `translate(${this.smartPosition.x}px,${this.smartPosition.y}px) scale(${zoom})`;
+        this.iframe.elt.style.transform = `translate3d(${this.smartPosition.x}px, ${this.smartPosition.y}px, 0) scale(${zoom}) perspective(1000px)`;
     }
 }
 /* 
@@ -4811,10 +4869,10 @@ extends iFrameWidget {
         return 'https://www.youtube.com/embed/' + videoId + "?autoplay=1";
     }
     // use update() instead if you want to ignore draw method culling
-    onDraw(){
-        // when visible and being drawn...
-
-    }
+    // onDraw(){
+    //     // when visible and being drawn...
+    //     super.onDraw(...arguments)
+    // }
 }
 
 
@@ -5611,14 +5669,21 @@ class StatusLight {
         this.name = name;
     }
     draw(){
+        // note things like status lights get drawn on the gui layer
+        // it's drawn ABOVE the "deep" canvas layers
+        // and is (for now) never blurred (since it has notifications and stuff)
         push();
         fill(store[this.name]?"green":"red");
         circle(this.x,this.y,this.r);
         strokeWeight(this.s);
         stroke(this.s);
         fill(255);
-        textAlign(LEFT, CENTER);
-        text(this.name,this.x+this.r+5,this.y-this.r);
+        textAlign(LEFT, TOP);
+        text(
+            this.name,
+            this.x+this.r+5,
+            this.y+this.r+5
+        );
         pop();
     }
 }
@@ -5632,9 +5697,10 @@ class LayereredCanvasRenderer {
     onClick(e){
         // go through the debug shapes and move the last one to the front of the array
         //this.debugShapes.unshift(this.debugShapes.pop());
-        this.focusedIndex++
-        if(this.focusedIndex >= this.canvases.length){
-            this.focusedIndex = 0;
+        // wrap around focus on click
+        this.focusedIndex--
+        if(this.focusedIndex<0){
+            this.focusedIndex = 1
         }
     }
     // for now, we assume we are working with 3 visible simultaneous canvases
@@ -5714,14 +5780,20 @@ class LayereredCanvasRenderer {
         // or just fully move to shader/three.js land
         // todo: cache / dirty-check updates
         this.canvases.forEach((canvas, index) => {
-            if(index !== this.focusedIndex) {
-                document.getElementById(`deep-canvas-${index+1}`).style.filter = `blur(${store.deepCanvasBlurLevel}px)`;
-            }else{
-                // enforce 0 blur for now
-                // we'll eventually make this a dynamic property of each canvas
-                document.getElementById(`deep-canvas-${index+1}`).style.filter = 'blur(0px)';
-            }
+            
+            document.getElementById(`deep-canvas-${index+1}`).style.filter = `blur(${index-1 === this.focusedIndex ? 0 : store.deepCanvasBlurLevel}px)`;
         });
+        // if the focusedIndex !== 0, we need to blur the "main" canvas too
+        document.querySelector('main canvas').style.filter=`blur(${this.focusedIndex === 0 ? '0' : store.deepCanvasBlurLevel}px)`
+        if(document.querySelector('#threejscanvas')){
+            document.querySelector('#threejscanvas').style.filter=`blur(${this.focusedIndex === 0 ? '0' : store.deepCanvasBlurLevel}px)`
+        }
+        // if we have any iframes, blur them too when not focused on layer "1"
+        if(document.querySelectorAll("iframe").length){
+            Array.from(document.querySelectorAll("iframe")).forEach((v,k)=>{
+                v.style.filter = `blur(${this.focusedIndex === 1 ? '0' : store.deepCanvasBlurLevel}px)`;
+            })
+        }
     }
     angles = [];
     drawDebugShapeToDeepCanvasLayer(canvasIndex){
@@ -5735,7 +5807,16 @@ class LayereredCanvasRenderer {
             this.angles[canvasIndex] = 0;
         }
 
+        // TODO: object define on window for caching
+        let halfWidth = innerWidth/2
+        let halfHeight = innerHeight/2
+
         canvas.push();
+        canvas.translate(mouseShifted.x, mouseShifted.y);
+        canvas.translate(
+            panX - (halfWidth*zoom), 
+            panY -(halfHeight*zoom)
+        );
         canvas.scale(zoom);
         const shape = this.debugShapes[canvasIndex];
         // p5.js automatically knows which canvas to draw on based on the canvas object we're calling the methods on.
@@ -5828,8 +5909,8 @@ class Dashboard {
         // update widget Target positions to be in a stack (slight offset per card)
         this.widgetLayoutOrder.forEach((widgetID,index)=>{
             let widget = this.widgets[widgetID]
-            let x = index * -30;
-            let y = index * 30;
+            let x = index * -3;
+            let y = index * 3;
             let w = widget.widgetSize.width;
             let h = widget.widgetSize.height;
             this.layout[widgetID] = {
@@ -5889,6 +5970,9 @@ class Dashboard {
                 x,y,w,h
             }
         })
+    }
+    newWidget(){
+        return this.registerWidget(...arguments)
     }
     registerWidget(widgetIDOrInstance,instanceOrNull){
         console.warn("registerWidget",{
@@ -5967,7 +6051,7 @@ class Dashboard {
         return this; // chainable
     }
     shuffleWidgets(){
-        this.widgetLayoutOrder = shuffle(this.widgetLayoutOrder);
+        this.widgetLayoutOrder = mctx.shuffle(this.widgetLayoutOrder);
     }
     shuffleWidgetPositions(){
         this.shuffleWidgets();
@@ -5977,11 +6061,12 @@ class Dashboard {
             /*
             z = index
             */
-            let z = Math.round(random(
+            let z = Math.round(mctx.random(
                 minWidgetDepth,
                 maxWidgetDepth
             ))
             this.widgets[widgetID].zDepth = z;
+            this.widgets[widgetID].canvasID = Math.round(mctx.random(-2,2))
         });
         
         this.updateWidgetDepthOrder();
@@ -8116,27 +8201,25 @@ extends WizardConfig {
 }
 class ToggleDashboardVisible extends BaseCmds(Command, new ToggleDashboardVisibleWizardConfig()){}
 
-class ToggleDashboardCollapsedWizardConfig
-extends WizardConfig {
-    name = "Toggle Dashboard: Collapsed"
-    steps = [
-        {question:"",onStepLoaded:(wiz)=>{wiz.end(); system.hideCmdPrompt();}}
-    ]
-    finalCallback(wiz){
-        console.warn("toggle dashboard collapsed")
-        system.get("Dashboard").toggleCollapsed();
-    }
-}
+// class ToggleDashboardCollapsedWizardConfig
+// extends WizardConfig {
+//     name = "Toggle Dashboard: Collapsed"
+//     steps = [
+//         {question:"",onStepLoaded:(wiz)=>{wiz.end(); system.hideCmdPrompt();}}
+//     ]
+//     finalCallback(wiz){
+//         console.warn("toggle dashboard collapsed")
+//         system.get("Dashboard").toggleCollapsed();
+//     }
+// }
 
-class ShuffleDashboardWidgetPositionsCommand 
-extends Config {
-    name = "Shuffle Dashboard Widget Positions"
-    execute(){
-        system.get("Dashboard").shuffleWidgetPositions();
-    }
-}
-
-class ToggleDashboardCollapsed extends BaseCmds(Command, new ToggleDashboardCollapsedWizardConfig()){}
+// class ShuffleDashboardWidgetPositionsCommand 
+// extends Config {
+//     name = "Shuffle Dashboard Widget Positions"
+//     execute(){
+//         system.dashboard.shuffleWidgetPositions();
+//     }
+// }
 
 class NewCommandCommand
 extends BaseCmds(Command, new NewCommandWizardConfig()){}
@@ -9230,6 +9313,9 @@ const InvokableCommands = {
     { name: "Enter Bulk Widget Editor Mode", command: "NotYetImplemented"},
     { name: "Group Widgets into Substack", command: "NotYetImplemented"}
     */
+    ["Shuffle Widget Positions"](){
+        system.dashboard.shuffleWidgetPositions();
+    },
 
     ["Netflix"](){
         system.registerWidget(new iFrameWidget(
@@ -9308,6 +9394,28 @@ const InvokableCommands = {
     NotYetImplemented(){
         console.warn('NotYetImplemented!')
     },
+    // [
+    //     "Play N64"
+    // ]: [
+    //     "Star Fox",
+    //     "Yoshi's Story",
+    //     "Super Mario World"
+    // ],
+    ["Play N64 > Starfox"](){
+        //return new N64EmulatorWidget
+        //return new iFrameWidget
+        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/embed/32822-star-fox-64-usa-rev-a.html"))
+    },
+    ["Play N64 > Super Mario World"](){
+        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/n64-games/super-mario-64-sky-stories.html"))
+    },
+    // charmeleon, quest 64, 
+    ["Play SNES > Pac Attack"](){
+        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/n64-games/super-mario-64-sky-stories.html"))
+    },
+    // ["Play N64 > ..."](){
+
+    // },
     ["Play N64 Yoshi's Story"](){
         /*
         <iframe src="https://www.retrogames.cc/embed/32546-yoshi-s-story-usa-en-ja.html" width="600" height="450" frameborder="no" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" scrolling="no"></iframe>
@@ -9466,27 +9574,29 @@ const InvokableCommands = {
         // maybe just add it to the url continually?
     },
     ["add song"](){
-        prompt("Which song?! (youtube urls for now, soon: NLP)",(value)=>{
-            system.invokeWith(YoutubePlayerWidget, value)
-        })
+        let response = prompt("Which song?! (youtube urls for now, soon: NLP)")
+        //system.invokeWith(YoutubePlayerWidget, response)
+        system.registerWidgetInstance(new YoutubePlayerWidget(null,{
+            tracks:[response]
+        }));
     },
     ["play next"](){
-
+        alert("todo: skip to next media")
     },
     ["undo"](){
-
+        alert("todo: undo")
     },
     ["redo"](){
-
+        alert("todo: redo")
     },
     ["select all"](){
-        
+        alert("todo: select all")
     },
     ["de-select all"](){
-        
+        alert("todo: de-select all")
     },
     ["invert selection"](){
-        
+        alert("todo: invert selection")
     },
     ["thoughts from 11/29/2023 > 3:59 PM "](){
         // golf culture is... weird!
@@ -9495,9 +9605,8 @@ const InvokableCommands = {
     },
     ["new iframe widget"](){
         // todo: PinnedIFrameWidgetInstantiator / factory?
-        prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here",(value)=>{
-            system.registerWidgetInstance(new iFrameWidget(value))
-        })
+        let resposne = prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here","http://iframesafe.url")
+        system.registerWidgetInstance(new iFrameWidget(response))
     },
     ["new browser bubble"](){
         InvokableCommands["new iframe widget"]()
@@ -9569,12 +9678,27 @@ const InvokableCommands = {
           system.getWidget(store.currentFocusedTodoWidgetID).addTodo(result);
     },
 
+    ["go to gather"](){
+        "https://app.gather.town/"
+    },
+
+    ["new shared piano"](){
+        
+        system.newWidget(new iFrameWidget("https://musiclab.chromeexperiments.com/Shared-Piano/"))
+    },
+
     // todo: [...aliases] || this.aliases
     ["start pomodoro timer"](){ InvokableCommands["new pomodoro timer"](); },
     ["new pomodoro session"](){ InvokableCommands["new pomodoro timer"](); },
     ["new pomodoro timer"](){
         //system.invokeWith()
         system.registerWidgetInstance(new PomodoroWidget())
+    },
+    ["toggle widget stacked"](){
+        system.dashboard.toggleCollapsed();
+    },
+    ["new clock widget"](){
+        system.registerWidgetInstance(new ClockWidget())
     },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
@@ -9612,7 +9736,8 @@ const InvokableCommands = {
             widget?.close?.();
         });
         // clear the dashboard
-        system.dashboard.clear();
+        //system.dashboard.clear();
+        system.dashboard.clearAllWidgets();
     },
     // TODO: make aliases and weighting/ranking easier
     ["Clear Dashboard"](){ InvokableCommands["Close All Widgets"]() },
@@ -10910,7 +11035,6 @@ class CmdPrompt extends Widget {
     addDefaultCommands(){
         // let cmds = [
         //     "new song",
-        //     "new piano widget",
         //     "new music widget",
         //     "new widget widget",
         //     "widget designer widget",
@@ -11203,6 +11327,9 @@ class CmdPrompt extends Widget {
 
     // TODO: need to trigger on backspace TOO!
     onCmdPromptInput(event){
+        // shift focus to "deep" canvas 0
+        deepCanvasManager.focusedIndex = 0;
+
         //console.log({event});
         this.processingInputEvent = event
 
@@ -12359,7 +12486,9 @@ function renderDebugUI(){
 
         {
             text:`fov ${fov}`
-        }
+        },
+        { text: `focusedIndex ${deepCanvasManager.focusedIndex}`},
+        { text: `deepRendererEnabled? ${!store.disableDeepCanvas}`}
     ];
 
     let baseOffset = 20;
@@ -12779,10 +12908,6 @@ function setupDefaults(){
             }
         }))
     })
-
-    // OLD
-    // hand-register some default commands
-    baseCmds.push(new ShuffleDashboardWidgetPositionsCommand());
 
     
 
@@ -13444,11 +13569,38 @@ document.body.appendChild(topCanvas);
         system
 
             // Main Widget Registration Area
-            // TODO: consolidate all other widget registration methods
+            
+
+            
+
+
+
+            
+            
+            // ~~ TODO: consolidate all other widget registration methods ~~
+
 
             // what if you could remote desktop in here?!
             // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
 
+            // 5-calls widget:
+            // https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/
+
+            // dental services in my dental coverage network?!
+            // x-ray services that work when i travel a lot for work?
+            // good accounting tips for freelancers and quarterly estimated taxpayers
+            // ...
+
+            // thomas and friends for SNES: minigame: 
+            // https://youtu.be/mQcR04RROUQ?si=9kpOTXAd9rQZ_QLa&t=482
+
+            // dark side of the moon, mario 64 sound font
+            .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
+            // can you use chat gpt in an iframe?
+            .newWidget("https://chat.openai.com/")
+
+
+            .registerWidgetInstance(new GithubCardWidget())
             .registerWidget(new ClockWidget())
             .registerWidget(new MarchingCubesDemoWidget())
 
@@ -13545,8 +13697,13 @@ document.body.appendChild(topCanvas);
         // set all widgets to canvasID 1 so they're in the "BG" deep canvas
         // then pick one at random and set it to 0 so it's focused
         // then pick another couple at random and set to -1 so it's in the "FG" deep canvas
-        Object.values(system.get("Dashboard").widgets).forEach((widget)=>{
-            widget.canvasID = -1;
+        const widVals = Object.values(system.get("Dashboard").widgets);
+        let count = widVals.length;
+        widVals.forEach((widget,index)=>{
+            widget.canvasID = Math.round(mctx.random(-1,1)); //-1;
+            // if(index === count -1){
+            //     widget.canvasID = 1;
+            // }
         })
         // let widgetKeys = Object.keys(system.get("Dashboard").widgets);
         // let randomWidgetKey = widgetKeys[Math.floor(Math.random() * widgetKeys.length)];
