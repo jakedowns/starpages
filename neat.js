@@ -14,7 +14,24 @@
 
 const testOpenAIServer = "http://127.0.0.1:4001/";
 
+const changelog = [
 
+    [
+        
+        "11.30.2023", 
+
+`
+    - ctrl+p: disable default print dialog; show cmdprompt instead
+    - working on refactoring notifications, debug ui, cursor, cmdprompt to all render on the "top" canvas layer (above the "deep" canvas layers)
+    ---
+    todos: - workflowy-like featureset
+    [bug] flickering frames (push/pop issue?)
+
+
+`
+]
+
+]
 
 let todos = [{
     "Overview of neat.js": {
@@ -1930,19 +1947,19 @@ const hoveredArray = []
 //     drawDashedLine(x, y + h, x, y, dashLength);  // Left side
 
 // }
-// function drawDashedLine(x1, y1, x2, y2, dashLength = 10) {
-//     // return;
-//     let distance = mctx.dist(x1, y1, x2, y2);
-//     let dashCount = Math.min(Math.floor(distance / dashLength), 10);
-//     let xStep = (x2 - x1) / dashCount;
-//     let yStep = (y2 - y1) / dashCount;
+function drawDashedLine(ctx, x1, y1, x2, y2, dashLength = 10) {
+    // return;
+    let distance = mctx.dist(x1, y1, x2, y2);
+    let dashCount = Math.min(Math.floor(distance / dashLength), 10);
+    let xStep = (x2 - x1) / dashCount;
+    let yStep = (y2 - y1) / dashCount;
 
-//     for (let i = 0; i < dashCount; i += 2) {
-//         let x = x1 + i * xStep;
-//         let y = y1 + i * yStep;
-//         mctx.line(x, y, x + xStep, y + yStep);
-//     }
-// }
+    for (let i = 0; i < dashCount; i += 2) {
+        let x = x1 + i * xStep;
+        let y = y1 + i * yStep;
+        ctx.line(x, y, x + xStep, y + yStep);
+    }
+}
 let fov = 100;
 // NOTE:
 // drawPosition is relative to screen space for dev ux
@@ -1972,6 +1989,74 @@ AI: I feel like you're not listening to me.
 (AI's mental model of) Jake: I'm trying to listen to you, but you're not making any sense.
 */
 
+class ViewFrustum {
+    constructor(near, far, fov, aspectRatio) {
+        this.near = near;
+        this.far = far;
+        this.fov = fov;
+        this.aspectRatio = aspectRatio;
+
+        this.tang = Math.tan(this.fov * 0.5);
+        this.height = this.near * this.tang;
+        this.width = this.height * this.aspectRatio;
+
+        this.planes = {
+            left: { x: -this.width, y: 0, z: this.near },
+            right: { x: this.width, y: 0, z: this.near },
+            top: { x: 0, y: this.height, z: this.near },
+            bottom: { x: 0, y: -this.height, z: this.near },
+            near: { x: 0, y: 0, z: this.near },
+            far: { x: 0, y: 0, z: this.far }
+        };
+    }
+}
+
+/**
+ * Z-depth Render Order (Top to Bottom / Front to Back)
+ * ====================================
+ * 
+ * > UI Canvas (pointer-events: none) (outside post-processing layers below)
+ * 
+ * > HTML DOM Elements (app elements outside canvas contexts)
+ *       - input elements (input text, textarea, password)
+ *       - temp debug buttons
+ *       - iFrames <<TODO: put these into a group that renders BELOW the topmost canvas (the UI canvas that renders ON TOP of the composited-post-processed buffer output)>>
+ * 
+ * > top canvas: <<composited-post-processed layer>> #outputCanvas
+ * 
+ * > #main-canvas-context canvas
+ * 
+ * > #deep-canvas-3
+ * 
+ * > #deep-canvas-2
+ * 
+ * > #deep-canvas-1
+ * 
+ * > #bg-image
+ */
+
+function isWidgetInFrustum(widget, frustum) {
+    const box = widget.getBoundingBox();
+
+    // Check if the widget is behind the near plane or in front of the far plane
+    if (box.far < frustum.near || box.near > frustum.far) {
+        return false;
+    }
+
+    // Check if the widget is to the left of the left plane or to the right of the right plane
+    if (box.right < -frustum.width || box.left > frustum.width) {
+        return false;
+    }
+
+    // Check if the widget is below the bottom plane or above the top plane
+    if (box.top < -frustum.height || box.bottom > frustum.height) {
+        return false;
+    }
+
+    // If none of the above checks failed, the widget is in the frustum
+    return true;
+}
+
 class Widget extends UndoRedoComponent {
     hovered = false
     // allow forcing a widget to draw on a specific canvas for a cool depth of field effect
@@ -1995,6 +2080,17 @@ class Widget extends UndoRedoComponent {
 
     get size(){
         return this?.widgetSize ?? {width:100,height:100};
+    }
+
+    getBoundingBox() {
+        return {
+            left: this.smartPosition.x,
+            right: this.smartPosition.x + this.widgetSize.width,
+            top: this.smartPosition.y,
+            bottom: this.smartPosition.y + this.widgetSize.height,
+            near: this.smartPosition.z,
+            far: this.smartPosition.z + this.widgetSize.depth
+        };
     }
 
     getPosition(thing){
@@ -2075,11 +2171,13 @@ class Widget extends UndoRedoComponent {
 
         // should we decorate this class with any functionality?
     }
+
     setTargetPosition(vector){
         this.targetPosition.x = vector.x;
         this.targetPosition.y = vector.y;
         return this; // chainable
     }
+
     centerPosition(){
         // todo move to Component or Drawable
         // default: center with screen bounds
@@ -2088,6 +2186,7 @@ class Widget extends UndoRedoComponent {
         this.basePosition.x = innerWidth / 2;
         this.basePosition.y = innerHeight / 2;
     }
+
     isHovered(){
 
         let realMouseX = (mctx.mouseX + panX)/zoom;
@@ -2222,6 +2321,7 @@ class Widget extends UndoRedoComponent {
     targetRenderDepth = 0
     targetExpFactor = 0
     tweenExpFactor = 0
+    
     updatePlax() {
         let apparentDepth = this.zDepth;
         let parallaxFactor = (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
@@ -2253,11 +2353,13 @@ class Widget extends UndoRedoComponent {
             x: affectedX, y: affectedY
         }
     }
+    
     getCurrentBase(){
         return this._absolutePosition;
         // return (this?.pinned === 1 || this?.pinned === true)
             // ? this.basePosition : this._absolutePosition
     }
+    
     preDraw(){
         this.getCurrentContext()
         this.moveToTarget();
@@ -2277,6 +2379,7 @@ class Widget extends UndoRedoComponent {
         
         return this; // chainable
     }
+    
     moveToTarget(){
         // if we've not reached our approx target position
         // lerp towards it
@@ -2297,9 +2400,11 @@ class Widget extends UndoRedoComponent {
             }
         }
     }
+    
     flagDoNotDraw(bool){
         this.doNotDraw = bool;
     }
+    
     getCurrentContext(){
         let ctx = this.canvasID 
             && !store.disableDeepCanvas 
@@ -2313,6 +2418,7 @@ class Widget extends UndoRedoComponent {
         this.ctx = ctx;
         return ctx;
     }
+    
     // draw calls onDraw when not culled
     // NOTE: we can instrument this widget
     // with perf metrics, and then check at the end of the frame
@@ -2337,10 +2443,15 @@ class Widget extends UndoRedoComponent {
         if(this?.onUpdate){
             this.onUpdate();
         }
-        if(this?.onDraw & !this.doNotDraw){
+        // TODO: doNotDraw isn't reliable yet
+        // need to finish view frustum culling
+        //if(this?.onDraw & !this.doNotDraw){
             // call extending method
-            this.onDraw();
-        }
+            if(!this?.onDraw){
+                system.panic("on draw missing!",this);
+            }
+            this?.onDraw?.();
+        //}
 
         this.ctx = this.getCurrentContext();
         let ctx = this.ctx;
@@ -2360,13 +2471,13 @@ class Widget extends UndoRedoComponent {
             we know the depth of the widget,
             we need to do some math to see if the widget is within the rhombus of the viewport
         */
-        // let deepLeftPXBound = panX * zoom;
-        // let deepRightPXBound = (panX - innerWidth) * zoom;
-        // let deepTopPXBound = panY * zoom;
-        // let deepBottomPXBound = (panY - innerHeight) * zoom;
+        let deepLeftPXBound = panX * zoom;
+        let deepRightPXBound = (panX - innerWidth) * zoom;
+        let deepTopPXBound = panY * zoom;
+        let deepBottomPXBound = (panY - innerHeight) * zoom;
         
-        // let isWithinXBounds = this.position.x + this.widgetSize.width > deepLeftPXBound && this.position.x < deepRightPXBound;
-        // let isWithinYBounds = this.position.y + this.widgetSize.height > deepTopPXBound && this.position.y < deepBottomPXBound;
+        let isWithinXBounds = this.smartPosition.x + this.widgetSize.width > deepLeftPXBound && this.smartPosition.x < deepRightPXBound;
+        let isWithinYBounds = this.smartPosition.y + this.widgetSize.height > deepTopPXBound && this.smartPosition.y < deepBottomPXBound;
 
         // drawDashedRect(
         //     3, "chartreuse",
@@ -2377,18 +2488,22 @@ class Widget extends UndoRedoComponent {
         //     deepBottomPXBound - deepTopPXBound,
         //     15
         // )
+
+        // const frustum = new ViewFrustum(1, 1000, Math.PI / 4, window.innerWidth / window.innerHeight);
+        // const widget = new Widget(0, 0, 50, 10, 10, 10);
         
-        // if(store.cullOutOfBoundsWidgets){
-        //     if(isWithinXBounds || isWithinYBounds){
-        //         // The widget is within the viewport
-        //         this.flagDoNotDraw(true);
-        //     }else{
-        //         this.flagDoNotDraw(false);
-        //         return;
-        //     }
-        // }else{
-        //     this.flagDoNotDraw(false);
-        // }
+        // TODO: use BVH
+        if(store.cullOutOfBoundsWidgets){
+            if(isWithinXBounds || isWithinYBounds){
+                // The widget is within the viewport
+                this.flagDoNotDraw(true);
+            }else{
+                this.flagDoNotDraw(false);
+                //return;
+            }
+        }else{
+            this.flagDoNotDraw(false);
+        }
         store.frameDrawCount++;
 
         // debug print position
@@ -2484,6 +2599,9 @@ class Widget extends UndoRedoComponent {
         // canvasContext.rect(scaledX, scaledY, scaledWidth, scaledHeight);
 
         // canvasContext.pop()
+    }
+    onDraw(){
+        // override me
     }
     close(){
         if(this.parentWidget){
@@ -3121,32 +3239,34 @@ class MoonPhaseWidget extends Widget {
             (this.currentPhaseId + 1) % MOON_PHASE_ORDER.length;
         }, 500)
     }
-    draw(){
+    onDraw(){
+        super.onDraw(...arguments)
         // if the widget isn't in the viewport anymore,
         // don't render it
         // TODO: implement BVH spatial partitioning for optimized
         // bounds checking
-        if(
-            this.position.x < 0 - this.widgetSize.width
-            || this.position.x > innerWidth + this.widgetSize.width
-            || this.position.y < 0 - this.widgetSize.height
-            || this.position.y > innerHeight + this.widgetSize.height
-        ){
-            return;
-        }
+        // if(
+        //     this.smartPosition.x < 0 - this.widgetSize.width
+        //     || this.smartPosition.x > innerWidth + this.widgetSize.width
+        //     || this.smartPosition.y < 0 - this.widgetSize.height
+        //     || this.smartPosition.y > innerHeight + this.widgetSize.height
+        // ){
+        //     return;
+        // }
 
-        super.draw(...arguments)
+        // super.draw(...arguments)
         // draw the moon phase
-        push()
-            textSize(300)
-            textAlign(CENTER, CENTER)
-            const ej = MOON_PHASE_EMOJIS[MOON_PHASE_ORDER[this.currentPhaseId]];
-            text(
-                `${ej}`,
-                this.position.x + (this.widgetSize.width / 2),
-                this.position.y + (this.widgetSize.height / 2)
-            )
-        pop()
+        let ctx = this.getCurrentContext();
+        ctx.push()
+        ctx.textSize(300)
+        ctx.textAlign(CENTER, CENTER)
+        const ej = MOON_PHASE_EMOJIS[MOON_PHASE_ORDER[this.currentPhaseId]];
+        ctx.text(
+            `${ej}`,
+            this.smartPosition.x + (this.widgetSize.width / 2),
+            this.smartPosition.y + (this.widgetSize.height / 2)
+        )
+        ctx.pop()
     }
 }
 
@@ -3686,11 +3806,12 @@ class ZoomDependentWidget extends Widget {
 
     draw(){
         super.draw(...arguments)
-        mctx.push()
-        mctx.textSize(50)
+        let ctx = this.getCurrentContext();
+        ctx.push()
+        ctx.textSize(50)
             this.center = {
-                x: this.position.x + (this.widgetSize.width / 2),
-                y: this.position.y + (this.widgetSize.height / 2)
+                x: this.smartPosition.x + (this.widgetSize.width / 2),
+                y: this.smartPosition.y + (this.widgetSize.height / 2)
             }
             // clamp zoom to last 2 significant decimal places
             this.roundedZoom = Math.round(zoom * 100) / 100;
@@ -3706,7 +3827,7 @@ class ZoomDependentWidget extends Widget {
                     this.drawLarge()
                     break;
             }
-        pop()
+        ctx.pop()
     }
     drawSmall(){
         // draw a small icon
@@ -3911,47 +4032,48 @@ class ImageViewerWidget extends Widget {
             this.widgetSize.height = this.newHeight;
             // Draw the image stretched to the new width and height
     }
-    draw(){
-        super.draw(...arguments)
-        if(this.doNotDraw){ return; }
+    onDraw(){
+        // super.draw(...arguments)
+        super.onDraw(...arguments)
+        // if(this.doNotDraw){ return; }
         this.ctx = this.getCurrentContext()
         this.ctx.push();
             
         this.ctx.image(
-                this.image, 
-                this.smartPosition.x + (this.widgetSize.width - this.newWidth) / 2,
-                this.smartPosition.y + (this.widgetSize.height - this.newHeight) / 2,
-                this.widgetSize.width,
-                this.widgetSize.height
-            );
+            this.image, 
+            this.smartPosition.x + (this.widgetSize.width - this.newWidth) / 2,
+            this.smartPosition.y + (this.widgetSize.height - this.newHeight) / 2,
+            this.widgetSize.width,
+            this.widgetSize.height
+        );
         
         this.ctx.pop();
     }
 }
 
-function drawCrosshair(_color, vec2){
+function drawCrosshair(ctx, _color, vec2){
     // draw the origin as a hollow circle
     let circleRadius = 10; // define the radius of the circle
     let circleResolution = 100; // define the resolution of the circle (number of line segments)
     let angleStep = TWO_PI / circleResolution; // calculate the angle between each line segment
-    stroke(_color); // set the stroke color
-    noFill(); // ensure the circle is hollow
-    beginShape(); // start a new shape
+    ctx.stroke(_color); // set the stroke color
+    ctx.noFill(); // ensure the circle is hollow
+    ctx.beginShape(); // start a new shape
     for (let i = 0; i <= circleResolution; i++) {
         let angle = angleStep * i; // calculate the angle of the current line segment
         let x = vec2.x + cos(angle) * circleRadius; // calculate the x position of the current line segment
         let y = vec2.y + sin(angle) * circleRadius; // calculate the y position of the current line segment
-        vertex(x, y); // add the current line segment to the shape
+        ctx.vertex(x, y); // add the current line segment to the shape
     }
-    endShape(); // finish the shape
+    ctx.endShape(); // finish the shape
 
     // draw a crosshair at vec2
-    stroke(_color)
-    line(
+    ctx.stroke(_color)
+    ctx.line(
         vec2.x - 10, vec2.y,
         vec2.x + 10, vec2.y,
     )
-    line(
+    ctx.line(
         vec2.x, vec2.y - 10,
         vec2.x, vec2.y + 10
     )
@@ -3959,21 +4081,22 @@ function drawCrosshair(_color, vec2){
 
 class Cursor {
     draw(){
+        let ctx = deepCanvasManager.canvasUI;
         // debug draw a line from the center of the screen to where we think the mouse is,
         // to help debug the mouse position
-        mctx.push();
-        mctx.strokeWeight(1)
-        mctx.stroke("red")
-        mctx.fill(0,0)
-        // drawDashedLine(mctx.mouseX, mctx.mouseY, mctx.innerWidth / 2, mctx.innerHeight / 2)
+        ctx.push();
+        ctx.strokeWeight(1)
+        ctx.stroke("red")
+        ctx.fill(0,0)
+        drawDashedLine(ctx, ctx.mouseX, ctx.mouseY, ctx.innerWidth / 2, ctx.innerHeight / 2)
         
-        mctx.stroke("purple")
-        mctx.line(mctx.mouseX, mctx.mouseY, mctx.pmouseX, mctx.pmouseY)
+        ctx.stroke("purple")
+        ctx.line(ctx.mouseX, ctx.mouseY, ctx.pmouseX, ctx.pmouseY)
 
         // draw a crosshair at the mouse position
-        drawCrosshair("blue", {x: mctx.mouseX, y: mctx.mouseY})
+        drawCrosshair(ctx, "blue", {x: ctx.mouseX, y: ctx.mouseY})
 
-        mctx.stroke("green")
+        ctx.stroke("green")
 
         // represents 0,0 top/left of the "world" canvas
         // corrected for zoom, and pan
@@ -3981,37 +4104,40 @@ class Cursor {
             x: panX * zoom,
             y: panY * zoom
         }
-        // drawDashedLine(
-        //     mctx.mouseX, mctx.mouseY,
-        //     worldOriginInScreenSpace.x, worldOriginInScreenSpace.y,
-        // )
+        drawDashedLine(
+            ctx,
+            ctx.mouseX, ctx.mouseY,
+            worldOriginInScreenSpace.x, worldOriginInScreenSpace.y,
+        )
         // seriously tho, how do we map the "Center" of the "virtualCanvas" (dashboard)
         // to screenspace and vice versa?
         let worldOriginAttempt2 = {
-            x: (panX + (mctx.windowWidth/2)) * zoom,
-            y: (panY + (mctx.windowHeight/2)) * zoom
+            x: (panX + (ctx.windowWidth/2)) * zoom,
+            y: (panY + (ctx.windowHeight/2)) * zoom
         }
 
-        drawCrosshair("red", worldOriginInScreenSpace);
-        mctx.stroke("yellow")
-        // drawDashedLine(
-        //     worldOriginInScreenSpace.x,
-        //     worldOriginInScreenSpace.y,
-        //     worldOriginAttempt2.x, 
-        //     worldOriginAttempt2.y
-        // )
-        drawCrosshair("green", worldOriginAttempt2);
+        drawCrosshair(ctx, "red", worldOriginInScreenSpace);
+        ctx.stroke("yellow")
+        drawDashedLine(
+            ctx,
+            worldOriginInScreenSpace.x,
+            worldOriginInScreenSpace.y,
+            worldOriginAttempt2.x, 
+            worldOriginAttempt2.y
+        )
+        drawCrosshair(ctx, "green", worldOriginAttempt2);
 
-        mctx.stroke("blue")
-        // drawDashedLine(
-        //     worldOriginAttempt2.x,
-        //     worldOriginAttempt2.y,
-        //     mctx.innerWidth/2,
-        //     mctx.innerHeight/2
-        // )
+        ctx.stroke("blue")
+        drawDashedLine(
+            ctx,
+            worldOriginAttempt2.x,
+            worldOriginAttempt2.y,
+            ctx.innerWidth/2,
+            ctx.innerHeight/2
+        )
         
         
-        mctx.pop();
+        ctx.pop();
     }
 }
 
@@ -4021,21 +4147,20 @@ extends ImageViewerWidget {
     rotationSpeedDegreesPerSecond = .05
     currentRotationDegrees = 0
     draw(){
-        super.draw()
-        if(this.doNotDraw){ return; }
-        push()
+        super.draw(...arguments)
+        this.ctx.push()
         // rotate the drawing context
         this.currentRotationDegrees += this.rotationSpeedDegreesPerSecond * deltaTime;
         if(this.currentRotationDegrees > 360){
             this.currentRotationDegrees = 0;
         }
         // rotate around the centerpoint of this widget relative to the display
-        translate(
-            this.position.x + (this.widgetSize.width / 2),
-            this.position.y + (this.widgetSize.height / 2)
+        this.ctx.translate(
+            this.smartPosition.x + (this.widgetSize.width / 2),
+            this.smartPosition.y + (this.widgetSize.height / 2)
         )
-        rotate(radians(this.currentRotationDegrees));
-        image(
+        this.ctx.rotate(radians(this.currentRotationDegrees));
+        this.ctx.image(
             this.image, 
             -this.halfWidth,
             -this.halfHeight,
@@ -4043,7 +4168,7 @@ extends ImageViewerWidget {
             this.newHeight
         );
         //super.draw(...arguments)
-        pop()
+        this.ctx.pop()
     }
 }
 
@@ -4738,6 +4863,7 @@ class iFrameWidget extends Widget {
     }
     
     onDraw(){
+        super.onDraw(...arguments)
         // if(system.get("cmdprompt").visible){
         //     this.iframe.hide();
         //     return
@@ -4766,7 +4892,7 @@ class iFrameWidget extends Widget {
             this.smartPosition.x,
             this.smartPosition.y
         );
-        debugger;
+        //debugger;
         //this.iframe.scale(zoom)
         // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
         // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
@@ -5214,26 +5340,25 @@ class ClockWidget extends Widget {
     draw(widgetID){
         super.draw(...arguments); // todo: split into super.preDraw/super.postDraw
         // just render the current time for now
-        fill("darkblue")
-        textAlign(CENTER, CENTER);
-        // font weight
-        push()
-        textFont('Georgia');
-        textSize(32);
-        textStyle(BOLD);
-        text(
+        this.ctx.fill("darkblue")
+        this.ctx.textAlign(CENTER, CENTER);
+        this.ctx.push()
+        this.ctx.textFont('Georgia');
+        this.ctx.textSize(32);
+        this.ctx.textStyle(BOLD);
+        this.ctx.text(
             this.dateFormatted + "\n" + this.timeFormatted, 
             this.smartPosition.x + (this.widgetSize.width/2), 
             this.smartPosition.y + (this.widgetSize.height/2)
         )
         // white overlay
-        fill(255)
-        text(
+        this.ctx.fill(255)
+        this.ctx.text(
             this.dateFormatted + "\n" + this.timeFormatted, 
             this.smartPosition.x + (this.widgetSize.width/2) - 3, 
             this.smartPosition.y + (this.widgetSize.height/2) - 3
         )
-        pop()
+        this.ctx.pop()
     }
 }
 class TimeToSunSetWidget extends ClockWidget {
@@ -5668,23 +5793,23 @@ class StatusLight {
         this.s = s;
         this.name = name;
     }
-    draw(){
+    draw(ctx){
         // note things like status lights get drawn on the gui layer
         // it's drawn ABOVE the "deep" canvas layers
         // and is (for now) never blurred (since it has notifications and stuff)
-        push();
-        fill(store[this.name]?"green":"red");
-        circle(this.x,this.y,this.r);
-        strokeWeight(this.s);
-        stroke(this.s);
-        fill(255);
-        textAlign(LEFT, TOP);
-        text(
+        ctx.push();
+        ctx.fill(store[this.name]?"green":"red");
+        ctx.circle(this.x,this.y,this.r);
+        ctx.strokeWeight(this.s);
+        ctx.stroke(this.s);
+        ctx.fill(255);
+        ctx.textAlign(LEFT, TOP);
+        ctx.text(
             this.name,
             this.x+this.r+5,
             this.y+this.r+5
         );
-        pop();
+        ctx.pop();
     }
 }
 
@@ -5740,7 +5865,32 @@ class LayereredCanvasRenderer {
         // bind a window resize event handler
         document.addEventListener('resize',this.onResize.bind(this))
 
-        this.draw()
+        /* canvasUI */
+        let sketchUI = function(p) {
+            p.setup = function() {
+            }
+            p.draw = function() {
+                p.clear()
+                p.fill("black")
+                p.stroke("red")
+                p.strokeWeight(1)
+                p.rect(0,0,50,50)
+                p.rect(10,10,40,40)
+                p.rect(20,20,30,30)
+            }
+            p.onResize = function(){
+                p.resizeCanvas(innerWidth, innerHeight);
+            }
+        };
+        this.canvasUI = new p5(sketchUI, `deep-canvas-ui`);
+        console.warn('canvasUI',{canvasUI:this.canvasUI})
+        this.canvasUI.resizeCanvas(innerWidth, innerHeight);
+        // Disable the default context menu
+        // this.canvasUI.elt.oncontextmenu = function (e) {
+        //     e.preventDefault();
+        // };
+
+        //this.draw()
     }
     onResize(){
         // update the dimensions to match the window (of all 3 canvases)
@@ -5928,6 +6078,7 @@ class Dashboard {
         // requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
         // requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
 
+        console.warn('make cancelable!')
         animateVector(
             /* from */ 
             {x:panX,y:panY,z:zoom},
@@ -5935,7 +6086,7 @@ class Dashboard {
             {x:0,y:0,z:1}, 
             /*onUpdate*/
             (vector)=>{
-                console.warn('onupdate',vector)
+                //console.warn('onupdate',vector)
                 panX = vector.x;
                 panY = vector.y;
                 zoom = vector.z;
@@ -7030,9 +7181,11 @@ class KeyboardWidget extends Widget {
     draw(){
         super.draw(...arguments);
 
-        push();
-        fill("red")
-        rect(0,0,100,100)
+        let ctx = this.ctx;
+
+        // ctx.push();
+        // ctx.fill("red")
+        // ctx.rect(0,0,100,100)
 
         // in a standard keyboard layout,
         // draw a box for every common key
@@ -7041,45 +7194,49 @@ class KeyboardWidget extends Widget {
         const keySize = 30;
         const keyLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Z', 'X', 'C', 'V', 'B', 'N', 'M'];
         let keyIndex = 0;
-        push()
-        translate(this.smartPosition.x,this.smartPosition.y)
+        ctx.push()
+        ctx.translate(this.smartPosition.x,this.smartPosition.y)
         for(let i = 0; i < 4; i++){
             for(let j = 0; j < 10; j++){
                 const x = (j + 1) * (keySize + padding);
                 const y = (i + 1) * (keySize + padding);
                 const key = keyLabels[keyIndex++];
                 const isPressed = this.currentlyPressedKeys[key];
-                push()
-                stroke("black")
-                strokeWeight(1)
+                ctx.push()
+                ctx.stroke("black")
+                ctx.strokeWeight(1)
                 // Draw the main key rectangle
-                fill(isPressed ? "darkgreen" : "#400040") // Made the lower part even darker
+                ctx.fill(isPressed ? "darkgreen" : "#400040") // Made the lower part even darker
                 
-                rect(x, y, keySize, keySize)
+                ctx.rect(x, y, keySize, keySize)
                 // Draw a smaller rectangle inside to give a 3D effect
-                fill(isPressed ? "green" : "purple")
+                ctx.fill(isPressed ? "green" : "purple")
                 let offset = isPressed ? 2 : 0
-                rect(x - offset, y - offset, keySize - 4, keySize - 4, 20)
-                fill("black")
-                strokeWeight(0)
-                textSize(20)
-                textStyle(BOLD)
-                textAlign(CENTER, CENTER)
+                ctx.rect(x - offset, y - offset, keySize - 4, keySize - 4, 20)
+                ctx.fill("black")
+                ctx.strokeWeight(0)
+                ctx.textSize(20)
+                ctx.textStyle(BOLD)
+                ctx.textAlign(CENTER, CENTER)
                 // Adjust the text position to prevent cropping
-                text(key, x, y ) // Adjusted the text position to prevent cropping
-                pop()
+                ctx.text(key, x, y ) // Adjusted the text position to prevent cropping
+                ctx.pop()
             }
         }
-        pop()
+        //ctx.pop()
 
         // Check if the status is failing to update to green
-        if(this.currentlyPressedKeys['ControlLeft'] && this.currentlyPressedKeys['AltLeft'] && this.currentlyPressedKeys['ShiftLeft']){
-            fill("green")
-            rect(0,0,100,100)
+        if(
+            this.currentlyPressedKeys['ControlLeft'] 
+            && this.currentlyPressedKeys['AltLeft'] 
+            && this.currentlyPressedKeys['ShiftLeft']
+        ){
+            ctx.fill("green")
+            ctx.rect(0,0,100,100)
         }
 
-        text("Computer Keyboard Preview",0,0)
-        pop();
+        ctx.text("Computer Keyboard Preview",0,0)
+        ctx.pop();
     }
 }
 
@@ -9328,8 +9485,18 @@ class TimerManager {
         this.timers[0].start()
     }
 }
+// regression tests / feature tests
+const bugs = [
+
+]
+const features = [
+
+]
 const InvokableCommands = {
     // { name: "New Basic Command" },
+
+    // ["youtube bookmarks:"]:
+    // ["https://www.youtube.com/user/huygensoptics"],
 
     /*
     { name: "Send a Tweet", command: "NotYetImplemented" },
@@ -9726,6 +9893,10 @@ const InvokableCommands = {
     ["new clock widget"](){
         system.registerWidgetInstance(new ClockWidget())
     },
+    // TODO: more "knowledge graph" connections / exploration
+    ["Watch Feels Good Man"](){
+        return "https://en.wikipedia.org/wiki/Feels_Good_Man"
+    },
     ["Play Quad City DJ's - C'Mon 'N Ride It (The Train)"](){
         return "https://www.youtube.com/watch?v=D53M1vVF2N4"
     },
@@ -10001,12 +10172,12 @@ class IsometricPreview extends Widget {
         this.cubeRotation = this.cubeRotation.multiply(Quaternion.FromEulerAngles(...rotation));
         this.cubeRotation = this.cubeRotation.normalize();
 
-        stroke("yellow")
-        strokeWeight(1)
-        fill("red")
-        rect(0,0,100,100)
+        this.ctx.stroke("yellow")
+        this.ctx.strokeWeight(1)
+        this.ctx.fill("red")
+        this.ctx.rect(0,0,100,100)
 
-        push();
+        this.ctx.push();
         let size = 100;
         let halfSize = size / 2;
         
@@ -10048,9 +10219,9 @@ class IsometricPreview extends Widget {
             let faceVertices = face.map((vertexIndex)=>{
                 return this.verts[vertexIndex];
             })
-            fill(this.faceColors[faceIndex])
+            this.ctx.fill(this.faceColors[faceIndex])
             // draw the face
-            beginShape();
+            this.ctx.beginShape();
             faceVertices.forEach((faceVert, vertIndex)=>{
                 if(faceVert.length !== 3 || (
                     Number.isNaN(faceVert[0]) ||
@@ -10078,9 +10249,9 @@ class IsometricPreview extends Widget {
                 let y2d = rotatedVert[1] * scale;
                 rotatedVerts.push([x2d,y2d,rotatedVert[2]])
                 // add point to shape
-                vertex(x2d,y2d)
+                this.ctx.vertex(x2d,y2d)
             })
-            endShape(CLOSE);
+            this.ctx.endShape(CLOSE);
         })
 
         //console.warn("ABSOULTE VERTS",absoluteVerts)
@@ -10122,9 +10293,9 @@ class IsometricPreview extends Widget {
 
 
         absoluteVerts.forEach((vert)=>{
-            stroke("red")
-            strokeWeight(3)
-            ellipse(vert[0],vert[1],10,10)
+            this.ctx.stroke("red")
+            this.ctx.strokeWeight(3)
+            this.ctx.ellipse(vert[0],vert[1],10,10)
         })
 
         // for (let i = 0; i < screenSpaceVertices.length; i+=3) {
@@ -10168,7 +10339,7 @@ class IsometricPreview extends Widget {
         // }
         // draw vertex
         //endShape(CLOSE);
-        pop();
+        this.ctx.pop();
     }
 }
 
@@ -10543,6 +10714,8 @@ class ToastNotification {
             return;
         }
 
+        let ctx = deepCanvasManager.canvasUI;
+
         // if it's "important" we step through
         // a one-time animation which clones
         // the message and renders it's clones in a diagonal line towards the center of the screen
@@ -10558,24 +10731,24 @@ class ToastNotification {
             }
         }
         this.targetCloneCount = targetCloneCount;
-        push();
+        ctx.push();
         for(let i = 0; i < targetCloneCount; i++){
             // shift the drawing context with each i
-            mctx.translate(-2 * i, 2 * i);
+            ctx.translate(-2 * i, 2 * i);
 
-            this.drawOneInstance(index+i)
+            this.drawOneInstance(index+i,ctx)
         }
-        pop();
+        ctx.pop();
     }
 
-    drawOneInstance(index){
-        rectMode(CORNER)
+    drawOneInstance(index,ctx){
+        ctx.rectMode(CORNER)
         let offsetY = 30 * index;
         let leavingAlpha = this.state === 'leaving' 
             ? (255 - ((Date.now() - this.leaveTime) / (this.destroyTime - this.leaveTime)) * 255)
             : 255;
         leavingAlpha = Math.floor(leavingAlpha);
-        stroke(0, 0, 0, leavingAlpha);
+        ctx.stroke(0, 0, 0, leavingAlpha);
         let bubbleColor = color("#2b124a");
         // if this.level === 'success' color should be green
         if(this.level === 'success'){
@@ -10583,12 +10756,12 @@ class ToastNotification {
         }
         const clampedAlpha = Math.min(200, leavingAlpha);
         bubbleColor.setAlpha(clampedAlpha); 
-        fill(bubbleColor);
+        ctx.fill(bubbleColor);
         const tBoxW = 300;
         const cornerRadius = 20;
-        rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
-        fill(255, 255, 255, clampedAlpha);
-        textAlign(LEFT,TOP);
+        ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
+        ctx.fill(255, 255, 255, clampedAlpha);
+        ctx.textAlign(LEFT,TOP);
         let words = this.message.split(' ');
         let line = '';
         let y = offsetY + 30;
@@ -10597,7 +10770,7 @@ class ToastNotification {
             let metrics = mctx.textWidth(testLine);
             let testWidth = metrics.width;
             if (testWidth > tBoxW && n > 0) {
-                text(line, windowWidth - 10 - tBoxW + 10, y);
+                ctx.text(line, windowWidth - 10 - tBoxW + 10, y);
                 line = words[n] + ' ';
                 y += metrics.height;
             }
@@ -10605,12 +10778,12 @@ class ToastNotification {
                 line = testLine;
             }
         }
-        text(line, windowWidth - 10 - tBoxW + 10, y);
+        ctx.text(line, windowWidth - 10 - tBoxW + 10, y);
         // darken by the lowest index so shadow effect
         let shadowEffect = map(index, 0, this.options.important ? this.targetCloneCount : 1, 0, 50);
-        fill(0, 0, 0, shadowEffect);
-        rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
-        alpha(255);
+        ctx.fill(0, 0, 0, shadowEffect);
+        ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
+        ctx.alpha(255);
     }
 }
 
@@ -10957,6 +11130,14 @@ class CmdPrompt extends Widget {
     // the list of contextually recommended commands
     filteredCommands = []; 
 
+    showCmdPrompt(){
+        // Show Command Prompt
+        store.CmdPromptVisible = true;
+
+        // focus the command palette input element
+        CmdPromptInput.elt.focus();
+    }
+
     get visible(){
         return store.CmdPromptVisible;
     }
@@ -11004,6 +11185,7 @@ class CmdPrompt extends Widget {
     // use update() instead if you want to ignore draw method culling
     // use beforePhysics or afterPhysics to add artistic control and influence / art-direction over simulations and behaviors at runtime
     onDraw(){
+        mctx = mainCanvasContext;
         // when visible and being drawn...
         // super.draw() already happened here
 
@@ -11301,33 +11483,34 @@ class CmdPrompt extends Widget {
     }
 
     renderCommandPrompt(){
-        push();
+        let ctx = deepCanvasManager.canvasUI;
+        ctx.push();
         const cmdpPosY = 0;
-        fill(0,0,0,200)
-        strokeWeight(0)
-        stroke("white")
-        rectMode(CORNER);
-        rect(0, cmdpPosY, windowWidth, windowHeight);
+        ctx.fill(0,0,0,200)
+        ctx.strokeWeight(0)
+        ctx.stroke("white")
+        ctx.rectMode(CORNER);
+        ctx.rect(0, cmdpPosY, windowWidth, windowHeight);
 
         // draw a large text input in the command palette
-        fill(0,0,0,200)
-        strokeWeight(0)
-        stroke("black")
-        rectMode(CORNER);
-        rect(10, cmdpPosY + 10, windowWidth - 20, 100);
-        fill("black")
+        ctx.fill(0,0,0,200)
+        ctx.strokeWeight(0)
+        ctx.stroke("black")
+        ctx.rectMode(CORNER);
+        ctx.rect(10, cmdpPosY + 10, windowWidth - 20, 100);
+        ctx.fill("black")
 
         // if there's no wizard active,
         // fallback to our default command suggestion list
         if(!store.activeWizard){
             cmdprompt.renderSuggestedCommands();
         }
-        pop();
+        ctx.pop();
     }
 
     renderSuggestedCommands(){
         /* pass the drawing responsibility on to the SuggestionList class instance */
-        this.commandSuggestionList.draw();
+        this.commandSuggestionList.draw(deepCanvasManager.canvasUI);
     }
 
     /*
@@ -12096,6 +12279,10 @@ class DebugPath {
 
     draw(_color){
         this.stepPruner();
+        let ctx = deepCanvasManager.canvasUI;
+        ctx.push()
+        ctx.translate(-panX + innerWidth/2, panY + innerHeight/2);
+        //ctx.scale(zoom, zoom);
         let adjustedLineColor = color("red");
         for(let i = 0; i < this.points.length - 1; i++) {
             if(this === DebugPathInstance){
@@ -12108,15 +12295,16 @@ class DebugPath {
             this.points[i].a = map(Date.now() - this.points[i].t, 0, 3000, 255, 0);
             adjustedLineColor.setAlpha(this.points[i].a);
 
-            stroke(adjustedLineColor);
-            strokeWeight(3);
-            line(
+            ctx.stroke(adjustedLineColor);
+            ctx.strokeWeight(3);
+            ctx.line(
                 this.points[i].x, 
                 this.points[i].y,
                 this.points[i+1].x, 
                 this.points[i+1].y
             );
         }
+        ctx.pop()
     }
 }
 const DebugPathInstance = new DebugPath();
@@ -12502,6 +12690,7 @@ let frameTimes = [];
 let lastFrameTime;
 
 function renderDebugUI(){
+    let ctx = deepCanvasManager.canvasUI;
     // push into rolling frameTimes array
     frameTimes.push(millis());
     // if we have more than 100 frames, remove the oldest one
@@ -12511,9 +12700,9 @@ function renderDebugUI(){
     // update FPS average
     FPS = 1000 / ((frameTimes[frameTimes.length - 1] - frameTimes[0]) / frameTimes.length);
     // draw FPS in red text
-    fill(255, 0, 0);
-    textSize(16);
-    textAlign(RIGHT, BOTTOM);
+    ctx.fill(255, 0, 0);
+    ctx.textSize(16);
+    ctx.textAlign(RIGHT, BOTTOM);
     const debugTexts = [
         { text: `FPS: ${FPS.toFixed(2)}` },
         { text: `DrawCalls: ${store.frameDrawCount}` },
@@ -12536,7 +12725,7 @@ function renderDebugUI(){
     let baseOffset = 20;
     let offset = 60;
     debugTexts.forEach((debugText) => {
-        text(debugText.text, windowWidth - 20, windowHeight - offset);
+        ctx.text(debugText.text, windowWidth - 20, windowHeight - offset);
         offset += baseOffset;
     });
 
@@ -12546,25 +12735,25 @@ function renderDebugUI(){
 
     // draw the status lights
     Object.entries(store.status_lights).forEach(([key,light])=>{
-        light.draw();
+        light.draw(ctx);
     });
 
 
 
     // Check if the text color is blending with the background color
     // If so, change the fill color
-    fill(255, 255, 255);
+    ctx.fill(255, 255, 255);
     // Ensure the text size is large enough to be visible
-    textSize(16);
-    textAlign(RIGHT, BOTTOM);
+    ctx.textSize(16);
+    ctx.textAlign(RIGHT, BOTTOM);
     // Render text that lists the current zoom, panX, panY
-    text(
+    ctx.text(
         `zoom: ${zoom.toFixed(2)} panX: ${panX.toFixed(2)} panY: ${panY.toFixed(2)}`, 
         windowWidth - 20, 
         windowHeight - 10);
     // render red text that shows the current interaction mode
-    fill(255, 0, 0);
-    text(
+    ctx.fill(255, 0, 0);
+    ctx.text(
         `interaction mode: ${store.interactionMode}`, 
         windowWidth - 20, 
         windowHeight - 30);
@@ -12926,7 +13115,8 @@ const getBasicSpawnWidgetConfig = function(widget){
 
 
 // Define the setup function
-let deepCanvasManager;
+/** LayereredCanvasRenderer */
+let deepCanvasManager;// = new LayereredCanvasRenderer();
 function setupDefaults(){
     // assign a random time to the query params so hard reload is by default
     // this is useful for testing
@@ -13509,6 +13699,15 @@ document.body.appendChild(topCanvas);
         })
         document.addEventListener('keydown', (e)=>{
             console.warn('keypress',{e})
+            // Check if Ctrl key is pressed along with P
+            if (e.ctrlKey && e.key === 'p') {
+                // Prevent the default print action
+                e.preventDefault();
+                //alert("Ctrl+P has been disabled!");
+                // toggle the dashboard
+                system.cmdprompt.showCmdPrompt();
+                return;
+            }
             // if the key is `f` and we don't have any inputs focused,
             // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
             if(e.key === 'f' && store.focusedField !== null){
@@ -14143,16 +14342,16 @@ document.body.appendChild(topCanvas);
             }
     
             DebugPathInstance.addPoint(
-                mouseShifted.x, 
-                mouseShifted.y, 
+                -mouseShifted.x, 
+                -mouseShifted.y, 
                 zoom+0
             );
             if(!store.DISABLE_DEBUG_PATHS){
                 DebugPathInstance.draw();
             }
             DebugPathTwo.addPoint(
-                targetX, 
-                targetY,
+                -targetX, 
+                -targetY,
                 zoom+0
             )
             if(!store.DISABLE_DEBUG_PATHS){
@@ -14643,10 +14842,10 @@ class SuggestionList {
         // we handled it
         return true;
     }
-    draw(){
-        this.drawSuggestedOptions();
+    draw(ctx){
+        this.drawSuggestedOptions(ctx);
     }
-    drawSuggestedOptions(){
+    drawSuggestedOptions(ctx){
         store.rendererStarted = true;
         
         // aka FilteredOptions
@@ -14684,24 +14883,25 @@ class SuggestionList {
                 w,
                 h,
                 label,
-                selected
+                selected,
+                ctx
             );
         })
     }
-    renderSuggestionOption(x,y,w,h,label,selected){
-        // mctx.push()
-        // mctx.translate(x,y);
-        mctx.rectMode(CORNER);
-        mctx.strokeWeight(selected ? 3 : 1);
+    renderSuggestionOption(x,y,w,h,label,selected,ctx){
+        // ctx.push()
+        // ctx.translate(x,y);
+        ctx.rectMode(CORNER);
+        ctx.strokeWeight(selected ? 3 : 1);
         // draw box
-        mctx.fill(selected ? "purple" : mctx.color(20))
-        mctx.rect(x,y,w,h);
-        mctx.strokeWeight(1);
+        ctx.fill(selected ? "purple" : ctx.color(20))
+        ctx.rect(x,y,w,h);
+        ctx.strokeWeight(1);
         // draw label
-        mctx.fill(200)
-        mctx.textAlign(CENTER,CENTER);
-        mctx.text(label, x + (w/2), y + (h/2));
-        // mctx.pop()
+        ctx.fill(200)
+        ctx.textAlign(CENTER,CENTER);
+        ctx.text(label, x + (w/2), y + (h/2));
+        // ctx.pop()
     }
 }
 
