@@ -692,6 +692,15 @@ class System {
     invokeWith(theClass){
         return new theClass(...arguments.slice(1))
     }
+    invoke(name){
+        return InvokableCommands[name]();
+    }
+    todo(){
+        this.notify("TODO: " + [...arguments].join(" "));
+    }
+    notify(){
+        this.get("toastManager").showToast(...arguments);
+    }
     constructor(manager){
         this.manager = manager;
     }
@@ -815,6 +824,10 @@ const manager = rootManager; // alias
 // construct our root system and attach our root manager
 
 // more singletons
+/**
+ * @see System
+ // @property {System} system
+ */
 let system = new System();
 
 let rootSystem; // alias
@@ -2862,8 +2875,8 @@ class VideoPlayerWidget extends Widget {
         // this video player position
         // this player.position
         this.video.position(
-            this.position.x - panX * -zoom, 
-            this.position.y - panY * -zoom
+            this.smartPosition.x, 
+            this.smartPosition.y
         );
         // Apply the size to the video
         this.video.size(this.widgetSize.width * zoom, this.widgetSize.height * zoom); 
@@ -4081,7 +4094,7 @@ function drawCrosshair(ctx, _color, vec2){
 
 class Cursor {
     draw(){
-        let ctx = deepCanvasManager.canvasUI;
+        let ctx = deepCanvasManager.uiContext;
         // debug draw a line from the center of the screen to where we think the mouse is,
         // to help debug the mouse position
         ctx.push();
@@ -4691,6 +4704,7 @@ class NewIFrameWidgetCommand extends BaseCmds(Command, {
                 // TODO: set input to placeholder / default
             },
             onStepUnload: (wiz)=>{
+                debugger;
                 // after the user response is stored
                 console.warn(`New ${this.name}: onStepUnload`, {wiz})
 
@@ -4826,9 +4840,7 @@ class iFrameWidget extends Widget {
             'display': 'block',
             'width': this.widgetSize.width * zoom + 'px',
             'height': this.widgetSize.height * zoom + 'px',
-            'transform': `translate(${this.smartPosition.x}px, ${this.smartPosition.y}px) scale(${zoom})`,
-            // pointer-events none when pan momentum is > 0
-            'pointer-events': Math.abs(panMomentumVector.x ?? panMomentumVector.y) > 0 ? 'none' : 'auto',
+            'transform': `scale(${zoom})`,
         }
         const tagAttrs = {
             'id': 'iframe',
@@ -4841,9 +4853,9 @@ class iFrameWidget extends Widget {
             'src': url ?? 'https://google.com/webhp?igu=1',
             'crossorigin': 'anonymous',
         }
-        console.log({tagAttrs})
+        // console.log({tagAttrs})
         this.iframe = createElement('iframe');
-        console.log('created iframe',{iframe:this.iframe})
+        // console.log('created iframe',{iframe:this.iframe})
         for (let attr in tagAttrs) {
             this.iframe.attribute(attr, tagAttrs[attr]);
         }
@@ -4851,8 +4863,20 @@ class iFrameWidget extends Widget {
         this.iframe.attribute('style',Object.keys(style).map((k)=>{
             return `${k}:${style[k]};`
         }).join(''));
-        // inject it into the dom
-        document.body.appendChild(this.iframe.elt);
+
+        // wrap the iframe in a wrapper, and add a overlay sibling for "iframe click tracking"
+        let wrapper = createElement('div');
+        wrapper.class('iframe-wrapper');
+        let overlay = createElement('div');
+        overlay.class('iframe-overlay');
+        wrapper.child(this.iframe);
+        wrapper.child(overlay);
+        // inject it into the dom #under-ui-elms
+        wrapper.parent('under-ui-elms')
+
+        // since we just spawned an iframe, focus on deep layer 1 (instead of 0)
+        //deepCanvasManager.setActiveLayer(1);
+        deepCanvasManager.focusedIndex = 1;
     }
     updateUrl(url){
         if(isEmptyOrUndefined(url)){
@@ -4862,6 +4886,8 @@ class iFrameWidget extends Widget {
         this.iframe.elt.src = url;
     }
     
+    // main iframe draw
+    // draw iframe main
     onDraw(){
         super.onDraw(...arguments)
         // if(system.get("cmdprompt").visible){
@@ -4885,20 +4911,68 @@ class iFrameWidget extends Widget {
 
         //     this.corrected = this.smartPosition;
         // }
+
+        // draw the + and - buttons we use to jump
+        // from mobile -> tablet -> desktop -> etc
+
+        const buttonSize = 50;
+        const halfButtonSize = 25; // center
+        const borderRadius = 10;
+        const negYOffset = - buttonSize - 10;
+        
+        // Draw a white on green plus
+        this.ctx.noStroke();
+        this.ctx.rectMode(CORNER)
+        this.ctx.fill("green");
+        this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
+        this.ctx.rectMode(CENTER, CENTER)
+        this.ctx.fill("white");
+        this.ctx.rect(halfButtonSize, negYOffset + halfButtonSize, 30, 10, borderRadius);
+        this.ctx.rect(halfButtonSize, negYOffset + halfButtonSize, 10, 30, borderRadius);
+
+        // Draw a white on red minus
+        this.ctx.rectMode(CORNER)
+        this.ctx.fill("red");
+        this.ctx.rect(
+                        buttonSize + 10, 
+                        negYOffset, 
+                        buttonSize, 
+                        buttonSize, 
+                        borderRadius);
+        this.ctx.rectMode(CENTER, CENTER);
+        this.ctx.fill("white");
+        this.ctx.rect(
+                        halfButtonSize + buttonSize + 10, 
+                        negYOffset + halfButtonSize, 
+                        30, 
+                        10, 
+                        borderRadius);
+
         // this.corrected = {...this.position};
         // corrected.x *= zoom;
         // corrected.y *= zoom;
         this.iframe.position(
-            this.smartPosition.x,
-            this.smartPosition.y
+            ( (mouseShifted.x + panX) * zoom ) + this.smartPosition.x,
+            ( (mouseShifted.y + panY) * zoom ) + this.smartPosition.y + buttonSize + 40
         );
+
+        // set pointerEvents none when deepCanvasManager.focusedIndex < 1
+        const panning = Math.abs(panMomentumVector.x ?? panMomentumVector.y)
+        
+        this.iframe.elt.style.pointerEvents = 
+            panning 
+            || deepCanvasManager.focusedIndex < 1
+            || store.shiftIsPressed 
+            ? 'none' 
+            : 'auto';
+
         //debugger;
         //this.iframe.scale(zoom)
         // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
         // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
         // this.iframe.elt.id = this.id;
         // t
-        this.iframe.elt.style.transform = `translate3d(${this.smartPosition.x}px, ${this.smartPosition.y}px, 0) scale(${zoom}) perspective(1000px)`;
+        this.iframe.elt.style.transform = `scale(${zoom})`;
     }
 }
 /* 
@@ -5719,6 +5793,14 @@ class Argument {
 
 let cmdprompt;
 
+document.addEventListener('mousedown', function(event) {
+    // if we clicked an iFrame, focus the top layer
+    if (event.target.tagName === 'IFRAME') {
+        console.warn('clicked an iframe',{event})
+        deepCanvasManager.focusedIndex = 1;
+    }
+})
+
 // Add a keyboard listener for cmd shift p shift+p
 document.addEventListener('keydown', function(event) {
     if (event.code === 'KeyP' && event.shiftKey && event.metaKey) {
@@ -5868,7 +5950,7 @@ class LayereredCanvasRenderer {
         // bind a window resize event handler
         document.addEventListener('resize',this.onResize.bind(this))
 
-        /* canvasUI */
+        /* uiContext */
         let sketchUI = function(p) {
             p.setup = function() {
             }
@@ -5881,17 +5963,63 @@ class LayereredCanvasRenderer {
                 p.rect(10,10,40,40)
                 p.rect(20,20,30,30)
             }
+            // Define the mousePressed function
+            p.mousePressed = function(){
+                // bail early if one of our other handlers handled the click
+                if(checkDidClickASuggestion()){
+                    return;
+                }
+                if(checkDidClickAModeSwitcherButton()){
+                    return;
+                }
+
+                // TODO: click handlers for widgets on the dashboard
+
+                // maybe select a node
+                if(store.currentGraph && store.currentGraph.OnMousePressed){
+                    store.currentGraph.OnMousePressed();
+                }
+
+                panningBG = true;
+                dragStartX = mouseX;
+                dragStartY = mouseY;
+
+                // if (
+                //     store.currentGraph 
+                //     && !store.currentGraph.selectedNodeIDs.length
+                // ) {
+                    // NOTE: we need to NOT flag as panning
+                    // based on the click target and any current MODE override
+                    // like maybe we should be allowing drag / drop
+                    // or spawning a connection spline
+                    
+                // } else {
+                //     panningBG = false;
+                // }
+            }
             p.onResize = function(){
                 p.resizeCanvas(innerWidth, innerHeight);
             }
+            // Define the mouseDragged function
+            p.mouseDragged = function(event){
+                let blockPan = false;
+                if(store.currentGraph){
+                    store.currentGraph.OnMouseDragged(event);
+                    blockPan = store.currentGraph.selectedNodeIDs.length > 0;
+                }
+                if(!blockPan){
+                    panX += mouseX - pmouseX;
+                    panY += mouseY - pmouseY;
+                }
+                // update our stored momentum vector by checking the delta
+                // between the current and previous mouse positions
+                panMomentumVector.x += (mouseX - pmouseX) * store.panMomentumDecay;
+                panMomentumVector.y += (mouseY - pmouseY) * store.panMomentumDecay;
+            }
         };
-        this.canvasUI = new p5(sketchUI, `deep-canvas-ui`);
-        console.warn('canvasUI',{canvasUI:this.canvasUI})
-        this.canvasUI.resizeCanvas(innerWidth, innerHeight);
-        // Disable the default context menu
-        // this.canvasUI.elt.oncontextmenu = function (e) {
-        //     e.preventDefault();
-        // };
+        this.uiContext = new p5(sketchUI, `deep-canvas-ui`);
+        console.warn('uiContext',{uiContext:this.uiContext})
+        this.uiContext.resizeCanvas(innerWidth, innerHeight);
 
         //this.draw()
     }
@@ -6038,12 +6166,13 @@ class Dashboard {
     layout = {}
     visible = true
     collapsed = false
-    clear(){
-        this.visible = false
-        // this.widgets = {}
-        // this.widgetLayoutOrder.length = 0
-        // this.widgetDepthOrder.length = 0
-    }
+    // clear(){
+    //     throw new 
+    //     //this.visible = false
+    //     // this.widgets = {}
+    //     // this.widgetLayoutOrder.length = 0
+    //     // this.widgetDepthOrder.length = 0
+    // }
     init(){
         // TODO: extend an entity component system where components have active state as boolean
         this.active = true;
@@ -6170,8 +6299,16 @@ class Dashboard {
         // })
         // if widgetIDOrInstance contains youtube.com, return a new youtube widget instance instead
         if(widgetIDOrInstance?.includes?.("youtube.com")){
+            let updatedUrl = widgetIDOrInstance;
+            try {
+                let url = new URL(updatedUrl);
+                url.searchParams.set('autoplay', '1');
+                updatedUrl = url.toString();
+            } catch (error) {
+                console.error('Invalid URL:', updatedUrl);
+            }
             // it's a youtube url!
-            return this.registerWidget(new YoutubePlayerWidget("",{tracks:[widgetIDOrInstance]}))
+            return this.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
         }
         if(widgetIDOrInstance?.includes?.("://")){
             // it's an iframe, chuck!
@@ -6354,6 +6491,12 @@ let store = {
     dragStartX: 0,
     dragStartY: 0,
     panMomentumVector: {
+        x: 0,
+        y: 0
+    },
+    // there's panning parallax, and then there's mouse peek on top
+    // of that to exaggerate the effect and explore the edges of the canvas
+    mouseExtraPanPeekVelocity: {
         x: 0,
         y: 0
     },
@@ -7390,7 +7533,7 @@ class WizardController {
     }
     /** @return bool - did we click a _visible_ suggestion rect? */
     checkDidClickASuggestion(){
-        console.warn('TODO: check did click a suggestion')
+        system.todo('wizard controller: check did click a suggestion')
     }
     tryCompleteStep(){
         // process the current step
@@ -7573,6 +7716,7 @@ class WizardController {
         mctx.pop()
     }
     drawCurrentStep(){
+        const uictx = deepCanvasManager.uiContext;
         this.drawStepProgressBreadcrumbs();
         const cStep = this.currentStep;
         const questionTitle = cStep?.questionTitle ?? 'Question';
@@ -7584,18 +7728,18 @@ class WizardController {
         // });
 
         // render the name of the current command in the top right
-        mctx.textAlign(RIGHT,TOP);
-        mctx.textStyle(BOLD)
-        mctx.text(`${this.name}`, mctx.windowWidth - 20, 20);
+        uictx.textAlign(RIGHT,TOP);
+        uictx.textStyle(BOLD)
+        uictx.text(`${this.name}`, uictx.windowWidth - 20, 20);
 
         // render the question
         let offsetY = 30;
-        mctx.fill(255)
-        mctx.textAlign(LEFT,TOP);
-        mctx.textStyle(BOLD)
-        mctx.text(`${questionTitle}`, 20, offsetY + 20);
-        mctx.textStyle(NORMAL)
-        mctx.text(`${question}`, 20, offsetY + 50);
+        uictx.fill(255)
+        uictx.textAlign(LEFT,TOP);
+        uictx.textStyle(BOLD)
+        uictx.text(`${questionTitle}`, 20, offsetY + 20);
+        uictx.textStyle(NORMAL)
+        uictx.text(`${question}`, 20, offsetY + 50);
     }
     OnPressEscape(event){
         if(confirm('Are you sure?')){
@@ -8399,29 +8543,16 @@ class WizardConfig {
     }
 }
 
-class ToggleDashboardVisibleWizardConfig
-extends WizardConfig {
-    name = "Toggle Dashboard: Visible"
-    steps = [
-        // TODO: bake into a pre-configured InstantCommandConfig instead of always using Wizard with a dummy first step manually
-        {question:"",onStepLoaded:(wiz)=>{wiz.end(); system.hideCmdPrompt();}}
-    ]
-    finalCallback(wiz){
-        console.warn("toggle dashboard visible")
-        system.get("Dashboard").toggleVisibility();
-    }
-}
-class ToggleDashboardVisible extends BaseCmds(Command, new ToggleDashboardVisibleWizardConfig()){}
-
-// class ToggleDashboardCollapsedWizardConfig
+// class ToggleDashboardVisibleWizardConfig
 // extends WizardConfig {
-//     name = "Toggle Dashboard: Collapsed"
+//     name = "Toggle Dashboard: Visible"
 //     steps = [
+//         // TODO: bake into a pre-configured InstantCommandConfig instead of always using Wizard with a dummy first step manually
 //         {question:"",onStepLoaded:(wiz)=>{wiz.end(); system.hideCmdPrompt();}}
 //     ]
 //     finalCallback(wiz){
-//         console.warn("toggle dashboard collapsed")
-//         system.get("Dashboard").toggleCollapsed();
+//         console.warn("toggle dashboard visible")
+//         system.get("Dashboard").toggleVisibility();
 //     }
 // }
 
@@ -9522,6 +9653,9 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["Toggle Dashboard Collapsed"](){
+        system.dashboard.toggleCollapsed();
+    },
     // { name: "New Basic Command" },
 
     // ["youtube bookmarks:"]:
@@ -9695,9 +9829,15 @@ const InvokableCommands = {
         return "https://www.youtube.com/watch?v=NUC2EQvdzmY";
     },
     ["Play Mindful Solutionism"](){
-        return "https://www.youtube.com/watch?v=T7jH-5YQLcE"
+        return "https://www.youtube.com/watch?v=T7jH-5YQLcE&width=800&height=600"
+    },
+    ["Play Symphony of Science - We Are All Connected"](){
+        return "https://www.youtube.com/watch?v=XGK84Poeynk";
+        // blocked :/
+        // return "https://www.youtube.com/watch?v=-qUj3A3Yl1E";
     },
     ["Play Glorious Dawn"](){
+        // ~> new YoutubePlayerWidget
         return "https://www.youtube.com/watch?v=zSgiXGELjbc";
     },
     ["Play Run The Jewels"](){ 
@@ -9737,7 +9877,7 @@ const InvokableCommands = {
         }
         io.emit('message', sanitized);
     },
-    ["Toggle Clear BG Flag "](){
+    ["DEV: Toggle Clear BG Flag(s)"](){
         // clear the cmd palette first, wait a tick THEN unset the flag
         store.CmdPromptVisible = false;
         
@@ -9761,10 +9901,14 @@ const InvokableCommands = {
     [`dislike song "x"`](x){
         console.warn('TODO: dislike song: x: ',{x})
     },
-    ["lock"](){
+    ...(["enter the lock screen", "enter lock screen", "lock the screen", "enter screensaver", "start screensaver", "enter screensaver mode"].reduce((acc, alias) => ({ ...acc, [alias]: () => system.invoke("LOCK_THE_SCREEN") }), {})),
+    ["lock the screen"](){
         // puts the system in lock screen, screen save mode
-        InvokableCommands["Clear Dashboard"]
-        InvokableCommands["Enable Deep Renderer"]
+        InvokableCommands["CLOSE_ALL_WIDGETS"]()
+        system.invoke("ENABLE_DEEP_RENDERER")
+        // display the lock screen widget
+        system.invoke("NEW_CLOCK_WIDGET")
+        system.invoke("NEW_TIME_TO_SUNSET_WIDGET")
     },
     ["enable deep renderer"](){
         store.disableDeepCanvas = false;
@@ -9827,7 +9971,7 @@ const InvokableCommands = {
     },
     ["new iframe widget"](){
         // todo: PinnedIFrameWidgetInstantiator / factory?
-        let resposne = prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here","http://iframesafe.url")
+        let response = prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here","http://iframesafe.url")
         system.registerWidgetInstance(new iFrameWidget(response))
     },
     ["new browser bubble"](){
@@ -9842,7 +9986,7 @@ const InvokableCommands = {
     ["new goal"](){},
     ["boomerang thought"](){},
     ["conversation freefall"](){},
-    ["new converstion map"](){},
+    ["new conversation map"](){},
     ["new mind map"](){},
     ["hello"](){
         system.get("toastManager").showToast("🐶 HHH WOOOAHW!", {pinned: false, important: true});
@@ -9916,7 +10060,7 @@ const InvokableCommands = {
         //system.invokeWith()
         system.registerWidgetInstance(new PomodoroWidget())
     },
-    ["toggle widget stacked"](){
+    ["toggle widgets stacked"](){
         system.dashboard.toggleCollapsed();
     },
     ["new clock widget"](){
@@ -9970,6 +10114,22 @@ const InvokableCommands = {
         //system.dashboard.clear();
         system.dashboard.clearAllWidgets();
     },
+    ["Fresh Start"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
+    ["Close All"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
+    ["Clear"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
+    ["TODO: make options sorted by usage, weighted default rankings"](){
+        // do it, then
+        system.todo("SO DO IT, THEN!")
+    },
+    ["TODO: soundcloud, vimeo, etc... (generic url embeds / paste support)"](){
+        system.todo("Do it then!");
+    },
+    ["stumbleupon"](){
+        system.todo("show some random content!")
+    },
+    ["Say..."](){
+        system.todo(prompt("What would you like to say?"))
+    },
     // TODO: make aliases and weighting/ranking easier
     ["Clear Dashboard"](){ InvokableCommands["Close All Widgets"]() },
     ["Open All Players"](){
@@ -10003,7 +10163,7 @@ const InvokableCommands = {
         console.warn("Set Dashboard Friction...");
     },
     ["recenter"](){
-        InvokableCommands["Center View"]();
+        system.invoke("CENTER_VIEW");
     },
     ["focus"](){
         InvokableCommands["Center View"]();
@@ -10495,55 +10655,6 @@ function isEmptyOrUndefined(thing){
     ) ? true : false;
 }
 
-// class CanvasCompositor {
-//     constructor(canvases, shaderProgram) {
-//         this.canvases = canvases;
-//         this.shaderProgram = shaderProgram;
-//         this.glContexts = this.canvases.map(canvas => {
-//             // Check if the context is a p5.js instance
-//             if (canvas instanceof p5) {
-//                 // If it is, return the 2D context
-//                 return canvas.drawingContext;
-//             } else {
-//                 // If it's not, return the WebGL context
-//                 return canvas.getContext('webgl');
-//             }
-//         });
-//         this.framebuffers = this.glContexts.map(gl => this.createFramebuffer(gl));
-//     }
-
-//     createFramebuffer(gl) {
-        
-//     }
-
-//     render() {
-//         this.glContexts.forEach((gl, i) => {
-//             gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[i].framebuffer);
-//             // Render your scene here
-//             if (this.canvases[i] instanceof p5) {
-//                 // If it's a p5 context, bind a callback for baking the state to a cached image texture
-//                 this.canvases[i].drawingContext.drawImage(this.canvases[i].canvas, 0, 0);
-//                 // Push the current state of the p5 context to the WebGL context
-//                 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.canvases[i].drawingContext.getImageData(0, 0, this.canvases[i].width, this.canvases[i].height).data), gl.STATIC_DRAW);
-//             }
-//         });
-
-//         // Now bind the main framebuffer (null) and use the textures from the framebuffers
-//         this.glContexts.forEach((gl, i) => {
-//             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//             gl.bindTexture(gl.TEXTURE_2D, this.framebuffers[i].texture);
-//             // Render your scene with the distortion shader here
-//             // Swap the buffer values from the p5 context to the WebGL context
-//             gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Float32Array(this.canvases[i].drawingContext.getImageData(0, 0, this.canvases[i].width, this.canvases[i].height).data));
-//         });
-//         // Apply the shader program after the layers have been stacked / composited / layered together in the buffer
-//         this.glContexts.forEach((gl, i) => {
-//             gl.useProgram(this.shaderProgram);
-//             // Draw the final output
-//             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-//         });
-//     }
-// }
 const vertexShaderSource = `
 attribute vec4 aVertexPosition;
 varying vec4 vColor;
@@ -10745,7 +10856,7 @@ class ToastNotification {
             return;
         }
 
-        let ctx = deepCanvasManager.canvasUI;
+        let ctx = deepCanvasManager.uiContext;
 
         // if it's "important" we step through
         // a one-time animation which clones
@@ -10811,10 +10922,10 @@ class ToastNotification {
         }
         ctx.text(line, windowWidth - 10 - tBoxW + 10, y);
         // darken by the lowest index so shadow effect
-        let shadowEffect = map(index, 0, this.options.important ? this.targetCloneCount : 1, 0, 50);
-        ctx.fill(0, 0, 0, shadowEffect);
-        ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
-        ctx.alpha(255);
+        // let shadowEffect = map(index, 0, this.options.important ? this.targetCloneCount : 1, 0, 50);
+        // ctx.fill(0, 0, 0, shadowEffect);
+        // ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
+        // ctx.alpha(255);
     }
 }
 
@@ -11153,6 +11264,7 @@ function levenshteinDistance(a, b) {
     return matrix[b.length][a.length];
 };
 
+// TODO: need to update the z-index of the canvas ui to be ABOVE any iframes
 class CmdPrompt extends Widget {
     // the current "Command" being constructed
     currentCommand = null; 
@@ -11174,31 +11286,31 @@ class CmdPrompt extends Widget {
     }
 
     afterSetup(){
-        mctx.push();
-        mctx.textSize(50);
-            CmdPromptInput = mctx.createInput('');
-            CmdPromptInput.elt.style.backgroundColor = 'black';
-            CmdPromptInput.elt.style.color = 'white';
-            CmdPromptInput.size(mctx.windowWidth - 20);
-            CmdPromptInput.position(10, 130);
-            // focus the command palette input
-            CmdPromptInput.elt.focus();
+        // TODO: draw the command prompt instead of using html el
+        CmdPromptInput = mctx.createInput('');
+        CmdPromptInput.parent('under-ui-elms');
+        CmdPromptInput.elt.style.backgroundColor = 'black';
+        CmdPromptInput.elt.style.color = 'white';
+        CmdPromptInput.size(windowWidth - 20);
+        CmdPromptInput.position(10, 130);
+        // focus the command palette input
+        CmdPromptInput.elt.focus();
 
-            CmdPromptInput.elt.addEventListener('focus', (e)=>{
-                // store.focusedField = CmdPromptInput.elt;
-                store.focused = true
-            })
-            CmdPromptInput.elt.addEventListener('blur', (e)=>{
-                // store.focusedField = null;
-                store.focused = false;
-            })
-        mctx.pop();
+        CmdPromptInput.elt.addEventListener('focus', (e)=>{
+            // store.focusedField = CmdPromptInput.elt;
+            store.focused = true
+        })
+        CmdPromptInput.elt.addEventListener('blur', (e)=>{
+            // store.focusedField = null;
+            store.focused = false;
+        })
+        
         // Listen for the 'keydown' event
         CmdPromptInput.elt.addEventListener('keypress', function(e) {
             // Check if the Enter key was pressed
             // if (e.key === 'Enter') {
                 // Call the onCmdPromptInput method
-                cmdprompt = system.get('cmdprompt');
+                cmdprompt = system.cmdprompt;
                 if(!cmdprompt){
                     system.warn("cmdprompt not ready");
                 }
@@ -11514,7 +11626,7 @@ class CmdPrompt extends Widget {
     }
 
     renderCommandPrompt(){
-        let ctx = deepCanvasManager.canvasUI;
+        let ctx = deepCanvasManager.uiContext;
         ctx.push();
         const cmdpPosY = 0;
         ctx.fill(0,0,0,200)
@@ -11541,7 +11653,7 @@ class CmdPrompt extends Widget {
 
     renderSuggestedCommands(){
         /* pass the drawing responsibility on to the SuggestionList class instance */
-        this.commandSuggestionList.draw(deepCanvasManager.canvasUI);
+        this.commandSuggestionList.draw(deepCanvasManager.uiContext);
     }
 
     /*
@@ -11639,7 +11751,7 @@ class CmdPrompt extends Widget {
     }
 
     checkDidClickASuggestion(){
-        console.warn('todo: check did click a suggestion')
+        system.todo("cmdprompt: check did click a suggestion")
         return false    
     }
 
@@ -11782,13 +11894,18 @@ class CmdPrompt extends Widget {
             let match1 = compare.includes(currentInputBufferTextLC);
         
             // Allow up to 3 character differences
-            let levenshteinMatch = levenshteinDistance(compare, currentInputBufferTextLC) <= 3; 
+            let levDist = levenshteinDistance(compare, currentInputBufferTextLC);
+            let levenshteinMatch = levDist <= 3; 
+            let levDistanceWeight = 1 - (levDist / 3);
 
             command.levenshteinMatch = levenshteinMatch;
         
             let matches = 0;
-            if(match1 || levenshteinMatch){
+            if(match1){
                 matches++;
+            }
+            if(levenshteinMatch){
+                matches+=levDistanceWeight;
             }
         
             if(matches){
@@ -11888,22 +12005,7 @@ class CmdPrompt extends Widget {
     }
 }
 
-// Define the mouseDragged function
-function mouseDragged(event){
-    let blockPan = false;
-    if(store.currentGraph){
-        store.currentGraph.OnMouseDragged(event);
-        blockPan = store.currentGraph.selectedNodeIDs.length > 0;
-    }
-    if(!blockPan){
-        panX += mouseX - pmouseX;
-        panY += mouseY - pmouseY;
-    }
-    // update our stored momentum vector by checking the delta
-    // between the current and previous mouse positions
-    panMomentumVector.x += (mouseX - pmouseX) * store.panMomentumDecay;
-    panMomentumVector.y += (mouseY - pmouseY) * store.panMomentumDecay;
-}
+
 
 class Field {
     makesClass = null; //DefaultFieldConstiuentClass;
@@ -12102,40 +12204,7 @@ function stepPanMomentum(){
     requestAnimationFrame(stepPanMomentum);
 }
 
-// Define the mousePressed function
-function mousePressed(){
-    // bail early if one of our other handlers handled the click
-    if(checkDidClickASuggestion()){
-        return;
-    }
-    if(checkDidClickAModeSwitcherButton()){
-        return;
-    }
 
-    // TODO: click handlers for widgets on the dashboard
-
-    // maybe select a node
-    if(store.currentGraph && store.currentGraph.OnMousePressed){
-        store.currentGraph.OnMousePressed();
-    }
-
-    panningBG = true;
-    dragStartX = mouseX;
-    dragStartY = mouseY;
-
-    // if (
-    //     store.currentGraph 
-    //     && !store.currentGraph.selectedNodeIDs.length
-    // ) {
-        // NOTE: we need to NOT flag as panning
-        // based on the click target and any current MODE override
-        // like maybe we should be allowing drag / drop
-        // or spawning a connection spline
-        
-    // } else {
-    //     panningBG = false;
-    // }
-}
 
 function __checkDidClickAVisibleSuggestion(){
 
@@ -12200,17 +12269,11 @@ function checkDidClickAModeSwitcherButton(){
     return foundClickedIndex !== -1 ? true : false;
 }
 
-// Define the mouseReleased function
-function mouseReleased(){
-    if (panningBG) {
-        panningBG = false;
-        stopDragging();
-    }
-}
+
 
 const max_blur = 100;
 let bgEl;
-const MIN_ZOOM = 0.01;
+const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 3;
 zoomStepSize = (MAX_ZOOM - MIN_ZOOM) / 8;
 
@@ -12310,7 +12373,7 @@ class DebugPath {
 
     draw(_color){
         this.stepPruner();
-        let ctx = deepCanvasManager.canvasUI;
+        let ctx = deepCanvasManager.uiContext;
         ctx.push()
         ctx.translate(-panX + innerWidth/2, panY + innerHeight/2);
         //ctx.scale(zoom, zoom);
@@ -12721,7 +12784,7 @@ let frameTimes = [];
 let lastFrameTime;
 
 function renderDebugUI(){
-    let ctx = deepCanvasManager.canvasUI;
+    let ctx = deepCanvasManager.uiContext;
     // push into rolling frameTimes array
     frameTimes.push(millis());
     // if we have more than 100 frames, remove the oldest one
@@ -12737,7 +12800,9 @@ function renderDebugUI(){
     const debugTexts = [
         { text: `FPS: ${FPS.toFixed(2)}` },
         { text: `DrawCalls: ${store.frameDrawCount}` },
-        { text: `whatTheCenterIs:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
+        { text: `center:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
+        // todo: zoom momentum / z-momentum
+        { text: `panMomentumVector: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
         { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
         { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
         { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` },
@@ -13146,7 +13211,11 @@ const getBasicSpawnWidgetConfig = function(widget){
 
 
 // Define the setup function
-/** LayereredCanvasRenderer */
+/** 
+ * @class LayereredCanvasRenderer 
+ * @see LayereredCanvasRenderer
+ * @see LayereredCanvasRenderer.draw
+*/
 let deepCanvasManager;// = new LayereredCanvasRenderer();
 function setupDefaults(){
     // assign a random time to the query params so hard reload is by default
@@ -13211,6 +13280,8 @@ function setupDefaults(){
                         level: "error"
                     });
                 }
+                let requestedWidth = null;
+                let requestedHeight = null;
                 // close the command prompt
                 store.CmdPromptVisible = false;
                 let tracks = [];
@@ -13218,11 +13289,37 @@ function setupDefaults(){
                     tracks = result;
                 }
                 else if(typeof result === 'string' && result.includes("youtube")){
+
+                    // see if the url includes ?width or ?height,
+                    // feed that to widgetSize
+                    try {
+                        const url = new URL(result);
+                        requestedWidth = url.searchParams.get('width');
+                        requestedHeight = url.searchParams.get('height');
+                    } catch (e) {
+                        console.error(`Failed to parse URL: ${e.message + ' ' + result}`);
+                    }
+
                     tracks = [result];
                 }else{
                     //
                 }
+
+                // normalize requestedWidth/height to ints, with defaults based on the current window size
+                requestedWidth = requestedWidth ? Math.min(window.innerWidth - 20, parseInt(requestedWidth)) : window.innerWidth / 2;
+                requestedHeight = requestedHeight ? Math.min(window.innerHeight - 20, parseInt(requestedHeight)) : window.innerHeight / 2;
+
                 if(tracks.length){
+
+                    // add ?autoplay=1 to the url at tracks[0]
+                    try{
+                        const url = new URL(tracks[0]);
+                        url.searchParams.set('autoplay', 1);
+                        tracks[0] = url.toString();
+                    }catch(e){
+                        console.error(`Failed to parse URL: ${e.message + ' ' + tracks[0]}`);
+                    }
+
                     // if the result is a string youtube. or you.tu.be.
                     system.get("toastManager")
                     // spawned player
@@ -13235,8 +13332,8 @@ function setupDefaults(){
                     system.get("Dashboard")
                         ?.registerWidget?.(new YoutubePlayerWidget("Youtube"+Date.now()+Math.random,{
                             widgetSize:{
-                                width: innerWidth * 0.25,
-                                height: innerWidth * 0.25 * (9 / 16)
+                                width: requestedWidth,
+                                height: requestedHeight
                             },
                             autoPlay: true,
                             tracks
@@ -13613,9 +13710,11 @@ void main(void) {
 }
 `;
 let topCanvas = document.createElement('canvas');
+topCanvas.id="topCanvas"; // composited canvas, not really TOP as UI is drawn above this even...
 topCanvas.width = window.innerWidth;
 topCanvas.height = window.innerHeight;
 topCanvas.style.position = 'absolute';
+topCanvas.style.pointerEvents = 'none';
 topCanvas.style.top = 0;
 topCanvas.style.left = 0;
 topCanvas.style.zIndex = 90001; // over 9000
@@ -13715,6 +13814,15 @@ document.body.appendChild(topCanvas);
                 }
             }
 
+            document.querySelectorAll('iframe').forEach((iframe)=>{
+                // toggle pointerEvents none when shift is pressed
+                if(store.shiftIsPressed){
+                    iframe.style.pointerEvents = 'none';
+                } else {
+                    iframe.style.pointerEvents = 'auto';
+                }
+            });
+
 
             // if we're not focused on any fields
             if(store.focusedField === null){
@@ -13725,7 +13833,7 @@ document.body.appendChild(topCanvas);
             //if(store.focusedField === CmdPromptInput.elt){
                 // arrow key down should cycle through the suggestion list
                 // call the input handler
-                cmdprompt = system.get('cmdprompt');
+                cmdprompt = system.cmdprompt;
                 if(!cmdprompt){
                     system.warn("cmdprompt not ready");
                 }
@@ -13811,7 +13919,7 @@ document.body.appendChild(topCanvas);
             // console.warn('keyup',{e})
             // if the cmdprompt is active, pipe the event
             if(store.CmdPromptVisible){
-                cmdprompt = system.get('cmdprompt');
+                cmdprompt = system.cmdprompt;
                 if(!cmdprompt){
                     system.warn("cmdprompt not ready");
                 }
@@ -13890,7 +13998,12 @@ document.body.appendChild(topCanvas);
 
             // 5-calls widget:
             .newWidget(
-                new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/")
+                new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/",{
+                    widgetSize:{
+                        width: 480,
+                        height: 640
+                    }
+                })
             )
 
             .newWidget(new iFrameWidget("https://faxzero.com/",{
@@ -13914,7 +14027,6 @@ document.body.appendChild(topCanvas);
 
             // thomas and friends for SNES: minigame: 
             .newWidget("https://youtu.be/mQcR04RROUQ?si=9kpOTXAd9rQZ_QLa&t=482")
-            .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
 
             // dark side of the moon, mario 64 sound font
             .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
@@ -14146,8 +14258,22 @@ document.body.appendChild(topCanvas);
             })
         }
 
+        // Disable the default context menu
+        p.canvas.oncontextmenu = function (e) {
+            e.preventDefault();
+            console.warn('prevent default!');
+        };
+
         postSetup();
     }
+
+    p.onMouseDown = function(){
+        if(p.mouseButton === p.RIGHT){
+            alert("right!")
+        }
+    }
+
+    
 
     // Define the mouseWheel function
     p.mouseWheel = function(event) {
@@ -14240,6 +14366,16 @@ document.body.appendChild(topCanvas);
         //console.warn('calling compositor render',performance.now())
         window.iCanvasCompositor.render();
     }
+
+    // Define the mouseReleased function
+    // TODO: put this on the canvas ui context layer (topmost layer is our interaction target)
+    p.mouseReleased = function(){
+        if (panningBG) {
+            panningBG = false;
+            stopDragging(); // ~> stepPanMomentum
+        }
+    }
+    
     window.myMainDrawFN = function() {
         if(!store.windowHasFocus){
             return;
@@ -14535,6 +14671,7 @@ class FluxExampleGraph extends Graph {
             // Codename Status Trees
             if(_n.id === 0){
                 const input = mctx.createInput('');
+                input.parent('under-ui-elms')
                 // name the input element and give it a throw-off autocomplete value too so it doesn't try to auto suggest anything
                 input.elt.name = generateRandomString();
                 input.elt.setAttribute('autocomplete', generateRandomString());
