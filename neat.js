@@ -4709,10 +4709,10 @@ class iFrameWidget extends Widget {
             'id': 'iframe',
             'frameborder': '0',
             'allowfullscreen': 'true',
-            'scrolling': 'no',
+            'scrolling': 'yes',
             'allow': 'autoplay; encrypted-media',
-            'height': `${this.widgetSize.width * zoom}px`,
-            'width': `${this.widgetSize.height * zoom}px`,
+            'height': `${this.widgetSize.width}px`,
+            'width': `${this.widgetSize.height}px`,
             'src': url ?? 'https://google.com/webhp?igu=1',
             'crossorigin': 'anonymous',
         }
@@ -5934,11 +5934,20 @@ class Dashboard {
             /* to */ 
             {x:0,y:0,z:1}, 
             /*onUpdate*/
-            (vector)=>{
-                console.warn('onupdate',vector)
-                panX = vector.x;
-                panY = vector.y;
-                zoom = vector.z;
+            (value, fieldName)=>{
+                // console.warn('onupdate',{value,fieldName})
+                //window[fieldName] = value;
+                switch(fieldName){
+                    case 'x':
+                        panX = value;
+                        break;
+                    case 'y':
+                        panY = value;
+                        break;
+                    case 'z':
+                        zoom = value;
+                        break;
+                }
             }, 
             /* duration ms */ 
             3000
@@ -6984,6 +6993,23 @@ class Refactor extends UndoRedoDecorator(DynamicThing) {
 /* for previewing a gamepad input */
 class GamePadWidget extends Widget {
 
+}
+
+class MyMouseEvents {
+    constructor(){
+        window.addEventListener('mousedown', this.onMouseDown.bind(this));
+        window.addEventListener('mouseup', this.onMouseUp.bind(this));
+    }
+    onMouseDown(e){
+        console.warn('onMouseDown',{e})
+    }
+    onMouseUp(e){
+        console.warn('onMouseUp',{e})
+    }
+    cleanupListeners(){
+        window.removeEventListener('mousedown', this.onMouseDown.bind(this));
+        window.removeEventListener('mouseup', this.onMouseUp.bind(this));
+    }
 }
 
 class KeyboardWidget extends Widget {
@@ -9729,6 +9755,8 @@ const InvokableCommands = {
     ["Play Quad City DJ's - C'Mon 'N Ride It (The Train)"](){
         return "https://www.youtube.com/watch?v=D53M1vVF2N4"
     },
+    // TODO: extract metadata and cache it (about youtube and other fetched urls)
+    ["Play BAMBOO WATER FOUNTAIN | Relax & Get Your Zen On | White Noise"]: "https://www.youtube.com/watch?v=aJaZc4E8Y4U",
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
         // the one i want is restricted
@@ -13263,22 +13291,26 @@ requestAnimationFrame(panXAnimation.animate.bind(panXAnimation));
 requestAnimationFrame(panYAnimation.animate.bind(panYAnimation));
 requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
 */
-function animateVector(from,to, onUpdate, duration = 1000){
+function animateVector(from, to, onUpdate, duration = 1000){
+    
     // assume x,y,z for now
     let xAnimation = new Animation(
-        from.x, to.x, 
+        from.x, 
+        to.x, 
         duration, 
-        (value) => {from.x = value; onUpdate(value); });
+        (value) => {from.x = value; onUpdate(value, 'x'); });
     
     let yAnimation = new Animation(
         from.y, 
-        to.y, duration, 
-        (value) => {from.y = value; onUpdate(value); });
+        to.y, 
+        duration, 
+        (value) => {from.y = value; onUpdate(value, 'y'); });
     
     let zAnimation = new Animation(
         from.z, 
-        to.z, duration, 
-        (value) => {from.z = value; onUpdate(value); });
+        to.z, 
+        duration, 
+        (value) => {from.z = value; onUpdate(value, 'z'); });
 
     requestAnimationFrame(xAnimation.animate.bind(xAnimation));
     requestAnimationFrame(yAnimation.animate.bind(yAnimation));
@@ -13655,7 +13687,23 @@ document.body.appendChild(topCanvas);
             // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
 
             // 5-calls widget:
-            .newWidget(new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/"))
+            .newWidget(
+                new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/")
+            )
+
+            .newWidget(new iFrameWidget("https://faxzero.com/",{
+                widgetSize:{
+                    width: 480,
+                    height: 640
+                }
+            }))
+
+            .newWidget(new iFrameWidget("https://publishersforpalestine.org/",{
+                widgetSize:{
+                    width: 480,
+                    height: 640
+                }
+            }))
 
             // dental services in my dental coverage network?!
             // x-ray services that work when i travel a lot for work?
@@ -13722,7 +13770,8 @@ document.body.appendChild(topCanvas);
             
             .registerWidget(
                 //"4SeasonsImg", 
-                new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif"))
+                new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif")
+            )
 
             .registerWidget(
                 new ImageViewerWidget("fine.gif")
