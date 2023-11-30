@@ -811,6 +811,7 @@ class System {
         return this.registerWidgetInstance(...arguments)
     }
     registerWidgetInstance(){
+        /** @see Dashboard.registerWidget */
         return this.dashboard.registerWidget(...arguments);
     }
     registerWidget(){
@@ -6152,6 +6153,27 @@ function mySpecialDrawingContext(canvasIndex){
     }
 }
 
+function extractQueryParamsOrDefaults(string){
+    let requestedWidth = null;
+    let requestedHeight = null;
+    try {
+        const url = new URL(string);
+        requestedWidth = url.searchParams.get('width');
+        requestedHeight = url.searchParams.get('height');
+    } catch (e) {
+        console.error(`Failed to parse URL: ${e.message + ' ' + result}`);
+    }
+    // normalize requestedWidth/height to ints, with defaults based on the current window size
+    requestedWidth = requestedWidth 
+        ? Math.min(window.innerWidth - 20, parseInt(requestedWidth)) 
+        : window.innerWidth / 2;
+    requestedHeight = requestedHeight 
+        ? Math.min(window.innerHeight - 20, parseInt(requestedHeight)) 
+        : window.innerHeight / 2;
+
+    return {requestedWidth,requestedHeight}
+}
+
 // TODO: extend Renderable
 // this is a Widget Rendering Context
 // NOTE: we stack multiple Dashboards assigned to 3 canvases
@@ -6298,6 +6320,15 @@ class Dashboard {
         //     instanceOrNull
         // })
         // if widgetIDOrInstance contains youtube.com, return a new youtube widget instance instead
+        if(
+            widgetIDOrInstance?.includes?.(".png")
+            || widgetIDOrInstance?.includes?.(".jpg")
+            || widgetIDOrInstance?.includes?.(".gif")
+            || widgetIDOrInstance?.includes?.(".jpeg")
+        ) {
+            // it's an image!
+            return this.registerWidget(new ImageWidget(widgetIDOrInstance))
+        }
         if(widgetIDOrInstance?.includes?.("youtube.com")){
             let updatedUrl = widgetIDOrInstance;
             try {
@@ -9901,10 +9932,23 @@ const InvokableCommands = {
     [`dislike song "x"`](x){
         console.warn('TODO: dislike song: x: ',{x})
     },
-    ...(["enter the lock screen", "enter lock screen", "lock the screen", "enter screensaver", "start screensaver", "enter screensaver mode"].reduce((acc, alias) => ({ ...acc, [alias]: () => system.invoke("LOCK_THE_SCREEN") }), {})),
+    ...(
+        [
+            "enter the lock screen", 
+            "enter lock screen", 
+            "lock the screen", 
+            "enter screensaver", 
+            "start screensaver", 
+            "enter screensaver mode"
+        ].reduce((acc, alias) => ({ 
+            ...acc, [alias]: () => system.invoke("LOCK_THE_SCREEN") 
+        }), {})
+    ),
     ["lock the screen"](){
         // puts the system in lock screen, screen save mode
         InvokableCommands["CLOSE_ALL_WIDGETS"]()
+
+
         system.invoke("ENABLE_DEEP_RENDERER")
         // display the lock screen widget
         system.invoke("NEW_CLOCK_WIDGET")
@@ -10081,6 +10125,10 @@ const InvokableCommands = {
         // todo: use python backend to extract
         // playable url from youtube-dl
         return "https://www.youtube.com/watch?v=931PQwTA79k";
+    },
+    ["show cardbox ideaz"](){
+        system.registerWidget("chrome_Eg990Efhut.png")
+        system.registerWidget("chrome_SeWUnElI6x.png")
     },
     ["New Moon Phase Widget"](){
         system.registerWidget(new MoonPhaseWidget());
