@@ -5934,7 +5934,8 @@ class Dashboard {
             /* to */ 
             {x:0,y:0,z:1}, 
             /*onUpdate*/
-            (vector)=>{   
+            (vector)=>{
+                console.warn('onupdate',vector)
                 panX = vector.x;
                 panY = vector.y;
                 zoom = vector.z;
@@ -9725,6 +9726,9 @@ const InvokableCommands = {
     ["new clock widget"](){
         system.registerWidgetInstance(new ClockWidget())
     },
+    ["Play Quad City DJ's - C'Mon 'N Ride It (The Train)"](){
+        return "https://www.youtube.com/watch?v=D53M1vVF2N4"
+    },
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
         // the one i want is restricted
@@ -13261,13 +13265,19 @@ requestAnimationFrame(zoomAnimation.animate.bind(zoomAnimation));
 */
 function animateVector(from,to, onUpdate, duration = 1000){
     // assume x,y,z for now
-    let xAnimation = new Animation(from.x, to.x, duration, 
+    let xAnimation = new Animation(
+        from.x, to.x, 
+        duration, 
         (value) => {from.x = value; onUpdate(value); });
     
-    let yAnimation = new Animation(from.y, to.y, duration, 
+    let yAnimation = new Animation(
+        from.y, 
+        to.y, duration, 
         (value) => {from.y = value; onUpdate(value); });
     
-    let zAnimation = new Animation(from.z, to.z, duration, 
+    let zAnimation = new Animation(
+        from.z, 
+        to.z, duration, 
         (value) => {from.z = value; onUpdate(value); });
 
     requestAnimationFrame(xAnimation.animate.bind(xAnimation));
