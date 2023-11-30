@@ -5855,6 +5855,9 @@ class LayereredCanvasRenderer {
                         }
                     })
                 }
+                p.onResize = function(){
+                    p.resizeCanvas(innerWidth, innerHeight);
+                }
             };
             this.canvases.push(new p5(sketch, `deep-canvas-${i+1}`));
             this.canvasSettings.push({
