@@ -650,7 +650,7 @@ class SystemManager {
     }
     registerWidget(name, instance){
         // register a widget instance with the system
-        this.get("Dashboard").registerWidget(name, instance);
+        this.dashboard.registerWidget(name, instance);
     }
 }
 /** 
@@ -681,6 +681,9 @@ class SystemManager {
  *   to the appropriate subsystems...
  */
 class System {
+    PreloadedImages = {}
+    PreloadedSounds = {}
+    PreloadedFonts = {}
     loadSound(soundFile){
         return new Promise((resolve,reject)=>{
             try{
@@ -701,7 +704,7 @@ class System {
     playSound(name){
         switch(name){
             case "widget_closed":
-                let soundFile = "Water Plop - Sound Effect (HD) [TubeRipper.com].mp3";
+                let soundFile = "res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3";
                 this.loadSound(soundFile).then(sound => {
                     sound.play();
                 }).catch(error => {
@@ -718,7 +721,7 @@ class System {
         this.notify(...arguments);
         //alert((arguments ?? []).join(",\n"))
     }
-    static get latestTodoWidgetOrNew(){
+    get latestTodoWidgetOrNew(){
         system.todo('implement a backing singleton for latest todo widget references')
         return new TodoWidget();
     }
@@ -1371,10 +1374,12 @@ class GherkinSequenceExecutor {
      * @returns 
      */
     preFlightCheck(){
-        console.warn('GSE:preFlightCheck',{
-            sequence: this.sequence,
-            isValid: this.sequence?.isValid,
-        })
+        if(store.debugGSE){
+            console.warn('GSE:preFlightCheck',{
+                sequence: this.sequence,
+                isValid: this.sequence?.isValid,
+            })
+        }
         if(this.sequence === null){
             // TODO: maybe panic the testRunner instead of the whole system
             system.panic("GSeqExecutor.preFlightCheck: no sequence provided");
@@ -1661,6 +1666,7 @@ class GherkinSequenceExecutor {
             // singleton key name provided
             return system.get(stepCallback)
         }else if(typeof stepCallback === 'object'){
+            //store.debugGSE && 
             console.warn('GSE:executeScenarioStep: step callback is an object, assuming it is a singleton instance',stepCallback)
             return stepCallback;
         }else{
@@ -2132,6 +2138,23 @@ class Widget extends UndoRedoComponent {
     // zero offset in the focal plane
     canvasID = 0 
 
+    get idArr(){
+        return [
+            this.smartPosition.x,
+            this.smartPosition.y,
+            this.widgetSize.width,
+            this.widgetSize.height,
+        ]
+    }
+    get idObj(){
+        return {
+            x: this.smartPosition.x,
+            y: this.smartPosition.y,
+            w: this.widgetSize.width,
+            h: this.widgetSize.height,
+        }
+    }
+
     // relative base position
     basePosition = {x:0,y:0}
     // get widgetPosition (){
@@ -2141,6 +2164,24 @@ class Widget extends UndoRedoComponent {
     position = {x:0,y:0}
     // offset position
     corrected = {}
+
+    containsPoint(x,y){
+        let box = this.getBoundingBox();
+        return (
+            x >= box.left
+            && x <= box.right
+            && y >= box.top
+            && y <= box.bottom
+        )
+    }
+
+    toLocalSpace(x,y){
+        let box = this.getBoundingBox();
+        return {
+            x: x - box.left,
+            y: y - box.top
+        }
+    }
 
     get name(){
         return this.constructor.name;
@@ -2249,8 +2290,6 @@ class Widget extends UndoRedoComponent {
             minWidgetDepth,
             maxWidgetDepth
         ))
-
-        //this.updatePlax();
 
         // should we decorate this class with any functionality?
     }
@@ -2385,8 +2424,8 @@ class Widget extends UndoRedoComponent {
         //     // draw an animated dashed line in the center of the two debug rectangles
         //     // drawAnimatedDashedLine(
         //     //     1, "hotpink", 0.1, 20,
-        //     //     createVector(rectA_x1 + wS.width / 2, rectA_y1 + wS.height / 2),
-        //     //     createVector(rectB_x1 + wS.width / 2, rectB_y1 + wS.height / 2),
+        //     //     mctx.createVector(rectA_x1 + wS.width / 2, rectA_y1 + wS.height / 2),
+        //     //     mctx.createVector(rectB_x1 + wS.width / 2, rectB_y1 + wS.height / 2),
         //     // )
 
         //ctx.pop();
@@ -2535,10 +2574,11 @@ class Widget extends UndoRedoComponent {
         // need to finish view frustum culling
         //if(this?.onDraw & !this.doNotDraw){
             // call extending method
-            if(!this?.onDraw){
-                system.panic("onDraw missing!",this);
+            if(this?.onDraw && !this.doNotDraw){
+                this?.onDraw?.();
+            }else{
+                //console.warn('skipping draw')
             }
-            this?.onDraw?.();
         //}
 
         
@@ -2593,6 +2633,7 @@ class Widget extends UndoRedoComponent {
             this.flagDoNotDraw(false);
         }
         store.frameDrawCount++;
+
         // toggle show widget debug info
         if(store.showWidgetPositions){
             this.ctx.push()
@@ -2691,6 +2732,10 @@ class Widget extends UndoRedoComponent {
     }
     onDraw(){
         // override me
+        //this.ctx.push()
+    }
+    endDraw(){
+        //this.ctx.pop()
     }
     close(){
         /** @see System.playSound */
@@ -2702,6 +2747,51 @@ class Widget extends UndoRedoComponent {
 }
 
 //class UIButton extends Widget {}
+
+// base of our synthetizer :D
+class OscilloscopeWidget extends Widget {
+    constructor(){
+        super(...arguments);
+
+        // draw a grid spaced 10px apart
+        // cache it to a bitmap
+        let gridCanvas = document.createElement('canvas');
+        gridCanvas.width = this.widgetSize.width;
+        gridCanvas.height = this.widgetSize.height;
+        let gridContext = gridCanvas.getContext('2d');
+
+        gridContext.strokeStyle = 'lightgrey';
+        gridContext.lineWidth = 0.5;
+
+        for(let x = 0; x <= gridCanvas.width; x += 10) {
+            gridContext.moveTo(x, 0);
+            gridContext.lineTo(x, gridCanvas.height);
+            gridContext.stroke();
+        }
+
+        for(let y = 0; y <= gridCanvas.height; y += 10) {
+            gridContext.moveTo(0, y);
+            gridContext.lineTo(gridCanvas.width, y);
+            gridContext.stroke();
+        }
+
+        this.gridImage = gridCanvas;
+    }
+    onDraw(){
+        super.onDraw(...arguments);
+
+        // draw the gridImage
+        this.ctx.drawImage(this.gridImage, 0, 0);
+
+        // draw an oscillating green line for now
+        this.ctx.strokeWeight(1)
+        this.ctx.stroke("green")
+        this.ctx.fill("green")
+        this.ctx.line(0,0,100,100)
+
+        super.endDraw();
+    }
+}
 
 class PhysicsToyWidget extends Widget {
     
@@ -3150,12 +3240,12 @@ class CalculatorWidget extends Widget {
         ["1","2","3","-"],
         ["0",".","=","+"],
     ]]
-    draw(){
-        super.draw(...arguments)
-        push()
-            rectMode(CENTER);
-            fill("lightgrey")
-            rect(
+    onDraw(){
+        super.onDraw(...arguments)
+        // this.ctx.push()
+        this.ctx.rectMode(CENTER);
+        this.ctx.fill("lightgrey")
+        this.ctx.rect(
                 this.smartPosition.x + this.widgetSize.width / 2,
                 this.smartPosition.y + this.widgetSize.height / 2,
                 this.widgetSize.width,
@@ -3168,11 +3258,11 @@ class CalculatorWidget extends Widget {
                     let padding = 20;
                     let buttonWidth = (this.widgetSize.width - padding) / row.length;
                     let buttonHeight = (this.widgetSize.height - (padding * this.buttons.length)) / this.buttons.length;
-                    rectMode(CENTER);
-                    fill("white")
-                    stroke("black")
-                    strokeWeight(3)
-                    rect(
+                    this.ctx.rectMode(CENTER);
+                    this.ctx.fill("white")
+                    this.ctx.stroke("black")
+                    this.ctx.strokeWeight(3)
+                    this.ctx.rect(
                         this.smartPosition.x + (buttonWidth * buttonIndex) + buttonWidth / 2,
                         this.smartPosition.y + (buttonHeight * rowIndex) + buttonHeight / 2,
                         buttonWidth,
@@ -3180,14 +3270,14 @@ class CalculatorWidget extends Widget {
                         20 // this is the radius for the rounded corners
                     );
 
-                    fill("black")
+                    this.ctx.fill("black")
                     let tpx = this.smartPosition.x + (buttonWidth * buttonIndex) + buttonWidth / 2;
                     let tpy = this.smartPosition.y + (buttonHeight * rowIndex) + buttonHeight / 2;
                     let tsx = 0;//buttonWidth;
                     let tsy = 0;//buttonHeight;
-                    textSize(20)
-                    textAlign(CENTER, CENTER)
-                    text(button, tpx,tpy,tsx,tsy)
+                    this.ctx.textSize(20)
+                    this.ctx.textAlign(CENTER, CENTER)
+                    this.ctx.text(button, tpx,tpy,tsx,tsy)
                 })
             })
             
@@ -3200,7 +3290,7 @@ class CalculatorWidget extends Widget {
             // textSize(20)
             // textAlign(CENTER, CENTER)
             // text("Calculator!", tpx,tpy,tsx,tsy)
-        pop()
+        //pop()
     }
 }
 class StickyNoteWidget extends Widget {
@@ -3453,6 +3543,84 @@ class CalendarWidget extends Widget {
     }
 }
 
+/**
+ * @class Raycast
+ */
+class Raycast {
+    hits = []
+    /**
+     * @type {p5.Vector}
+     */
+    from = null
+    /**
+     * @type {p5.Vector}
+     */
+    to = null
+    /**
+     * 
+     * @param {p5.Vector} from 
+     * @param {p5.Vector} to 
+     */
+    constructor(from, to){
+        this.from = from;
+        this.to = to;
+        this.performHitCheck();
+    }
+    performHitCheck(){
+        // Create a single shared vector outside the loop
+        let direction = p5.Vector.sub(this.to, this.from);
+        let maxRayLength = direction.mag();
+        direction.normalize();
+
+        // Iterate through all widgets in the system dashboard
+        Object.keys(system.dashboard.widgets).forEach(widgetID => {
+            let widget = system.dashboard.widgets[widgetID];
+            // Check if the ray intersects the widget
+            let hitPoint = this.checkIntersection(widget, direction, maxRayLength);
+            if(hitPoint) {
+                // If it does, save the local hitpoint (in widget space) and the global hit point (in world space) in our hits array
+                this.hits.push({
+                    local: hitPoint.local,
+                    global: hitPoint.global,
+                    widget: widget
+                });
+            }
+        })
+        // TODO: Optimize this with BVH (Bounding Volume Hierarchy) in the future
+    }
+    /**
+     * 
+     * @param {Widget} widget 
+     * @param {p5.Vector} direction 
+     * @param {float} maxRayLength 
+     * @returns 
+     */
+    checkIntersection(widget, direction, maxRayLength){
+        // return a hitpoint{local,global} if we hit,
+        // else, return null
+        let magnitude = 0;
+        let stepSize = 1;
+        let hitPoint = null;
+        let stopOnFirstHit = true;
+
+        while(magnitude <= maxRayLength) {
+            let position = p5.Vector.add(this.from, p5.Vector.mult(direction, magnitude));
+            if(widget.containsPoint(position.x, position.y)) {
+                hitPoint = {
+                    local: widget.toLocalSpace(position),
+                    global: position
+                };
+                if(stopOnFirstHit) {
+                    break;
+                }
+            }
+            magnitude += stepSize;
+        }
+
+        return hitPoint;
+    }
+}
+
 class MoonPhaseWidget extends Widget {
     name = "Moon Phase Widget"
     currentPhaseId = 0;
@@ -3469,6 +3637,7 @@ class MoonPhaseWidget extends Widget {
     }
     onDraw(){
         super.onDraw(...arguments)
+
         // if the widget isn't in the viewport anymore,
         // don't render it
         // TODO: implement BVH spatial partitioning for optimized
@@ -3484,17 +3653,17 @@ class MoonPhaseWidget extends Widget {
 
         // super.draw(...arguments)
         // draw the moon phase
-        let ctx = this.getCurrentContext();
-        ctx.push()
-        ctx.textSize(300)
-        ctx.textAlign(CENTER, CENTER)
+        // let ctx = this.getCurrentContext();
+        // ctx.push()
+        this.ctx.textSize(300)
+        this.ctx.textAlign(CENTER, CENTER)
         const ej = MOON_PHASE_EMOJIS[MOON_PHASE_ORDER[this.currentPhaseId]];
-        ctx.text(
+        this.ctx.text(
             `${ej}`,
             this.smartPosition.x + (this.widgetSize.width / 2),
             this.smartPosition.y + (this.widgetSize.height / 2)
         )
-        ctx.pop()
+        // ctx.pop()
     }
 }
 
@@ -3881,44 +4050,25 @@ class UIButton extends Widget {
     constructor(){
         super(...arguments)
     }
-    draw(rootWidget){
-        // this.smartPosition.x = rootWidget.position.x;
-        // this.smartPosition.y = rootWidget.position.y;
-        // super.draw(...arguments)
-        this.preDraw();
-        push()
-
-            strokeWeight(3)
-            stroke("blue")
-            fill(this.hovered ? "green" : "red")
-            rect(
-                rootWidget.position.x 
-                    + this.smartPosition.x 
-                    + (rootWidget.widgetSize.width / 2)
-                    - (this.widgetSize.width / 2),
-                rootWidget.position.y 
-                    + this.smartPosition.y 
-                    + (rootWidget.widgetSize.height / 2)
-                    - (this.widgetSize.height / 2),
-                this.widgetSize.width,
-                this.widgetSize.height,
-                20
-            )
-            textAlign(CENTER, CENTER)
-            fill("yellow")
-            text(
-                "UIButton",
-                rootWidget.position.x 
-                    + this.smartPosition.x 
-                    + (rootWidget.widgetSize.width / 2)
-                    - (this.widgetSize.width / 2),
-                rootWidget.position.y 
-                    + this.smartPosition.y 
-                    + (rootWidget.widgetSize.height / 2)
-                    - (this.widgetSize.height / 2)
-            )
-
-        pop();
+    onDraw(rootWidget){
+        super.onDraw(...arguments)
+        this.ctx.strokeWeight(3)
+        this.ctx.stroke("blue")
+        this.ctx.fill(this.hovered ? "green" : "red")
+        this.ctx.rect(
+            this.smartPosition.x,
+            this.smartPosition.y,
+            this.widgetSize.width,
+            this.widgetSize.height,
+            20
+        )
+        this.ctx.textAlign(CENTER, CENTER)
+        this.ctx.fill("yellow")
+        this.ctx.text(
+            "UIButton",
+            this.smartPosition.x,
+            this.smartPosition.y
+        )
     }
 }
 
@@ -4069,33 +4219,6 @@ class ZoomDependentWidget extends Widget {
         mctx.text(`🦠\n${this.roundedZoom}`,this.center.x,this.center.y - 25)
     }
 }
-// register the widget with the command system as instantiatable
-class NewZoomDependentWidgetCommand
-extends BaseCmds(Command,{
-    name: "New Zoom Dependent Widget",
-    steps: [
-        {
-            question: "Loading...",
-            onStepLoaded(wiz){
-                try{
-
-                    system.get("Dashboard").registerWidget(new ZoomDependentWidget())
-                }catch(e){
-                    system.error(e)
-                }
-                system.hideCmdPrompt();
-
-                // end the wizard
-                wiz.end();
-                // hide the command prompt
-                system.get("cmdprompt").hide();
-            }
-        }
-    ],
-    finalCallback(wiz){
-
-    }
-}){/**/}
 
 class TitleIdeaSwitcher {
     title_ideas = [
@@ -4171,14 +4294,19 @@ class SVGViewerWidget extends Widget {
     draw(){
         super.draw(...arguments)
 
-        if(!PreloadedSVGs[this.src]){
-            PreloadedSVGs[this.src] = loadImage(this.src)
+        if(!system.PreloadedSVGs[this.src]){
+            system.PreloadedSVGs[this.src] = loadImage(this.src)
         }
 
         // draw the SVG
-        if(PreloadedSVGs[this.src]){
+        if(system.PreloadedSVGs[this.src]){
             // draw it
-            image(PreloadedSVGs[this.src], this.smartPosition.x, this.smartPosition.y, this.widgetSize.width, this.widgetSize.height);
+            image(system.PreloadedSVGs[this.src], 
+                this.smartPosition.x, 
+                this.smartPosition.y, 
+                this.widgetSize.width, 
+                this.widgetSize.height
+            );
         }
     }
 }
@@ -4207,8 +4335,8 @@ class ImageViewerWidget extends Widget {
         // if the src contains .gif, use a gif renderer
         this.isGif = this.src.includes(".gif");
 
-        if(PreloadedImages[this.src]){
-            this.image = PreloadedImages[this.src];
+        if(system.PreloadedImages[this.src]){
+            this.image = system.PreloadedImages[this.src];
         }else{
             // does this need to be in a callback or does it unwrap itself?
             // Answer: 
@@ -4218,7 +4346,7 @@ class ImageViewerWidget extends Widget {
             loadImage(this.src, (img) => {
                 this.image = img;
                 this.updateSizeBasedOnImage();
-                PreloadedImages[this.src] = img;
+                system.PreloadedImages[this.src] = img;
             });
             this.image = 'LOADING';
         }
@@ -5097,6 +5225,9 @@ class iFrameWidget extends Widget {
                 }
             }
         
+        // if width/height opts were not provided
+        // check the string for ?width=w&height=h or ?w=w&h=h
+
         /*
         if(arguments[1]?.fullTag?.length){
                 arguments[1]?.fullTag
@@ -5117,6 +5248,14 @@ class iFrameWidget extends Widget {
     // draw iframe main
     onDraw(){
         super.onDraw(...arguments)
+
+        this.ctx.push()
+        this.ctx.translate(-this.smartPosition.x, -this.smartPosition.y)
+        this.ctx.scale(zoom)
+        this.ctx.fill("red")
+        this.ctx.text(`url:${this.url}`, 0, 0, 100, 100);
+        this.ctx.pop()
+
         // if(system.get("cmdprompt").visible){
         //     this.iframe.hide();
         //     return
@@ -5751,7 +5890,7 @@ class GherkinRunnerWidget extends Widget {
         system.warn('Widget.setResults: results',results)
         this.results = results
         setTimeout(()=>{
-            system.get("Dashboard").reflowLayout()
+            system.dashboard.reflowLayout()
         },100)
     }
     async run(){
@@ -6033,11 +6172,18 @@ class Argument {
 */
 
 let cmdprompt;
+/**
+ * 
+ * Array of Raycast rays
+ * @type {Raycast[]}
+ */
+let raysToVisualize = [];
 
+// TODO: move to MyMouseEvents
 document.addEventListener('mousedown', function(event) {
     // if we clicked an iFrame, focus the top layer
     if (event.target.tagName === 'IFRAME') {
-        console.warn('clicked an iframe',{event})
+        console.warn('clicked an iframe!',{event})
         
     }
 
@@ -6057,8 +6203,18 @@ document.addEventListener('mousedown', function(event) {
     // deepCanvasManager.canvasSettings[1] = deepCanvasManager.canvasSettings[0];
     // deepCanvasManager.canvasSettings[0] = topCanvasSettings;
 
+    // draw a raycast from the mouse position
+    let from = mctx.createVector(mouseX, mouseY);
+    let to = mctx.createVector(innerWidth, innerHeight);
+    let raycast = new Raycast(from, to);
+    console.warn('RAY CAST RESULTS!',{
+        raycast,
+    })
 
-    
+    raysToVisualize.push(raycast);
+    setTimeout(()=>{
+        raysToVisualize.unshift();
+    },3000)
 })
 // double-click
 document.addEventListener
@@ -6173,7 +6329,7 @@ class LayereredCanvasRenderer {
         //this.debugShapes.unshift(this.debugShapes.pop());
         // wrap around focus on click
         this.focusedIndex--
-        if(this.focusedIndex<-1){
+        if(this.focusedIndex<0){
             this.focusedIndex = 1
         }
     }
@@ -6555,7 +6711,13 @@ class Dashboard {
         const space = 100; //420;
         
         // Sort widgets by height in descending order
-        this.widgetLayoutOrder.sort((a, b) => this.widgets[b].widgetSize.height - this.widgets[a].widgetSize.height);
+        this.widgetLayoutOrder.sort((a, b) => {
+            let widgetA = this.widgets[a];
+            let widgetB = this.widgets[b];
+            let heightA = widgetA && widgetA.widgetSize ? widgetA.widgetSize.height : 0;
+            let heightB = widgetB && widgetB.widgetSize ? widgetB.widgetSize.height : 0;
+            return heightB - heightA;
+        });
 
         this.widgetLayoutOrder.forEach((widgetID, index) => {
             let widget = this.widgets[widgetID];
@@ -6755,17 +6917,10 @@ class Dashboard {
                 x: this.layout[widgetID].x * zoom,
                 y: this.layout[widgetID].y * zoom,
             }
-            mctx.push()
-                // mctx.translate(-panX, -panY)
-                // mctx.translate(this.widgets[widgetID].smartPosition.x, this.widgets[widgetID].smartPosition.y)
-                // mctx.scale(1/zoom)
-                // mctx.push()
-                // aka widget.draw()
-                this.widgets[widgetID]
-                    .setTargetPosition(scaledTarget)
-                    .draw(widgetID);
-                // mctx.pop()
-            mctx.pop()
+            // aka widget.draw()
+            this.widgets[widgetID]
+                .setTargetPosition(scaledTarget)
+                .draw(widgetID);
         });
         // if there's at least one hovered widget, set the cursor to pointer
         document.body.style.cursor = hoveredArray?.length 
@@ -7625,8 +7780,9 @@ class GamePadWidget extends Widget {
 
 }
 
-class MyMouseEvents {
+class MyMouseEvents extends Widget {
     constructor(){
+        super(...arguments)
         window.addEventListener('mousedown', this.onMouseDown.bind(this));
         window.addEventListener('mouseup', this.onMouseUp.bind(this));
     }
@@ -9585,7 +9741,7 @@ class Graph {
         // Adjust mouse position for pan and zoom
         let adjustedMouseX = (mouseX - panX) / zoom;
         let adjustedMouseY = (mouseY - panY) / zoom;
-        let mousePos = createVector(adjustedMouseX, adjustedMouseY);
+        let mousePos = mctx.createVector(adjustedMouseX, adjustedMouseY);
 
         let closestNode = null;
         let closestDistance = Infinity;
@@ -10030,6 +10186,9 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new zoom dependent widget"](){
+        system.registerWidget(new ZoomDependentWidget())
+    },
     ["new sticky note"](){
         system.registerWidgetInstance(new StickyNoteWidget())
     },
@@ -10189,8 +10348,6 @@ const InvokableCommands = {
     },
     ["reflow"](){
         window.dispatchEvent(new Event("resize"));
-        //system.get("Dashboard")
-        //    ?.reflowLayout?.();
     },
     FocusWidget(id){
         system.get("Dashboard")
@@ -11040,6 +11197,13 @@ class SplineEditorWidget extends Widget {}
 class TimelineWidget extends Widget {}
 class ColorPickerWidget extends Widget {
     // TODO
+    onDraw(){
+        super.onDraw(...arguments)
+        this.ctx.fill("red")
+        this.ctx.rect(0,0,100,100)
+        this.ctx.fill(0)
+        this.ctx.text("TODO: Color Picker Widget",0,0)
+    }
 }
 class NestedDragAndDropSortingWidget extends Widget {}
 class FractalTreeGraphViewerWidget extends Widget {}
@@ -11631,13 +11795,14 @@ class ToastNotification {
         // the message and renders it's clones in a diagonal line towards the center of the screen
 
         let targetCloneCount = 1;
+        let speedFactor = .05; // .1 ~ 10% ~ 2 waves per second 
         if(this.options.important){
             if(this.importantCloneAnimationSequenceFrame < 3000){
                 this.importantCloneAnimationSequenceFrame++;
 
                 // use rounded sin wave to define number of clones (int)
                 // and their position (float)
-                targetCloneCount = Math.abs(Math.round(Math.sin(this.importantCloneAnimationSequenceFrame / 10) * 10));
+                targetCloneCount = Math.abs(Math.round(Math.sin(this.importantCloneAnimationSequenceFrame * speedFactor) * 10));
             }
         }
         this.targetCloneCount = targetCloneCount;
@@ -11653,6 +11818,7 @@ class ToastNotification {
 
     drawOneInstance(index,ctx){
 
+        ctx.push()
         ctx.rectMode(CORNER)
         let offsetY = 30 * index;
         let leavingAlpha = this.state === 'leaving' 
@@ -11675,25 +11841,44 @@ class ToastNotification {
         
         const tBoxW = 300;
         const cornerRadius = 20;
-        // ctx.push();
-        ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
-        ctx.fill(255, 255, 255, clampedAlpha);
-        // ctx.pop();
 
+        ctx.rect(
+            windowWidth - 10 - tBoxW, 
+            20 + offsetY, 
+            tBoxW, 
+            100, 
+            cornerRadius
+        );
+        ctx.fill(255, 255, 255, clampedAlpha);
+
+
+        /**
+         * @see drawStringWordWrapped
+         * @param {string} str
+         * @param {number} x
+         * @param {number} y
+         * @param {number} w
+         * @param {number} lineHeight
+         * @param {p5.Graphics} ctx
+         */
+        //ctx.push();
         drawStringWordWrapped(
             this.message,
-            windowWidth - 10 - tBoxW + 10,
-            20 + offsetY + 10,
-            tBoxW - 20,
-            100 - 20,
+            10,
+            10,
+            tBoxW,
+            20, // line height
             ctx
         )
+        //ctx.pop();
 
         // darken by the lowest index so shadow effect
         // let shadowEffect = map(index, 0, this.options.important ? this.targetCloneCount : 1, 0, 50);
         // ctx.fill(0, 0, 0, shadowEffect);
         // ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
         // ctx.alpha(255);
+
+        ctx.pop();
     }
 }
 
@@ -13164,6 +13349,7 @@ class DebugPath {
         //this.stepPruner();
     }
 
+    // todo convert to Widget and use onDraw
     draw(_color){
         // disable ze gizmo
         if(store.disableDebugPath){
@@ -13172,7 +13358,7 @@ class DebugPath {
         this.stepPruner();
         let ctx = deepCanvasManager.uiContext;
         ctx.push()
-        ctx.translate(-panX + innerWidth/2, panY + innerHeight/2);
+        //ctx.translate(-panX + innerWidth/2, panY + innerHeight/2);
         //ctx.scale(zoom, zoom);
         let adjustedLineColor = color("red");
         for(let i = 0; i < this.points.length - 1; i++) {
@@ -14247,19 +14433,7 @@ function setupDefaults(){
         baseCmds.push(getBasicSpawnWidgetConfig(widget));
     })
 }
-/** TODO REVISIT */
-// move to p.preload
-const PreloadedImages = {};
-const PreloadedSVGs = {}
-const PreloadedSounds = {};
-function preload() {
-    Object.entries(PreloadedImages).forEach(([_,imgName])=>{
-        PreloadedImages[imgName] = loadImage(imgName);
-    })
-    Object.entries(PreloadedSVGs).forEach(([_,name])=>{
-        PreloadedSVGs[name] = loadImage(name);
-    })
-}
+
 class DOMNode extends Widget {
     get text(){
         return this._text;
@@ -14504,7 +14678,26 @@ let cursor, MainCanvasContextThing = function(p){
         setTimeout(()=>{_onResize()},150);
     }
 
+    system.PreloadedImages = {};
+    system.PreloadedSVGs = {}
+    system.PreloadedSounds = {
+        "res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3": null
+    };
+    p.preload = function() {
+        Object.entries(system.PreloadedImages).forEach(([_,imgName])=>{
+            system.PreloadedImages[imgName] = loadImage(imgName);
+        })
+        Object.entries(system.PreloadedSVGs).forEach(([_,name])=>{
+            system.PreloadedSVGs[name] = loadImage(name);
+        })
+        Object.entries(system.PreloadedSounds).forEach(([_,name])=>{
+            system.PreloadedSounds[name] = system.loadSound(name);
+        })
+    }
+
     p.setup = function(){
+
+        p.resizeCanvas(mctx.innerWidth,mctx.innerHeight)
 
         window.addEventListener('mouseup', function(event) {
             // if we clicked on or INSIDE of #html-foreground
@@ -14840,14 +15033,13 @@ document.body.appendChild(topCanvas);
         })
 
         // Additional Widgets
-        system.get("Dashboard").registerWidget(new KeyboardWidget());
+        system.registerWidget(new KeyboardWidget());
+        system.registerWidget(new MyMouseEvents());
 
         //system.get("cmdprompt")
         system.cmdprompt.afterSetup()
 
         // const WidgetsToRegister = [
-        //     "inspiration/Flag_of_Palestine.svg",
-        //     "milky-way-galaxy.gif",
         //     "inspiration/001.png",
         //     "inspiration/signs-of-yesterday.jpeg",
         //     "fine.gif",
@@ -14862,7 +15054,7 @@ document.body.appendChild(topCanvas);
         //     TodoWidget,
         //     UIDemoWidget,
         //     WeatherWidget,
-        //     ZoomDependentWidget,
+
         //     ImageCubeRotatorWidget,
         //     ImageRotatorWidget,        
         // ]
@@ -14879,6 +15071,7 @@ document.body.appendChild(topCanvas);
             // DEFAULT WIDGET SET
 
         system.registerWidget("colorpickermockup.png")
+        system.registerWidget(new ColorPickerWidget())
 
         // as "let him cook" meme
         system.registerWidget("https://i.kym-cdn.com/photos/images/newsfeed/002/488/659/18a.jpg");
@@ -14905,6 +15098,9 @@ document.body.appendChild(topCanvas);
 
         //InvokableCommands["UI Inspiration > Minority Report UI"]()
         system.invoke("EMBED_TWEET")
+
+        // demo widgets
+        system.invoke("new zoom dependent widget")
 
         // OnDashboardReady OnDashboardLoaded OnDashboardInit
         // OnDashboardStarted
@@ -14977,8 +15173,6 @@ document.body.appendChild(topCanvas);
             .registerWidget(new AStarPathfindingDemoWidget())
 
             .registerWidget(new MandlebrotWidget())
-
-            .registerWidget(new ZoomDependentWidget())
 
                 //     .registerWidget(new IsometricPreview())
 
@@ -15057,11 +15251,11 @@ document.body.appendChild(topCanvas);
             //         console.warn(`failed to instantiate widget ${widgetClassName}`)
             //         return;
             //     }
-            //     system.get("Dashboard").registerWidget(theInstance)
+            //     system.registerWidget(theInstance)
             // })
 
                 // shuffle widget order
-                // system.get("Dashboard").shuffleWidgets()
+                // system.dashboard.shuffleWidgets()
                 // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
 
         // POST-REGISTRATION-WIDGET-MUNGING-OPERATIONS
@@ -15285,13 +15479,41 @@ document.body.appendChild(topCanvas);
     }
 
     // Define the draw function
-    // Main Draw / Root Draw
+    // Main Draw fn / Root Draw
     // Todo: system manager should loop over active systems,
     // and call draw on systems which have non empty render queues
     p.draw = function(){
         //myMainDrawFN();
         //console.warn('calling compositor render',performance.now())
         window.iCanvasCompositor.render();
+
+        // debug layer, draw raysToVisualize
+        // remember raysToVisualize is an array of Raycast
+        // annotate it:
+        /**
+         * @type {Raycast[]}
+         */
+        raysToVisualize.forEach((ray)=>{
+            let uictx = deepCanvasManager.uiContext;
+            uictx.push()
+            // Draw a blue dot at the source
+            uictx.fill(0,0,255);
+            uictx.ellipse(ray.from.x, ray.from.y, 2.5, 2.5);
+            // Draw a red dot at the destination
+            uictx.fill(255,0,0);
+            uictx.ellipse(ray.to.x, ray.to.y, 5, 5);
+            // Draw a line from source to destination
+            uictx.stroke(0, 255, 0);
+            uictx.strokeWeight(1);
+            uictx.line(
+                ray.from.x, 
+                ray.from.y, 
+                //ray.from.z, 
+                ray.to.x, 
+                ray.to.y //, ray.to.z
+            );
+            uictx.pop()
+        })
     }
 
     // Define the mouseReleased function
@@ -15776,38 +15998,33 @@ lines.forEach(line => ctx.text(line.text, windowWidth - 10 - tBoxW + 10, line.y)
 ctx.pop();
 */
 
-function drawStringWordWrapped(
-    string, 
-    x, 
-    y, 
-    lineHeight, 
-    fitWidth, 
-    ctx
-) {
-    ctx.fill(200)
-    ctx.textAlign(CENTER,CENTER);
-    // if the text is wider than the box, word wrap it
-    let textWidth = ctx.textWidth(string);
-    if (textWidth > fitWidth) {
-        let words = string.split(' ');
-        let line = '';
-        let yLineOffset = 0;
-        for (let i = 0; i < words.length; i++) {
-            let testLine = line + words[i] + ' ';
-            let testWidth = ctx.textWidth(testLine);
-            if (testWidth > fitWidth && i > 0) {
-                ctx.text(
-                    line, 
-                    x + (fitWidth/2), 
-                    y + (lineHeight/2) + yLineOffset);
-                line = words[i] + ' ';
-                yLineOffset += ctx.textSize();
-            } else {
-                line = testLine;
-            }
+function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
+    let words = string.split(' ');
+    let line = '';
+    let yLineOffset = 0;
+
+    for (let i = 0; i < words.length; i++) {
+        let testLine = line + words[i] + ' ';
+        let testWidth = ctx.textWidth(testLine);
+
+        ctx.textAlign(LEFT,TOP)
+        if (testWidth > fitWidth && i > 0) {
+            ctx.text(
+                line.trim(), 
+                x, 
+                y + (lineHeight / 2) + yLineOffset);
+            line = words[i] + ' ';
+            yLineOffset += ctx.textSize();
+        } else {
+            line = testLine;
         }
-        ctx.text(line, x + (fitWidth/2), y + (lineHeight/2) + yLineOffset);
     }
+
+    ctx.text(
+        line.trim(), 
+        x, 
+        y + yLineOffset
+    );
 }
 
 // todo: make a multi-select version
@@ -16079,16 +16296,28 @@ class SuggestionList {
             );
         })
     }
+    /**
+     * 
+     * @param {float} x 
+     * @param {Number} y 
+     * @param {Number} w 
+     * @param {Number} h 
+     * @param {string} label 
+     * @param {boolean} selected 
+     * @param {p5.p5jsContext} ctx 
+     */
     renderSuggestionOption(x,y,w,h,label,selected,ctx){
         ctx.push()
         // ctx.translate(x,y);
+        // ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke("white")
         ctx.strokeWeight(selected ? 3 : 1);
         // draw box
         ctx.fill(selected ? "purple" : ctx.color(20))
-        ctx.rect(x,y,w,h);
+        ctx.rect(0,0,w,h);
         ctx.strokeWeight(1);
+        ctx.translate(x,y)
         // draw label
         drawStringWordWrapped(
             label,
@@ -16098,9 +16327,9 @@ class SuggestionList {
             w - 20,
             ctx
         )
-        
-
         ctx.pop()
+
+        
     }
 }
 
