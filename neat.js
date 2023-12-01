@@ -681,9 +681,17 @@ class SystemManager {
  *   to the appropriate subsystems...
  */
 class System {
+    alert(){
+        this.notify(...arguments);
+        alert(arguments.join(",\n"))
+    }
     static get latestTodoWidgetOrNew(){
         system.todo('implement a backing singleton for latest todo widget references')
         return new TodoWidget();
+    }
+    log(){
+        console.log(...arguments);
+        system.showToast(arguments[0])
     }
     tag = "";
     innerClockTime = -1; 
@@ -702,6 +710,13 @@ class System {
     todo(){
         this.notify("TODO: " + [...arguments].join(" "));
     }
+    showToast(){
+        this.notify(...arguments);
+    }
+    // aka notify
+    // aka toast
+    // aka alert
+    // aka notification
     notify(){
         this.get("toastManager").showToast(...arguments);
     }
@@ -2115,13 +2130,17 @@ class Widget extends UndoRedoComponent {
 
     getPosition(thing){
         return thing.basePosition ?? thing.position;
+        // if(thing === this){
+        //     return thing.basePosition ?? thing.position;
+        // }
+        // return thing?.smartPosition ?? thing.basePosition ?? thing.position;
     }
 
     getPositionRecursive(node, accumulatedPosition = {x:0,y:0}){
         if(node.parentWidget){
             let parentPos = this.getPosition(node.parentWidget);
-            accumulatedPosition.x += parentPos.x;
-            accumulatedPosition.y += parentPos.y;
+            accumulatedPosition.x += parentPos.x + node.parentWidget.widgetSize.width;
+            accumulatedPosition.y += parentPos.y + node.parentWidget.widgetSize.height;
             return this.getPositionRecursive(node.parentWidget, accumulatedPosition);
         }
 
@@ -2530,23 +2549,25 @@ class Widget extends UndoRedoComponent {
         store.frameDrawCount++;
         // toggle show widget debug info
         if(store.showWidgetPositions){
-            canvasContext.fill("red")
-            canvasContext.text(`x:${
+            this.ctx.push()
+            this.ctx.fill("red")
+            this.ctx.text(`x:${
                 this.basePosition.x.toFixed(2)
             } y:${
                 this.basePosition.y.toFixed(2)
             } z:${
                 this.zDepth.toFixed(2)
             }\n xD:${
-                this.position.x.toFixed(2)
+                this.smartPosition.x.toFixed(2)
             } yD:${
-                this.position.y.toFixed(2)
+                this.smartPosition.y.toFixed(2)
             } zD:${
                 this.zDepth.toFixed(2)
             }`,
-                this.position.x,
-                this.position.y
+                this.smartPosition.x,
+                this.smartPosition.y
             );
+            this.ctx.pop()
         }
 
         // canvasContext.strokeWeight(1)
@@ -2634,6 +2655,128 @@ class Widget extends UndoRedoComponent {
 
 //class UIButton extends Widget {}
 
+class PhysicsToyWidget extends Widget {
+    
+    widgetSize = {
+        width: 100,
+        height: 100,
+    }
+
+    spheres = []
+    
+    constructor(){
+        super(...arguments);
+        for(var i = 0; i < 10; i++){
+            this.spheres.push({
+                x: mctx.random(0, this.widgetSize.width),
+                y: mctx.random(0, this.widgetSize.height),
+                vx: mctx.random(-1, 1),
+                vy: mctx.random(-1, 1),
+            })
+        }
+    }
+    
+    onDraw(){
+        super.onDraw(...arguments)
+
+        this.stepPhysics()
+        
+        // draw a hemisphere with balls in it
+        this.ctx.fill(0,0,0,1);
+        this.ctx.text("Physics Toy", this.smartPosition.y, this.smartPosition.y);
+        // using a polygon, draw a hemisphere
+        this.ctx.strokeWeight(1)
+        this.ctx.stroke(255)
+        let segments = 10;
+        let radius = this.widgetSize.width / 2;
+        let angleStep = 360 / segments;
+        let angle = 0;
+        let points = [];
+        for(var i = 0; i < segments; i++){
+            let x = radius * Math.cos(angle);
+            let y = radius * Math.sin(angle);
+            points.push({x,y});
+            angle += angleStep;
+        }
+        this.ctx.beginShape();
+        points.forEach((point)=>{ 
+            this.ctx.vertex(point.x, point.y);
+        })
+        this.ctx.endShape(CLOSE);
+    }
+    
+    stepPhysics(){
+        this.spheres.forEach((sphere)=>{
+            sphere.x += sphere.vx;
+            sphere.y += sphere.vy;
+            if(sphere.x < 0 || sphere.x > this.widgetSize.width){
+                sphere.vx *= -1;
+            }
+            if(sphere.y < 0 || sphere.y > this.widgetSize.height){
+                sphere.vy *= -1;
+            }
+            // check for collisions
+            this.spheres.forEach((otherSphere)=>{
+                if(sphere === otherSphere){
+                    return;
+                }
+                let distance = Math.hypot(sphere.x - otherSphere.x, sphere.y - otherSphere.y);
+                if(distance < 10){
+                    // collision!
+                    // swap velocities
+                    let temp = sphere.vx;
+                    sphere.vx = otherSphere.vx;
+                    otherSphere.vx = temp;
+                    temp = sphere.vy;
+                    sphere.vy = otherSphere.vy;
+                    otherSphere.vy = temp;
+                    // calculate the angle of collision
+                    let dx = otherSphere.x - sphere.x;
+                    let dy = otherSphere.y - sphere.y;
+                    let collisionAngle = Math.atan2(dy, dx);
+
+                    // calculate the new velocity after collision
+                    let magnitude1 = Math.sqrt(sphere.vx * sphere.vx + sphere.vy * sphere.vy);
+                    let magnitude2 = Math.sqrt(otherSphere.vx * otherSphere.vx + otherSphere.vy * otherSphere.vy);
+
+                    let direction1 = Math.atan2(sphere.vy, sphere.vx);
+                    let direction2 = Math.atan2(otherSphere.vy, otherSphere.vx);
+
+                    let new_vx1 = magnitude1 * Math.cos(direction1 - collisionAngle);
+                    let new_vy1 = magnitude1 * Math.sin(direction1 - collisionAngle);
+                    let new_vx2 = magnitude2 * Math.cos(direction2 - collisionAngle);
+                    let new_vy2 = magnitude2 * Math.sin(direction2 - collisionAngle);
+
+                    // final velocity after rotating axis back to original location
+                    sphere.vx = Math.cos(collisionAngle) * new_vx1 + Math.cos(collisionAngle + Math.PI/2) * new_vy1;
+                    sphere.vy = Math.sin(collisionAngle) * new_vx1 + Math.sin(collisionAngle + Math.PI/2) * new_vy1;
+                    otherSphere.vx = Math.cos(collisionAngle) * new_vx2 + Math.cos(collisionAngle + Math.PI/2) * new_vy2;
+                    otherSphere.vy = Math.sin(collisionAngle) * new_vx2 + Math.sin(collisionAngle + Math.PI/2) * new_vy2;
+                }
+            });
+        });
+    }
+}
+class MoleculeWidget extends Widget{}
+class AtomWidget extends Widget{}
+// does particle emission things
+class ParticleWidget extends Widget {
+
+}
+class StressBallWidget extends Widget {
+    // shows motion blur and squash n stretch at boundaries
+    // shows rendering in 2d mode vs 3d mode
+}
+class LavaLampWidget extends Widget {
+    // shows how to use a shader to render a lava lamp
+    // in 2d mode we use signed distance "meta balls"
+    // in 3d there's a meta ball mode, and a raymarched mode
+    // there's a guassian splat test mode too
+    // with fake (precomputed) raytraced lights and shadows
+}
+
+// toy train
+// train toy
 class TrainToyWidget extends Widget {
     constructor(){
         super(...arguments);
@@ -2643,7 +2786,7 @@ class TrainToyWidget extends Widget {
         super.onDraw(...arguments)
 
         this.ctx.fill(0,0,0,1);
-        this.ctx.text("Train Toy", 0, 0);
+        this.ctx.text("Train Toy", this.smartPosition.y, this.smartPosition.y);
     }
 }
 
@@ -5301,6 +5444,7 @@ class TodoWidget extends Widget {
     }
     addTodo(thing){
         this.todos.push({value:thing, status:0});
+        /** @see Dashboard.reflowLayout */
         this.dashboard?.reflowLayout();
     }
     updateTodo(id, newValue){
@@ -5846,11 +5990,19 @@ document.addEventListener('mousedown', function(event) {
     // if we clicked an iFrame, focus the top layer
     if (event.target.tagName === 'IFRAME') {
         console.warn('clicked an iframe',{event})
-        //deepCanvasManager.focusedIndex = 1;
-
+        
         // keep the focus, just swap the top layer
     }
-    deepCanvasManager.canvases.unshift(deepCanvasManager.canvases.pop());
+    deepCanvasManager.focusedIndex = deepCanvasManager.focusedIndex === 0 ? 1 : 0;
+    let topCanvas = deepCanvasManager.canvases[1];
+    deepCanvasManager.canvases[1] = deepCanvasManager.canvases[0];
+    deepCanvasManager.canvases[0] = topCanvas;
+
+    // swap settings to match
+    let topCanvasSettings = deepCanvasManager.canvasSettings[1];
+    deepCanvasManager.canvasSettings[1] = deepCanvasManager.canvasSettings[0];
+    deepCanvasManager.canvasSettings[0] = topCanvasSettings;
+    
 })
 // double-click
 document.addEventListener
@@ -5960,18 +6112,18 @@ class LayereredCanvasRenderer {
     maxRendered = 1 // todo extend
     globalPan = {x:0,y:0}
     globalZoom = 0
-    onClick(e){
-        // go through the debug shapes and move the last one to the front of the array
-        //this.debugShapes.unshift(this.debugShapes.pop());
-        // wrap around focus on click
-        this.focusedIndex--
-        if(this.focusedIndex<0){
-            this.focusedIndex = 1
-        }
-    }
+    // onClick(e){
+    //     // go through the debug shapes and move the last one to the front of the array
+    //     //this.debugShapes.unshift(this.debugShapes.pop());
+    //     // wrap around focus on click
+    //     this.focusedIndex--
+    //     if(this.focusedIndex<0){
+    //         this.focusedIndex = 1
+    //     }
+    // }
     // for now, we assume we are working with 3 visible simultaneous canvases
     constructor(){
-        window.addEventListener("click",this.onClick.bind(this))
+        // window.addEventListener("click",this.onClick.bind(this))
         this.canvases = [];
         this.canvasSettings = [
 
@@ -6194,6 +6346,12 @@ class LayereredCanvasRenderer {
             this.angles[canvasIndex] = 0;
         }
         canvas[shape.name](...inargs);
+        canvas.textAlign(CENTER, CENTER)
+        canvas.textSize(32)
+        // canvas.fill("white")
+        canvas.stroke("black")
+        canvas.strokeWeight(1)
+        canvas.text(canvasIndex, panX*zoom, panY*zoom)
         canvas.pop();
 
     }
@@ -6280,7 +6438,7 @@ class Dashboard {
             }
         })
     }
-    centerView(){
+    centerView(resetZoom = false){
         // Instantiate and start the animations
         // const panXAnimation = new Animation(panX, 0, 1000, value => panX = value);
         // const panYAnimation = new Animation(panY, 0, 1000, value => panY = value);
@@ -6295,8 +6453,7 @@ class Dashboard {
             /* from */ 
             {x:panX,y:panY,z:zoom},
             /* to */ 
-            // retain zoom
-            {x:0,y:0,z:zoom}, 
+            {x:0,y:0,z:resetZoom?0:zoom}, 
             /*onUpdate*/
             (value, fieldName)=>{
                 // console.warn('onupdate',{value,fieldName})
@@ -7526,7 +7683,44 @@ class KeyboardWidget extends Widget {
     }
 }
 
-class BonsaiTreeWidget extends Widget {
+class TreeWidget extends Widget {
+    name = "TreeWidget"
+    tree = null
+    widgetSize = {
+        width: 300,
+        height: 600
+    }
+    constructor(){
+        super(...arguments)
+
+        this.depth = mctx.random(1,5);
+        this.width = mctx.random(1,5);
+        this.height = mctx.random(1,5);
+    }
+    onDraw(){
+        super.onDraw(...arguments);
+
+        /* for now draw a hard-coded struct, in the future, they'll be dynamic */
+        
+        for(let i = 0; i < depth; i++){
+            for(let j = 0; j < width; j++){
+                for(let k = 0; k < height; k++){
+                    let x = i * 100;
+                    let y = j * 100;
+                    let z = k * 100;
+                    this.ctx.push();
+                    this.ctx.translate(x,y,z);
+                    this.ctx.fill("green");
+                    this.ctx.rect(0,0,100,100);
+                    this.ctx.pop();
+                }
+            }
+        }
+
+    }
+}
+
+class BonsaiTreeWidget extends TreeWidget {
     name = "BonsaiTreeWidget"
     tree = null
     widgetSize = {
@@ -9767,6 +9961,9 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new sticky note"](){
+        system.registerWidgetInstance(new StickyNoteWidget())
+    },
     new_refactor_plan(){
         system.todo("!!! NotYetImplemented !!!")
     },
@@ -9808,6 +10005,10 @@ const InvokableCommands = {
     },
     ["new quiz..."](){
         system.todo("!!! NotYetImplemented !!!")
+    },
+    ["todo: convert and clean up old wizard code"](){
+        system.todo("how much space is dead code %-wise?")
+        system.todo("TRACK IT OVER TIME!")
     },
     ["new trivia"](){
         system.todo("!!! NotYetImplemented !!!")
@@ -10126,7 +10327,7 @@ const InvokableCommands = {
             alert('no valid chars given');
             return;
         }
-        io.emit('message', sanitized);
+        socketIO.emit('message', sanitized);
     },
     ["DEV: Toggle Clear BG Flag(s)"](){
         // clear the cmd palette first, wait a tick THEN unset the flag
@@ -10412,6 +10613,115 @@ const InvokableCommands = {
     this_is_fine: "fine.gif",
     feels_good_man: "feelsgoodman.gif",
 
+    "new hand-written digit recognizer": "",
+    "new hand-drawn shape recognizer": "",
+    "new classifer": "",
+    // textual inversion, style transfer
+    "new AI training run": "",
+    "generate an image of...": "",
+    "convert this image to a video": "",
+    "combine these images!": "",
+
+    "watch bob ross": "",
+    "watch wheel of fortune": "",
+    "watch powerpuff girls": "",
+    "watch the simpsons": "",
+
+    "play half life": "",
+    "play portal 2": "",
+
+    "remember...": "",
+    "forget...": "",
+
+    "YouTube - The Coding Train - Coding Challenge 177: Soft Body Physics": "https://www.youtube.com/watch?v=IxdGyqhppis",
+
+    "visit the coding train": "https://thecodingtrain.com/?width=800&height=600",
+
+    "play snake": "",
+    "play line rider": "https://www.linerider.com/",
+
+    "the spinning top from inception": "https://www.youtube.com/watch?v=pQd1-4tqymo",
+    "new research journey"(){
+
+    },
+    "resume research journey"(){
+    },
+    "return to most recent notebook"(){
+
+    },
+
+    "check the weather":"check the forecast",
+    "whats it like outside":"check the forecast",
+    "check the forecast"(){
+
+    },
+
+    "what do i have going on today?":"check my calendar",
+    
+    "new shader graph"(){},
+    "new shadertoy shader"(){},
+    "browse shadertoy"(){},
+    "favorite shaders"(){},
+    "new sim city"(){},
+    "new roller coaster tycoon"(){},
+    "play uno"(){},
+    "play dos (from the makers of uno)"(){},
+    "play sorry"(){},
+    "play trouble"(){},
+    "play connect four"(){},
+    "play chess"(){},
+    "mucho party"(){},
+    "play crazy eights"(){},
+    "maze race"(){},
+    "play monopoly"(){},
+    "play scrabble"(){},
+    "word search"(){},
+    "who wants to be a millionaire"(){},
+    "you don't know jack"(){},
+
+
+    "search spotify"(){},
+    "search pandora"(){},
+    "search soundcloud"(){},
+
+    "toggle fullscreen"(){
+        //system.invoke("TOGGLE_FULLSCREEN");
+        if(!store.isFullscreen){
+            document.documentElement.requestFullscreen().then(() => {
+                store.isFullscreen = true;
+            }).catch(err => {
+                console.log(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        }else{
+            document.exitFullscreen().then(() => {
+                store.isFullscreen = false;
+            }).catch(err => {
+                console.log(`Error attempting to exit full-screen mode: ${err.message} (${err.name})`);
+            });
+        }
+    },
+
+    "what about > ctrl+z that takes you between CONTEXTS (bubbles) instead of just per-app?":true,
+    "what about > seeing your daily digital journeys and being able to zoom out and see loops and trends and topics and news like a little wii town that can be rendered in any style of our choosings! byos-mmo":true,
+    "request metadata for url"(){
+        let url = prompt("What url?","https://www.youtube.com/watch?v=fc9bYJKNpdQ")
+        // we use socket-io to request the server send us some metadata about the url
+        if (!socketIO.hasListeners('metadata')) {
+            socketIO.on('metadata', (data) => {
+                console.log('metadata',data);
+            });
+        }
+        socketIO.emit('request-metadata', url);
+    },
+
+    ["Plant a tree"](){
+        socketIO.emit('plant-tree');
+        system.invoke("NEW_TREE_WIDGET");
+    },
+    ["new tree widget"](){
+        system.registerWidget(new TreeWidget());
+    },
+
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
         // the one i want is restricted
@@ -10523,6 +10833,9 @@ const InvokableCommands = {
     ["new rubiks cube widget"](){
         system.registerWidget(new RubiksCubeWidget());
         new HideCmdPromptCommand().execute();
+    },
+    ["play pacman"](){
+        system.registerWidget(new iFrameWidget("https://www.google.com/logos/2010/pacman10-i.html"));
     },
     // @see tetriswidget
     ["new tetris widget"](){
@@ -11003,27 +11316,50 @@ void main(void) {
 }
 `
 
+const doAfterWaitReturnTrue = function(check,timeout=1000,interval=100){
+    return new Promise((resolve,reject)=>{
+        let start = Date.now();
+        setTimeout(function checkCondition() {
+            try {
+                if (check()) {
+                    resolve(true)
+                } else if (Date.now() - start < timeout) {
+                    setTimeout(checkCondition, 100);
+                } else {
+                    reject(new Error('timed out for ' + check + ': ' + arguments));
+                }
+            } catch (e) {
+                console.error(e);
+                reject(e)
+            }
+        }, interval);
+    })
+}
+
 // domready
 document.addEventListener('DOMContentLoaded', (event) => {
     // TODO: await Peer to become available...
 
-    // call the server and try to establish a p2p webrtc connection with another client
-    const peer = new Peer({key: 'your_api_key_here'});
+    doAfterWaitReturnTrue(()=>typeof window?.Peer !== 'undefined').then(()=>{
+        // call the server and try to establish a p2p webrtc connection with another client
+        const peer = new Peer({key: 'your_api_key_here'});
 
-    peer.on('open', function(id) {
-        console.log('My peer ID is: ' + id);
-    });
-
-    peer.on('connection', function(conn) {
-        conn.on('data', function(data){
-            console.log('Received', data);
+        peer.on('open', function(id) {
+            console.log('My peer ID is: ' + id);
         });
-    });
-
-    let conn = peer.connect('another-peers-id');
-    conn.on('open', function(){
-        conn.send('hi!');
-    });
+    
+        peer.on('connection', function(conn) {
+            conn.on('data', function(data){
+                console.log('Received', data);
+            });
+        });
+    
+        let conn = peer.connect('another-peers-id');
+        conn.on('open', function(){
+            conn.send('hi!');
+        });
+    })
+    
 });
 
 
@@ -11625,9 +11961,11 @@ class CmdPrompt extends Widget {
         return store.CmdPromptVisible;
     }
 
-    get timestamp(){
-        let currentDateTime = new Date();
-        return `${currentDateTime.getMonth() + 1}/${currentDateTime.getDate()}/${currentDateTime.getFullYear()} ${currentDateTime.getHours()}:${currentDateTime.getMinutes()}:${currentDateTime.getSeconds()}`;
+    getTimestamp(){
+        const currentDateTime = new Date();
+        const formattedDate = `${currentDateTime.getMonth() + 1}/${currentDateTime.getDate()}/${currentDateTime.getFullYear()}`;
+        const formattedTime = `${currentDateTime.getHours().toString().padStart(2, '0')}:${currentDateTime.getMinutes().toString().padStart(2, '0')}:${currentDateTime.getSeconds().toString().padStart(2, '0')}`;
+        return `${formattedDate} ${formattedTime}`;
     }
 
     afterSetup(){
@@ -11685,7 +12023,7 @@ class CmdPrompt extends Widget {
     // use update() instead if you want to ignore draw method culling
     // use beforePhysics or afterPhysics to add artistic control and influence / art-direction over simulations and behaviors at runtime
     onDraw(){
-        CmdPromptInput.attribute('placeholder', `${this.timestamp}`);
+        CmdPromptInput.attribute('placeholder', `${this.getTimestamp()}`);
 
         mctx = mainCanvasContext;
         // when visible and being drawn...
@@ -13634,7 +13972,22 @@ function setupDefaults(){
                 //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
                 // }
                 let result;
+
+                // if the cmdName includes https:// or a file extension,
+                // we should return a new instance of an appropriate widget
+                if(cmdName?.includes?.('youtube.') || cmdName?.includes?.('youtu.be')){
+                    return system.registerWidgetInstance(new YoutubePlayerWidget("Youtube"+Date.now()+Math.random,{tracks:[cmdName]}));
+                }else if(cmdName?.includes?.('://')){
+                    // try an iframe
+                    return system.registerWidgetInstance(new iFrameWidget("Iframe"+Date.now()+Math.random,{src:cmdName}));
+                }
+                // if it's an ARRAY of STRINGS, we need to do ths same check and early return
+
                 try{
+                    if(!InvokableCommands[machineizedCmdName] || !InvokableCommands[machineizedCmdName]?.call){c
+                        console.warn("command must be one of:",Object.keys(InvokableCommands))
+                        system.panic("bad command name: "+machineizedCmdName)
+                    }
                     result = InvokableCommands[machineizedCmdName].call(this);
                 }catch(e){
                     console.error('failed to execute command!',e)
@@ -13896,7 +14249,6 @@ const CoreWidgets = [
     // JSONViewer,
     // GraphVizDotLangViewer,
     // ThreeJSViewer,
-    // //StickyNoteWidget,
     // GlobeWidget,
     // TimezoneClocksWidget,
     // SplineEditorWidget,
@@ -14286,7 +14638,7 @@ document.body.appendChild(topCanvas);
         document.addEventListener('keydown', (e)=>{
             console.warn('keypress',{e})
             // Check if Ctrl key is pressed along with P
-            if (e.ctrlKey && e.key === 'p') {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
                 // Prevent the default ctrl p ctrl+p print action!
                 e.preventDefault();
                 //alert("Ctrl+P has been disabled!");
@@ -14296,38 +14648,32 @@ document.body.appendChild(topCanvas);
             }
 
             // override default ctrl|cmd + f behavior
-            document.addEventListener('keydown', (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-                    e.preventDefault();
-                    system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
-                }
-            });
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
+            }
 
             // override default ctrl|cmd + k behavior
-            document.addEventListener('keydown', (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                    e.preventDefault();
-                    system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
-                }
-            });
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
+            }
 
             // override default ctrl|cmd + l behavior
-            document.addEventListener('keydown', (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
-                    e.preventDefault();
-                    system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
-                }
-            });
+            if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+                e.preventDefault();
+                system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
+            }
 
             // if the key is `f` and we don't have any inputs focused,
             // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
-            if(e.key === 'f' && store.focusedField !== null){
-                console.error("focus blocked by",store.focusedField)
-            }
-            if(e.key === 'f' && store.focusedField === null){
-                alert('focus!');
-                // animated
+            if(e.key === 'f' && !store.focusedField){
                 system.dashboard.centerView();
+                system.alert("focused")   
+            }
+            if((e.metaKey || e.ctrlKey) && e.key === '0'){
+                /** @see Dashboard.centerView */
+                system.dashboard.centerView(true);
             }
             
             let KeyboardPanInfluence = { x: 0, y: 0 };
@@ -14415,8 +14761,6 @@ document.body.appendChild(topCanvas);
 
         //     MessengerWidget,
         //     MiniMapWidget,
-        //     StickyNoteWidget,
-        //     // TetrisWidget,
         //     TimerWidget,
         //     TodoWidget,
         //     UIDemoWidget,
@@ -14437,11 +14781,15 @@ document.body.appendChild(topCanvas);
             // add our first widget (todo: load state from dehydrated json)
             // DEFAULT WIDGET SET
 
+        // Register Some Widgets
         // Spawn Some Widgets
         InvokableCommands["New Time To Sunset Widget"]()
         InvokableCommands["New Calculator Widget"]()
         InvokableCommands["New Egg Timer"]()
         InvokableCommands["Play Glorious Dawn"]()
+        InvokableCommands["NEW_STICKY_NOTE"]()
+        // InvokableCommands["New Scratch Pad"]()
+        //InvokableCommands["New Markdown Editor"]()
 
         system.invoke("Study Greek Alphabet Flashcards");
 
@@ -14979,7 +15327,7 @@ document.body.appendChild(topCanvas);
             //     window.history.replaceState({}, '', url);
             // }
             
-            // NOTE: there is an issuer where when you're zoomed in,
+            // NOTE: there is an issue where when you're zoomed in,
             // it's relative from the top left of the whole screen
             // we want zoom to pull the center towards where the mouse is
             // so 1 we need to calculate where the "center" is by getting

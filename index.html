@@ -6,12 +6,13 @@
     <script src="https://cdn.jsdelivr.net/gh/peers/peerjs@1.3.1/dist/peerjs.min.js"></script>
     <script>
       document.addEventListener('DOMContentLoaded', (event) => {
-        var socketIO = io('http://127.0.0.1:4001/', { transports: ['websocket', 'polling'] });
+        window.socketIO = io('http://127.0.0.1:4001/', { transports: ['websocket', 'polling'] });
         console.warn('socketIO', socketIO)
         // connect to "testOpenAIServer" and send a prompt message
         socketIO.on('message', function(data){
           // This event listener will trigger for any type of message received from the server
           console.log("received message from server", data);
+          system.log(`${data}`);
         });
         socketIO.on('connect', function(){
           console.log("connected to socket.io server");
@@ -415,6 +416,7 @@
       z-index: 9001;
     }
     #html-foreground {
+      pointer-events: none;
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
       width: 100%;

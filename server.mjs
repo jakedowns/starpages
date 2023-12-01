@@ -90,6 +90,26 @@ io.on('connection', (socket) => {
     });
     socket.on('message', async (message) => {
         console.warn("got message from client", message)
+        // reply
+        socket.emit('message', {you_said:message,i_say:"hey!"})
+    });
+    socket.on('request-metadata', async (url) => {
+        const ogs = require('open-graph-scraper');
+        const options = { url: url };
+        ogs(options)
+        .then((data) => {
+            const { error, result } = data;
+            if (error) console.log('Error:', error);
+            else {
+                // Save the result to a JSON file
+                const fs = require('fs');
+                fs.writeFile('metadata.json', JSON.stringify(result), (err) => {
+                    if (err) throw err;
+                    console.log('Metadata saved to metadata.json');
+                });
+            }
+        });
+        socket.emit('metadata', response.data);
     });
     socket.on('lookup', async (url) => {
         const options = { url };
