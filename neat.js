@@ -681,6 +681,10 @@ class SystemManager {
  *   to the appropriate subsystems...
  */
 class System {
+    static get latestTodoWidgetOrNew(){
+        system.todo('implement a backing singleton for latest todo widget references')
+        return new TodoWidget();
+    }
     tag = "";
     innerClockTime = -1; 
     // separate from our "serializable" state,
@@ -867,6 +871,8 @@ class Hello {
         Hello, World! This is an update! welcome to version 1.0! we're testing a new sandbox for working with code.`)
     }
 }
+
+
 
 // aka corecmds, core commands, system commands, root commands, global commands...
 let baseCmds = [
@@ -2522,27 +2528,26 @@ class Widget extends UndoRedoComponent {
             this.flagDoNotDraw(false);
         }
         store.frameDrawCount++;
-
-        // debug print position
-        //if(store.showWidgetPositions){
-            // canvasContext.fill("red")
-            // canvasContext.text(`x:${
-            //     this.basePosition.x.toFixed(2)
-            // } y:${
-            //     this.basePosition.y.toFixed(2)
-            // } z:${
-            //     this.zDepth.toFixed(2)
-            // }\n xD:${
-            //     this.position.x.toFixed(2)
-            // } yD:${
-            //     this.position.y.toFixed(2)
-            // } zD:${
-            //     this.zDepth.toFixed(2)
-            // }`,
-            //     this.position.x,
-            //     this.position.y
-            // );
-        //}
+        // toggle show widget debug info
+        if(store.showWidgetPositions){
+            canvasContext.fill("red")
+            canvasContext.text(`x:${
+                this.basePosition.x.toFixed(2)
+            } y:${
+                this.basePosition.y.toFixed(2)
+            } z:${
+                this.zDepth.toFixed(2)
+            }\n xD:${
+                this.position.x.toFixed(2)
+            } yD:${
+                this.position.y.toFixed(2)
+            } zD:${
+                this.zDepth.toFixed(2)
+            }`,
+                this.position.x,
+                this.position.y
+            );
+        }
 
         // canvasContext.strokeWeight(1)
         // canvasContext.stroke("darkblue")
@@ -2629,6 +2634,18 @@ class Widget extends UndoRedoComponent {
 
 //class UIButton extends Widget {}
 
+class TrainToyWidget extends Widget {
+    constructor(){
+        super(...arguments);
+        this.name = "Train Toy";
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+
+        this.ctx.fill(0,0,0,1);
+        this.ctx.text("Train Toy", 0, 0);
+    }
+}
 
 class FlashCard extends Widget {
     index
@@ -2658,6 +2675,8 @@ class FlashCard extends Widget {
         mctx.pop()
     }
 }
+
+//
 class FlashCardWidget extends Widget {
     cards = []
     shownCardIDs = []
@@ -2727,6 +2746,7 @@ class FlashCardWidget extends Widget {
         })
     }
 }
+// Widget <~> FlashCard <~> FlashCardWidget <~> GreekAlphabetWidget
 class GreekAlphabetWidget extends FlashCardWidget {
     widgetSize = {
         x:800, y:600
@@ -4004,11 +4024,12 @@ class ImageViewerWidget extends Widget {
             // Yes, it needs to be in a callback. The loadImage function is asynchronous, so we need to ensure
             // that the image is fully loaded before assigning it to this.image. We can do this by passing a callback
             // function to loadImage. The callback function will be executed once the image is fully loaded.
-            PreloadedImages[this.src] = loadImage(this.src, (img) => {
+            loadImage(this.src, (img) => {
                 this.image = img;
                 this.updateSizeBasedOnImage();
+                PreloadedImages[this.src] = img;
             });
-            this.image = PreloadedImages[this.src];
+            this.image = 'LOADING';
         }
         return this;
     }
@@ -4050,6 +4071,9 @@ class ImageViewerWidget extends Widget {
             // Draw the image stretched to the new width and height
     }
     onDraw(){
+        if(this.image === 'LOADING'){
+            return;
+        }
         // super.draw(...arguments)
         super.onDraw(...arguments)
         // if(this.doNotDraw){ return; }
@@ -4692,58 +4716,58 @@ extends BaseCmds(Command,{
     }
 }){/**/}
 
-class NewIFrameWidgetCommand extends BaseCmds(Command, {
-    name: "New iFrame Widget",
-    steps: [
-        {
-            question: "What URL?",
-            answerDefaultValue: "https://www.google.com/webhp?igu=1",
-            answerPlaceholder: "https://www.google.com/webhp?igu=1",
-            answerStorageKey: "input",
-            // beforeStepUnload
-            toastOnSuccess: (wiz)=>{
-                return `Widget Added!\n${wiz.stepResponses[0].input}`
-            },
-            onStepLoaded: (wiz)=>{
-                // TODO: set input to placeholder / default
-            },
-            onStepUnload: (wiz)=>{
-                debugger;
-                // after the user response is stored
-                console.warn(`New ${this.name}: onStepUnload`, {wiz})
+// class NewIFrameWidgetCommand extends BaseCmds(Command, {
+//     name: "New iFrame Widget",
+//     steps: [
+//         {
+//             question: "What URL?",
+//             answerDefaultValue: "https://www.google.com/webhp?igu=1",
+//             answerPlaceholder: "https://www.google.com/webhp?igu=1",
+//             answerStorageKey: "input",
+//             // beforeStepUnload
+//             toastOnSuccess: (wiz)=>{
+//                 return `Widget Added!\n${wiz.stepResponses[0].input}`
+//             },
+//             onStepLoaded: (wiz)=>{
+//                 // TODO: set input to placeholder / default
+//             },
+//             onStepUnload: (wiz)=>{
+//                 debugger;
+//                 // after the user response is stored
+//                 console.warn(`New ${this.name}: onStepUnload`, {wiz})
 
-                const url = wiz.stepResponses[0].input;
-                // todo: validate
+//                 const url = wiz.stepResponses[0].input;
+//                 // todo: validate
 
-                if(url.includes('youtube.com')){
-                    // use a YoutubePlayerWidget instead
-                    system.get("Dashboard")
-                    .registerWidget(
-                        `Youtube Player: ${url}`,
-                        new YoutubePlayerWidget("",{
-                            tracks:[
-                                url
-                            ]
-                        })
-                    )
-                }else{
-                    system
-                        .get("Dashboard")
-                        .registerWidget(
-                            "WidgetInstance"+performance.now(), 
-                            new iFrameWidget(url)
-                        );
-                }
+//                 if(url.includes('youtube.com')){
+//                     // use a YoutubePlayerWidget instead
+//                     system.get("Dashboard")
+//                     .registerWidget(
+//                         `Youtube Player: ${url}`,
+//                         new YoutubePlayerWidget("",{
+//                             tracks:[
+//                                 url
+//                             ]
+//                         })
+//                     )
+//                 }else{
+//                     system
+//                         .get("Dashboard")
+//                         .registerWidget(
+//                             "WidgetInstance"+performance.now(), 
+//                             new iFrameWidget(url)
+//                         );
+//                 }
 
 
-                // end the wizard
-                wiz.end();
-                // hide the command prompt
-                system.get("cmdprompt").hide();
-            }
-        }
-    ]
-}){}
+//                 // end the wizard
+//                 wiz.end();
+//                 // hide the command prompt
+//                 system.get("cmdprompt").hide();
+//             }
+//         }
+//     ]
+// }){}
 
 
 // contained in a widget holder
@@ -4844,6 +4868,11 @@ class iFrameWidget extends Widget {
         this.iframe.attribute('style',Object.keys(style).map((k)=>{
             return `${k}:${style[k]};`
         }).join(''));
+
+        // hide by default (for performance)
+        // this.iframe.hide();
+
+        // TODO: allow unfreezing nested iframe tabs
 
         // wrap the iframe in a wrapper, and add a overlay sibling for "iframe click tracking"
         let wrapper = createElement('div');
@@ -5255,6 +5284,8 @@ class TodoWidget extends Widget {
         super();
         this.input = mctx.createInput("");
         this.input.elt.placeholder = "Add Todo";
+        this.input.parent('under-ui-elms')
+
         this.input.elt.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 this.addTodo(this.input.value());
@@ -5597,6 +5628,8 @@ class GherkinRunnerWidget extends Widget {
             // 20px off the top edge
             this.position.y + 20
         )
+
+        /** @see Widget.draw */
 
         //console.warn('GherkinRunnerWidget.draw');
         // rounded rect with status lights in rows and columns
@@ -6093,7 +6126,7 @@ class LayereredCanvasRenderer {
         // if the focusedIndex !== 0, we need to blur the "main" canvas too
         document.querySelector('main canvas').style.filter=`blur(${this.focusedIndex === 0 ? '0' : store.deepCanvasBlurLevel}px)`
         if(document.querySelector('#threejscanvas')){
-            document.querySelector('#threejscanvas').style.filter=`blur(${this.focusedIndex === 0 ? '0' : store.deepCanvasBlurLevel}px)`
+            document.querySelector('#threejscanvas').style.filter=`blur(${this.focusedIndex === 1 ? '0' : store.deepCanvasBlurLevel}px)`
         }
         // if we have any iframes, blur them too when not focused on layer "1"
         if(document.querySelectorAll("iframe").length){
@@ -9734,6 +9767,69 @@ const features = [
 
 ]
 const InvokableCommands = {
+    new_refactor_plan(){
+        system.todo("!!! NotYetImplemented !!!")
+    },
+    new_sandbox(){
+        system.todo('low priority')
+    },
+    todo_fix_word_wrap(){
+        system.todo('med')
+    },
+    todo_fix_todos_to_use_omnibar(){
+        system.todo("one input to rule them all!")
+    },
+    todo_fix_cmd_prompt_rendering_order_incorrect(){
+        system.todo("i'll get there!")
+    },
+    todo_add_analytics_tracking_code(){
+        system.todo('yeah yeah yeah')
+    },
+    todo_add_user_account_system(){
+        system.todo('yeah yeah yeah')
+    },
+    todo_add_code_editor(){
+        system.todo('med')
+    },
+    todo_normalize_suggestion_list_dedupe(){
+        system.todo('low priority')
+    },
+    ["new widget..."](){
+        system.todo("!!! NotYetImplemented !!!")
+    },
+    ["new command..."](){
+        system.todo("!!! NotYetImplemented !!!")
+    },
+    ["new wizard..."](){
+        system.todo("!!! NotYetImplemented !!!")
+    },
+    ["new poll..."](){
+        system.todo("!!! NotYetImplemented !!!")
+    },
+    ["new quiz..."](){
+        system.todo("!!! NotYetImplemented !!!")
+    },
+    ["new trivia"](){
+        system.todo("!!! NotYetImplemented !!!")
+    },
+    ["toggle debug cursor"](){
+
+    },
+    // 
+    ["toggle debug widget info"](){
+        store.showWidgetPositions = !store.showWidgetPositions;
+    },
+    //
+    ["toggle widget debug info"](){
+        InvokableCommands["toggle debug widget info"]();
+    },
+    ["new alias..."](){
+        let results = prompt("alias a word or phrase to another word or phrase","Key...","Value...")
+        if(!results){
+            return;
+        }
+        system.todo("!!! NotYetImplemented !!!")
+    },
     ["Toggle Dashboard Collapsed"](){
         system.dashboard.toggleCollapsed();
     },
@@ -9840,6 +9936,40 @@ const InvokableCommands = {
     //     "Yoshi's Story",
     //     "Super Mario World"
     // ],
+
+    ["todo: add daily progress bar of time"](){},
+    ["todo: more themes / time of day stuff"]:"",
+
+    // alias
+    new_toy_train: "new_train_toy",
+    new_train_toy(){
+        system.registerWidget(new TrainToyWidget());
+    },
+
+    ["New Journal Entry"](){},
+    ["New Experiment"](){},
+    ["New Analysis"](){},
+    ["New Comparison"](){},
+    ["New Description"](){},
+    ["New Mood Board"](){},
+    ["New Text Chat"](){ system.todo("So do it already!") },
+    ["New Video Chat"](){ system.todo("So do it already!") },
+    ["New Voice Chat"](){ system.todo("So do it already!") },
+    ["New Screen Grab"](){ system.todo("So do it already!") },
+    ["New Tutorial"](){ system.todo("So do it already!") },
+    ["New Onboarding Help Reference Guide"](){
+        system.todo("So do it already!")
+    },
+    ["Open P5.js Documentation"](){
+        // NOTE: we check the width/height in our own parser to know the default size :)
+        // we can add other optional params like md:width, lg:width, etc
+        return "https://p5js.org/reference/?width=800&height=600"
+    },
+    ["Open P5.js Playground"](){
+    },
+    ["New Notebook..."](){
+
+    },
     ["Play N64 > Starfox"](){
         //return new N64EmulatorWidget
         //return new iFrameWidget
@@ -9935,9 +10065,47 @@ const InvokableCommands = {
     ["Play The Mother of All Demos"](){
         return "https://www.youtube.com/watch?v=yJDv-zdhzMY";
     },
+    ["Paste from Clipboard"](){
+        // access the clipboard and see if there's an image (base64 encoded)
+        navigator.clipboard.read().then(data => {
+            if (!data || !data.items) {
+                console.log("No data found on clipboard");
+                return;
+            }
+            for (let i = 0; i < data.items.length; i++) {
+                if (data.items[i].type.indexOf("image") === -1) {
+                    continue;
+                }
+                const blob = data.items[i].getAsFile();
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    console.log(event.target.result); // This is the base64 image
+                };
+                reader.readAsDataURL(blob);
+            }
+        }).catch(err => {
+            console.error("Error reading clipboard contents: ", err);
+        });
+    },
+    ["Set Command Icon"](){},
+    ["New Icon"](){},
+    ["open photopea"]:"https://www.photopea.com/",
+    ["open piskel"]:"new_pixel_art",
+    // you don't have to invent something if someone has iframes and import/export already
+    ["new pixel art"]:"https://www.piskelapp.com/p/create/sprite",
+    ["New Resource"](){},
+    ["New Stream"](){},
+    // ["New Goal"](){},
+    ["New Promise"](){},
+    ["Bucket List Item Completed"](){},
+    ["New Bucket List Item"](){},
+    ["Play with Splines"](){},
+    ["Play with signed distance fields"](){},
+    ["Play with marching cubes"](){},
     ["Play Pure Imagination"](){
         return "https://www.youtube.com/watch?v=4qEF95LMaWA";
     },
+    ["Play Charlie and the Chocolate Factory (19XX)"](){},
     ["Play Inside - TJ Mack"](){
         return "https://www.youtube.com/watch?v=evwGhEyjIRs";
     },
@@ -9972,9 +10140,20 @@ const InvokableCommands = {
             store.clearMode = !store.clearMode;
         },1000)
     },
+    
+    ["Play: Had What is Love"](){
+        // when AI guesses right?!
+        return "https://www.youtube.com/watch?v=HEXWRTEbj1I";
+    },
+
     ["Play: The Avalanches > Frontier Psychiatrist"](){
         return "https://www.youtube.com/watch?v=qLrnkK2YEcE";
     },
+
+    ["Open Chrome Experiments"]:"https://experiments.withgoogle.com/",
+    
+    ["Chrome Experiments > Chrome Music Lab - Song Maker"]:"https://musiclab.chromeexperiments.com/Song-Maker",
+    
     // save, remember, share, fave -> T{x}
     [`like song "x"`](x){
         console.warn('TODO: like song: x: ',{x})
@@ -10032,7 +10211,7 @@ const InvokableCommands = {
         }
     },
     ["set zoom"](){
-        store.zoom = parseInt(prompt("what level? (number)", store.zoom) ?? 0)
+        store.zoom = parseFloat(parseFloat(prompt("what level? (number)", store.zoom) ?? 0).toFixed(2))
     },
     ["new test runner"](){
         //system.invokeWith(TestRunnerWidget)
@@ -10040,27 +10219,32 @@ const InvokableCommands = {
         system.todo("instance a test runner widget!")
     },
     ["new fish"](){
-        system.todo("instance a fish!")
+        system.registerWidgetInstance(new FishWidget());
     },
     ["new dog"](){
         // reminders to take care of your pet!
-        system.todo("instance a dog!")
+        system.registerWidgetInstance(new DogWidget());
     },
     ["new cat"](){
-        system.todo("instance a cat!")
+        system.registerWidgetInstance(new CatWidget());
     },
-    ["New sketchpad"](){},
-    [""](){},
+    ["New sketchpad"](){
+        system.registerWidgetInstance(new SketchpadWidget());
+    },
+    // workflows
+    ["new workflow"](){},
+    ["new flow field"](){},
     ["new idea"](){},
     // start a random favorite or similar youtube video
     ["enter chore mode"](){},
     ["enter vacuuming mode"](){},
-    ["new tab"](){
-        InvokableCommands["new browser bubble"]()
-    },
+    new_tab: "new_browser_bubble",
     ["new synthesizer"](){
         // spawn a Synth Widget :D
         alert("Todo: spawn a synthesizer widget on the intergalactic hyperdimensional breadboard!")
+    },
+    ["new youtube player"](){
+        system.registerWidgetInstance(new YoutubePlayerWidget(prompt("what video?", "https://www.youtube.com/watch?v=Z0hDnmQPH4g")));
     },
     ["TODO: make it remember when deep rendering and three rendering were last on when you restart the page"](){
         // maybe just add it to the url continually?
@@ -10090,11 +10274,6 @@ const InvokableCommands = {
     ["invert selection"](){
         alert("todo: invert selection")
     },
-    ["thoughts from 11/29/2023 > 3:59 PM "](){
-        // golf culture is... weird!
-        system.showToast("watching https://www.youtube.com/watch?v=Z0hDnmQPH4g")
-        system.registerWidgetInstance(new YoutubePlayerWidget(null,{tracks:["https://www.youtube.com/watch?v=Z0hDnmQPH4g"]}))
-    },
     ["new iframe widget"](){
         // todo: PinnedIFrameWidgetInstantiator / factory?
         let response = prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here","http://iframesafe.url")
@@ -10105,10 +10284,21 @@ const InvokableCommands = {
     },
     ["new mind map"](){},
     ["new todo"](){},
-    ["new timer"](){},
-    ["new stopwatch"](){},
-    ["new countdown"](){},
-    ["new daily task"](){},
+    ["new timer"](){
+        system.registerWidgetInstance(new TimerWidget())
+    },
+    ["new pomodoro timer"](){
+        system.registerWidgetInstance(new PomodoroWidget())
+    },
+    ["new stopwatch"](){
+        //system.registerWidgetInstance(new StopwatchWidget())
+    },
+    ["new countdown"](){
+        //system.registerWidgetInstance(new CountdownWidget())
+    },
+    ["new daily task"](){
+        system.todo("new daily task!")
+    },
     ["new goal"](){},
     ["boomerang thought"](){},
     ["conversation freefall"](){},
@@ -10172,7 +10362,7 @@ const InvokableCommands = {
               system.registerWidget(newTodoWidget);
               store.currentFocusedTodoWidgetID = newTodoWidget.id;
           }
-          system.getWidget(store.currentFocusedTodoWidgetID).addTodo(result);
+          system.latestTodoWidgetOrNew.addTodo(result);
     },
 
     ["go to gather"](){
@@ -10207,11 +10397,20 @@ const InvokableCommands = {
     // TODO: extract metadata and cache it (about youtube and other fetched urls)
     ["Play BAMBOO WATER FOUNTAIN | Relax & Get Your Zen On | White Noise"]: "https://www.youtube.com/watch?v=aJaZc4E8Y4U",
 
-    ["Play Redbone"](){
-        return "https://soundcloud.com/childish-gambino/redbone"
+    ["Play Redbone"]:"https://soundcloud.com/childish-gambino/redbone",
+        // DRM'd good one:
         //return "https://www.youtube.com/watch?v=Kp7eSUU9oy8"
-    },
 
+    play_dido_thank_you: "https://www.youtube.com/watch?v=1TO48Cnl66w",
+    samples_dido_thank_you(){
+        return InvokableCommands.play_eminem_stan_ft_dido;
+    },
+    play_eminem_stan_ft_dido: "https://www.youtube.com/watch?v=gOMhN-hfMtY",
+
+    ["Play Bestie"]:"https://www.youtube.com/watch?v=5SH69RyqLA4",
+
+    this_is_fine: "fine.gif",
+    feels_good_man: "feelsgoodman.gif",
 
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
@@ -11426,12 +11625,29 @@ class CmdPrompt extends Widget {
         return store.CmdPromptVisible;
     }
 
+    get timestamp(){
+        let currentDateTime = new Date();
+        return `${currentDateTime.getMonth() + 1}/${currentDateTime.getDate()}/${currentDateTime.getFullYear()} ${currentDateTime.getHours()}:${currentDateTime.getMinutes()}:${currentDateTime.getSeconds()}`;
+    }
+
     afterSetup(){
         // TODO: draw the command prompt instead of using html el
         CmdPromptInput = mctx.createInput('');
-        CmdPromptInput.parent('under-ui-elms');
-        CmdPromptInput.elt.style.backgroundColor = 'black';
+        CmdPromptInput.parent('html-foreground');
+        CmdPromptInput.elt.style.backgroundColor = 'transparent';
         CmdPromptInput.elt.style.color = 'white';
+        CmdPromptInput.elt.style.zIndex = 9999;
+        //CmdPromptInput.elt.style.filter = 'blur(10px)';
+
+        CmdPromptInput.style('border', 'none');
+
+
+        
+        
+        CmdPromptInput.attribute('placeholder', `${this.timestamp}`);
+        
+        CmdPromptInput.style('font-size', '66px');
+
         CmdPromptInput.size(windowWidth - 20);
         CmdPromptInput.position(10, 130);
         // focus the command palette input
@@ -11469,25 +11685,29 @@ class CmdPrompt extends Widget {
     // use update() instead if you want to ignore draw method culling
     // use beforePhysics or afterPhysics to add artistic control and influence / art-direction over simulations and behaviors at runtime
     onDraw(){
+        CmdPromptInput.attribute('placeholder', `${this.timestamp}`);
+
         mctx = mainCanvasContext;
         // when visible and being drawn...
         // super.draw() already happened here
 
         // Draw the command prompt as a 16 bit or 8 bit or even 1 bit input box with chunky rounded borders using squares in a grid layout
-        mctx.push();
-        mctx.strokeWeight(2);
-        mctx.stroke(255);
-        mctx.fill(0);
-        mctx.rectMode(mctx.CENTER);
-        let gridSize = 16; // Change this to 8 or 1 for different bit styles
-        let gridWidth = mctx.windowWidth / gridSize;
-        let gridHeight = (mctx.windowHeight - 130) / gridSize;
-        for (let i = 0; i < gridSize; i++) {
-            for (let j = 0; j < gridSize; j++) {
-                mctx.rect(i * gridWidth, 130 + j * gridHeight, gridWidth, gridHeight);
-            }
-        }
-        mctx.pop();
+        // mctx.push();
+        // mctx.strokeWeight(2);
+        // mctx.stroke(255);
+        // mctx.fill(0);
+        // mctx.rectMode(mctx.CENTER);
+        // let gridSize = 16; // Change this to 8 or 1 for different bit styles
+        // let baseWidth = mctx.windowWidth * .80
+        // let baseHeight = mctx.windowHeight * .80
+        // let gridWidth = baseWidth / gridSize;
+        // let gridHeight = (baseHeight - 130) / gridSize;
+        // for (let i = 0; i < gridSize; i++) {
+        //     for (let j = 0; j < gridSize; j++) {
+        //         mctx.rect(i * gridWidth, 130 + j * gridHeight, gridWidth, gridHeight);
+        //     }
+        // }
+        // mctx.pop();
     }
 
     registerCommand(
@@ -11701,12 +11921,12 @@ class CmdPrompt extends Widget {
 
         // Load Graph
         this.availableCommands = this.availableCommands.concat([
-            new Command("Toggle Debug Cursor",{
-                //executeAsString: "window.store.debugCursor = !window.store.debugCursor"
-                callback: function(){
-                    window.store.debugCursor = !(window.store?.debugCursor ?? false);
-                }
-            }),
+            // new Command("Toggle Debug Cursor",{
+            //     //executeAsString: "window.store.debugCursor = !window.store.debugCursor"
+            //     callback: function(){
+            //         window.store.debugCursor = !(window.store?.debugCursor ?? false);
+            //     }
+            // }),
 
 
             new Command("Load Graph...",{
@@ -11771,10 +11991,10 @@ class CmdPrompt extends Widget {
         ctx.push();
         const cmdpPosY = 0;
         ctx.fill(0,0,0,200)
-        ctx.strokeWeight(0)
+        ctx.strokeWeight(1)
         ctx.stroke("white")
         ctx.rectMode(CORNER);
-        ctx.rect(0, cmdpPosY, windowWidth, windowHeight);
+        ctx.rect(0, cmdpPosY, windowWidth, windowHeight, 20);
 
         // draw a large text input in the command palette
         ctx.fill(0,0,0,200)
@@ -12513,6 +12733,10 @@ class DebugPath {
     }
 
     draw(_color){
+        // disable ze gizmo
+        if(store.disableDebugPath){
+            return;
+        }
         this.stepPruner();
         let ctx = deepCanvasManager.uiContext;
         ctx.push()
@@ -13732,9 +13956,9 @@ class SketchfabEmbedWidget extends iFrameWidget {
 
     
 //    }
-   onDraw(){
-    super.onDraw(...arguments)
-   }
+//    onDraw(){
+//     super.onDraw(...arguments)
+//    }
 //    onDraw(){
 //     super.onDraw(...arguments)
 //     this.element.position(
@@ -13831,6 +14055,18 @@ let cursor, MainCanvasContextThing = function(p){
     }
 
     p.setup = function(){
+
+        window.addEventListener('mouseup', function(event) {
+            // if we clicked on or INSIDE of #html-foreground
+            // we need to IGNORE the event if it's a click on an input
+            // otherwise, we need to let it pass through to the canvas below
+            var target = event.target;
+            if(target.matches('#html-foreground, #html-foreground *')) {
+                if(!target.matches('input, input *')) {
+                    event.stopPropagation();
+                }
+            }
+        })
 
         // when the window loses focus, disable the expensive rendering
         window.addEventListener('blur', function(event) {
@@ -14051,13 +14287,38 @@ document.body.appendChild(topCanvas);
             console.warn('keypress',{e})
             // Check if Ctrl key is pressed along with P
             if (e.ctrlKey && e.key === 'p') {
-                // Prevent the default print action
+                // Prevent the default ctrl p ctrl+p print action!
                 e.preventDefault();
                 //alert("Ctrl+P has been disabled!");
                 // toggle the dashboard
                 system.cmdprompt.showCmdPrompt();
                 return;
             }
+
+            // override default ctrl|cmd + f behavior
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                    e.preventDefault();
+                    system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
+                }
+            });
+
+            // override default ctrl|cmd + k behavior
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault();
+                    system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
+                }
+            });
+
+            // override default ctrl|cmd + l behavior
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+                    e.preventDefault();
+                    system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
+                }
+            });
+
             // if the key is `f` and we don't have any inputs focused,
             // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
             if(e.key === 'f' && store.focusedField !== null){
@@ -14182,8 +14443,11 @@ document.body.appendChild(topCanvas);
         InvokableCommands["New Egg Timer"]()
         InvokableCommands["Play Glorious Dawn"]()
 
+        system.invoke("Study Greek Alphabet Flashcards");
+
         //InvokableCommands["NEW_SKETCHFAB_VIEWER"]()
-        system.invoke("NEW_SKETCHFAB_VIEWER")
+        //system.invoke("NEW_SKETCHFAB_VIEWER")
+        system.registerWidget(new SketchfabEmbedWidget())
 
         system.invoke("NEW_FISH")
         system.invoke("NEW_DOG")
@@ -14754,21 +15018,24 @@ document.body.appendChild(topCanvas);
                 mouseShifted.y = p.lerp(mouseShifted.y, targetY, 0.1);
             }
     
-            DebugPathInstance.addPoint(
-                -mouseShifted.x, 
-                -mouseShifted.y, 
-                zoom+0
-            );
-            if(!store.DISABLE_DEBUG_PATHS){
-                DebugPathInstance.draw();
-            }
-            DebugPathTwo.addPoint(
-                -targetX, 
-                -targetY,
-                zoom+0
-            )
-            if(!store.DISABLE_DEBUG_PATHS){
-                DebugPathTwo.draw(40);
+            
+            if(!store.disableDebugPath){    
+                DebugPathInstance.addPoint(
+                    -mouseShifted.x, 
+                    -mouseShifted.y, 
+                    zoom+0
+                );
+                if(!store.DISABLE_DEBUG_PATHS){
+                    DebugPathInstance.draw();
+                }
+                DebugPathTwo.addPoint(
+                    -targetX, 
+                    -targetY,
+                    zoom+0
+                )
+                if(!store.DISABLE_DEBUG_PATHS){
+                    DebugPathTwo.draw(40);
+                }
             }
             
     
@@ -15649,6 +15916,46 @@ class REPL extends VirtualMachine {
     // You might replace this with code to set a "paused" state and check it in your evaluate method
     pauseSandbox() {
         console.warn('Pause functionality is not supported in JavaScript');
+    }
+}
+
+class AnimalWidget extends Widget {
+    widgetSize = {
+        width: 100,
+        height: 100
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+    }
+}
+class DogWidget extends AnimalWidget {
+    onDraw(){
+        super.onDraw(...arguments)
+
+        this.ctx.fill("brown")
+        .stroke("black")
+        .strokeWeight(2)
+        .circle(0,0,50)
+    }
+}
+class CatWidget extends AnimalWidget {
+    onDraw(){
+        super.onDraw(...arguments)
+
+        this.ctx.fill("orange")
+        .stroke("black")
+        .strokeWeight(2)
+        .circle(0,0,50)
+    }
+}
+class FishWidget extends AnimalWidget {
+    onDraw(){
+        super.onDraw(...arguments)
+
+        this.ctx.fill("blue")
+        .stroke("black")
+        .strokeWeight(2)
+        .circle(0,0,50)
     }
 }
 

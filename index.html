@@ -414,13 +414,20 @@
       height: 100%;
       z-index: 9001;
     }
+    #html-foreground {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9002;
+    }
     #deep-canvas-ui {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
       width: 100%;
       height: 100%;
       pointer-events: none;
-      z-index: 9002;
+      z-index: 9003;
     }
     </style>
     <meta charset="utf-8" />
@@ -433,6 +440,7 @@
     <div id="deep-canvas-3" class="deep-canvas"></div>
     <main id="main-canvas-context"></main>
     <div id="under-ui-elms"><!-- iFrames and stuff go here --></div>
+    <div id="html-foreground"><!-- html inputs that need to go above iframes --></div>
     <div id="deep-canvas-ui"></div>
     <script>
       var script = document.createElement('script');
