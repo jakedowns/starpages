@@ -2294,9 +2294,9 @@ class Widget extends UndoRedoComponent {
 
         // this.parallaxedPosition = {
         //     x: (this?.parentWidget?.position?.x ?? 0)
-        //         + (this.position.x ?? 0),
+        //         + (this.smartPosition.x ?? 0),
         //     y: (this?.parentWidget?.position?.y ?? 0)
-        //         + (this.position.y ?? 0),
+        //         + (this.smartPosition.y ?? 0),
         // }
 
         // mctx.push()
@@ -2430,8 +2430,8 @@ class Widget extends UndoRedoComponent {
         affectedY = (cBase.y - window.innerHeight / 2) * distanceFactor + window.innerHeight / 2;
 
         // Update position
-        // this.position.x = affectedX;
-        // this.position.y = affectedY;
+        // this.smartPosition.x = affectedX;
+        // this.smartPosition.y = affectedY;
         this.parallaxedPosition = {
             x: affectedX, y: affectedY
         }
@@ -2643,8 +2643,8 @@ class Widget extends UndoRedoComponent {
 
         // canvasContext.rectMode(CENTER);
         // canvasContext.rect(
-        //     this.position.x + this.widgetSize.width / 2, 
-        //     this.position.y + this.widgetSize.height / 2, 
+        //     this.smartPosition.x + this.widgetSize.width / 2, 
+        //     this.smartPosition.y + this.widgetSize.height / 2, 
         //     this.widgetSize.width, 
         //     this.widgetSize.height, 
         //     20 // this is the radius for the rounded corners
@@ -2658,14 +2658,14 @@ class Widget extends UndoRedoComponent {
         //     // widget id
         //     canvasContext.text(
         //         widgetID, 
-        //         this.position.x + (this.widgetSize.width / 2), 
-        //         this.position.y + this.widgetSize.height + 20
+        //         this.smartPosition.x + (this.widgetSize.width / 2), 
+        //         this.smartPosition.y + this.widgetSize.height + 20
         //     )
         //     // widget name
         //     canvasContext.text(
         //         this.name, 
-        //         this.position.x + (this.widgetSize.width / 2), 
-        //         this.position.y + this.widgetSize.height + 40
+        //         this.smartPosition.x + (this.widgetSize.width / 2), 
+        //         this.smartPosition.y + this.widgetSize.height + 40
         //     )
         // //}
 
@@ -2675,8 +2675,8 @@ class Widget extends UndoRedoComponent {
         // let scaleFactor = fov / (fov + this.zDepth);
 
         // // Scale position and size of the object
-        // let scaledX = this.position.x * scaleFactor;
-        // let scaledY = this.position.y * scaleFactor;
+        // let scaledX = this.smartPosition.x * scaleFactor;
+        // let scaledY = this.smartPosition.y * scaleFactor;
         // let scaledWidth = this.widgetSize.width * scaleFactor;
         // let scaledHeight = this.widgetSize.height * scaleFactor;
 
@@ -2858,8 +2858,8 @@ class FlashCard extends Widget {
         mctx.strokeWeight(1)
         mctx.color("red")
         mctx.rect(
-            this.position.x,
-            this.position.y,
+            this.smartPosition.x,
+            this.smartPosition.y,
             this.size.width,
             this.size.height
         )
@@ -3116,24 +3116,24 @@ class MessengerWidget extends Widget {
 
     draw(){
         super.draw(...arguments)
-        push()
-            rectMode(CENTER);
-            fill("lightblue")
-            rect(
-                this.position.x + this.widgetSize.width / 2,
-                this.position.y + this.widgetSize.height / 2,
+        mctx.push()
+        mctx.rectMode(CENTER);
+        mctx.fill("lightblue")
+        mctx.rect(
+                this.smartPosition.x + this.widgetSize.width / 2,
+                this.smartPosition.y + this.widgetSize.height / 2,
                 this.widgetSize.width,
                 this.widgetSize.height,
                 20 // this is the radius for the rounded corners
             );
-            fill("black")
-            let tpx = this.position.x + this.widgetSize.width / 2;
-            let tpy = this.position.y + this.widgetSize.height / 2;
+            mctx.fill("black")
+            let tpx = this.smartPosition.x + this.widgetSize.width / 2;
+            let tpy = this.smartPosition.y + this.widgetSize.height / 2;
             let tsx = this.widgetSize.width;
             let tsy = this.widgetSize.height;
-            textSize(20)
-            textAlign(CENTER, CENTER)
-            text("Messenger!", tpx,tpy,tsx,tsy)
+            mctx.textSize(20)
+            mctx.textAlign(CENTER, CENTER)
+            mctx.text("Messenger!", tpx,tpy,tsx,tsy)
         mctx.pop()
     }
 }
@@ -3156,8 +3156,8 @@ class CalculatorWidget extends Widget {
             rectMode(CENTER);
             fill("lightgrey")
             rect(
-                this.position.x + this.widgetSize.width / 2,
-                this.position.y + this.widgetSize.height / 2,
+                this.smartPosition.x + this.widgetSize.width / 2,
+                this.smartPosition.y + this.widgetSize.height / 2,
                 this.widgetSize.width,
                 this.widgetSize.height,
                 20 // this is the radius for the rounded corners
@@ -3193,8 +3193,8 @@ class CalculatorWidget extends Widget {
             
 
             // fill("black")
-            // let tpx = this.position.x + this.widgetSize.width / 2;
-            // let tpy = this.position.y + this.widgetSize.height / 2;
+            // let tpx = this.smartPosition.x + this.widgetSize.width / 2;
+            // let tpy = this.smartPosition.y + this.widgetSize.height / 2;
             // let tsx = this.widgetSize.width;
             // let tsy = this.widgetSize.height;
             // textSize(20)
@@ -3220,15 +3220,15 @@ class StickyNoteWidget extends Widget {
             rectMode(CENTER);
             fill("yellow")
             rect(
-                this.position.x + this.widgetSize.width / 2,
-                this.position.y + this.widgetSize.height / 2,
+                this.smartPosition.x + this.widgetSize.width / 2,
+                this.smartPosition.y + this.widgetSize.height / 2,
                 this.widgetSize.width,
                 this.widgetSize.height,
                 20 // this is the radius for the rounded corners
             );
             fill("black")
-            let tpx = this.position.x + this.widgetSize.width / 2;
-            let tpy = this.position.y + this.widgetSize.height / 2;
+            let tpx = this.smartPosition.x + this.widgetSize.width / 2;
+            let tpy = this.smartPosition.y + this.widgetSize.height / 2;
             let tsx = this.widgetSize.width;
             let tsy = this.widgetSize.height;
             textSize(20)
@@ -3322,16 +3322,16 @@ class WeatherWidget extends Widget {
                 textAlign(CENTER, CENTER)
                 text(
                     `${Math.round(current.temp - 273.15)}°C`,
-                    this.position.x + (this.widgetSize.width / 2),
-                    this.position.y + (this.widgetSize.height / 2)
+                    this.smartPosition.x + (this.widgetSize.width / 2),
+                    this.smartPosition.y + (this.widgetSize.height / 2)
                 )
 
                 // render the forecast
                 textSize(20)
                 textAlign(LEFT, TOP)
                 let forecast = current.forecast;
-                let forecastX = this.position.x + 20;
-                let forecastY = this.position.y + 20;
+                let forecastX = this.smartPosition.x + 20;
+                let forecastY = this.smartPosition.y + 20;
                 forecast.forEach((forecastItem)=>{
                     text(
                         `${Math.round(forecastItem.temp - 273.15)}°C`,
@@ -3411,7 +3411,7 @@ class RubiksCubeWidget extends Widget {
                     // set the fill color of the square
                     fill(color);
                     // draw the square
-                    rect(this.position.x + (j * 50), this.position.y + (i * 50), 50, 50);
+                    rect(this.smartPosition.x + (j * 50), this.smartPosition.y + (i * 50), 50, 50);
                 }
             }
         pop();
@@ -3422,7 +3422,7 @@ class TetrisWidget extends Widget {
     draw(){
         super.draw(...arguments)
         fill("red")
-        text("TETRIS!!!", this.position.x, this.position.y)
+        text("TETRIS!!!", this.smartPosition.x, this.smartPosition.y)
     }
 }
 class CalendarWidget extends Widget {
@@ -3441,8 +3441,8 @@ class CalendarWidget extends Widget {
             // Define the number of rows
             let rows = Math.ceil(31 / squaresPerRow);
             // Define the starting position
-            let startX = this.position.x + (this.widgetSize.width - squaresPerRow * squareSize) / 2;
-            let startY = this.position.y + (this.widgetSize.height - rows * squareSize) / 2;
+            let startX = this.smartPosition.x + (this.widgetSize.width - squaresPerRow * squareSize) / 2;
+            let startY = this.smartPosition.y + (this.widgetSize.height - rows * squareSize) / 2;
             // Draw the grid
             for(let i = 0; i < rows; i++) {
                 for(let j = 0; j < squaresPerRow; j++) {
@@ -3868,7 +3868,7 @@ class ClientResolverDebugWidget extends Widget {
         super.draw(...arguments)
         fill("yellow")
         // render just the ip for now
-        text("Client Resolver: \n"+this.resolver.instantValue, this.position.x + 10, this.position.y + 10)
+        text("Client Resolver: \n"+this.resolver.instantValue, this.smartPosition.x + 10, this.smartPosition.y + 10)
     }
 }
 
@@ -3882,8 +3882,8 @@ class UIButton extends Widget {
         super(...arguments)
     }
     draw(rootWidget){
-        // this.position.x = rootWidget.position.x;
-        // this.position.y = rootWidget.position.y;
+        // this.smartPosition.x = rootWidget.position.x;
+        // this.smartPosition.y = rootWidget.position.y;
         // super.draw(...arguments)
         this.preDraw();
         push()
@@ -3893,11 +3893,11 @@ class UIButton extends Widget {
             fill(this.hovered ? "green" : "red")
             rect(
                 rootWidget.position.x 
-                    + this.position.x 
+                    + this.smartPosition.x 
                     + (rootWidget.widgetSize.width / 2)
                     - (this.widgetSize.width / 2),
                 rootWidget.position.y 
-                    + this.position.y 
+                    + this.smartPosition.y 
                     + (rootWidget.widgetSize.height / 2)
                     - (this.widgetSize.height / 2),
                 this.widgetSize.width,
@@ -3909,11 +3909,11 @@ class UIButton extends Widget {
             text(
                 "UIButton",
                 rootWidget.position.x 
-                    + this.position.x 
+                    + this.smartPosition.x 
                     + (rootWidget.widgetSize.width / 2)
                     - (this.widgetSize.width / 2),
                 rootWidget.position.y 
-                    + this.position.y 
+                    + this.smartPosition.y 
                     + (rootWidget.widgetSize.height / 2)
                     - (this.widgetSize.height / 2)
             )
@@ -4178,7 +4178,7 @@ class SVGViewerWidget extends Widget {
         // draw the SVG
         if(PreloadedSVGs[this.src]){
             // draw it
-            image(PreloadedSVGs[this.src], this.position.x, this.position.y, this.widgetSize.width, this.widgetSize.height);
+            image(PreloadedSVGs[this.src], this.smartPosition.x, this.smartPosition.y, this.widgetSize.width, this.widgetSize.height);
         }
     }
 }
@@ -4238,8 +4238,8 @@ class ImageViewerWidget extends Widget {
             //         : this.widgetSize.width / 4;
             //     let x = radius * cos(2 * PI * i / 10 - PI / 2);
             //     let y = radius * sin(2 * PI * i / 10 - PI / 2);
-            //     x += this.position.x + (this.widgetSize.width / 2);
-            //     y += this.position.y + (this.widgetSize.height / 2) + 10;
+            //     x += this.smartPosition.x + (this.widgetSize.width / 2);
+            //     y += this.smartPosition.y + (this.widgetSize.height / 2) + 10;
             //     vertex(x, y);
             // }
             // endShape(CLOSE);
@@ -4427,9 +4427,9 @@ extends ImageViewerWidget {
 //         // this.updateCanvasAttributes(
 //         //     this.widgetSize.width,
 //         //     this.widgetSize.height,
-//         //     this.position.x,
-//         //     this.position.y,
-//         //     ''//`translate(${this.position.x}px,${this.position.y}px)`
+//         //     this.smartPosition.x,
+//         //     this.smartPosition.y,
+//         //     ''//`translate(${this.smartPosition.x}px,${this.smartPosition.y}px)`
 //         // )
 //     }
 //     addLights(){
@@ -4986,7 +4986,7 @@ class ScratchPad extends Widget {
         this.nestedCanvas.ellipse(this.nestedCanvas.width / 2, this.nestedCanvas.height / 2, 50, 50);
 
 
-        image(this.nestedCanvas, this.position.x, this.position.y);
+        image(this.nestedCanvas, this.smartPosition.x, this.smartPosition.y);
     }
 }
 
@@ -5130,11 +5130,11 @@ class iFrameWidget extends Widget {
         // }
 
         // if(this.pinned){
-        //     this.corrected.x = 0//(this.position.x + (mouseShifted.x*zoom))
-        //     this.corrected.y = windowHeight - this.widgetSize.height//(this.position.y + (mouseShifted.y*zoom))
+        //     this.corrected.x = 0//(this.smartPosition.x + (mouseShifted.x*zoom))
+        //     this.corrected.y = windowHeight - this.widgetSize.height//(this.smartPosition.y + (mouseShifted.y*zoom))
         // }else{
-            // this.corrected.x = (-this.position.x - panX) * zoom;
-            // this.corrected.y = (-this.position.y - panY) * zoom;
+            // this.corrected.x = (-this.smartPosition.x - panX) * zoom;
+            // this.corrected.y = (-this.smartPosition.y - panY) * zoom;
 
         //     this.corrected = this.smartPosition;
         // }
@@ -5433,16 +5433,16 @@ class PomodoroWidget extends Widget {
         textAlign(CENTER, CENTER);
         text(
             "🍅 Pomodoro Timer 🍅",
-            this.position.x + (this.widgetSize.width/2), 
-            this.position.y + 20 // + (this.dimensions.height/2)
+            this.smartPosition.x + (this.widgetSize.width/2), 
+            this.smartPosition.y + 20 // + (this.dimensions.height/2)
         )
         if(this.pomClassInstance.endedAt){
             const endedAtFormatted = new Date(this.pomClassInstance.endedAt).toLocaleTimeString();
             const durFmtd = new Date(this.pomClassInstance.durationMs).toLocaleTimeString();
             text(
                 `Pomodoro Ended!\nduration: ${durFmtd}\n at:${endedAtFormatted}`,
-                this.position.x + (this.widgetSize.width/2), 
-                this.position.y + 40 // + (this.dimensions.height/2)
+                this.smartPosition.x + (this.widgetSize.width/2), 
+                this.smartPosition.y + 40 // + (this.dimensions.height/2)
             )
         }else{
             const remainingMs = this.pomClassInstance.durationMs - (performance.now() - this.pomClassInstance.timerStartedAt);
@@ -5453,8 +5453,8 @@ class PomodoroWidget extends Widget {
             textAlign(CENTER, TOP)
             text(
                 `Pomodoro Running: \n${remainingFormatted} remaining`,
-                this.position.x + (this.widgetSize.width/2), 
-                this.position.y + 40 // + (this.dimensions.height/2)
+                this.smartPosition.x + (this.widgetSize.width/2), 
+                this.smartPosition.y + 40 // + (this.dimensions.height/2)
             )
         }
     }
@@ -5510,9 +5510,9 @@ class TodoWidget extends Widget {
 
         this.input.position(
             // center the input box
-            this.position.x + (panX/zoom) + (this.widgetSize.width/2) - (this.input.width/2),
+            this.smartPosition.x + (panX/zoom) + (this.widgetSize.width/2) - (this.input.width/2),
             // tuck it above the bottom of the widget
-            this.position.y + (panY/zoom) + this.widgetSize.height - 30
+            this.smartPosition.y + (panY/zoom) + this.widgetSize.height - 30
         )
         // if the command prompt is visible, hide the input since p5.js inputs are drawn over the canvas
         if(system.get("cmdprompt").visible){
@@ -5525,8 +5525,8 @@ class TodoWidget extends Widget {
         textAlign(CENTER, CENTER);
         text(
             "Todos ("+this.todos.length+")",
-            this.position.x + (this.widgetSize.width/2), 
-            this.position.y + 20 // + (this.dimensions.height/2)
+            this.smartPosition.x + (this.widgetSize.width/2), 
+            this.smartPosition.y + 20 // + (this.dimensions.height/2)
         )
 
         this.todos.forEach((todo,index)=>{
@@ -5534,8 +5534,8 @@ class TodoWidget extends Widget {
             textAlign(LEFT, CENTER);
             text(
                 (index+1)+" "+(todo.status ? '✅' : '❌')+" "+todo.value,
-                this.position.x + 20, //+ (this.dimensions.width/2), 
-                this.position.y + 60 + (index * 20)
+                this.smartPosition.x + 20, //+ (this.dimensions.width/2), 
+                this.smartPosition.y + 60 + (index * 20)
             )
         })
     }
@@ -5770,8 +5770,8 @@ class GherkinRunnerWidget extends Widget {
         super.draw(widgetID);
         let buttonSize = 30;
         // TODO: decide if we want to coordinate from top left or center center of the widgets by convention
-        let buttonX = this.position.x + this.widgetSize.width - 40;
-        let buttonY = this.position.y + 20;
+        let buttonX = this.smartPosition.x + this.widgetSize.width - 40;
+        let buttonY = this.smartPosition.y + 20;
         let triSize = 20; 
         let half_triSize = 5;
 
@@ -5816,9 +5816,9 @@ class GherkinRunnerWidget extends Widget {
         fill("darkblue")
         text(
             `Features: ${this.results.length}`,
-            this.position.x + (this.widgetSize.width / 2),
+            this.smartPosition.x + (this.widgetSize.width / 2),
             // 20px off the top edge
-            this.position.y + 20
+            this.smartPosition.y + 20
         )
 
         /** @see Widget.draw */
@@ -5829,8 +5829,8 @@ class GherkinRunnerWidget extends Widget {
         // each status light is a different color
         // each status light represents the status of a passing or 
         // failing part of the current feature run
-        let x = this.position.x + 20;
-        let y = this.position.y + 20;
+        let x = this.smartPosition.x + 20;
+        let y = this.smartPosition.y + 20;
         this.maxHeight = 0;
         // let widgetWidth = 300
         // let widgetHeight = 300
@@ -5900,7 +5900,7 @@ class GherkinRunnerWidget extends Widget {
                 x -= 20
             })
             // de-indent back to the left
-            x = this.position.x + 20;
+            x = this.smartPosition.x + 20;
         })
     }
 }
@@ -9054,8 +9054,8 @@ class ScrollableWidget extends Widget {
         // draw the scrollable viewport
         stroke(0); strokeWidth(1); fill(0,0)
         rect(
-            this.position.x + this.scrollViewportDims.padding,
-            this.position.y + this.scrollViewportDims.padding,
+            this.smartPosition.x + this.scrollViewportDims.padding,
+            this.smartPosition.y + this.scrollViewportDims.padding,
             this.widgetSize.width - this.scrollViewportDims.padding * 2,
             this.widgetSize.height - this.scrollViewportDims.padding * 2
         )
@@ -9063,8 +9063,8 @@ class ScrollableWidget extends Widget {
         // vertical
         stroke(0); strokeWidth(1); fill(0,0)
         rect(
-            this.position.x + this.widgetSize.width - 3 - this.scrollBarWidth,
-            this.position.y + this.scrollViewportDims.padding,
+            this.smartPosition.x + this.widgetSize.width - 3 - this.scrollBarWidth,
+            this.smartPosition.y + this.scrollViewportDims.padding,
             this.scrollBarWidth,
             Math.max(
                 this.minScrollBarSize, 
@@ -11309,16 +11309,16 @@ class TimerWidget extends Widget {
             textAlign(LEFT,TOP);
             // text(
             //     `${timer.id} ${timer.timeElapsedFormatted}`, 
-            //     this.position.x + 20, 
-            //     this.position.y + (index * 20)
+            //     this.smartPosition.x + 20, 
+            //     this.smartPosition.y + (index * 20)
             // )
             // draw the time elapsed vs. time remaining
             fill("red")
 
             text(
                 `Timer ${index+1} \n elapsed: ${timer.timeElapsedFormatted} \n remaining: ${timer.timeRemainingFormatted}`,
-                this.position.x + 20,
-                this.position.y + 40
+                this.smartPosition.x + 20,
+                this.smartPosition.y + 40
             )
         })
     }
@@ -11652,6 +11652,7 @@ class ToastNotification {
     }
 
     drawOneInstance(index,ctx){
+
         ctx.rectMode(CORNER)
         let offsetY = 30 * index;
         let leavingAlpha = this.state === 'leaving' 
@@ -11659,40 +11660,35 @@ class ToastNotification {
             : 255;
         leavingAlpha = Math.floor(leavingAlpha);
         ctx.stroke(0, 0, 0, leavingAlpha);
+        
         let bubbleColor = color("#2b124a");
         // if this.level === 'success' color should be green
         if(this.level === 'success'){
             bubbleColor = color("darkgreen");
+        }else if(this.important){
+            bubbleColor = color("darkred");
         }
+
         const clampedAlpha = Math.min(200, leavingAlpha);
         bubbleColor.setAlpha(clampedAlpha); 
         ctx.fill(bubbleColor);
+        
         const tBoxW = 300;
         const cornerRadius = 20;
-        ctx.push();
+        // ctx.push();
         ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
         ctx.fill(255, 255, 255, clampedAlpha);
-        ctx.textAlign(LEFT,TOP);
-        let words = this.message.split(' ');
-        let lines = [];
-        let line = '';
-        let y = offsetY + 30;
-        for(let n = 0; n < words.length; n++) {
-            let testLine = line + words[n] + ' ';
-            let metrics = mctx.textWidth(testLine);
-            let testWidth = metrics.width;
-            if (testWidth > tBoxW && n > 0) {
-                lines.push({ text: line, y: y });
-                line = words[n] + ' ';
-                y += metrics.height;
-            }
-            else {
-                line = testLine;
-            }
-        }
-        lines.push({ text: line, y: y });
-        lines.forEach(line => ctx.text(line.text, windowWidth - 10 - tBoxW + 10, line.y));
-        ctx.pop();
+        // ctx.pop();
+
+        drawStringWordWrapped(
+            this.message,
+            windowWidth - 10 - tBoxW + 10,
+            20 + offsetY + 10,
+            tBoxW - 20,
+            100 - 20,
+            ctx
+        )
+
         // darken by the lowest index so shadow effect
         // let shadowEffect = map(index, 0, this.options.important ? this.targetCloneCount : 1, 0, 50);
         // ctx.fill(0, 0, 0, shadowEffect);
@@ -15351,7 +15347,7 @@ document.body.appendChild(topCanvas);
         * @description Iterating over sprites array
         * @type {Sprite[]} sprites - Each sprite is an instance of the Sprite class
         */
-        mainCanvasContext.push();
+        // mainCanvasContext.push();
         store.minZ = 1000;
         store.maxZ = 0;
         
@@ -15408,14 +15404,14 @@ document.body.appendChild(topCanvas);
                 sprite.y = constrain(sprite.y, 0, windowHeight);
             })
         }
-        mainCanvasContext.pop()
+        //mainCanvasContext.pop()
     
         // draw our bg image
         if(bgImage){
             p.image(bgImage, 0, 0, windowWidth, windowHeight);
         }
         // center our coordinate system
-        mainCanvasContext.push();
+        // mainCanvasContext.push();
             const halfWidth = p.windowWidth / 2;
             const halfHeight = p.windowHeight / 2;
             mainCanvasContext.translate(halfWidth, halfHeight)
@@ -15527,7 +15523,7 @@ document.body.appendChild(topCanvas);
         // jump back to the main canvas context
         
         // reset any transforms
-        mainCanvasContext.pop();
+        // mainCanvasContext.pop();
     
         // render toast notifications
         system.get("toastManager")?.draw?.();
@@ -15752,6 +15748,65 @@ class EmptyGraph extends Graph {
         super(options)
         this.nodes = [];
         this.edges = [];
+    }
+}
+
+/*
+
+ctx.textAlign(LEFT,TOP);
+let words = this.message.split(' ');
+let lines = [];
+let line = '';
+let y = offsetY + 30;
+for(let n = 0; n < words.length; n++) {
+    let testLine = line + words[n] + ' ';
+    let metrics = mctx.textWidth(testLine);
+    let testWidth = metrics.width;
+    if (testWidth > tBoxW && n > 0) {
+        lines.push({ text: line, y: y });
+        line = words[n] + ' ';
+        y += metrics.height;
+    }
+    else {
+        line = testLine;
+    }
+}
+lines.push({ text: line, y: y });
+lines.forEach(line => ctx.text(line.text, windowWidth - 10 - tBoxW + 10, line.y));
+ctx.pop();
+*/
+
+function drawStringWordWrapped(
+    string, 
+    x, 
+    y, 
+    lineHeight, 
+    fitWidth, 
+    ctx
+) {
+    ctx.fill(200)
+    ctx.textAlign(CENTER,CENTER);
+    // if the text is wider than the box, word wrap it
+    let textWidth = ctx.textWidth(string);
+    if (textWidth > fitWidth) {
+        let words = string.split(' ');
+        let line = '';
+        let yLineOffset = 0;
+        for (let i = 0; i < words.length; i++) {
+            let testLine = line + words[i] + ' ';
+            let testWidth = ctx.textWidth(testLine);
+            if (testWidth > fitWidth && i > 0) {
+                ctx.text(
+                    line, 
+                    x + (fitWidth/2), 
+                    y + (lineHeight/2) + yLineOffset);
+                line = words[i] + ' ';
+                yLineOffset += ctx.textSize();
+            } else {
+                line = testLine;
+            }
+        }
+        ctx.text(line, x + (fitWidth/2), y + (lineHeight/2) + yLineOffset);
     }
 }
 
@@ -16025,19 +16080,27 @@ class SuggestionList {
         })
     }
     renderSuggestionOption(x,y,w,h,label,selected,ctx){
-        // ctx.push()
+        ctx.push()
         // ctx.translate(x,y);
         ctx.rectMode(CORNER);
+        ctx.stroke("white")
         ctx.strokeWeight(selected ? 3 : 1);
         // draw box
         ctx.fill(selected ? "purple" : ctx.color(20))
         ctx.rect(x,y,w,h);
         ctx.strokeWeight(1);
         // draw label
-        ctx.fill(200)
-        ctx.textAlign(CENTER,CENTER);
-        ctx.text(label, x + (w/2), y + (h/2));
-        // ctx.pop()
+        drawStringWordWrapped(
+            label,
+            x + 10,
+            y + 10,
+            20,
+            w - 20,
+            ctx
+        )
+        
+
+        ctx.pop()
     }
 }
 
