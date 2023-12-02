@@ -2555,11 +2555,10 @@ class Widget extends UndoRedoComponent {
         let parallaxFactor = (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
         parallaxFactor *= (1 - zoom / MAX_ZOOM); // Flatten effect at higher zoom
 
-        parallaxFactor *= 0.1
-
-        if (store.DISABLE_PARALLAX) {
-            parallaxFactor = 0;
-        }
+        // parallaxFactor *= 0.1
+        // if (store.DISABLE_PARALLAX) {
+        //     parallaxFactor = 0;
+        // }
 
         let cBase = this.getCurrentBase();
 
@@ -2695,13 +2694,14 @@ class Widget extends UndoRedoComponent {
             this.onUpdate();
         }
 
+        // handle global translation / scale
         this.enterDrawingContext();
         // TODO: doNotDraw isn't reliable yet
         // need to finish view frustum culling
         //if(this?.onDraw & !this.doNotDraw){
             // call extending method
             if(this?.onDraw){//} && !this.doNotDraw){
-                this?.onDraw?.();
+                this?.onDraw?.call(this);
             }else{
                 //console.warn('skipping draw')
             }
@@ -2765,9 +2765,10 @@ class Widget extends UndoRedoComponent {
 
         // toggle show widget debug info
         if(store.showWidgetPositions){
-            this.ctx.push()
+            // this.ctx.push()
             this.ctx.fill("red")
-            this.ctx.text(`x:${
+            this.ctx.text(`
+            x:${
                 this.basePosition.x.toFixed(2)
             } y:${
                 this.basePosition.y.toFixed(2)
@@ -2780,10 +2781,13 @@ class Widget extends UndoRedoComponent {
             } zD:${
                 this.zDepth.toFixed(2)
             }`,
-                this.smartPosition.x,
-                this.smartPosition.y
+
+
+
+                //this.smartPosition.x,
+                //this.smartPosition.y
             );
-            this.ctx.pop()
+            // this.ctx.pop()
         }
 
         // canvasContext.strokeWeight(1)
@@ -3750,6 +3754,7 @@ class Raycast {
 class MoonPhaseWidget extends Widget {
     name = "Moon Phase Widget"
     currentPhaseId = 0;
+    canvasID = 1;
     widgetSize = {
         width: 300,
         height: 300
@@ -3784,10 +3789,13 @@ class MoonPhaseWidget extends Widget {
         this.ctx.textSize(300)
         this.ctx.textAlign(CENTER, CENTER)
         const ej = MOON_PHASE_EMOJIS[MOON_PHASE_ORDER[this.currentPhaseId]];
+        // this.ctx.rectMode(CORNER);
+        // center 1 char
         this.ctx.text(
             `${ej}`,
-            this.smartPosition.x + (this.widgetSize.width / 2),
-            this.smartPosition.y + (this.widgetSize.height / 2)
+            // todo this.halfWidgetSize or .halfSize
+            (this.widgetSize.width / 2),
+            (this.widgetSize.height / 2)
         )
         // ctx.pop()
     }
@@ -4738,6 +4746,18 @@ class P53DLayer extends Widget {
             // this.canvas.setAttribute("height",height);
         }
     }
+    // TODO: technically we could allow multiple of these
+    // each layer could be a different renderer:
+    // > p52D, p5WebGL, threejs, dom
+    // for now, this ONE widget holds this ONE context
+    // it's probably better to let the deepCanvasManager handle
+    // which engines draw to which elements when,
+    // rather than leaving it up to the individual widgets
+    // the widgets could opt-in to perferred render modes,
+    // set preferred (ranked-choice) order (ultimately user decides)
+    // implement specific callbacks for specific rendering modes
+    // remember the goal is abstract widgets that can be themed and styled
+    // wherever they're rendered
     getP5JSContext() {
         if (this.p5jsContext) {
             return this.p5jsContext;
@@ -6174,7 +6194,7 @@ class ClockWidget extends Widget {
         super.onDraw(...arguments); // todo: split into super.preDraw/super.postDraw
         // just render the current time for now
         
-        this.ctx.push()
+        // this.ctx.push()
         this.ctx.fill("darkblue")
         this.ctx.textAlign(CENTER, CENTER);
         this.ctx.textFont('Georgia');
@@ -6182,17 +6202,17 @@ class ClockWidget extends Widget {
         this.ctx.textStyle(BOLD);
         this.ctx.text(
             this.dateFormatted + "\n" + this.timeFormatted, 
-            this.smartPosition.x + (this.widgetSize.width/2), 
-            this.smartPosition.y + (this.widgetSize.height/2)
+            (this.widgetSize.width/2), 
+            (this.widgetSize.height/2)
         )
         // white overlay
         this.ctx.fill(255)
         this.ctx.text(
             this.dateFormatted + "\n" + this.timeFormatted, 
-            this.smartPosition.x + (this.widgetSize.width/2) - 3, 
-            this.smartPosition.y + (this.widgetSize.height/2) - 3
+            (this.widgetSize.width/2) - 3, 
+            (this.widgetSize.height/2) - 3
         )
-        this.ctx.pop()
+        // this.ctx.pop()
     }
 }
 class TimeToSunSetWidget extends ClockWidget {
@@ -6212,7 +6232,7 @@ class TimeToSunSetWidget extends ClockWidget {
         return `${hours}h ${minutes}m ${seconds}s \nto sunset`
     }
     get timeFormatted(){
-        return ''
+        return 'sunset'
     }
     draw(){
         super.draw(...arguments)
@@ -6223,7 +6243,13 @@ class TimeToSunSetWidget extends ClockWidget {
         // todo: split into super.preDraw/super.postDraw
         super.onDraw(...arguments); 
 
-        
+        textAlign(CENTER, CENTER);
+        fill("darkblue")
+        text(
+            this.dateFormatted + "\n" + this.timeFormatted,
+            0 + (this.widgetSize.width/2),
+            0 + 20 // + (this.dimensions.height/2)
+        )
     }
     drawSunsetGradient(){
         // // draw a sunset themed background gradient
@@ -6247,8 +6273,8 @@ class TimeToSunSetWidget extends ClockWidget {
             this.ctx.strokeWeight(0)
             this.ctx.fill(color);
             this.ctx.rect(
-                this.smartPosition.x, 
-                this.smartPosition.y + (i * (this.widgetSize.height / lines)), 
+                0, 
+                0 + (i * (this.widgetSize.height / lines)), 
                 this.widgetSize.width, 
                 this.widgetSize.height / lines
             )
@@ -6295,12 +6321,12 @@ class GherkinRunnerWidget extends Widget {
 
     }
     // render the widget
-    draw(widgetID){
-        super.draw(widgetID);
+    onDraw(widgetID){
+        super.onDraw(widgetID);
         let buttonSize = 30;
         // TODO: decide if we want to coordinate from top left or center center of the widgets by convention
-        let buttonX = this.smartPosition.x + this.widgetSize.width - 40;
-        let buttonY = this.smartPosition.y + 20;
+        let buttonX = this.widgetSize.width - 40;
+        let buttonY = 20;
         let triSize = 20; 
         let half_triSize = 5;
 
@@ -6345,9 +6371,9 @@ class GherkinRunnerWidget extends Widget {
         fill("darkblue")
         text(
             `Features: ${this.results.length}`,
-            this.smartPosition.x + (this.widgetSize.width / 2),
+            (this.widgetSize.width / 2),
             // 20px off the top edge
-            this.smartPosition.y + 20
+            20
         )
 
         /** @see Widget.draw */
@@ -6358,8 +6384,8 @@ class GherkinRunnerWidget extends Widget {
         // each status light is a different color
         // each status light represents the status of a passing or 
         // failing part of the current feature run
-        let x = this.smartPosition.x + 20;
-        let y = this.smartPosition.y + 20;
+        let x = 20;
+        let y = 20;
         this.maxHeight = 0;
         // let widgetWidth = 300
         // let widgetHeight = 300
@@ -7055,7 +7081,7 @@ class Dashboard {
             /* from */ 
             {x:panX,y:panY,z:zoom},
             /* to */ 
-            {x:0,y:0,z:resetZoom?0:zoom}, 
+            {x:0,y:0,z:resetZoom?0.2:zoom}, 
             /*onUpdate*/
             (value, fieldName)=>{
                 // console.warn('onupdate',{value,fieldName})
@@ -7388,7 +7414,7 @@ let store = {
     Dashboard: null,
     // maybe we just store these IN dashboard manager?...
     widgets: {},
-    showWidgetPositions: false,
+    showWidgetPositions: 1, //false,
 
     // viewValue: '',
     // controllerValue: '',
@@ -10554,6 +10580,9 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new moon phase widget"](){
+        system.registerWidget(new MoonPhaseWidget())
+    },
     ["new minimap widget"](){
         system.registerWidget(new MiniMapWidget())
     },
@@ -10742,6 +10771,15 @@ const InvokableCommands = {
     new_train_toy(){
         system.registerWidget(new TrainToyWidget());
     },
+
+    ["new p5 js web gl context demo"](){
+        system.registerWidget(new P53DLayer()) 
+    },
+
+    ["New Mix Tape"](){},
+    ["New Compilation Album"](){},
+    ["New Best Hits List"](){},
+    ["New Top 10 List"](){},
 
     ["New Journal Entry"](){},
     ["New Experiment"](){},
@@ -10997,14 +11035,20 @@ const InvokableCommands = {
     ["enable sprites"](){
         store.disableSprites = false;
     },
-    ["enable deep renderer"](){
-        store.disableDeepCanvas = false;
-    },
-    ["disable deep renderer"](){
-        store.disableDeepCanvas = true;
-    },
+    // ["enable deep renderer"](){
+    //     store.disableDeepCanvas = false;
+    // },
+    // ["disable deep renderer"](){
+    //     store.disableDeepCanvas = true;
+    // },
     ["toggle deep renderer"](){
         store.disableDeepCanvas = !store.disableDeepCanvas;
+
+        // clear the canvases anytime we change rendering options
+        deepCanvasManager.canvases.forEach((c)=>{
+            c.clear();
+        })
+        mainCanvasContext.clear();
 
         this.getLabel = function(){
             return `${!bool ? 'Enable' : 'Disable'} Deep Canvas Renderer`
@@ -11381,9 +11425,6 @@ const InvokableCommands = {
         system.registerWidget("chrome_Eg990Efhut.png")
         system.registerWidget("chrome_SeWUnElI6x.png")
     },
-    ["New Moon Phase Widget"](){
-        system.registerWidget(new MoonPhaseWidget());
-    },
     ["New AI Chat Widget"](){
         system.registerWidget(new AIChatWidget());
     },
@@ -11460,6 +11501,13 @@ const InvokableCommands = {
     ["recenter"](){
         system.invoke("CENTER_VIEW");
     },
+    ["sign up"](){},
+    ["register..."](){},
+    ["learn more..."](){},
+    ["new account"](){},
+    ["create account"](){},
+    ["log in"](){},
+    ["log out"](){},
     ["focus"](){
         InvokableCommands["Center View"]();
     },
@@ -12183,6 +12231,7 @@ class ToastNotification {
     importantCloneCount = 0;
     importantCloneAnimationSequenceFrame = 0;
     // drawToast renderToast
+    // todo extend Widget?
     // TODO: levels (info, warn, error, success)
     draw(index){
         if(this.state === 'destroyed'){
@@ -12218,8 +12267,9 @@ class ToastNotification {
     }
 
     drawOneInstance(index,ctx){
-
-        ctx.push()
+        // NOTE: in here, we're in a translated instance,
+        // DONT PUSH IT AWAY!
+        //ctx.push()
         ctx.rectMode(CORNER)
         let offsetY = 30 * index;
         let leavingAlpha = this.state === 'leaving' 
@@ -12265,8 +12315,8 @@ class ToastNotification {
         //ctx.push();
         drawStringWordWrapped(
             this.message,
-            10,
-            10,
+            windowWidth - tBoxW,
+            20,
             tBoxW,
             20, // line height
             ctx
@@ -12279,7 +12329,7 @@ class ToastNotification {
         // ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
         // ctx.alpha(255);
 
-        ctx.pop();
+        // ctx.pop();
     }
 }
 
@@ -12653,6 +12703,7 @@ class CmdPrompt extends Widget {
         CmdPromptInput.elt.style.backgroundColor = 'transparent';
         CmdPromptInput.elt.style.color = 'white';
         CmdPromptInput.elt.style.zIndex = 9999;
+        CmdPromptInput.elt.id = 'cmdprompt-input';
         //CmdPromptInput.elt.style.filter = 'blur(10px)';
 
         CmdPromptInput.style('border', 'none');
@@ -13759,8 +13810,11 @@ class DebugPath {
         this.stepPruner();
         let ctx = deepCanvasManager.uiContext;
         ctx.push()
-        //ctx.translate(-panX + windowWidth/2, panY + windowHeight/2);
-        //ctx.scale(zoom, zoom);
+        ctx.translate(
+            -1 * (windowWidth/2 + panX), 
+            -1 * (windowHeight/2 + panY)
+        );
+        ctx.scale(zoom, zoom);
         let adjustedLineColor = color("red");
         for(let i = 0; i < this.points.length - 1; i++) {
             if(this === DebugPathInstance){
@@ -14935,7 +14989,7 @@ const CoreWidgets = [
     // // "Hypercard"
     // FractalTreeGraphViewerWidget,
 
-    KeyboardWidget
+    // KeyboardWidget
 ]
 
 class SoundCloudWidget extends iFrameWidget {
@@ -15068,13 +15122,19 @@ function animateVector(from, to, onUpdate, duration = 1000){
 let cursor, MainCanvasContextThing = function(p){
     let _onResize = function(){
         mctx.resizeCanvas(windowWidth, windowHeight);
+        // document.querySelectorAll('canvas').forEach((canvii)=>{
+        //     canvii.width = windowWidth;
+        //     canvii.height = windowHeight;
+        //     canvii.style.width = windowWidth+'px';
+        //     canvii.style.height = windowHeight+'px';
+        // })
         // TODO: call resize on DeepCanvasManager
         system.get("Dashboard")?.reflowLayout?.()
     }
     let _onResizeDebounced = debounce(_onResize);
-    // p.onResize = function(){
-    //     _onResizeDebounced();
-    // }
+    p.onResize = function(){
+        _onResizeDebounced();
+    }
 
     const postSetup = function(){
         setTimeout(()=>{_onResize()},150);
@@ -15139,7 +15199,7 @@ let cursor, MainCanvasContextThing = function(p){
         // e.g. when we're in a mode where we're typing in a text field
 
 
-    // load pan,zoom from query params (if any)
+        // load pan,zoom from query params (if any)
         let params = new URLSearchParams(window.location.search);
         panX = parseFloat(params.get('panX')) || 0;
         panY = parseFloat(params.get('panY')) || 0;
@@ -15206,18 +15266,19 @@ void main(void) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black for non-stripes
     }
 }
-`;
-let topCanvas = document.createElement('canvas');
-topCanvas.id="topCanvas"; // composited canvas, not really TOP as UI is drawn above this even...
-topCanvas.width = window.windowWidth;
-topCanvas.height = window.windowHeight;
-topCanvas.style.position = 'absolute';
-topCanvas.style.pointerEvents = 'none';
-topCanvas.style.top = 0;
-topCanvas.style.left = 0;
-topCanvas.style.zIndex = 90001; // over 9000
-// topCanvas.style.pointerEvents = 'none';
-document.body.appendChild(topCanvas);
+`       ;
+
+        let topCanvas = document.createElement('canvas');
+        topCanvas.id="topCanvas"; // composited canvas, not really TOP as UI is drawn above this even...
+        topCanvas.width = window.windowWidth;
+        topCanvas.height = window.windowHeight;
+        topCanvas.style.position = 'absolute';
+        topCanvas.style.pointerEvents = 'none';
+        topCanvas.style.top = 0;
+        topCanvas.style.left = 0;
+        topCanvas.style.zIndex = 90001; // over 9000
+        // topCanvas.style.pointerEvents = 'none';
+        document.body.appendChild(topCanvas);
         window.iCanvasCompositor = new CanvasCompositor(canvases, fragmentShaderSource, topCanvas);
 
         //initTHREEMode();
@@ -15444,9 +15505,7 @@ document.body.appendChild(topCanvas);
             }
         })
 
-        // Additional Widgets
-        system.registerWidget(new KeyboardWidget());
-        system.registerWidget(new MyMouseEvents());
+        
 
         //system.get("cmdprompt")
         system.cmdprompt.afterSetup()
@@ -15458,7 +15517,6 @@ document.body.appendChild(topCanvas);
         //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
         //     CalendarWidget,
-        //     ClockWidget,
 
         //     MessengerWidget,
         //     TimerWidget,
@@ -15478,204 +15536,212 @@ document.body.appendChild(topCanvas);
         // attach the results of the self test runner to the widget
         grw.setResults(autorunFeatureTestResults);
         system.get("Dashboard").init()
+
+        // loadTestWidgets
+        if(store.showTestWidgets){
             // add our first widget (todo: load state from dehydrated json)
             // DEFAULT WIDGET SET
 
-        system.registerWidget("colorpickermockup.png")
-        system.registerWidget(new ColorPickerWidget())
+            system.registerWidget("colorpickermockup.png")
+            system.registerWidget(new ColorPickerWidget())
 
-        // as "let him cook" meme
-        system.registerWidget("https://i.kym-cdn.com/photos/images/newsfeed/002/488/659/18a.jpg");
+            // as "let him cook" meme
+            system.registerWidget("https://i.kym-cdn.com/photos/images/newsfeed/002/488/659/18a.jpg");
 
-        // Register Some Widgets
-        // Spawn Some Widgets
-        InvokableCommands["New Time To Sunset Widget"]()
-        InvokableCommands["New Calculator Widget"]()
-        InvokableCommands["New Egg Timer"]()
-        InvokableCommands["Play Glorious Dawn"]()
-        InvokableCommands["NEW_STICKY_NOTE"]()
-        // InvokableCommands["New Scratch Pad"]()
-        //InvokableCommands["New Markdown Editor"]()
+            // Register Some Widgets
+            // Spawn Some Widgets
+            InvokableCommands["New Time To Sunset Widget"]()
+            InvokableCommands["New Calculator Widget"]()
+            InvokableCommands["New Egg Timer"]()
+            InvokableCommands["Play Glorious Dawn"]()
+            InvokableCommands["NEW_STICKY_NOTE"]()
+            // InvokableCommands["New Scratch Pad"]()
+            //InvokableCommands["New Markdown Editor"]()
 
-        system.invoke("Study Greek Alphabet Flashcards");
+            system.invoke("Study Greek Alphabet Flashcards");
 
-        //InvokableCommands["NEW_SKETCHFAB_VIEWER"]()
-        //system.invoke("NEW_SKETCHFAB_VIEWER")
-        system.registerWidget(new SketchfabEmbedWidget())
+            //InvokableCommands["NEW_SKETCHFAB_VIEWER"]()
+            //system.invoke("NEW_SKETCHFAB_VIEWER")
+            system.registerWidget(new SketchfabEmbedWidget())
 
-        system.invoke("NEW_FISH")
-        system.invoke("NEW_DOG")
-        system.invoke("NEW_CAT")
+            system.invoke("NEW_FISH")
+            system.invoke("NEW_DOG")
+            system.invoke("NEW_CAT")
 
-        //InvokableCommands["UI Inspiration > Minority Report UI"]()
-        system.invoke("EMBED_TWEET")
+            //InvokableCommands["UI Inspiration > Minority Report UI"]()
+            system.invoke("EMBED_TWEET")
 
-        // demo widgets
-        system.invoke("new zoom dependent widget")
-        // aka navigator widget
-        system.invoke("new minimap widget")
+            // demo widgets
+            system.invoke("new zoom dependent widget")
+            // aka navigator widget
+            system.invoke("new minimap widget")
 
-        // OnDashboardReady OnDashboardLoaded OnDashboardInit
-        // OnDashboardStarted
-        system
+            system.invoke("new moon phase widget")
 
-            // Main Widget Registration Area
-            
+            // OnDashboardReady OnDashboardLoaded OnDashboardInit
+            // OnDashboardStarted
+            system
 
-
-
-            
-            
-            // ~~ TODO: consolidate all other widget registration methods ~~
+                // Main Widget Registration Area
+                
 
 
-            // what if you could remote desktop in here?!
-            // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
 
-            // 5-calls widget:
-            .newWidget(
-                new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/",{
+                
+                
+                // ~~ TODO: consolidate all other widget registration methods ~~
+
+
+                // what if you could remote desktop in here?!
+                // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
+
+                // 5-calls widget:
+                .newWidget(
+                    new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/",{
+                        widgetSize:{
+                            width: 480,
+                            height: 640
+                        }
+                    })
+                )
+
+                .newWidget(new iFrameWidget("https://faxzero.com/",{
                     widgetSize:{
                         width: 480,
                         height: 640
                     }
+                }))
+
+                .newWidget(new iFrameWidget("https://publishersforpalestine.org/",{
+                    widgetSize:{
+                        width: 480,
+                        height: 640
+                    }
+                }))
+
+                // dental services in my dental coverage network?!
+                // x-ray services that work when i travel a lot for work?
+                // good accounting tips for freelancers and quarterly estimated taxpayers
+                // ...
+
+                // thomas and friends for SNES: minigame: 
+                .newWidget("https://youtu.be/mQcR04RROUQ?si=9kpOTXAd9rQZ_QLa&t=482")
+
+                // dark side of the moon, mario 64 sound font
+                .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
+
+                // recommended related stuff...
+                // https://www.reddit.com/r/SuperMario64/
+
+                // can you use chat gpt in an iframe?
+                // .newWidget(new iFrameWidget("https://chat.openai.com/",{
+                //     widgetSize:{
+                //         width:800,
+                //         height:600
+                //     }
+                // }))
+
+
+                .newWidget(new GithubCardWidget())
+                .registerWidget(new ClockWidget())
+                .registerWidget(new MarchingCubesDemoWidget())
+
+                .registerWidget(new AStarPathfindingDemoWidget())
+
+                .registerWidget(new MandlebrotWidget())
+
+                    //     .registerWidget(new IsometricPreview())
+
+                    .registerWidget(new AIWidget())
+                    // this should be part of deep canvas manager...
+                    // .registerWidget(new P53DLayer()) 
+                    // disabled by default cause it tanks perf
+                    // need to optimize draw routines...
+                    // .registerWidget(new ThreeJSViewer())
+
+                    .registerWidget(new KeyboardWidget())
+
+
+                // TODO THEIR IFRAME IS BLOCKED, HOST A IFRAME FRIENDLY COPY!!!
+                .registerWidgetAvailable("Google Color Picker",()=>{
+                    system.todo("Googles color picker is iframe-blocked, make or find an iframe friendly one")
                 })
-            )
+                .registerWidget(
+                    new ImageViewerWidget("ukraine-flag.jpeg")
+                )
+                .registerWidget(
+                    new ImageViewerWidget("insp.png",{
+                        widgetSize:{width:2880,height:1580}
+                    })
+                )
+                .registerWidget(
+                    //"SVGViewerWidget:PFlag",
+                    new ImageViewerWidget("Flag_of_Palestine.svg")
+                )
+                .registerWidget(
+                    //"milky-way-galaxy.gif",
+                    new ImageViewerWidget("milky-way-galaxy.gif")
+                )
 
-            .newWidget(new iFrameWidget("https://faxzero.com/",{
-                widgetSize:{
-                    width: 480,
-                    height: 640
-                }
-            }))
+                
+                .registerWidget(
+                    //"4SeasonsImg", 
+                    new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif")
+                )
 
-            .newWidget(new iFrameWidget("https://publishersforpalestine.org/",{
-                widgetSize:{
-                    width: 480,
-                    height: 640
-                }
-            }))
+                .registerWidget(
+                    new ImageViewerWidget("fine.gif")
+                )
+                
+                // .registerWidget("GherkinRunnerWidget",  grw)
+                
+                // // intentionally on a separate line to make it easier to comment out last chained method
+                // ;
+                // WidgetsToRegister.forEach((widgetClassName)=>{
+                //     let theInstance = null;
+                //     const widgetTypes = {
+                //         ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
+                //         VideoPlayerWidget: [".mp4"],
+                //         YoutubePlayerWidget: [".youtube."]
+                //     };
+                //     if(typeof widgetClassName === 'string'){
+                //         for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
+                //             if (extensions.some(ext => widgetClassName.includes(ext))) {
+                //                 if(!window[widgetType]){
+                //                     console.warn("missing widget type",{
+                //                         widgetType,
+                //                         extensions,
+                //                         widgetClassName
+                //                     })
+                //                     continue;
+                //                 }
 
-            // dental services in my dental coverage network?!
-            // x-ray services that work when i travel a lot for work?
-            // good accounting tips for freelancers and quarterly estimated taxpayers
-            // ...
+                //                 theInstance = new window[widgetType](widgetClassName);
+                //                 break;
+                //             }
+                //         }
+                //         if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
+                //             theInstance = new iFrameWidget(widgetClassName);
+                //         }
+                //     }else{
+                //         if (!theInstance) {
+                //             theInstance = new widgetClassName();
+                //         }
+                //     }
+                //     if(!theInstance){
+                //         console.warn(`failed to instantiate widget ${widgetClassName}`)
+                //         return;
+                //     }
+                //     system.registerWidget(theInstance)
+                // })
 
-            // thomas and friends for SNES: minigame: 
-            .newWidget("https://youtu.be/mQcR04RROUQ?si=9kpOTXAd9rQZ_QLa&t=482")
-
-            // dark side of the moon, mario 64 sound font
-            .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
-
-            // recommended related stuff...
-            // https://www.reddit.com/r/SuperMario64/
-
-            // can you use chat gpt in an iframe?
-            // .newWidget(new iFrameWidget("https://chat.openai.com/",{
-            //     widgetSize:{
-            //         width:800,
-            //         height:600
-            //     }
-            // }))
-
-
-            .newWidget(new GithubCardWidget())
-            .registerWidget(new ClockWidget())
-            .registerWidget(new MarchingCubesDemoWidget())
-
-            .registerWidget(new AStarPathfindingDemoWidget())
-
-            .registerWidget(new MandlebrotWidget())
-
-                //     .registerWidget(new IsometricPreview())
-
-                .registerWidget(new AIWidget())
-                // this should be part of deep canvas manager...
-                // .registerWidget(new P53DLayer()) 
-                // disabled by default cause it tanks perf
-                // need to optimize draw routines...
-                // .registerWidget(new ThreeJSViewer())
-
-                .registerWidget(new MoonPhaseWidget())
-                .registerWidget(new KeyboardWidget())
-
-
-            // TODO THEIR IFRAME IS BLOCKED, HOST A IFRAME FRIENDLY COPY!!!
-            .registerWidgetAvailable("Google Color Picker",()=>{
-                system.todo("Googles color picker is iframe-blocked, make or find an iframe friendly one")
-            })
-            .registerWidget(
-                new ImageViewerWidget("ukraine-flag.jpeg")
-            )
-            .registerWidget(
-                new ImageViewerWidget("insp.png",{
-                    widgetSize:{width:2880,height:1580}
-                })
-            )
-            .registerWidget(
-                //"SVGViewerWidget:PFlag",
-                new ImageViewerWidget("Flag_of_Palestine.svg")
-            )
-            .registerWidget(
-                //"milky-way-galaxy.gif",
-                new ImageViewerWidget("milky-way-galaxy.gif")
-            )
-
-            
-            .registerWidget(
-                //"4SeasonsImg", 
-                new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif")
-            )
-
-            .registerWidget(
-                new ImageViewerWidget("fine.gif")
-            )
-            
-            // .registerWidget("GherkinRunnerWidget",  grw)
-            
-            // // intentionally on a separate line to make it easier to comment out last chained method
-            // ;
-            // WidgetsToRegister.forEach((widgetClassName)=>{
-            //     let theInstance = null;
-            //     const widgetTypes = {
-            //         ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
-            //         VideoPlayerWidget: [".mp4"],
-            //         YoutubePlayerWidget: [".youtube."]
-            //     };
-            //     if(typeof widgetClassName === 'string'){
-            //         for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
-            //             if (extensions.some(ext => widgetClassName.includes(ext))) {
-            //                 if(!window[widgetType]){
-            //                     console.warn("missing widget type",{
-            //                         widgetType,
-            //                         extensions,
-            //                         widgetClassName
-            //                     })
-            //                     continue;
-            //                 }
-
-            //                 theInstance = new window[widgetType](widgetClassName);
-            //                 break;
-            //             }
-            //         }
-            //         if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
-            //             theInstance = new iFrameWidget(widgetClassName);
-            //         }
-            //     }else{
-            //         if (!theInstance) {
-            //             theInstance = new widgetClassName();
-            //         }
-            //     }
-            //     if(!theInstance){
-            //         console.warn(`failed to instantiate widget ${widgetClassName}`)
-            //         return;
-            //     }
-            //     system.registerWidget(theInstance)
-            // })
-
-                // shuffle widget order
-                // system.dashboard.shuffleWidgets()
-                // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
+                    // shuffle widget order
+                    // system.dashboard.shuffleWidgets()
+                    // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
+            // Additional Widgets
+            system.registerWidget(new KeyboardWidget());
+            system.registerWidget(new MyMouseEvents());
+        }
 
         // POST-REGISTRATION-WIDGET-MUNGING-OPERATIONS
         // set all widgets to canvasID 1 so they're in the "BG" deep canvas
@@ -15831,28 +15897,28 @@ document.body.appendChild(topCanvas);
             // panX += (mouseX - windowWidth / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
             // panY += (mouseY - windowHeight / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
     
-            // Implementing simple nudge based on logic
-            // If panX > 0, we're panning right, so we need to nudge left
-            let delta = deltaTime * (oldZoom - newZoom);
-            let delta2 = Math.abs(panX) - 0;
-            let delta3 = Math.abs(panY) - 0;
-            delta*=1.0 - (delta2+delta3);
-            let stepFactor = .09; //1.001;
-            if(panX > 0) {
-                panX -= stepFactor * delta;
-            }
-            // If panX < 0, we're panning left, so we need to nudge right
-            if(panX < 0) {
-                panX += stepFactor * delta;
-            }
-            // If panY > 0, we're panning down, so we need to nudge up
-            if(panY > 0) {
-                panY -= stepFactor * delta;
-            }
-            // If panY < 0, we're panning up, so we need to nudge down
-            if(panY < 0) {
-                panY += stepFactor * delta;
-            }
+            // // Implementing simple nudge based on logic
+            // // If panX > 0, we're panning right, so we need to nudge left
+            // let delta = deltaTime * (oldZoom - newZoom);
+            // let delta2 = Math.abs(panX) - 0;
+            // let delta3 = Math.abs(panY) - 0;
+            // delta*=1.0 - (delta2+delta3);
+            // let stepFactor = .09; //1.001;
+            // if(panX > 0) {
+            //     panX -= stepFactor * delta;
+            // }
+            // // If panX < 0, we're panning left, so we need to nudge right
+            // if(panX < 0) {
+            //     panX += stepFactor * delta;
+            // }
+            // // If panY > 0, we're panning down, so we need to nudge up
+            // if(panY > 0) {
+            //     panY -= stepFactor * delta;
+            // }
+            // // If panY < 0, we're panning up, so we need to nudge down
+            // if(panY < 0) {
+            //     panY += stepFactor * delta;
+            // }
     
     
         }else{
@@ -16130,7 +16196,7 @@ document.body.appendChild(topCanvas);
             }
             
     
-            mainCanvasContext.translate(mouseShifted.x, mouseShifted.y);
+            mainCanvasContext.translate(-mouseShifted.x, -mouseShifted.y);
             mainCanvasContext.scale(zoom);
             // translate(mouseX, mouseY);
             mainCanvasContext.translate(
