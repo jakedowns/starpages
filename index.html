@@ -12,7 +12,7 @@
         socketIO.on('message', function(data){
           // This event listener will trigger for any type of message received from the server
           console.log("received message from server", data);
-          system.log(`${data}`);
+          system.log(`${JSON.stringify(data)}`);
         });
         socketIO.on('connect', function(){
           console.log("connected to socket.io server");
@@ -357,6 +357,7 @@
       
     }
     iframe {
+      position: absolute;
       transition: filter .5s ease-in-out;
     }
     canvas {

@@ -681,6 +681,43 @@ class SystemManager {
  *   to the appropriate subsystems...
  */
 class System {
+    registerWidgetAvailable(invokeable_command_string, widget_class){
+        if(InvokableCommands[invokeable_command_string]){
+            system.warn("name override detected: " + invokeable_command_string);
+        }
+        InvokableCommands[invokeable_command_string] = ()=>{
+            // Check if widget_class is a string
+            if (typeof widget_class === 'string') {
+                // Try to invoke it as a URI
+                let result = tryInvokeHandlerForUri(widget_class);
+                // If it returns -1, it wasn't invokable
+                if (result === -1) {
+                    throw new Error("Unable to invoke URI: " + widget_class);
+                }
+                return result;
+            }
+            // Check if widget_class is a function
+            else if (typeof widget_class === 'function') {
+                // Check if the function is a constructor (can be called with 'new')
+                if (widget_class.prototype && widget_class.prototype.constructor === widget_class) {
+                    // Call the function as a constructor
+                    return new widget_class();
+                } else {
+                    // Call the function normally
+                    return widget_class();
+                }
+            }
+            // Check if widget_class is a singleton we can call system.get() on
+            else if (system.get(widget_class)) {
+                return system.get(widget_class);
+            }
+            // If none of the above, throw an error
+            else {
+                throw new Error("Unable to invoke widget_class: " + widget_class);
+            }
+        };
+        return this;
+    }
     PreloadedImages = {}
     PreloadedSounds = {}
     PreloadedFonts = {}
@@ -704,13 +741,26 @@ class System {
     playSound(name){
         switch(name){
             case "widget_closed":
-                let soundFile = "res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3";
-                this.loadSound(soundFile).then(sound => {
-                    sound.play();
-                }).catch(error => {
-                    console.error(error)
-                    // system.panic(error)
-                });
+                // let duration = 0.5; // Set the duration for the sound
+                // let osc = new p5.Oscillator();
+                // osc.setType('sine');
+                // osc.freq(440);
+                // osc.amp(0);
+                // osc.start();
+                // osc.amp(0.5, 0.05);
+                // setTimeout(() => {
+                //     osc.amp(0, duration);
+                //     osc = null;
+                // }, duration * 1000);
+                // let soundFile = "res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3";
+                // this.loadSound(soundFile).then(sound => {
+                //     sound.play();
+                // }).catch(error => {
+                //     console.error(error)
+                //     // system.panic(error)
+                // });
+                //system.plopAudioPlayer.seek(0);
+                system.plopAudioPlayer.play();
             break;
             default:
                 system.panic("unknown sound?! 👀")
@@ -741,6 +791,18 @@ class System {
         return new theClass(...Array.from(arguments).slice(1))
     }
     invoke(name){
+        let launched = -2;
+        if(typeof InvokableCommands[name] === 'string'){
+            launched = this.invokeHandlerForUri(name);
+        }
+        if(
+            launched === -2
+            || launched === -1
+        ){
+            // system.panic("System.invoke: no handler found for uri: " + name);
+        }else{
+            return launched;
+        }
         return InvokableCommands[name]();
     }
     todo(){
@@ -865,12 +927,58 @@ class System {
     newWidget(){
         return this.registerWidgetInstance(...arguments)
     }
+    // NOTE it's kind of annoying that we want to chain this
+    // cause then we have to return the system instance
+    // and not the new widget instance
     registerWidgetInstance(){
         /** @see Dashboard.registerWidget */
-        return this.dashboard.registerWidget(...arguments);
+        this.dashboard.registerWidget(...arguments);
+        return this;
     }
     registerWidget(){
         return this.registerWidgetInstance(...arguments)
+    }
+    tryInvokeHandlerForUri(uri){
+        if(
+            uri?.includes?.(".png")
+            || uri?.includes?.(".jpg")
+            || uri?.includes?.(".gif")
+            || uri?.includes?.(".jpeg")
+        ) {
+            // it's an image!
+            return system.registerWidget(new ImageViewerWidget(uri))
+        }
+    
+        // if it's a soundcloud url, return a new soundcloud widget instance instead
+        if(
+            uri?.includes?.("soundcloud.com")
+        ) {
+            const MySoundCloudClass = class extends SoundCloudWidget {
+                url = uri
+            } 
+            return system.registerWidget(new MySoundCloudClass())
+        }
+    
+        if(
+            uri?.includes?.("youtube.com")
+            || uri?.includes?.("youtu.be")
+        ){
+            let updatedUrl = uri;
+            try {
+                let url = new URL(updatedUrl);
+                url.searchParams.set('autoplay', '1');
+                updatedUrl = url.toString();
+            } catch (error) {
+                console.error('Invalid URL:', updatedUrl);
+            }
+            // it's a youtube url!
+            return system.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
+        }
+        if(uri?.includes?.("://")){
+            // it's an iframe, chuck!
+            return system.registerWidget(new iFrameWidget(uri))
+        }
+        return -1;
     }
 }
 const rootSystemManager = new SystemManager();
@@ -2013,7 +2121,7 @@ const hoveredArray = []
 //     mctx.stroke(_strokeColor)
 //     mctx.fill(fillColor)
 //     mctx.rect(10, 10, mctx.innerWidth - 20, mctx.innerHeight - 20)
-//     mctx.rect(20, 20, mctx.windowWidth - 40, mctx.windowHeight - 40)
+//     mctx.rect(20, 20, mctx.innerWidth - 40, mctx.windowHeight - 40)
 //     // draw a rect comprised of 4 dashed lines
 //     drawDashedLine(x, y, x + w, y, dashLength);  // Top side
 //     drawDashedLine(x + w, y, x + w, y + h, dashLength);  // Right side
@@ -2231,6 +2339,9 @@ class Widget extends UndoRedoComponent {
 
     // smart position is the parallaxed position on top of the local position (falls back to the base local position if no parallax is applied)
     get smartPosition(){
+        if(this.pinned && this.fixedPosition){
+            return this.fixedPosition;
+        }
         // let base = this.getCurrentBase();
 
         // TODO: sometimes we _dont_ apply it
@@ -2284,12 +2395,7 @@ class Widget extends UndoRedoComponent {
 
         this.halfDepthRange = this.depthRange / 2;
 
-        // assign a random z-depth for fun
-        // we'll make this more static // meaningful soon
-        this.zDepth = Math.round(mctx.random(
-            minWidgetDepth,
-            maxWidgetDepth
-        ))
+        this.zDepth = 0
 
         // should we decorate this class with any functionality?
     }
@@ -2544,6 +2650,24 @@ class Widget extends UndoRedoComponent {
         this.ctx = ctx;
         return ctx;
     }
+
+    enterDrawingContext(){
+        this.ctx.push();
+        this.ctx.translate(
+            this.smartPosition.x,
+            this.smartPosition.y
+        )
+        this.ctx.scale(
+            zoom,
+            zoom
+        )
+    }
+    endDrawingContext(){
+        this.leaveDrawing();
+    }
+    leaveDrawing(){
+        this.ctx.pop();
+    }
     
     // draw calls onDraw when not culled
     // NOTE: we can instrument this widget
@@ -2570,29 +2694,34 @@ class Widget extends UndoRedoComponent {
         if(this?.onUpdate){
             this.onUpdate();
         }
+
+        this.enterDrawingContext();
         // TODO: doNotDraw isn't reliable yet
         // need to finish view frustum culling
         //if(this?.onDraw & !this.doNotDraw){
             // call extending method
-            if(this?.onDraw && !this.doNotDraw){
+            if(this?.onDraw){//} && !this.doNotDraw){
                 this?.onDraw?.();
             }else{
                 //console.warn('skipping draw')
             }
         //}
+        this.endDrawingContext();
 
         
         let ctx = this.ctx;
+        this.enterDrawingContext();
         ctx.rectMode(CORNER);
         ctx.strokeWeight(1)
         ctx.stroke("darkblue")
         ctx.fill(color(0,0,0,100))
         ctx.rect(
-            this.smartPosition.x + this.widgetSize.width / 2,
-            this.smartPosition.y + this.widgetSize.height / 2,
+            0,0,
             this.widgetSize.width,
-            this.widgetSize.height
+            this.widgetSize.height,
+            20 // this is the radius for the rounded corners
         )
+        this.endDrawingContext();
 
         /*
             we need to project an imaginary plane from screenspace into world space
@@ -2733,9 +2862,6 @@ class Widget extends UndoRedoComponent {
     onDraw(){
         // override me
         //this.ctx.push()
-    }
-    endDraw(){
-        //this.ctx.pop()
     }
     close(){
         /** @see System.playSound */
@@ -3915,7 +4041,7 @@ const SimpleCommandConfig = function (name, action, target){
 }
 const WrappedCommand = function (name, action, target){
     const _config = SimpleCommandConfig(name, action, target);
-    console.warn('wrapping command...',{_config})
+    //console.warn('wrapping command...',{_config})
     return function(){
         console.warn('instancing wrapped command', {
             _config,
@@ -4472,8 +4598,8 @@ class Cursor {
         // seriously tho, how do we map the "Center" of the "virtualCanvas" (dashboard)
         // to screenspace and vice versa?
         let worldOriginAttempt2 = {
-            x: (panX + (ctx.windowWidth/2)) * zoom,
-            y: (panY + (ctx.windowHeight/2)) * zoom
+            x: (panX + (ctx.innerWidth/2)) * zoom,
+            y: (panY + (ctx.innerHeight/2)) * zoom
         }
 
         drawCrosshair(ctx, "red", worldOriginInScreenSpace);
@@ -4632,7 +4758,7 @@ class P53DLayer extends Widget {
         this.p5jsContext = createGraphics(
             innerWidth, //this.widgetSize.width, 
             innerHeight, //this.widgetSize.height
-            WEBGL
+            mctx.WEBGL
         );
         // Attach the p5.js canvas to the existing canvas element
         this.p5jsContext.parent(this.canvasWrapper); 
@@ -5162,8 +5288,8 @@ class iFrameWidget extends Widget {
             'left': '0',
             'z-index': '999999',
             'display': 'block',
-            'width': this.widgetSize.width * zoom + 'px',
-            'height': this.widgetSize.height * zoom + 'px',
+            'width': this.widgetSize.width + 'px',
+            'height': this.widgetSize.height + 'px',
             'transform': `scale(${zoom})`,
         }
         const tagAttrs = {
@@ -5172,11 +5298,12 @@ class iFrameWidget extends Widget {
             'allowfullscreen': 'true',
             'scrolling': 'yes',
             'allow': 'autoplay; encrypted-media',
-            'height': `${this.widgetSize.width}px`,
-            'width': `${this.widgetSize.height}px`,
+            // 'height': `${this.widgetSize.width}px`,
+            // 'width': `${this.widgetSize.height}px`,
             'src': this.url ?? 'https://google.com/webhp?igu=1',
             'crossorigin': 'anonymous',
         }
+        // alert(this.url + ' ' + this.widgetSize.width + 'x' + this.widgetSize.height)
         // console.log({tagAttrs})
         this.iframe = createElement('iframe');
         // console.log('created iframe',{iframe:this.iframe})
@@ -5210,6 +5337,17 @@ class iFrameWidget extends Widget {
     constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
         super(...arguments);
         this.url = url ?? this.url;
+
+        // let opts = null;
+        // if(typeof pxWidthOrOptsOrNull === 'object'){
+        //     opts = pxWidthOrOptsOrNull;
+        // }
+
+        console.warn('iframe',{
+            url,
+            two: arguments[1],
+            three: arguments[2],
+        })
 
         //this.widgetSize = { width: 300, height: 150 }
 
@@ -5254,7 +5392,7 @@ class iFrameWidget extends Widget {
         this.ctx.scale(zoom)
         this.ctx.fill("red")
         this.ctx.text(`url:${this.url}`, 0, 0, 100, 100);
-        this.ctx.pop()
+        //this.ctx.pop()
 
         // if(system.get("cmdprompt").visible){
         //     this.iframe.hide();
@@ -5286,40 +5424,109 @@ class iFrameWidget extends Widget {
         const borderRadius = 10;
         const negYOffset = - buttonSize - 10;
         
-        // Draw a white on green plus
-        this.ctx.noStroke();
-        this.ctx.rectMode(CORNER)
-        this.ctx.fill("green");
-        this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
-        this.ctx.rectMode(CENTER)
-        this.ctx.fill("white");
-        this.ctx.rect(halfButtonSize, negYOffset + halfButtonSize, 30, 10, borderRadius);
-        this.ctx.rect(halfButtonSize, negYOffset + halfButtonSize, 10, 30, borderRadius);
+        // Draw a white X on a RED BUTTON
+        this.ctx.push(); // Save current drawing style and transformation matrix
 
-        // Draw a white on red minus
-        this.ctx.rectMode(CORNER)
-        this.ctx.fill("red");
-        this.ctx.rect(
-                        buttonSize + 10, 
-                        negYOffset, 
-                        buttonSize, 
-                        buttonSize, 
-                        borderRadius);
-        this.ctx.rectMode(CENTER);
-        this.ctx.fill("white");
-        this.ctx.rect(
-                        halfButtonSize + buttonSize + 10, 
-                        negYOffset + halfButtonSize, 
-                        30, 
-                        10, 
-                        borderRadius);
+        // Save the default state
+        this.ctx.drawingContext.save(); 
+        // Apply a skew transformation
+        // The parameters are: scale factors (x, y), skew factors (x, y), translate (x, y)
+        let time = Date.now() * 0.001; // Get current time in seconds
+        let skewValueX = Math.sin(time); // Calculate sin value of the current time for x-axis skew
+        let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
+        this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
+        // squash scale to account for skew in screen space
+        this.ctx.scale(1.5,1)
 
-        // this.corrected = {...this.position};
-        // corrected.x *= zoom;
-        // corrected.y *= zoom;
+        // Draw your objects here
+        this.ctx.rect(50, 50, 100, 100);
+
+        // Restore the context to its original state
+        this.ctx.drawingContext.restore();
+
+            this.ctx.translate(
+                this.smartPosition.x,
+                this.smartPosition.y
+            )
+            this.ctx.noStroke();
+            this.ctx.rectMode(CORNER)
+            this.ctx.fill("red");
+            this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
+            this.ctx.rectMode(CENTER)
+            this.ctx.fill("white");
+            this.ctx.translate(halfButtonSize, halfButtonSize)
+            this.ctx.rotate(radians(45));
+            this.ctx.rect(0, 0, 30, 10, borderRadius);
+            this.ctx.rect(0, 0, 10, 30, borderRadius);
+            this.ctx.rotate(radians(-45));
+            this.ctx.translate(-halfButtonSize, -halfButtonSize)
+        this.ctx.pop(); // Restore drawing style and transformation matrix
+
+        // Draw a white minus on a yellow button
+        this.ctx.push(); // Save current drawing style and transformation matrix
+        this.ctx.translate(
+            this.smartPosition.x,
+            this.smartPosition.y
+        )
+            this.ctx.rectMode(CORNER)
+            this.ctx.fill("goldenrod");
+            this.ctx.rect(
+                            buttonSize + 10, 
+                            negYOffset, 
+                            buttonSize, 
+                            buttonSize, 
+                            borderRadius);
+            this.ctx.rectMode(CENTER);
+            this.ctx.fill("white");
+            this.ctx.rect(
+                            halfButtonSize + buttonSize + 10, 
+                            negYOffset + halfButtonSize, 
+                            30, 
+                            10, 
+                            borderRadius);
+        this.ctx.pop(); // Restore drawing style and transformation matrix
+
+        // Draw a white plus on a green button
+        this.ctx.push(); // Save current drawing style and transformation matrix
+            this.ctx.translate(
+                this.smartPosition.x,
+                this.smartPosition.y
+            )
+            this.ctx.translate(0, buttonSize + 10)
+            this.ctx.noStroke();
+            this.ctx.rectMode(CORNER)
+            this.ctx.fill("green");
+            this.ctx.rect(0, 0, buttonSize, buttonSize, borderRadius);
+            this.ctx.rectMode(CENTER)
+            this.ctx.fill("white");
+            this.ctx.rect(
+                halfButtonSize, 
+                halfButtonSize, 
+                30, 
+                10, 
+                borderRadius
+            );
+            this.ctx.rect(
+                halfButtonSize, 
+                halfButtonSize, 
+                10, 
+                30, 
+                borderRadius);
+        this.ctx.pop(); // Restore drawing style and transformation matrix
+
+        let iFrameX = ( 
+            (mouseShifted.x + panX)
+            + this.smartPosition.x 
+        ) * zoom;
+        
+        let iFrameY = (
+            (mouseShifted.y + panY)
+            + this.smartPosition.y
+        ) * zoom;
+        
         this.iframe.position(
-            ( (mouseShifted.x + panX) * zoom ) + this.smartPosition.x,
-            ( (mouseShifted.y + panY) * zoom ) + this.smartPosition.y + buttonSize + 40
+            iFrameX,
+            iFrameY
         );
 
         // set pointerEvents none when deepCanvasManager.focusedIndex < 1
@@ -5423,16 +5630,23 @@ extends iFrameWidget {
         return this.options?.pickRandomOnPlay ? this.getRandomTrackNotYetPlayed() : this.tracks[0];
     }
     iframeSafeUrl(url){
+        let autoplayParam = url.includes('?') ? "&autoplay=1" : "?autoplay=1";
         if(url.includes('/embed/')){
-            return url + "?autoplay=1";
+            return url + autoplayParam;
         }
-        let videoId = url.split('v=')[1];
+        let videoId = '';
+        if (url.includes('v=')) {
+            videoId = url.split('v=')[1];
+        }
         let ampersandPosition = videoId.indexOf('&');
         if(ampersandPosition != -1) {
             videoId = videoId.substring(0, ampersandPosition);
         }
-        // Added "?autoplay=1" to enable autoplay in the embed URL
-        return 'https://www.youtube.com/embed/' + videoId + "?autoplay=1";
+        console.warn('iframeSafeUrl',
+            `https://www.youtube.com/embed/${videoId}${autoplayParam}`
+        )
+        // Added autoplayParam to enable autoplay in the embed URL
+        return 'https://www.youtube.com/embed/' + videoId + autoplayParam;
     }
     // use update() instead if you want to ignore draw method culling
     // onDraw(){
@@ -5596,6 +5810,182 @@ class PomodoroWidget extends Widget {
                 this.smartPosition.y + 40 // + (this.dimensions.height/2)
             )
         }
+    }
+}
+
+
+class BlockBreaker extends Widget {
+
+}
+class SnakeGame extends Widget {
+
+}
+class PipeGameWidget extends Widget {
+    spots = []
+    edges = []
+    numInputs = 1
+    numOutputs = 1
+    rows = 3
+    cols = 3
+    piece_types = [
+        "straight",
+        "corner",
+        "t",
+        "cross"
+    ]
+    piece_rotations = [
+        "up",
+        "right",
+        "down",
+        "left"
+    ]
+    edge_parts = [
+        "none",
+        "input",
+        "output",
+    ]
+    current_edge_part_pool = []
+    constructor(){
+        current_edge_part_pool.length = 0
+        // pre-assign our edge parts (based on capped input and output counts)
+        for(let i = 0; i < this.numInputs; i++){
+            current_edge_part_pool.push("input")
+        }
+        for(let i = 0; i < this.numOutputs; i++){
+            current_edge_part_pool.push("output")
+        }
+        // for the remainder, fill the pool with "none"
+        // Calculate the number of edge pieces
+        let edgePieces = (this.rows * 2) + (this.cols * 2) - 4;
+        // Calculate the number of inner pieces
+        // let innerPieces = (this.rows - 2) * (this.cols - 2);
+        // Calculate the number of "none" pieces
+        let nonePieces = edgePieces - this.numInputs - this.numOutputs;
+        // Fill the pool with "none" for the remaining pieces
+        for(let i = 0; i < nonePieces; i++){
+            current_edge_part_pool.push("none")
+        }
+
+        for(let i = 0; i < this.rows; i++){
+            for(let j = 0; j < this.cols; j++){
+                this.spots.push({
+                    row: i,
+                    col: j,
+                    piece: {
+                        type: random(this.piece_types),
+                        rotation: random(this.piece_rotations),
+                    }
+                })
+
+                // if this spot is on an edge,
+                // add an edge part
+                if(i === 0 || i === this.rows - 1 || j === 0 || j === this.cols - 1){
+                    this.edges.push({
+                        row: i,
+                        col: j,
+                        part: random(this.edge_parts)
+                    })
+                }
+            }
+        }
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+
+        // TODO: draw to static cache on change
+
+        // draw the grid
+        for(let i = 0; i < this.rows; i++){
+            for(let j = 0; j < this.cols; j++){
+                // draw the grid
+                this.ctx.push()
+                this.ctx.translate(
+                    this.smartPosition.x + (i * 50),
+                    this.smartPosition.y + (j * 50)
+                )
+                this.ctx.stroke("black")
+                this.ctx.noFill()
+                this.ctx.rect(0, 0, 50, 50)
+                this.ctx.pop()
+            }
+        }
+
+        // draw the edges
+        this.edges.forEach((edge)=>{
+            this.ctx.push()
+            this.ctx.translate(
+                this.smartPosition.x + (edge.row * 50),
+                this.smartPosition.y + (edge.col * 50)
+            )
+            this.ctx.stroke("black")
+            this.ctx.noFill()
+            this.ctx.rect(0, 0, 50, 50)
+            this.ctx.pop()
+        })
+
+        // draw the parts
+        this.spots.forEach((spot)=>{
+            this.ctx.push()
+            this.ctx.translate(
+                this.smartPosition.x + (spot.row * 50),
+                this.smartPosition.y + (spot.col * 50)
+            )
+            this.ctx.stroke("black")
+            if(spot.part === "straight") {
+                this.ctx.fill("red")
+            } else if(spot.part === "corner") {
+                this.ctx.fill("blue")
+            } else if(spot.part === "t") {
+                this.ctx.fill("green")
+            } else {
+                this.ctx.noFill()
+            }
+            // rotate to the current rotation of the part
+            this.ctx.translate(25, 25)
+            if(spot.rotation === "up"){
+                this.ctx.rotate(radians(0))
+            }else if(spot.rotation === "right"){
+                this.ctx.rotate(radians(90))
+            }else if(spot.rotation === "down"){
+                this.ctx.rotate(radians(180))
+            }else if(spot.rotation === "left"){
+                this.ctx.rotate(radians(270))
+            }
+
+            // Visualize the current rotation by changing the border radius of one corner
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, 0);
+            this.ctx.lineTo(50, 0);
+            this.ctx.quadraticCurveTo(50, 50, 0, 50);
+            this.ctx.closePath();
+            this.ctx.stroke();
+            this.ctx.pop()
+        })
+
+    }
+    onClickPart(part){
+        part.type = this.getNextPieceForPart(part.type);
+    }
+    onRightClickPart(part){
+        part.rotation = this.getNextRotationForPart(part.rotation);
+    }
+    getNextRotationForPart(currentRotation){
+        // get the next rotation in the pool
+        // if it's the last rotation, return the first rotation
+        let currentIndex = this.piece_rotations.indexOf(currentRotation);
+        if(currentIndex === this.piece_rotations.length - 1){
+            return this.piece_rotations[0];
+        }
+        return this.piece_rotations[currentIndex + 1];
+    }
+    getNextCyclePartForPart(currentPart){
+        // get the next piece in the pool
+        // if it's the last piece, return the first piece
+        let currentIndex = current_edge_part_pool.indexOf(currentPart);
+        if(currentIndex === current_edge_part_pool.length - 1){
+            return current_edge_part_pool[0];
+        }
+        return current_edge_part_pool[currentIndex + 1];
     }
 }
 
@@ -6708,7 +7098,7 @@ class Dashboard {
         prevRowHeight = 0,
         currentRowIndex = 0;
 
-        const space = 100; //420;
+        const space = 3; //420;
         
         // Sort widgets by height in descending order
         this.widgetLayoutOrder.sort((a, b) => {
@@ -6728,18 +7118,17 @@ class Dashboard {
             let w = widget.widgetSize.width;
             let h = widget.widgetSize.height;
 
-            // scale widget size for personal space / padding
-            let padding = 10; // Define padding
+            let padding = 1; // Define padding
             w = w - 20 * padding; // Subtract padding from width
             h = h - 20 * padding; // Subtract padding from height
 
-            let virtualWidth = innerWidth / zoom;
-            if (currentRowWidth + w + space > virtualWidth) {
-                prevRowHeight = currentRowMaxHeight;
-                currentRowIndex++;
-                currentRowWidth = 0; // Reset row width
-                accumulatedRowOffset += prevRowHeight + space; // Increase space between widgets vertically
-            }
+            // let virtualWidth = innerWidth / zoom;
+            // if (currentRowWidth + w + space > virtualWidth) {
+            //     prevRowHeight = currentRowMaxHeight;
+            //     currentRowIndex++;
+            //     currentRowWidth = 0; // Reset row width
+            //     accumulatedRowOffset += prevRowHeight + space; // Increase space between widgets vertically
+            // }
             currentRowMaxHeight = Math.max(currentRowMaxHeight, h);
             let x = currentRowWidth;
             let y = accumulatedRowOffset;
@@ -6748,11 +7137,13 @@ class Dashboard {
                 x, y, w, h
             }
 
-            currentRowWidth += w + space; // Increase space between widgets horizontally
+            currentRowWidth += w + space; 
         });
     }
     newWidget(){
-        return this.registerWidget(...arguments)
+        this.registerWidget(...arguments)
+
+        return this; // chainable
     }
     registerWidget(widgetIDOrInstance,instanceOrNull){
         // console.warn("registerWidget",{
@@ -6760,42 +7151,19 @@ class Dashboard {
         //     instanceOrNull
         // })
         // if widgetIDOrInstance contains youtube.com, return a new youtube widget instance instead
-        if(
-            widgetIDOrInstance?.includes?.(".png")
-            || widgetIDOrInstance?.includes?.(".jpg")
-            || widgetIDOrInstance?.includes?.(".gif")
-            || widgetIDOrInstance?.includes?.(".jpeg")
-        ) {
-            // it's an image!
-            return this.registerWidget(new ImageViewerWidget(widgetIDOrInstance))
+        
+        let launched = -2;
+        if(typeof widgetIDOrInstance === 'string'){
+            // see if it's an invokable uri
+            launched = system.tryInvokeHandlerForUri(widgetIDOrInstance);
+        }
+        if(launched === -2 || launched === -1){
+            // not a uri, or no handler found
+        }else{
+            console.warn('Dashboard.registerWidget: uri handler found, returning early')
+            return;
         }
 
-        // if it's a soundcloud url, return a new soundcloud widget instance instead
-        if(
-            widgetIDOrInstance?.includes?.("soundcloud.com")
-        ) {
-            const MySoundCloudClass = class extends SoundCloudWidget {
-                url = "widgetIDOrInstance"
-            } 
-            return this.registerWidget(new MySoundCloudClass())
-        }
-
-        if(widgetIDOrInstance?.includes?.("youtube.com")){
-            let updatedUrl = widgetIDOrInstance;
-            try {
-                let url = new URL(updatedUrl);
-                url.searchParams.set('autoplay', '1');
-                updatedUrl = url.toString();
-            } catch (error) {
-                console.error('Invalid URL:', updatedUrl);
-            }
-            // it's a youtube url!
-            return this.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
-        }
-        if(widgetIDOrInstance?.includes?.("://")){
-            // it's an iframe, chuck!
-            return this.registerWidget(new iFrameWidget(widgetIDOrInstance))
-        }
         let widgetID, widgetInstance = widgetIDOrInstance;
         if(typeof widgetIDOrInstance !== "string"){
             //system.panic('Dashboard.registerWidget: widgetID must be a string',widgetID)
@@ -8218,7 +8586,7 @@ class WizardController {
         mctx.push()
         // center
         mctx.translate(
-            mctx.windowWidth / 2 - ((this.config.steps.length / 2) * 10),
+            mctx.innerWidth / 2 - ((this.config.steps.length / 2) * 10),
             30
         )
         let spacing = 30;
@@ -8263,7 +8631,7 @@ class WizardController {
         // render the name of the current command in the top right
         uictx.textAlign(RIGHT,TOP);
         uictx.textStyle(BOLD)
-        uictx.text(`${this.name}`, uictx.windowWidth - 20, 20);
+        uictx.text(`${this.name}`, uictx.innerWidth - 20, 20);
 
         // render the question
         let offsetY = 30;
@@ -10186,6 +10554,9 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new minimap widget"](){
+        system.registerWidget(new MiniMapWidget())
+    },
     ["new zoom dependent widget"](){
         system.registerWidget(new ZoomDependentWidget())
     },
@@ -10361,7 +10732,6 @@ const InvokableCommands = {
     // ]: [
     //     "Star Fox",
     //     "Yoshi's Story",
-    //     "Super Mario World"
     // ],
 
     ["todo: add daily progress bar of time"](){},
@@ -10402,10 +10772,16 @@ const InvokableCommands = {
         //return new iFrameWidget
         system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/embed/32822-star-fox-64-usa-rev-a.html"))
     },
-    ["Play N64 > Super Mario World"](){
-        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/n64-games/super-mario-64-sky-stories.html"))
+    ["Play N64 > Super Mario 64"](){
+        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/embed/43416-super-mario-64-sky-stories.html"),{
+            // widgetSize:{width:600,height:450}
+            widgetSize:{width:1920,height:1080}
+        })
     },
     // charmeleon, quest 64, 
+    ["Play SNES > Super Mario World"](){
+        system.todo("paste iframe url!")
+    },
     ["Play SNES > Pac Attack"](){
         system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/n64-games/super-mario-64-sky-stories.html"))
     },
@@ -10444,9 +10820,6 @@ const InvokableCommands = {
     },
     // ["Play SNES Super Mario Kart"]
     // ["Play SNES Pac Attack"]
-    ["Play SNES Super Mario World"](){
-        alert("TODO: SNES Mario World")
-    },
     ["Play Battle Tetris - jstris (from Gather.town)"](){
         system.registerWidget(new iFrameWidget(
             "https://jstris.jezevec10.com/",{
@@ -10869,7 +11242,13 @@ const InvokableCommands = {
 
     "visit the coding train": "https://thecodingtrain.com/?width=800&height=600",
 
-    "play snake": "",
+    "new snake game": "play snake",
+    "play snake"(){
+        system.registerWidget(new SnakeWidget());
+    },
+    "play Pipe Game"(){
+        system.registerWidget(new PipeGameWidget());
+    },
     "play line rider": "https://www.linerider.com/",
 
     "the spinning top from inception": "https://www.youtube.com/watch?v=pQd1-4tqymo",
@@ -10961,6 +11340,17 @@ const InvokableCommands = {
     ["meteor shower"](){},
     ["aurora"](){},
     ["rainstorm"](){},
+
+    ["lightning"](){
+        system.todo("toggle bg lightning effects")
+    },
+    // increase lightning
+    // decrease lightning
+    // increase thunder
+    // decrease thunder
+    // increase rain
+    // decrease rain
+
     ["light rain"](){},
     "new fireplace":"https://www.youtube.com/watch?v=7s5MdY_VX7A",
 
@@ -10969,6 +11359,17 @@ const InvokableCommands = {
         system.registerWidget(new ImageRotatorWidget("smile.png"))
     },
 
+    // ["play i'm on everything"]: "https://www.youtube.com/watch?v=q2sn-ULymu8",
+    ["play i'm on everything"]:()=>"https://www.youtube.com/watch?v=q2sn-ULymu8",
+    ["play with physics"](){},
+    ["play with gravity"](){},
+    ["disable gravity"](){},
+    ["disable friction"](){},
+    ["dark mode"](){},
+    ["light mode"](){},
+    ["new theme"](){},
+    ["new style guide"](){},
+    ["new promo materials"](){},
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
         // the one i want is restricted
@@ -11809,7 +12210,7 @@ class ToastNotification {
         ctx.push();
         for(let i = 0; i < targetCloneCount; i++){
             // shift the drawing context with each i
-            ctx.translate(-2 * i, 2 * i);
+            ctx.translate(0, 50);
 
             this.drawOneInstance(index+i,ctx)
         }
@@ -12313,7 +12714,7 @@ class CmdPrompt extends Widget {
         // mctx.fill(0);
         // mctx.rectMode(mctx.CENTER);
         // let gridSize = 16; // Change this to 8 or 1 for different bit styles
-        // let baseWidth = mctx.windowWidth * .80
+        // let baseWidth = mctx.innerWidth * .80
         // let baseHeight = mctx.windowHeight * .80
         // let gridWidth = baseWidth / gridSize;
         // let gridHeight = (baseHeight - 130) / gridSize;
@@ -13657,26 +14058,27 @@ class Implementer {
 }
 
 
-class MiniMapWidget extends ImplementationOf([
-    "Widget",
-    // PinnedWidget, Pinnable
+// class MiniMapWidget extends ImplementationOf([
+//     "Widget",
+//     // PinnedWidget, Pinnable
     
-    // // Draggable/Droppable
-    // "Draggable",
-    // // register for draw callback
-    // "Drawable",
-    // // implements common handlers
-    // // and callbacks hooks
-    // // for objects in SortingContexts 
-    // "Sortable",
-    // // ["Todos",{
-    // //     configurableImplementations: true
-    // // }],
-    // // ["Todos",[
-    // //     /* Webpack Style */
-    // //     "FlexibleArguments"
-    // // ]]
-]) {
+//     // // Draggable/Droppable
+//     // "Draggable",
+//     // // register for draw callback
+//     // "Drawable",
+//     // // implements common handlers
+//     // // and callbacks hooks
+//     // // for objects in SortingContexts 
+//     // "Sortable",
+//     // // ["Todos",{
+//     // //     configurableImplementations: true
+//     // // }],
+//     // // ["Todos",[
+//     // //     /* Webpack Style */
+//     // //     "FlexibleArguments"
+//     // // ]]
+// ]) {
+class MiniMapWidget extends Widget {
     widgetSize = {
         width: 300,
         height: 300
@@ -13688,20 +14090,21 @@ class MiniMapWidget extends ImplementationOf([
         x: 0,
         y: 0
     }
-    draw(){
-        //super.preDraw();
-        super.draw();
-        push() // exit previous context
-        strokeWeight(3);
-        stroke(255,0,0);
-        fill(20);
-        rect(
+    onDraw(){
+        super.onDraw();
+
+        this.ctx.strokeWeight(3);
+        this.ctx.stroke(255,0,0);
+        this.ctx.fill(20);
+
+        // pinned
+        this.ctx.rect(
             this.fixedPosition.x,
             this.fixedPosition.y,
             this.widgetSize.width,
             this.widgetSize.height
         )
-        pop() // return
+        //this.endDraw()
     }
 }
 
@@ -14414,9 +14817,9 @@ function setupDefaults(){
             system.registerWidget(new window[widget.classname]());
             return;
         }else if(typeof widget === "function"){
-            console.warn("detected widget as function",{
-                widget,
-            })
+            // console.warn("detected widget as function",{
+            //     widget,
+            // })
             baseCmds.push(widget)
         }else{
             console.error("detected widget as object",{
@@ -14485,7 +14888,6 @@ class Animation {
 }
 const CoreWidgets = [
     // H1Widget,
-    //P53DLayer,
     // ThreeJSViewer,
     //IsometricPreview,
     // Solitaire,
@@ -14665,7 +15067,7 @@ function animateVector(from, to, onUpdate, duration = 1000){
 
 let cursor, MainCanvasContextThing = function(p){
     let _onResize = function(){
-        mctx.resizeCanvas(windowWidth, windowHeight);
+        mctx.resizeCanvas(innerWidth, innerHeight);
         // TODO: call resize on DeepCanvasManager
         system.get("Dashboard")?.reflowLayout?.()
     }
@@ -14743,7 +15145,7 @@ let cursor, MainCanvasContextThing = function(p){
             it's a spectrum
         */
         whatTheCenterIs = {
-            x: this.windowWidth / 2,
+            x: this.innerWidth / 2,
             y: this.windowHeight / 2,
             z: 0
         }
@@ -14769,7 +15171,12 @@ let cursor, MainCanvasContextThing = function(p){
         // search for booting... to jump here :D
         // boot routine
         console.info("booting...");
-        manager.boot(); rootSystem = system = manager.systems[0];
+        manager.boot(); 
+        rootSystem = system = manager.systems[0];
+
+        system.plopAudioPlayer = mctx.createAudio('res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3');
+        system.plopAudioPlayer.volume(0.1);
+        
         console.info("booted");
 
         let canvases = [
@@ -14815,7 +15222,7 @@ document.body.appendChild(topCanvas);
         // spawn a bunch of BlurSprite
         for(var i=0;i<20;i++){
             let sprite = new Sprite();
-            sprite.x = p.random(-p.windowWidth,p.windowWidth);
+            sprite.x = p.random(-p.innerWidth,p.innerWidth);
             sprite.y = p.random(-p.windowHeight,p.windowHeight);
             sprite.z = p.random(-10,10)
             sprite.radius = p.random(1,10)
@@ -14969,12 +15376,12 @@ document.body.appendChild(topCanvas);
             
             let KeyboardPanInfluence = { x: 0, y: 0 };
             let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
-            let maxInfluence = 100 * (1 / zoom);
+            let maxInfluence = 100 * (zoom); // 1/zoom?
             let decayFactor = 0.99;
             let lerpFactor = 0.001; // control the speed of lerp
             let ignore = false;
             let baseStepSize = 100;
-            let stepSize = baseStepSize * (1 / zoom);
+            let stepSize = baseStepSize * (zoom); // 1/zoom?
             switch(e.key) {
                 case 'w':
                     zoom += 0.1;
@@ -15049,7 +15456,6 @@ document.body.appendChild(topCanvas);
         //     ClockWidget,
 
         //     MessengerWidget,
-        //     MiniMapWidget,
         //     TimerWidget,
         //     TodoWidget,
         //     UIDemoWidget,
@@ -15101,6 +15507,8 @@ document.body.appendChild(topCanvas);
 
         // demo widgets
         system.invoke("new zoom dependent widget")
+        // aka navigator widget
+        system.invoke("new minimap widget")
 
         // OnDashboardReady OnDashboardLoaded OnDashboardInit
         // OnDashboardStarted
@@ -15177,14 +15585,20 @@ document.body.appendChild(topCanvas);
                 //     .registerWidget(new IsometricPreview())
 
                 .registerWidget(new AIWidget())
-                // .registerWidget(new P53DLayer())
+                // this should be part of deep canvas manager...
+                // .registerWidget(new P53DLayer()) 
+                // disabled by default cause it tanks perf
+                // need to optimize draw routines...
                 // .registerWidget(new ThreeJSViewer())
 
                 .registerWidget(new MoonPhaseWidget())
                 .registerWidget(new KeyboardWidget())
 
-            
-            // .registerWidget("Google Color Picker",
+
+            // TODO THEIR IFRAME IS BLOCKED, HOST A IFRAME FRIENDLY COPY!!!
+            .registerWidgetAvailable("Google Color Picker",()=>{
+                system.todo("Googles color picker is iframe-blocked, make or find an iframe friendly one")
+            })
             .registerWidget(
                 new ImageViewerWidget("ukraine-flag.jpeg")
             )
@@ -15634,7 +16048,7 @@ document.body.appendChild(topCanvas);
         }
         // center our coordinate system
         // mainCanvasContext.push();
-            const halfWidth = p.windowWidth / 2;
+            const halfWidth = p.innerWidth / 2;
             const halfHeight = p.windowHeight / 2;
             mainCanvasContext.translate(halfWidth, halfHeight)
     
@@ -16002,6 +16416,7 @@ function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
     let words = string.split(' ');
     let line = '';
     let yLineOffset = 0;
+    let lines = [];
 
     for (let i = 0; i < words.length; i++) {
         let testLine = line + words[i] + ' ';
@@ -16009,10 +16424,7 @@ function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
 
         ctx.textAlign(LEFT,TOP)
         if (testWidth > fitWidth && i > 0) {
-            ctx.text(
-                line.trim(), 
-                x, 
-                y + (lineHeight / 2) + yLineOffset);
+            lines.push({ text: line.trim(), x: x, y: y + (lineHeight / 2) + yLineOffset });
             line = words[i] + ' ';
             yLineOffset += ctx.textSize();
         } else {
@@ -16020,11 +16432,9 @@ function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
         }
     }
 
-    ctx.text(
-        line.trim(), 
-        x, 
-        y + yLineOffset
-    );
+    lines.push({ text: line.trim(), x: x, y: y + yLineOffset });
+
+    lines.forEach(line => ctx.text(line.text, line.x, line.y));
 }
 
 // todo: make a multi-select version
@@ -16077,8 +16487,8 @@ class SuggestionList {
                 console.warn('suggestion is null?',{suggestion,i})
                 continue;
             }
-            let suggestionWidth = mctx.windowWidth * .66;
-            let x = ( mctx.windowWidth / 2 ) - (suggestionWidth/2);
+            let suggestionWidth = mctx.innerWidth * .66;
+            let x = ( mctx.innerWidth / 2 ) - (suggestionWidth/2);
             let y = 10 + (i * 50);
             let w = suggestionWidth;
             let h = 50;
