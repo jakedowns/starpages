@@ -681,6 +681,43 @@ class SystemManager {
  *   to the appropriate subsystems...
  */
 class System {
+    registerWidgetAvailable(invokeable_command_string, widget_class){
+        if(InvokableCommands[invokeable_command_string]){
+            system.warn("name override detected: " + invokeable_command_string);
+        }
+        InvokableCommands[invokeable_command_string] = ()=>{
+            // Check if widget_class is a string
+            if (typeof widget_class === 'string') {
+                // Try to invoke it as a URI
+                let result = tryInvokeHandlerForUri(widget_class);
+                // If it returns -1, it wasn't invokable
+                if (result === -1) {
+                    throw new Error("Unable to invoke URI: " + widget_class);
+                }
+                return result;
+            }
+            // Check if widget_class is a function
+            else if (typeof widget_class === 'function') {
+                // Check if the function is a constructor (can be called with 'new')
+                if (widget_class.prototype && widget_class.prototype.constructor === widget_class) {
+                    // Call the function as a constructor
+                    return new widget_class();
+                } else {
+                    // Call the function normally
+                    return widget_class();
+                }
+            }
+            // Check if widget_class is a singleton we can call system.get() on
+            else if (system.get(widget_class)) {
+                return system.get(widget_class);
+            }
+            // If none of the above, throw an error
+            else {
+                throw new Error("Unable to invoke widget_class: " + widget_class);
+            }
+        };
+        return this;
+    }
     PreloadedImages = {}
     PreloadedSounds = {}
     PreloadedFonts = {}
@@ -704,13 +741,26 @@ class System {
     playSound(name){
         switch(name){
             case "widget_closed":
-                let soundFile = "res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3";
-                this.loadSound(soundFile).then(sound => {
-                    sound.play();
-                }).catch(error => {
-                    console.error(error)
-                    // system.panic(error)
-                });
+                // let duration = 0.5; // Set the duration for the sound
+                // let osc = new p5.Oscillator();
+                // osc.setType('sine');
+                // osc.freq(440);
+                // osc.amp(0);
+                // osc.start();
+                // osc.amp(0.5, 0.05);
+                // setTimeout(() => {
+                //     osc.amp(0, duration);
+                //     osc = null;
+                // }, duration * 1000);
+                // let soundFile = "res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3";
+                // this.loadSound(soundFile).then(sound => {
+                //     sound.play();
+                // }).catch(error => {
+                //     console.error(error)
+                //     // system.panic(error)
+                // });
+                //system.plopAudioPlayer.seek(0);
+                system.plopAudioPlayer.play();
             break;
             default:
                 system.panic("unknown sound?! 👀")
@@ -741,6 +791,18 @@ class System {
         return new theClass(...Array.from(arguments).slice(1))
     }
     invoke(name){
+        let launched = -2;
+        if(typeof InvokableCommands[name] === 'string'){
+            launched = this.invokeHandlerForUri(name);
+        }
+        if(
+            launched === -2
+            || launched === -1
+        ){
+            // system.panic("System.invoke: no handler found for uri: " + name);
+        }else{
+            return launched;
+        }
         return InvokableCommands[name]();
     }
     todo(){
@@ -865,12 +927,58 @@ class System {
     newWidget(){
         return this.registerWidgetInstance(...arguments)
     }
+    // NOTE it's kind of annoying that we want to chain this
+    // cause then we have to return the system instance
+    // and not the new widget instance
     registerWidgetInstance(){
         /** @see Dashboard.registerWidget */
-        return this.dashboard.registerWidget(...arguments);
+        this.dashboard.registerWidget(...arguments);
+        return this;
     }
     registerWidget(){
         return this.registerWidgetInstance(...arguments)
+    }
+    tryInvokeHandlerForUri(uri){
+        if(
+            uri?.includes?.(".png")
+            || uri?.includes?.(".jpg")
+            || uri?.includes?.(".gif")
+            || uri?.includes?.(".jpeg")
+        ) {
+            // it's an image!
+            return system.registerWidget(new ImageViewerWidget(uri))
+        }
+    
+        // if it's a soundcloud url, return a new soundcloud widget instance instead
+        if(
+            uri?.includes?.("soundcloud.com")
+        ) {
+            const MySoundCloudClass = class extends SoundCloudWidget {
+                url = uri
+            } 
+            return system.registerWidget(new MySoundCloudClass())
+        }
+    
+        if(
+            uri?.includes?.("youtube.com")
+            || uri?.includes?.("youtu.be")
+        ){
+            let updatedUrl = uri;
+            try {
+                let url = new URL(updatedUrl);
+                url.searchParams.set('autoplay', '1');
+                updatedUrl = url.toString();
+            } catch (error) {
+                console.error('Invalid URL:', updatedUrl);
+            }
+            // it's a youtube url!
+            return system.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
+        }
+        if(uri?.includes?.("://")){
+            // it's an iframe, chuck!
+            return system.registerWidget(new iFrameWidget(uri))
+        }
+        return -1;
     }
 }
 const rootSystemManager = new SystemManager();
@@ -2012,7 +2120,7 @@ const hoveredArray = []
 //     mctx.strokeWeight(_strokeWeight)
 //     mctx.stroke(_strokeColor)
 //     mctx.fill(fillColor)
-//     mctx.rect(10, 10, mctx.innerWidth - 20, mctx.innerHeight - 20)
+//     mctx.rect(10, 10, mctx.windowWidth - 20, mctx.windowHeight - 20)
 //     mctx.rect(20, 20, mctx.windowWidth - 40, mctx.windowHeight - 40)
 //     // draw a rect comprised of 4 dashed lines
 //     drawDashedLine(x, y, x + w, y, dashLength);  // Top side
@@ -2231,6 +2339,9 @@ class Widget extends UndoRedoComponent {
 
     // smart position is the parallaxed position on top of the local position (falls back to the base local position if no parallax is applied)
     get smartPosition(){
+        if(this.pinned && this.fixedPosition){
+            return this.fixedPosition;
+        }
         // let base = this.getCurrentBase();
 
         // TODO: sometimes we _dont_ apply it
@@ -2284,12 +2395,7 @@ class Widget extends UndoRedoComponent {
 
         this.halfDepthRange = this.depthRange / 2;
 
-        // assign a random z-depth for fun
-        // we'll make this more static // meaningful soon
-        this.zDepth = Math.round(mctx.random(
-            minWidgetDepth,
-            maxWidgetDepth
-        ))
+        this.zDepth = 0
 
         // should we decorate this class with any functionality?
     }
@@ -2305,8 +2411,8 @@ class Widget extends UndoRedoComponent {
         // default: center with screen bounds
         // TODO: each "system" should have screens attached
         // the system manager should allow viewports that point to screens within various systems
-        this.basePosition.x = innerWidth / 2;
-        this.basePosition.y = innerHeight / 2;
+        this.basePosition.x = windowWidth / 2;
+        this.basePosition.y = windowHeight / 2;
     }
 
     isHovered(){
@@ -2449,11 +2555,10 @@ class Widget extends UndoRedoComponent {
         let parallaxFactor = (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
         parallaxFactor *= (1 - zoom / MAX_ZOOM); // Flatten effect at higher zoom
 
-        parallaxFactor *= 0.1
-
-        if (store.DISABLE_PARALLAX) {
-            parallaxFactor = 0;
-        }
+        // parallaxFactor *= 0.1
+        // if (store.DISABLE_PARALLAX) {
+        //     parallaxFactor = 0;
+        // }
 
         let cBase = this.getCurrentBase();
 
@@ -2462,11 +2567,11 @@ class Widget extends UndoRedoComponent {
         let affectedY = cBase.y + (parallaxFactor * mouseShifted.y);
 
         // Distance-based scaling
-        let distanceFromCenter = Math.hypot(cBase.x - window.innerWidth / 2, cBase.y - window.innerHeight / 2);
-        let distanceFactor = distanceFromCenter / (window.innerWidth / 2);
+        let distanceFromCenter = Math.hypot(cBase.x - window.windowWidth / 2, cBase.y - window.windowHeight / 2);
+        let distanceFactor = distanceFromCenter / (window.windowWidth / 2);
         distanceFactor = (1 - distanceFactor) * (1 - zoom / 6);
-        affectedX = (cBase.x - window.innerWidth / 2) * distanceFactor + window.innerWidth / 2;
-        affectedY = (cBase.y - window.innerHeight / 2) * distanceFactor + window.innerHeight / 2;
+        affectedX = (cBase.x - window.windowWidth / 2) * distanceFactor + window.windowWidth / 2;
+        affectedY = (cBase.y - window.windowHeight / 2) * distanceFactor + window.windowHeight / 2;
 
         // Update position
         // this.smartPosition.x = affectedX;
@@ -2544,6 +2649,24 @@ class Widget extends UndoRedoComponent {
         this.ctx = ctx;
         return ctx;
     }
+
+    enterDrawingContext(){
+        this.ctx.push();
+        this.ctx.translate(
+            this.smartPosition.x,
+            this.smartPosition.y
+        )
+        this.ctx.scale(
+            zoom,
+            zoom
+        )
+    }
+    endDrawingContext(){
+        this.leaveDrawing();
+    }
+    leaveDrawing(){
+        this.ctx.pop();
+    }
     
     // draw calls onDraw when not culled
     // NOTE: we can instrument this widget
@@ -2570,29 +2693,35 @@ class Widget extends UndoRedoComponent {
         if(this?.onUpdate){
             this.onUpdate();
         }
+
+        // handle global translation / scale
+        this.enterDrawingContext();
         // TODO: doNotDraw isn't reliable yet
         // need to finish view frustum culling
         //if(this?.onDraw & !this.doNotDraw){
             // call extending method
-            if(this?.onDraw && !this.doNotDraw){
-                this?.onDraw?.();
+            if(this?.onDraw){//} && !this.doNotDraw){
+                this?.onDraw?.call(this);
             }else{
                 //console.warn('skipping draw')
             }
         //}
+        this.endDrawingContext();
 
         
         let ctx = this.ctx;
+        this.enterDrawingContext();
         ctx.rectMode(CORNER);
         ctx.strokeWeight(1)
         ctx.stroke("darkblue")
         ctx.fill(color(0,0,0,100))
         ctx.rect(
-            this.smartPosition.x + this.widgetSize.width / 2,
-            this.smartPosition.y + this.widgetSize.height / 2,
+            0,0,
             this.widgetSize.width,
-            this.widgetSize.height
+            this.widgetSize.height,
+            20 // this is the radius for the rounded corners
         )
+        this.endDrawingContext();
 
         /*
             we need to project an imaginary plane from screenspace into world space
@@ -2600,9 +2729,9 @@ class Widget extends UndoRedoComponent {
             we need to do some math to see if the widget is within the rhombus of the viewport
         */
         let deepLeftPXBound = panX * zoom;
-        let deepRightPXBound = (panX - innerWidth) * zoom;
+        let deepRightPXBound = (panX - windowWidth) * zoom;
         let deepTopPXBound = panY * zoom;
-        let deepBottomPXBound = (panY - innerHeight) * zoom;
+        let deepBottomPXBound = (panY - windowHeight) * zoom;
         
         let isWithinXBounds = this.smartPosition.x + this.widgetSize.width > deepLeftPXBound && this.smartPosition.x < deepRightPXBound;
         let isWithinYBounds = this.smartPosition.y + this.widgetSize.height > deepTopPXBound && this.smartPosition.y < deepBottomPXBound;
@@ -2617,7 +2746,7 @@ class Widget extends UndoRedoComponent {
         //     15
         // )
 
-        // const frustum = new ViewFrustum(1, 1000, Math.PI / 4, window.innerWidth / window.innerHeight);
+        // const frustum = new ViewFrustum(1, 1000, Math.PI / 4, window.windowWidth / window.windowHeight);
         // const widget = new Widget(0, 0, 50, 10, 10, 10);
         
         // TODO: use BVH
@@ -2636,9 +2765,10 @@ class Widget extends UndoRedoComponent {
 
         // toggle show widget debug info
         if(store.showWidgetPositions){
-            this.ctx.push()
+            // this.ctx.push()
             this.ctx.fill("red")
-            this.ctx.text(`x:${
+            this.ctx.text(`
+            x:${
                 this.basePosition.x.toFixed(2)
             } y:${
                 this.basePosition.y.toFixed(2)
@@ -2651,10 +2781,13 @@ class Widget extends UndoRedoComponent {
             } zD:${
                 this.zDepth.toFixed(2)
             }`,
-                this.smartPosition.x,
-                this.smartPosition.y
+
+
+
+                //this.smartPosition.x,
+                //this.smartPosition.y
             );
-            this.ctx.pop()
+            // this.ctx.pop()
         }
 
         // canvasContext.strokeWeight(1)
@@ -2733,9 +2866,6 @@ class Widget extends UndoRedoComponent {
     onDraw(){
         // override me
         //this.ctx.push()
-    }
-    endDraw(){
-        //this.ctx.pop()
     }
     close(){
         /** @see System.playSound */
@@ -3624,6 +3754,7 @@ class Raycast {
 class MoonPhaseWidget extends Widget {
     name = "Moon Phase Widget"
     currentPhaseId = 0;
+    canvasID = 1;
     widgetSize = {
         width: 300,
         height: 300
@@ -3644,9 +3775,9 @@ class MoonPhaseWidget extends Widget {
         // bounds checking
         // if(
         //     this.smartPosition.x < 0 - this.widgetSize.width
-        //     || this.smartPosition.x > innerWidth + this.widgetSize.width
+        //     || this.smartPosition.x > windowWidth + this.widgetSize.width
         //     || this.smartPosition.y < 0 - this.widgetSize.height
-        //     || this.smartPosition.y > innerHeight + this.widgetSize.height
+        //     || this.smartPosition.y > windowHeight + this.widgetSize.height
         // ){
         //     return;
         // }
@@ -3658,10 +3789,13 @@ class MoonPhaseWidget extends Widget {
         this.ctx.textSize(300)
         this.ctx.textAlign(CENTER, CENTER)
         const ej = MOON_PHASE_EMOJIS[MOON_PHASE_ORDER[this.currentPhaseId]];
+        // this.ctx.rectMode(CORNER);
+        // center 1 char
         this.ctx.text(
             `${ej}`,
-            this.smartPosition.x + (this.widgetSize.width / 2),
-            this.smartPosition.y + (this.widgetSize.height / 2)
+            // todo this.halfWidgetSize or .halfSize
+            (this.widgetSize.width / 2),
+            (this.widgetSize.height / 2)
         )
         // ctx.pop()
     }
@@ -3915,7 +4049,7 @@ const SimpleCommandConfig = function (name, action, target){
 }
 const WrappedCommand = function (name, action, target){
     const _config = SimpleCommandConfig(name, action, target);
-    console.warn('wrapping command...',{_config})
+    //console.warn('wrapping command...',{_config})
     return function(){
         console.warn('instancing wrapped command', {
             _config,
@@ -4448,7 +4582,7 @@ class Cursor {
         ctx.strokeWeight(1)
         ctx.stroke("red")
         ctx.fill(0,0)
-        drawDashedLine(ctx, ctx.mouseX, ctx.mouseY, ctx.innerWidth / 2, ctx.innerHeight / 2)
+        drawDashedLine(ctx, ctx.mouseX, ctx.mouseY, ctx.windowWidth / 2, ctx.windowHeight / 2)
         
         ctx.stroke("purple")
         ctx.line(ctx.mouseX, ctx.mouseY, ctx.pmouseX, ctx.pmouseY)
@@ -4492,8 +4626,8 @@ class Cursor {
             ctx,
             worldOriginAttempt2.x,
             worldOriginAttempt2.y,
-            ctx.innerWidth/2,
-            ctx.innerHeight/2
+            ctx.windowWidth/2,
+            ctx.windowHeight/2
         )
         
         
@@ -4603,8 +4737,8 @@ class P53DLayer extends Widget {
     widgetSize = { width: 800, height: 800 }
     updateCanvasAttributes(width, height, left, top, transform) {
         if (this.canvas) {
-            this.canvas.style.width = innerWidth + 'px'; // width + 'px';
-            this.canvas.style.height = innerHeight + 'px';
+            this.canvas.style.width = windowWidth + 'px'; // width + 'px';
+            this.canvas.style.height = windowHeight + 'px';
             // this.canvas.style.left = left + 'px';
             // this.canvas.style.top = top + 'px';
             // this.canvas.style.transform = transform;
@@ -4612,6 +4746,18 @@ class P53DLayer extends Widget {
             // this.canvas.setAttribute("height",height);
         }
     }
+    // TODO: technically we could allow multiple of these
+    // each layer could be a different renderer:
+    // > p52D, p5WebGL, threejs, dom
+    // for now, this ONE widget holds this ONE context
+    // it's probably better to let the deepCanvasManager handle
+    // which engines draw to which elements when,
+    // rather than leaving it up to the individual widgets
+    // the widgets could opt-in to perferred render modes,
+    // set preferred (ranked-choice) order (ultimately user decides)
+    // implement specific callbacks for specific rendering modes
+    // remember the goal is abstract widgets that can be themed and styled
+    // wherever they're rendered
     getP5JSContext() {
         if (this.p5jsContext) {
             return this.p5jsContext;
@@ -4630,9 +4776,9 @@ class P53DLayer extends Widget {
         // }
     
         this.p5jsContext = createGraphics(
-            innerWidth, //this.widgetSize.width, 
-            innerHeight, //this.widgetSize.height
-            WEBGL
+            windowWidth, //this.widgetSize.width, 
+            windowHeight, //this.widgetSize.height
+            mctx.WEBGL
         );
         // Attach the p5.js canvas to the existing canvas element
         this.p5jsContext.parent(this.canvasWrapper); 
@@ -4701,8 +4847,8 @@ class P53DLayer extends Widget {
         //context.directionalLight(255, 255, 255, 0.25, 0.25, -1);
     
         // Control rotation with mouse
-        let centerX = window.innerWidth / 2;
-        let centerY = window.innerHeight / 2;
+        let centerX = window.windowWidth / 2;
+        let centerY = window.windowHeight / 2;
         // Translate the context by the smart position and zoom
         // context.translate(centerX, centerY);
         // context.scale(zoom, zoom);
@@ -5143,8 +5289,8 @@ class iFrameWidget extends Widget {
     pinned = false
     
     widgetSize = {
-        width: Math.min(window.innerWidth * 0.2, 800),
-        height: Math.min(window.innerHeight * 0.2, 800)
+        width: Math.min(window.windowWidth * 0.2, 800),
+        height: Math.min(window.windowHeight * 0.2, 800)
     }
     close(){
         super.close(...arguments)
@@ -5162,8 +5308,8 @@ class iFrameWidget extends Widget {
             'left': '0',
             'z-index': '999999',
             'display': 'block',
-            'width': this.widgetSize.width * zoom + 'px',
-            'height': this.widgetSize.height * zoom + 'px',
+            'width': this.widgetSize.width + 'px',
+            'height': this.widgetSize.height + 'px',
             'transform': `scale(${zoom})`,
         }
         const tagAttrs = {
@@ -5172,11 +5318,12 @@ class iFrameWidget extends Widget {
             'allowfullscreen': 'true',
             'scrolling': 'yes',
             'allow': 'autoplay; encrypted-media',
-            'height': `${this.widgetSize.width}px`,
-            'width': `${this.widgetSize.height}px`,
+            // 'height': `${this.widgetSize.width}px`,
+            // 'width': `${this.widgetSize.height}px`,
             'src': this.url ?? 'https://google.com/webhp?igu=1',
             'crossorigin': 'anonymous',
         }
+        // alert(this.url + ' ' + this.widgetSize.width + 'x' + this.widgetSize.height)
         // console.log({tagAttrs})
         this.iframe = createElement('iframe');
         // console.log('created iframe',{iframe:this.iframe})
@@ -5210,6 +5357,17 @@ class iFrameWidget extends Widget {
     constructor(url,pxWidthOrOptsOrNull,pxHeightOrNull){
         super(...arguments);
         this.url = url ?? this.url;
+
+        // let opts = null;
+        // if(typeof pxWidthOrOptsOrNull === 'object'){
+        //     opts = pxWidthOrOptsOrNull;
+        // }
+
+        console.warn('iframe',{
+            url,
+            two: arguments[1],
+            three: arguments[2],
+        })
 
         //this.widgetSize = { width: 300, height: 150 }
 
@@ -5254,7 +5412,7 @@ class iFrameWidget extends Widget {
         this.ctx.scale(zoom)
         this.ctx.fill("red")
         this.ctx.text(`url:${this.url}`, 0, 0, 100, 100);
-        this.ctx.pop()
+        //this.ctx.pop()
 
         // if(system.get("cmdprompt").visible){
         //     this.iframe.hide();
@@ -5286,40 +5444,109 @@ class iFrameWidget extends Widget {
         const borderRadius = 10;
         const negYOffset = - buttonSize - 10;
         
-        // Draw a white on green plus
-        this.ctx.noStroke();
-        this.ctx.rectMode(CORNER)
-        this.ctx.fill("green");
-        this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
-        this.ctx.rectMode(CENTER)
-        this.ctx.fill("white");
-        this.ctx.rect(halfButtonSize, negYOffset + halfButtonSize, 30, 10, borderRadius);
-        this.ctx.rect(halfButtonSize, negYOffset + halfButtonSize, 10, 30, borderRadius);
+        // Draw a white X on a RED BUTTON
+        this.ctx.push(); // Save current drawing style and transformation matrix
 
-        // Draw a white on red minus
-        this.ctx.rectMode(CORNER)
-        this.ctx.fill("red");
-        this.ctx.rect(
-                        buttonSize + 10, 
-                        negYOffset, 
-                        buttonSize, 
-                        buttonSize, 
-                        borderRadius);
-        this.ctx.rectMode(CENTER);
-        this.ctx.fill("white");
-        this.ctx.rect(
-                        halfButtonSize + buttonSize + 10, 
-                        negYOffset + halfButtonSize, 
-                        30, 
-                        10, 
-                        borderRadius);
+        // Save the default state
+        this.ctx.drawingContext.save(); 
+        // Apply a skew transformation
+        // The parameters are: scale factors (x, y), skew factors (x, y), translate (x, y)
+        let time = Date.now() * 0.001; // Get current time in seconds
+        let skewValueX = Math.sin(time); // Calculate sin value of the current time for x-axis skew
+        let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
+        this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
+        // squash scale to account for skew in screen space
+        this.ctx.scale(1.5,1)
 
-        // this.corrected = {...this.position};
-        // corrected.x *= zoom;
-        // corrected.y *= zoom;
+        // Draw your objects here
+        this.ctx.rect(50, 50, 100, 100);
+
+        // Restore the context to its original state
+        this.ctx.drawingContext.restore();
+
+            this.ctx.translate(
+                this.smartPosition.x,
+                this.smartPosition.y
+            )
+            this.ctx.noStroke();
+            this.ctx.rectMode(CORNER)
+            this.ctx.fill("red");
+            this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
+            this.ctx.rectMode(CENTER)
+            this.ctx.fill("white");
+            this.ctx.translate(halfButtonSize, halfButtonSize)
+            this.ctx.rotate(radians(45));
+            this.ctx.rect(0, 0, 30, 10, borderRadius);
+            this.ctx.rect(0, 0, 10, 30, borderRadius);
+            this.ctx.rotate(radians(-45));
+            this.ctx.translate(-halfButtonSize, -halfButtonSize)
+        this.ctx.pop(); // Restore drawing style and transformation matrix
+
+        // Draw a white minus on a yellow button
+        this.ctx.push(); // Save current drawing style and transformation matrix
+        this.ctx.translate(
+            this.smartPosition.x,
+            this.smartPosition.y
+        )
+            this.ctx.rectMode(CORNER)
+            this.ctx.fill("goldenrod");
+            this.ctx.rect(
+                            buttonSize + 10, 
+                            negYOffset, 
+                            buttonSize, 
+                            buttonSize, 
+                            borderRadius);
+            this.ctx.rectMode(CENTER);
+            this.ctx.fill("white");
+            this.ctx.rect(
+                            halfButtonSize + buttonSize + 10, 
+                            negYOffset + halfButtonSize, 
+                            30, 
+                            10, 
+                            borderRadius);
+        this.ctx.pop(); // Restore drawing style and transformation matrix
+
+        // Draw a white plus on a green button
+        this.ctx.push(); // Save current drawing style and transformation matrix
+            this.ctx.translate(
+                this.smartPosition.x,
+                this.smartPosition.y
+            )
+            this.ctx.translate(0, buttonSize + 10)
+            this.ctx.noStroke();
+            this.ctx.rectMode(CORNER)
+            this.ctx.fill("green");
+            this.ctx.rect(0, 0, buttonSize, buttonSize, borderRadius);
+            this.ctx.rectMode(CENTER)
+            this.ctx.fill("white");
+            this.ctx.rect(
+                halfButtonSize, 
+                halfButtonSize, 
+                30, 
+                10, 
+                borderRadius
+            );
+            this.ctx.rect(
+                halfButtonSize, 
+                halfButtonSize, 
+                10, 
+                30, 
+                borderRadius);
+        this.ctx.pop(); // Restore drawing style and transformation matrix
+
+        let iFrameX = ( 
+            (mouseShifted.x + panX)
+            + this.smartPosition.x 
+        ) * zoom;
+        
+        let iFrameY = (
+            (mouseShifted.y + panY)
+            + this.smartPosition.y
+        ) * zoom;
+        
         this.iframe.position(
-            ( (mouseShifted.x + panX) * zoom ) + this.smartPosition.x,
-            ( (mouseShifted.y + panY) * zoom ) + this.smartPosition.y + buttonSize + 40
+            iFrameX,
+            iFrameY
         );
 
         // set pointerEvents none when deepCanvasManager.focusedIndex < 1
@@ -5423,16 +5650,23 @@ extends iFrameWidget {
         return this.options?.pickRandomOnPlay ? this.getRandomTrackNotYetPlayed() : this.tracks[0];
     }
     iframeSafeUrl(url){
+        let autoplayParam = url.includes('?') ? "&autoplay=1" : "?autoplay=1";
         if(url.includes('/embed/')){
-            return url + "?autoplay=1";
+            return url + autoplayParam;
         }
-        let videoId = url.split('v=')[1];
+        let videoId = '';
+        if (url.includes('v=')) {
+            videoId = url.split('v=')[1];
+        }
         let ampersandPosition = videoId.indexOf('&');
         if(ampersandPosition != -1) {
             videoId = videoId.substring(0, ampersandPosition);
         }
-        // Added "?autoplay=1" to enable autoplay in the embed URL
-        return 'https://www.youtube.com/embed/' + videoId + "?autoplay=1";
+        console.warn('iframeSafeUrl',
+            `https://www.youtube.com/embed/${videoId}${autoplayParam}`
+        )
+        // Added autoplayParam to enable autoplay in the embed URL
+        return 'https://www.youtube.com/embed/' + videoId + autoplayParam;
     }
     // use update() instead if you want to ignore draw method culling
     // onDraw(){
@@ -5596,6 +5830,182 @@ class PomodoroWidget extends Widget {
                 this.smartPosition.y + 40 // + (this.dimensions.height/2)
             )
         }
+    }
+}
+
+
+class BlockBreaker extends Widget {
+
+}
+class SnakeGame extends Widget {
+
+}
+class PipeGameWidget extends Widget {
+    spots = []
+    edges = []
+    numInputs = 1
+    numOutputs = 1
+    rows = 3
+    cols = 3
+    piece_types = [
+        "straight",
+        "corner",
+        "t",
+        "cross"
+    ]
+    piece_rotations = [
+        "up",
+        "right",
+        "down",
+        "left"
+    ]
+    edge_parts = [
+        "none",
+        "input",
+        "output",
+    ]
+    current_edge_part_pool = []
+    constructor(){
+        current_edge_part_pool.length = 0
+        // pre-assign our edge parts (based on capped input and output counts)
+        for(let i = 0; i < this.numInputs; i++){
+            current_edge_part_pool.push("input")
+        }
+        for(let i = 0; i < this.numOutputs; i++){
+            current_edge_part_pool.push("output")
+        }
+        // for the remainder, fill the pool with "none"
+        // Calculate the number of edge pieces
+        let edgePieces = (this.rows * 2) + (this.cols * 2) - 4;
+        // Calculate the number of inner pieces
+        // let innerPieces = (this.rows - 2) * (this.cols - 2);
+        // Calculate the number of "none" pieces
+        let nonePieces = edgePieces - this.numInputs - this.numOutputs;
+        // Fill the pool with "none" for the remaining pieces
+        for(let i = 0; i < nonePieces; i++){
+            current_edge_part_pool.push("none")
+        }
+
+        for(let i = 0; i < this.rows; i++){
+            for(let j = 0; j < this.cols; j++){
+                this.spots.push({
+                    row: i,
+                    col: j,
+                    piece: {
+                        type: random(this.piece_types),
+                        rotation: random(this.piece_rotations),
+                    }
+                })
+
+                // if this spot is on an edge,
+                // add an edge part
+                if(i === 0 || i === this.rows - 1 || j === 0 || j === this.cols - 1){
+                    this.edges.push({
+                        row: i,
+                        col: j,
+                        part: random(this.edge_parts)
+                    })
+                }
+            }
+        }
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+
+        // TODO: draw to static cache on change
+
+        // draw the grid
+        for(let i = 0; i < this.rows; i++){
+            for(let j = 0; j < this.cols; j++){
+                // draw the grid
+                this.ctx.push()
+                this.ctx.translate(
+                    this.smartPosition.x + (i * 50),
+                    this.smartPosition.y + (j * 50)
+                )
+                this.ctx.stroke("black")
+                this.ctx.noFill()
+                this.ctx.rect(0, 0, 50, 50)
+                this.ctx.pop()
+            }
+        }
+
+        // draw the edges
+        this.edges.forEach((edge)=>{
+            this.ctx.push()
+            this.ctx.translate(
+                this.smartPosition.x + (edge.row * 50),
+                this.smartPosition.y + (edge.col * 50)
+            )
+            this.ctx.stroke("black")
+            this.ctx.noFill()
+            this.ctx.rect(0, 0, 50, 50)
+            this.ctx.pop()
+        })
+
+        // draw the parts
+        this.spots.forEach((spot)=>{
+            this.ctx.push()
+            this.ctx.translate(
+                this.smartPosition.x + (spot.row * 50),
+                this.smartPosition.y + (spot.col * 50)
+            )
+            this.ctx.stroke("black")
+            if(spot.part === "straight") {
+                this.ctx.fill("red")
+            } else if(spot.part === "corner") {
+                this.ctx.fill("blue")
+            } else if(spot.part === "t") {
+                this.ctx.fill("green")
+            } else {
+                this.ctx.noFill()
+            }
+            // rotate to the current rotation of the part
+            this.ctx.translate(25, 25)
+            if(spot.rotation === "up"){
+                this.ctx.rotate(radians(0))
+            }else if(spot.rotation === "right"){
+                this.ctx.rotate(radians(90))
+            }else if(spot.rotation === "down"){
+                this.ctx.rotate(radians(180))
+            }else if(spot.rotation === "left"){
+                this.ctx.rotate(radians(270))
+            }
+
+            // Visualize the current rotation by changing the border radius of one corner
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, 0);
+            this.ctx.lineTo(50, 0);
+            this.ctx.quadraticCurveTo(50, 50, 0, 50);
+            this.ctx.closePath();
+            this.ctx.stroke();
+            this.ctx.pop()
+        })
+
+    }
+    onClickPart(part){
+        part.type = this.getNextPieceForPart(part.type);
+    }
+    onRightClickPart(part){
+        part.rotation = this.getNextRotationForPart(part.rotation);
+    }
+    getNextRotationForPart(currentRotation){
+        // get the next rotation in the pool
+        // if it's the last rotation, return the first rotation
+        let currentIndex = this.piece_rotations.indexOf(currentRotation);
+        if(currentIndex === this.piece_rotations.length - 1){
+            return this.piece_rotations[0];
+        }
+        return this.piece_rotations[currentIndex + 1];
+    }
+    getNextCyclePartForPart(currentPart){
+        // get the next piece in the pool
+        // if it's the last piece, return the first piece
+        let currentIndex = current_edge_part_pool.indexOf(currentPart);
+        if(currentIndex === current_edge_part_pool.length - 1){
+            return current_edge_part_pool[0];
+        }
+        return current_edge_part_pool[currentIndex + 1];
     }
 }
 
@@ -5784,7 +6194,7 @@ class ClockWidget extends Widget {
         super.onDraw(...arguments); // todo: split into super.preDraw/super.postDraw
         // just render the current time for now
         
-        this.ctx.push()
+        // this.ctx.push()
         this.ctx.fill("darkblue")
         this.ctx.textAlign(CENTER, CENTER);
         this.ctx.textFont('Georgia');
@@ -5792,17 +6202,17 @@ class ClockWidget extends Widget {
         this.ctx.textStyle(BOLD);
         this.ctx.text(
             this.dateFormatted + "\n" + this.timeFormatted, 
-            this.smartPosition.x + (this.widgetSize.width/2), 
-            this.smartPosition.y + (this.widgetSize.height/2)
+            (this.widgetSize.width/2), 
+            (this.widgetSize.height/2)
         )
         // white overlay
         this.ctx.fill(255)
         this.ctx.text(
             this.dateFormatted + "\n" + this.timeFormatted, 
-            this.smartPosition.x + (this.widgetSize.width/2) - 3, 
-            this.smartPosition.y + (this.widgetSize.height/2) - 3
+            (this.widgetSize.width/2) - 3, 
+            (this.widgetSize.height/2) - 3
         )
-        this.ctx.pop()
+        // this.ctx.pop()
     }
 }
 class TimeToSunSetWidget extends ClockWidget {
@@ -5822,7 +6232,7 @@ class TimeToSunSetWidget extends ClockWidget {
         return `${hours}h ${minutes}m ${seconds}s \nto sunset`
     }
     get timeFormatted(){
-        return ''
+        return 'sunset'
     }
     draw(){
         super.draw(...arguments)
@@ -5833,7 +6243,13 @@ class TimeToSunSetWidget extends ClockWidget {
         // todo: split into super.preDraw/super.postDraw
         super.onDraw(...arguments); 
 
-        
+        textAlign(CENTER, CENTER);
+        fill("darkblue")
+        text(
+            this.dateFormatted + "\n" + this.timeFormatted,
+            0 + (this.widgetSize.width/2),
+            0 + 20 // + (this.dimensions.height/2)
+        )
     }
     drawSunsetGradient(){
         // // draw a sunset themed background gradient
@@ -5857,8 +6273,8 @@ class TimeToSunSetWidget extends ClockWidget {
             this.ctx.strokeWeight(0)
             this.ctx.fill(color);
             this.ctx.rect(
-                this.smartPosition.x, 
-                this.smartPosition.y + (i * (this.widgetSize.height / lines)), 
+                0, 
+                0 + (i * (this.widgetSize.height / lines)), 
                 this.widgetSize.width, 
                 this.widgetSize.height / lines
             )
@@ -5900,17 +6316,17 @@ class GherkinRunnerWidget extends Widget {
         this.running = !this.running;
     }
     recalcDimensions(){
-        this.widgetSize.width = Math.max(600, innerWidth - 60);
+        this.widgetSize.width = Math.max(600, windowWidth - 60);
         this.widgetSize.height = 150 + (this.maxHeight ?? 0);
 
     }
     // render the widget
-    draw(widgetID){
-        super.draw(widgetID);
+    onDraw(widgetID){
+        super.onDraw(widgetID);
         let buttonSize = 30;
         // TODO: decide if we want to coordinate from top left or center center of the widgets by convention
-        let buttonX = this.smartPosition.x + this.widgetSize.width - 40;
-        let buttonY = this.smartPosition.y + 20;
+        let buttonX = this.widgetSize.width - 40;
+        let buttonY = 20;
         let triSize = 20; 
         let half_triSize = 5;
 
@@ -5955,9 +6371,9 @@ class GherkinRunnerWidget extends Widget {
         fill("darkblue")
         text(
             `Features: ${this.results.length}`,
-            this.smartPosition.x + (this.widgetSize.width / 2),
+            (this.widgetSize.width / 2),
             // 20px off the top edge
-            this.smartPosition.y + 20
+            20
         )
 
         /** @see Widget.draw */
@@ -5968,8 +6384,8 @@ class GherkinRunnerWidget extends Widget {
         // each status light is a different color
         // each status light represents the status of a passing or 
         // failing part of the current feature run
-        let x = this.smartPosition.x + 20;
-        let y = this.smartPosition.y + 20;
+        let x = 20;
+        let y = 20;
         this.maxHeight = 0;
         // let widgetWidth = 300
         // let widgetHeight = 300
@@ -6205,7 +6621,7 @@ document.addEventListener('mousedown', function(event) {
 
     // draw a raycast from the mouse position
     let from = mctx.createVector(mouseX, mouseY);
-    let to = mctx.createVector(innerWidth, innerHeight);
+    let to = mctx.createVector(windowWidth, windowHeight);
     let raycast = new Raycast(from, to);
     console.warn('RAY CAST RESULTS!',{
         raycast,
@@ -6343,7 +6759,7 @@ class LayereredCanvasRenderer {
         for(let i = 0; i < 3; i++){
             let sketch = function(p) {
                 p.setup = function() {
-                    p.createCanvas(innerWidth, innerHeight);
+                    p.createCanvas(windowWidth, windowHeight);
                 }
                 p.draw = function() {
                     // draw all widgets for this depth
@@ -6361,7 +6777,7 @@ class LayereredCanvasRenderer {
                     })
                 }
                 p.onResize = function(){
-                    p.resizeCanvas(innerWidth, innerHeight);
+                    p.resizeCanvas(windowWidth, windowHeight);
                 }
             };
             this.canvases.push(new p5(sketch, `deep-canvas-${i+1}`));
@@ -6421,7 +6837,7 @@ class LayereredCanvasRenderer {
                 // }
             }
             p.onResize = function(){
-                p.resizeCanvas(innerWidth, innerHeight);
+                p.resizeCanvas(windowWidth, windowHeight);
             }
             // Define the mouseDragged function
             p.mouseDragged = function(event){
@@ -6442,14 +6858,14 @@ class LayereredCanvasRenderer {
         };
         this.uiContext = new p5(sketchUI, `deep-canvas-ui`);
         console.warn('uiContext',{uiContext:this.uiContext})
-        this.uiContext.resizeCanvas(innerWidth, innerHeight);
+        this.uiContext.resizeCanvas(windowWidth, windowHeight);
 
         //this.draw()
     }
     onResize(){
         // update the dimensions to match the window (of all 3 canvases)
         this.canvases.forEach((canvas)=>{
-            canvas.resizeCanvas(innerWidth, innerHeight);
+            canvas.resizeCanvas(windowWidth, windowHeight);
         })
     }
     debugShapes = [
@@ -6512,8 +6928,8 @@ class LayereredCanvasRenderer {
         }
 
         // TODO: object define on window for caching
-        let halfWidth = innerWidth/2
-        let halfHeight = innerHeight/2
+        let halfWidth = windowWidth/2
+        let halfHeight = windowHeight/2
 
         canvas.push();
         canvas.translate(mouseShifted.x, mouseShifted.y);
@@ -6593,11 +7009,11 @@ function extractQueryParamsOrDefaults(string){
     }
     // normalize requestedWidth/height to ints, with defaults based on the current window size
     requestedWidth = requestedWidth 
-        ? Math.min(window.innerWidth - 20, parseInt(requestedWidth)) 
-        : window.innerWidth / 2;
+        ? Math.min(window.windowWidth - 20, parseInt(requestedWidth)) 
+        : window.windowWidth / 2;
     requestedHeight = requestedHeight 
-        ? Math.min(window.innerHeight - 20, parseInt(requestedHeight)) 
-        : window.innerHeight / 2;
+        ? Math.min(window.windowHeight - 20, parseInt(requestedHeight)) 
+        : window.windowHeight / 2;
 
     return {requestedWidth,requestedHeight}
 }
@@ -6665,7 +7081,7 @@ class Dashboard {
             /* from */ 
             {x:panX,y:panY,z:zoom},
             /* to */ 
-            {x:0,y:0,z:resetZoom?0:zoom}, 
+            {x:0,y:0,z:resetZoom?0.2:zoom}, 
             /*onUpdate*/
             (value, fieldName)=>{
                 // console.warn('onupdate',{value,fieldName})
@@ -6708,7 +7124,7 @@ class Dashboard {
         prevRowHeight = 0,
         currentRowIndex = 0;
 
-        const space = 100; //420;
+        const space = 3; //420;
         
         // Sort widgets by height in descending order
         this.widgetLayoutOrder.sort((a, b) => {
@@ -6728,18 +7144,17 @@ class Dashboard {
             let w = widget.widgetSize.width;
             let h = widget.widgetSize.height;
 
-            // scale widget size for personal space / padding
-            let padding = 10; // Define padding
+            let padding = 1; // Define padding
             w = w - 20 * padding; // Subtract padding from width
             h = h - 20 * padding; // Subtract padding from height
 
-            let virtualWidth = innerWidth / zoom;
-            if (currentRowWidth + w + space > virtualWidth) {
-                prevRowHeight = currentRowMaxHeight;
-                currentRowIndex++;
-                currentRowWidth = 0; // Reset row width
-                accumulatedRowOffset += prevRowHeight + space; // Increase space between widgets vertically
-            }
+            // let virtualWidth = windowWidth / zoom;
+            // if (currentRowWidth + w + space > virtualWidth) {
+            //     prevRowHeight = currentRowMaxHeight;
+            //     currentRowIndex++;
+            //     currentRowWidth = 0; // Reset row width
+            //     accumulatedRowOffset += prevRowHeight + space; // Increase space between widgets vertically
+            // }
             currentRowMaxHeight = Math.max(currentRowMaxHeight, h);
             let x = currentRowWidth;
             let y = accumulatedRowOffset;
@@ -6748,11 +7163,13 @@ class Dashboard {
                 x, y, w, h
             }
 
-            currentRowWidth += w + space; // Increase space between widgets horizontally
+            currentRowWidth += w + space; 
         });
     }
     newWidget(){
-        return this.registerWidget(...arguments)
+        this.registerWidget(...arguments)
+
+        return this; // chainable
     }
     registerWidget(widgetIDOrInstance,instanceOrNull){
         // console.warn("registerWidget",{
@@ -6760,42 +7177,19 @@ class Dashboard {
         //     instanceOrNull
         // })
         // if widgetIDOrInstance contains youtube.com, return a new youtube widget instance instead
-        if(
-            widgetIDOrInstance?.includes?.(".png")
-            || widgetIDOrInstance?.includes?.(".jpg")
-            || widgetIDOrInstance?.includes?.(".gif")
-            || widgetIDOrInstance?.includes?.(".jpeg")
-        ) {
-            // it's an image!
-            return this.registerWidget(new ImageViewerWidget(widgetIDOrInstance))
+        
+        let launched = -2;
+        if(typeof widgetIDOrInstance === 'string'){
+            // see if it's an invokable uri
+            launched = system.tryInvokeHandlerForUri(widgetIDOrInstance);
+        }
+        if(launched === -2 || launched === -1){
+            // not a uri, or no handler found
+        }else{
+            console.warn('Dashboard.registerWidget: uri handler found, returning early')
+            return;
         }
 
-        // if it's a soundcloud url, return a new soundcloud widget instance instead
-        if(
-            widgetIDOrInstance?.includes?.("soundcloud.com")
-        ) {
-            const MySoundCloudClass = class extends SoundCloudWidget {
-                url = "widgetIDOrInstance"
-            } 
-            return this.registerWidget(new MySoundCloudClass())
-        }
-
-        if(widgetIDOrInstance?.includes?.("youtube.com")){
-            let updatedUrl = widgetIDOrInstance;
-            try {
-                let url = new URL(updatedUrl);
-                url.searchParams.set('autoplay', '1');
-                updatedUrl = url.toString();
-            } catch (error) {
-                console.error('Invalid URL:', updatedUrl);
-            }
-            // it's a youtube url!
-            return this.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
-        }
-        if(widgetIDOrInstance?.includes?.("://")){
-            // it's an iframe, chuck!
-            return this.registerWidget(new iFrameWidget(widgetIDOrInstance))
-        }
         let widgetID, widgetInstance = widgetIDOrInstance;
         if(typeof widgetIDOrInstance !== "string"){
             //system.panic('Dashboard.registerWidget: widgetID must be a string',widgetID)
@@ -7020,7 +7414,7 @@ let store = {
     Dashboard: null,
     // maybe we just store these IN dashboard manager?...
     widgets: {},
-    showWidgetPositions: false,
+    showWidgetPositions: 1, //false,
 
     // viewValue: '',
     // controllerValue: '',
@@ -10186,6 +10580,12 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new moon phase widget"](){
+        system.registerWidget(new MoonPhaseWidget())
+    },
+    ["new minimap widget"](){
+        system.registerWidget(new MiniMapWidget())
+    },
     ["new zoom dependent widget"](){
         system.registerWidget(new ZoomDependentWidget())
     },
@@ -10361,7 +10761,6 @@ const InvokableCommands = {
     // ]: [
     //     "Star Fox",
     //     "Yoshi's Story",
-    //     "Super Mario World"
     // ],
 
     ["todo: add daily progress bar of time"](){},
@@ -10372,6 +10771,15 @@ const InvokableCommands = {
     new_train_toy(){
         system.registerWidget(new TrainToyWidget());
     },
+
+    ["new p5 js web gl context demo"](){
+        system.registerWidget(new P53DLayer()) 
+    },
+
+    ["New Mix Tape"](){},
+    ["New Compilation Album"](){},
+    ["New Best Hits List"](){},
+    ["New Top 10 List"](){},
 
     ["New Journal Entry"](){},
     ["New Experiment"](){},
@@ -10402,10 +10810,16 @@ const InvokableCommands = {
         //return new iFrameWidget
         system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/embed/32822-star-fox-64-usa-rev-a.html"))
     },
-    ["Play N64 > Super Mario World"](){
-        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/n64-games/super-mario-64-sky-stories.html"))
+    ["Play N64 > Super Mario 64"](){
+        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/embed/43416-super-mario-64-sky-stories.html"),{
+            // widgetSize:{width:600,height:450}
+            widgetSize:{width:1920,height:1080}
+        })
     },
     // charmeleon, quest 64, 
+    ["Play SNES > Super Mario World"](){
+        system.todo("paste iframe url!")
+    },
     ["Play SNES > Pac Attack"](){
         system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/n64-games/super-mario-64-sky-stories.html"))
     },
@@ -10444,9 +10858,6 @@ const InvokableCommands = {
     },
     // ["Play SNES Super Mario Kart"]
     // ["Play SNES Pac Attack"]
-    ["Play SNES Super Mario World"](){
-        alert("TODO: SNES Mario World")
-    },
     ["Play Battle Tetris - jstris (from Gather.town)"](){
         system.registerWidget(new iFrameWidget(
             "https://jstris.jezevec10.com/",{
@@ -10624,14 +11035,20 @@ const InvokableCommands = {
     ["enable sprites"](){
         store.disableSprites = false;
     },
-    ["enable deep renderer"](){
-        store.disableDeepCanvas = false;
-    },
-    ["disable deep renderer"](){
-        store.disableDeepCanvas = true;
-    },
+    // ["enable deep renderer"](){
+    //     store.disableDeepCanvas = false;
+    // },
+    // ["disable deep renderer"](){
+    //     store.disableDeepCanvas = true;
+    // },
     ["toggle deep renderer"](){
         store.disableDeepCanvas = !store.disableDeepCanvas;
+
+        // clear the canvases anytime we change rendering options
+        deepCanvasManager.canvases.forEach((c)=>{
+            c.clear();
+        })
+        mainCanvasContext.clear();
 
         this.getLabel = function(){
             return `${!bool ? 'Enable' : 'Disable'} Deep Canvas Renderer`
@@ -10869,7 +11286,13 @@ const InvokableCommands = {
 
     "visit the coding train": "https://thecodingtrain.com/?width=800&height=600",
 
-    "play snake": "",
+    "new snake game": "play snake",
+    "play snake"(){
+        system.registerWidget(new SnakeWidget());
+    },
+    "play Pipe Game"(){
+        system.registerWidget(new PipeGameWidget());
+    },
     "play line rider": "https://www.linerider.com/",
 
     "the spinning top from inception": "https://www.youtube.com/watch?v=pQd1-4tqymo",
@@ -10961,6 +11384,17 @@ const InvokableCommands = {
     ["meteor shower"](){},
     ["aurora"](){},
     ["rainstorm"](){},
+
+    ["lightning"](){
+        system.todo("toggle bg lightning effects")
+    },
+    // increase lightning
+    // decrease lightning
+    // increase thunder
+    // decrease thunder
+    // increase rain
+    // decrease rain
+
     ["light rain"](){},
     "new fireplace":"https://www.youtube.com/watch?v=7s5MdY_VX7A",
 
@@ -10969,6 +11403,17 @@ const InvokableCommands = {
         system.registerWidget(new ImageRotatorWidget("smile.png"))
     },
 
+    // ["play i'm on everything"]: "https://www.youtube.com/watch?v=q2sn-ULymu8",
+    ["play i'm on everything"]:()=>"https://www.youtube.com/watch?v=q2sn-ULymu8",
+    ["play with physics"](){},
+    ["play with gravity"](){},
+    ["disable gravity"](){},
+    ["disable friction"](){},
+    ["dark mode"](){},
+    ["light mode"](){},
+    ["new theme"](){},
+    ["new style guide"](){},
+    ["new promo materials"](){},
     ["Play Pendulum  Hold your Colour Full Album"](){
         return "https://www.youtube.com/watch?app=desktop&v=RbWeGfcuQNo"
         // the one i want is restricted
@@ -10979,9 +11424,6 @@ const InvokableCommands = {
     ["show cardbox ideaz"](){
         system.registerWidget("chrome_Eg990Efhut.png")
         system.registerWidget("chrome_SeWUnElI6x.png")
-    },
-    ["New Moon Phase Widget"](){
-        system.registerWidget(new MoonPhaseWidget());
     },
     ["New AI Chat Widget"](){
         system.registerWidget(new AIChatWidget());
@@ -11039,8 +11481,8 @@ const InvokableCommands = {
                 console.log("urls",urls)
                 system.registerWidget(new YoutubePlayerWidget({
                     widgetSize:{
-                        width: innerWidth * 0.25,
-                        height: innerWidth * 0.25 * (9 / 16)
+                        width: windowWidth * 0.25,
+                        height: windowWidth * 0.25 * (9 / 16)
                     },
                     autoPlay: true,
                     tracks: typeof urls === 'string' ? [urls] : urls
@@ -11059,6 +11501,13 @@ const InvokableCommands = {
     ["recenter"](){
         system.invoke("CENTER_VIEW");
     },
+    ["sign up"](){},
+    ["register..."](){},
+    ["learn more..."](){},
+    ["new account"](){},
+    ["create account"](){},
+    ["log in"](){},
+    ["log out"](){},
     ["focus"](){
         InvokableCommands["Center View"]();
     },
@@ -11782,6 +12231,7 @@ class ToastNotification {
     importantCloneCount = 0;
     importantCloneAnimationSequenceFrame = 0;
     // drawToast renderToast
+    // todo extend Widget?
     // TODO: levels (info, warn, error, success)
     draw(index){
         if(this.state === 'destroyed'){
@@ -11809,7 +12259,7 @@ class ToastNotification {
         ctx.push();
         for(let i = 0; i < targetCloneCount; i++){
             // shift the drawing context with each i
-            ctx.translate(-2 * i, 2 * i);
+            ctx.translate(0, 50);
 
             this.drawOneInstance(index+i,ctx)
         }
@@ -11817,8 +12267,9 @@ class ToastNotification {
     }
 
     drawOneInstance(index,ctx){
-
-        ctx.push()
+        // NOTE: in here, we're in a translated instance,
+        // DONT PUSH IT AWAY!
+        //ctx.push()
         ctx.rectMode(CORNER)
         let offsetY = 30 * index;
         let leavingAlpha = this.state === 'leaving' 
@@ -11864,8 +12315,8 @@ class ToastNotification {
         //ctx.push();
         drawStringWordWrapped(
             this.message,
-            10,
-            10,
+            windowWidth - tBoxW,
+            20,
             tBoxW,
             20, // line height
             ctx
@@ -11878,7 +12329,7 @@ class ToastNotification {
         // ctx.rect(windowWidth - 10 - tBoxW, 20 + offsetY, tBoxW, 100, cornerRadius);
         // ctx.alpha(255);
 
-        ctx.pop();
+        // ctx.pop();
     }
 }
 
@@ -12252,6 +12703,7 @@ class CmdPrompt extends Widget {
         CmdPromptInput.elt.style.backgroundColor = 'transparent';
         CmdPromptInput.elt.style.color = 'white';
         CmdPromptInput.elt.style.zIndex = 9999;
+        CmdPromptInput.elt.id = 'cmdprompt-input';
         //CmdPromptInput.elt.style.filter = 'blur(10px)';
 
         CmdPromptInput.style('border', 'none');
@@ -13137,8 +13589,8 @@ class StarField extends FieldOf(Star){
 class StarFieldWidget extends Widget {
     get widgetSize(){
         return {
-            x: innerWidth,
-            y: innerHeight
+            x: windowWidth,
+            y: windowHeight
         }
     }
 
@@ -13358,8 +13810,11 @@ class DebugPath {
         this.stepPruner();
         let ctx = deepCanvasManager.uiContext;
         ctx.push()
-        //ctx.translate(-panX + innerWidth/2, panY + innerHeight/2);
-        //ctx.scale(zoom, zoom);
+        ctx.translate(
+            -1 * (windowWidth/2 + panX), 
+            -1 * (windowHeight/2 + panY)
+        );
+        ctx.scale(zoom, zoom);
         let adjustedLineColor = color("red");
         for(let i = 0; i < this.points.length - 1; i++) {
             if(this === DebugPathInstance){
@@ -13657,26 +14112,27 @@ class Implementer {
 }
 
 
-class MiniMapWidget extends ImplementationOf([
-    "Widget",
-    // PinnedWidget, Pinnable
+// class MiniMapWidget extends ImplementationOf([
+//     "Widget",
+//     // PinnedWidget, Pinnable
     
-    // // Draggable/Droppable
-    // "Draggable",
-    // // register for draw callback
-    // "Drawable",
-    // // implements common handlers
-    // // and callbacks hooks
-    // // for objects in SortingContexts 
-    // "Sortable",
-    // // ["Todos",{
-    // //     configurableImplementations: true
-    // // }],
-    // // ["Todos",[
-    // //     /* Webpack Style */
-    // //     "FlexibleArguments"
-    // // ]]
-]) {
+//     // // Draggable/Droppable
+//     // "Draggable",
+//     // // register for draw callback
+//     // "Drawable",
+//     // // implements common handlers
+//     // // and callbacks hooks
+//     // // for objects in SortingContexts 
+//     // "Sortable",
+//     // // ["Todos",{
+//     // //     configurableImplementations: true
+//     // // }],
+//     // // ["Todos",[
+//     // //     /* Webpack Style */
+//     // //     "FlexibleArguments"
+//     // // ]]
+// ]) {
+class MiniMapWidget extends Widget {
     widgetSize = {
         width: 300,
         height: 300
@@ -13688,20 +14144,21 @@ class MiniMapWidget extends ImplementationOf([
         x: 0,
         y: 0
     }
-    draw(){
-        //super.preDraw();
-        super.draw();
-        push() // exit previous context
-        strokeWeight(3);
-        stroke(255,0,0);
-        fill(20);
-        rect(
+    onDraw(){
+        super.onDraw();
+
+        this.ctx.strokeWeight(3);
+        this.ctx.stroke(255,0,0);
+        this.ctx.fill(20);
+
+        // pinned
+        this.ctx.rect(
             this.fixedPosition.x,
             this.fixedPosition.y,
             this.widgetSize.width,
             this.widgetSize.height
         )
-        pop() // return
+        //this.endDraw()
     }
 }
 
@@ -14310,8 +14767,8 @@ function setupDefaults(){
                 }
 
                 // normalize requestedWidth/height to ints, with defaults based on the current window size
-                requestedWidth = requestedWidth ? Math.min(window.innerWidth - 20, parseInt(requestedWidth)) : window.innerWidth / 2;
-                requestedHeight = requestedHeight ? Math.min(window.innerHeight - 20, parseInt(requestedHeight)) : window.innerHeight / 2;
+                requestedWidth = requestedWidth ? Math.min(window.windowWidth - 20, parseInt(requestedWidth)) : window.windowWidth / 2;
+                requestedHeight = requestedHeight ? Math.min(window.windowHeight - 20, parseInt(requestedHeight)) : window.windowHeight / 2;
 
                 if(tracks.length){
 
@@ -14414,9 +14871,9 @@ function setupDefaults(){
             system.registerWidget(new window[widget.classname]());
             return;
         }else if(typeof widget === "function"){
-            console.warn("detected widget as function",{
-                widget,
-            })
+            // console.warn("detected widget as function",{
+            //     widget,
+            // })
             baseCmds.push(widget)
         }else{
             console.error("detected widget as object",{
@@ -14485,7 +14942,6 @@ class Animation {
 }
 const CoreWidgets = [
     // H1Widget,
-    //P53DLayer,
     // ThreeJSViewer,
     //IsometricPreview,
     // Solitaire,
@@ -14533,7 +14989,7 @@ const CoreWidgets = [
     // // "Hypercard"
     // FractalTreeGraphViewerWidget,
 
-    KeyboardWidget
+    // KeyboardWidget
 ]
 
 class SoundCloudWidget extends iFrameWidget {
@@ -14666,13 +15122,19 @@ function animateVector(from, to, onUpdate, duration = 1000){
 let cursor, MainCanvasContextThing = function(p){
     let _onResize = function(){
         mctx.resizeCanvas(windowWidth, windowHeight);
+        // document.querySelectorAll('canvas').forEach((canvii)=>{
+        //     canvii.width = windowWidth;
+        //     canvii.height = windowHeight;
+        //     canvii.style.width = windowWidth+'px';
+        //     canvii.style.height = windowHeight+'px';
+        // })
         // TODO: call resize on DeepCanvasManager
         system.get("Dashboard")?.reflowLayout?.()
     }
     let _onResizeDebounced = debounce(_onResize);
-    // p.onResize = function(){
-    //     _onResizeDebounced();
-    // }
+    p.onResize = function(){
+        _onResizeDebounced();
+    }
 
     const postSetup = function(){
         setTimeout(()=>{_onResize()},150);
@@ -14691,13 +15153,18 @@ let cursor, MainCanvasContextThing = function(p){
             system.PreloadedSVGs[name] = loadImage(name);
         })
         Object.entries(system.PreloadedSounds).forEach(([_,name])=>{
-            system.PreloadedSounds[name] = system.loadSound(name);
+            system.loadSound(name).then((sound)=>{
+                system.PreloadedSounds[name] = sound;
+            }).catch((e)=>{
+                console.warn('bad sound',name)
+                console.error('failed to load sound',e)
+            });
         })
     }
 
     p.setup = function(){
 
-        p.resizeCanvas(mctx.innerWidth,mctx.innerHeight)
+        p.resizeCanvas(mctx.windowWidth,mctx.windowHeight)
 
         window.addEventListener('mouseup', function(event) {
             // if we clicked on or INSIDE of #html-foreground
@@ -14732,7 +15199,7 @@ let cursor, MainCanvasContextThing = function(p){
         // e.g. when we're in a mode where we're typing in a text field
 
 
-    // load pan,zoom from query params (if any)
+        // load pan,zoom from query params (if any)
         let params = new URLSearchParams(window.location.search);
         panX = parseFloat(params.get('panX')) || 0;
         panY = parseFloat(params.get('panY')) || 0;
@@ -14769,7 +15236,12 @@ let cursor, MainCanvasContextThing = function(p){
         // search for booting... to jump here :D
         // boot routine
         console.info("booting...");
-        manager.boot(); rootSystem = system = manager.systems[0];
+        manager.boot(); 
+        rootSystem = system = manager.systems[0];
+
+        system.plopAudioPlayer = mctx.createAudio('res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3');
+        system.plopAudioPlayer.volume(0.1);
+        
         console.info("booted");
 
         let canvases = [
@@ -14794,18 +15266,19 @@ void main(void) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black for non-stripes
     }
 }
-`;
-let topCanvas = document.createElement('canvas');
-topCanvas.id="topCanvas"; // composited canvas, not really TOP as UI is drawn above this even...
-topCanvas.width = window.innerWidth;
-topCanvas.height = window.innerHeight;
-topCanvas.style.position = 'absolute';
-topCanvas.style.pointerEvents = 'none';
-topCanvas.style.top = 0;
-topCanvas.style.left = 0;
-topCanvas.style.zIndex = 90001; // over 9000
-// topCanvas.style.pointerEvents = 'none';
-document.body.appendChild(topCanvas);
+`       ;
+
+        let topCanvas = document.createElement('canvas');
+        topCanvas.id="topCanvas"; // composited canvas, not really TOP as UI is drawn above this even...
+        topCanvas.width = window.windowWidth;
+        topCanvas.height = window.windowHeight;
+        topCanvas.style.position = 'absolute';
+        topCanvas.style.pointerEvents = 'none';
+        topCanvas.style.top = 0;
+        topCanvas.style.left = 0;
+        topCanvas.style.zIndex = 90001; // over 9000
+        // topCanvas.style.pointerEvents = 'none';
+        document.body.appendChild(topCanvas);
         window.iCanvasCompositor = new CanvasCompositor(canvases, fragmentShaderSource, topCanvas);
 
         //initTHREEMode();
@@ -14969,12 +15442,12 @@ document.body.appendChild(topCanvas);
             
             let KeyboardPanInfluence = { x: 0, y: 0 };
             let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
-            let maxInfluence = 100 * (1 / zoom);
+            let maxInfluence = 100 * (zoom); // 1/zoom?
             let decayFactor = 0.99;
             let lerpFactor = 0.001; // control the speed of lerp
             let ignore = false;
             let baseStepSize = 100;
-            let stepSize = baseStepSize * (1 / zoom);
+            let stepSize = baseStepSize * (zoom); // 1/zoom?
             switch(e.key) {
                 case 'w':
                     zoom += 0.1;
@@ -15032,9 +15505,7 @@ document.body.appendChild(topCanvas);
             }
         })
 
-        // Additional Widgets
-        system.registerWidget(new KeyboardWidget());
-        system.registerWidget(new MyMouseEvents());
+        
 
         //system.get("cmdprompt")
         system.cmdprompt.afterSetup()
@@ -15046,10 +15517,8 @@ document.body.appendChild(topCanvas);
         //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
         //     CalendarWidget,
-        //     ClockWidget,
 
         //     MessengerWidget,
-        //     MiniMapWidget,
         //     TimerWidget,
         //     TodoWidget,
         //     UIDemoWidget,
@@ -15067,196 +15536,212 @@ document.body.appendChild(topCanvas);
         // attach the results of the self test runner to the widget
         grw.setResults(autorunFeatureTestResults);
         system.get("Dashboard").init()
+
+        // loadTestWidgets
+        if(store.showTestWidgets){
             // add our first widget (todo: load state from dehydrated json)
             // DEFAULT WIDGET SET
 
-        system.registerWidget("colorpickermockup.png")
-        system.registerWidget(new ColorPickerWidget())
+            system.registerWidget("colorpickermockup.png")
+            system.registerWidget(new ColorPickerWidget())
 
-        // as "let him cook" meme
-        system.registerWidget("https://i.kym-cdn.com/photos/images/newsfeed/002/488/659/18a.jpg");
+            // as "let him cook" meme
+            system.registerWidget("https://i.kym-cdn.com/photos/images/newsfeed/002/488/659/18a.jpg");
 
-        // Register Some Widgets
-        // Spawn Some Widgets
-        InvokableCommands["New Time To Sunset Widget"]()
-        InvokableCommands["New Calculator Widget"]()
-        InvokableCommands["New Egg Timer"]()
-        InvokableCommands["Play Glorious Dawn"]()
-        InvokableCommands["NEW_STICKY_NOTE"]()
-        // InvokableCommands["New Scratch Pad"]()
-        //InvokableCommands["New Markdown Editor"]()
+            // Register Some Widgets
+            // Spawn Some Widgets
+            InvokableCommands["New Time To Sunset Widget"]()
+            InvokableCommands["New Calculator Widget"]()
+            InvokableCommands["New Egg Timer"]()
+            InvokableCommands["Play Glorious Dawn"]()
+            InvokableCommands["NEW_STICKY_NOTE"]()
+            // InvokableCommands["New Scratch Pad"]()
+            //InvokableCommands["New Markdown Editor"]()
 
-        system.invoke("Study Greek Alphabet Flashcards");
+            system.invoke("Study Greek Alphabet Flashcards");
 
-        //InvokableCommands["NEW_SKETCHFAB_VIEWER"]()
-        //system.invoke("NEW_SKETCHFAB_VIEWER")
-        system.registerWidget(new SketchfabEmbedWidget())
+            //InvokableCommands["NEW_SKETCHFAB_VIEWER"]()
+            //system.invoke("NEW_SKETCHFAB_VIEWER")
+            system.registerWidget(new SketchfabEmbedWidget())
 
-        system.invoke("NEW_FISH")
-        system.invoke("NEW_DOG")
-        system.invoke("NEW_CAT")
+            system.invoke("NEW_FISH")
+            system.invoke("NEW_DOG")
+            system.invoke("NEW_CAT")
 
-        //InvokableCommands["UI Inspiration > Minority Report UI"]()
-        system.invoke("EMBED_TWEET")
+            //InvokableCommands["UI Inspiration > Minority Report UI"]()
+            system.invoke("EMBED_TWEET")
 
-        // demo widgets
-        system.invoke("new zoom dependent widget")
+            // demo widgets
+            system.invoke("new zoom dependent widget")
+            // aka navigator widget
+            system.invoke("new minimap widget")
 
-        // OnDashboardReady OnDashboardLoaded OnDashboardInit
-        // OnDashboardStarted
-        system
+            system.invoke("new moon phase widget")
 
-            // Main Widget Registration Area
-            
+            // OnDashboardReady OnDashboardLoaded OnDashboardInit
+            // OnDashboardStarted
+            system
 
-
-
-            
-            
-            // ~~ TODO: consolidate all other widget registration methods ~~
+                // Main Widget Registration Area
+                
 
 
-            // what if you could remote desktop in here?!
-            // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
 
-            // 5-calls widget:
-            .newWidget(
-                new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/",{
+                
+                
+                // ~~ TODO: consolidate all other widget registration methods ~~
+
+
+                // what if you could remote desktop in here?!
+                // .registerWidget(new iFrameWidget("https://remotedesktop.google.com/access/"))
+
+                // 5-calls widget:
+                .newWidget(
+                    new iFrameWidget("https://5calls.org/issue/israel-palestine-gaza-war-hamas-ceasefire/",{
+                        widgetSize:{
+                            width: 480,
+                            height: 640
+                        }
+                    })
+                )
+
+                .newWidget(new iFrameWidget("https://faxzero.com/",{
                     widgetSize:{
                         width: 480,
                         height: 640
                     }
+                }))
+
+                .newWidget(new iFrameWidget("https://publishersforpalestine.org/",{
+                    widgetSize:{
+                        width: 480,
+                        height: 640
+                    }
+                }))
+
+                // dental services in my dental coverage network?!
+                // x-ray services that work when i travel a lot for work?
+                // good accounting tips for freelancers and quarterly estimated taxpayers
+                // ...
+
+                // thomas and friends for SNES: minigame: 
+                .newWidget("https://youtu.be/mQcR04RROUQ?si=9kpOTXAd9rQZ_QLa&t=482")
+
+                // dark side of the moon, mario 64 sound font
+                .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
+
+                // recommended related stuff...
+                // https://www.reddit.com/r/SuperMario64/
+
+                // can you use chat gpt in an iframe?
+                // .newWidget(new iFrameWidget("https://chat.openai.com/",{
+                //     widgetSize:{
+                //         width:800,
+                //         height:600
+                //     }
+                // }))
+
+
+                .newWidget(new GithubCardWidget())
+                .registerWidget(new ClockWidget())
+                .registerWidget(new MarchingCubesDemoWidget())
+
+                .registerWidget(new AStarPathfindingDemoWidget())
+
+                .registerWidget(new MandlebrotWidget())
+
+                    //     .registerWidget(new IsometricPreview())
+
+                    .registerWidget(new AIWidget())
+                    // this should be part of deep canvas manager...
+                    // .registerWidget(new P53DLayer()) 
+                    // disabled by default cause it tanks perf
+                    // need to optimize draw routines...
+                    // .registerWidget(new ThreeJSViewer())
+
+                    .registerWidget(new KeyboardWidget())
+
+
+                // TODO THEIR IFRAME IS BLOCKED, HOST A IFRAME FRIENDLY COPY!!!
+                .registerWidgetAvailable("Google Color Picker",()=>{
+                    system.todo("Googles color picker is iframe-blocked, make or find an iframe friendly one")
                 })
-            )
+                .registerWidget(
+                    new ImageViewerWidget("ukraine-flag.jpeg")
+                )
+                .registerWidget(
+                    new ImageViewerWidget("insp.png",{
+                        widgetSize:{width:2880,height:1580}
+                    })
+                )
+                .registerWidget(
+                    //"SVGViewerWidget:PFlag",
+                    new ImageViewerWidget("Flag_of_Palestine.svg")
+                )
+                .registerWidget(
+                    //"milky-way-galaxy.gif",
+                    new ImageViewerWidget("milky-way-galaxy.gif")
+                )
 
-            .newWidget(new iFrameWidget("https://faxzero.com/",{
-                widgetSize:{
-                    width: 480,
-                    height: 640
-                }
-            }))
+                
+                .registerWidget(
+                    //"4SeasonsImg", 
+                    new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif")
+                )
 
-            .newWidget(new iFrameWidget("https://publishersforpalestine.org/",{
-                widgetSize:{
-                    width: 480,
-                    height: 640
-                }
-            }))
+                .registerWidget(
+                    new ImageViewerWidget("fine.gif")
+                )
+                
+                // .registerWidget("GherkinRunnerWidget",  grw)
+                
+                // // intentionally on a separate line to make it easier to comment out last chained method
+                // ;
+                // WidgetsToRegister.forEach((widgetClassName)=>{
+                //     let theInstance = null;
+                //     const widgetTypes = {
+                //         ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
+                //         VideoPlayerWidget: [".mp4"],
+                //         YoutubePlayerWidget: [".youtube."]
+                //     };
+                //     if(typeof widgetClassName === 'string'){
+                //         for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
+                //             if (extensions.some(ext => widgetClassName.includes(ext))) {
+                //                 if(!window[widgetType]){
+                //                     console.warn("missing widget type",{
+                //                         widgetType,
+                //                         extensions,
+                //                         widgetClassName
+                //                     })
+                //                     continue;
+                //                 }
 
-            // dental services in my dental coverage network?!
-            // x-ray services that work when i travel a lot for work?
-            // good accounting tips for freelancers and quarterly estimated taxpayers
-            // ...
+                //                 theInstance = new window[widgetType](widgetClassName);
+                //                 break;
+                //             }
+                //         }
+                //         if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
+                //             theInstance = new iFrameWidget(widgetClassName);
+                //         }
+                //     }else{
+                //         if (!theInstance) {
+                //             theInstance = new widgetClassName();
+                //         }
+                //     }
+                //     if(!theInstance){
+                //         console.warn(`failed to instantiate widget ${widgetClassName}`)
+                //         return;
+                //     }
+                //     system.registerWidget(theInstance)
+                // })
 
-            // thomas and friends for SNES: minigame: 
-            .newWidget("https://youtu.be/mQcR04RROUQ?si=9kpOTXAd9rQZ_QLa&t=482")
-
-            // dark side of the moon, mario 64 sound font
-            .newWidget("https://www.youtube.com/watch?v=KVKtF-i3gK4")
-
-            // recommended related stuff...
-            // https://www.reddit.com/r/SuperMario64/
-
-            // can you use chat gpt in an iframe?
-            // .newWidget(new iFrameWidget("https://chat.openai.com/",{
-            //     widgetSize:{
-            //         width:800,
-            //         height:600
-            //     }
-            // }))
-
-
-            .newWidget(new GithubCardWidget())
-            .registerWidget(new ClockWidget())
-            .registerWidget(new MarchingCubesDemoWidget())
-
-            .registerWidget(new AStarPathfindingDemoWidget())
-
-            .registerWidget(new MandlebrotWidget())
-
-                //     .registerWidget(new IsometricPreview())
-
-                .registerWidget(new AIWidget())
-                // .registerWidget(new P53DLayer())
-                // .registerWidget(new ThreeJSViewer())
-
-                .registerWidget(new MoonPhaseWidget())
-                .registerWidget(new KeyboardWidget())
-
-            
-            // .registerWidget("Google Color Picker",
-            .registerWidget(
-                new ImageViewerWidget("ukraine-flag.jpeg")
-            )
-            .registerWidget(
-                new ImageViewerWidget("insp.png",{
-                    widgetSize:{width:2880,height:1580}
-                })
-            )
-            .registerWidget(
-                //"SVGViewerWidget:PFlag",
-                new ImageViewerWidget("Flag_of_Palestine.svg")
-            )
-            .registerWidget(
-                //"milky-way-galaxy.gif",
-                new ImageViewerWidget("milky-way-galaxy.gif")
-            )
-
-            
-            .registerWidget(
-                //"4SeasonsImg", 
-                new ImageViewerWidget("https://cdn.pixabay.com/animation/2023/08/13/15/26/15-26-43-822_512.gif")
-            )
-
-            .registerWidget(
-                new ImageViewerWidget("fine.gif")
-            )
-            
-            // .registerWidget("GherkinRunnerWidget",  grw)
-            
-            // // intentionally on a separate line to make it easier to comment out last chained method
-            // ;
-            // WidgetsToRegister.forEach((widgetClassName)=>{
-            //     let theInstance = null;
-            //     const widgetTypes = {
-            //         ImageViewerWidget: [".gif",".png",".jpeg",".jpg",".svg"],
-            //         VideoPlayerWidget: [".mp4"],
-            //         YoutubePlayerWidget: [".youtube."]
-            //     };
-            //     if(typeof widgetClassName === 'string'){
-            //         for (const [widgetType, extensions] of Object.entries(widgetTypes)) {
-            //             if (extensions.some(ext => widgetClassName.includes(ext))) {
-            //                 if(!window[widgetType]){
-            //                     console.warn("missing widget type",{
-            //                         widgetType,
-            //                         extensions,
-            //                         widgetClassName
-            //                     })
-            //                     continue;
-            //                 }
-
-            //                 theInstance = new window[widgetType](widgetClassName);
-            //                 break;
-            //             }
-            //         }
-            //         if (!theInstance && (widgetClassName.includes("://") || widgetClassName.split(".").length > 2)) {
-            //             theInstance = new iFrameWidget(widgetClassName);
-            //         }
-            //     }else{
-            //         if (!theInstance) {
-            //             theInstance = new widgetClassName();
-            //         }
-            //     }
-            //     if(!theInstance){
-            //         console.warn(`failed to instantiate widget ${widgetClassName}`)
-            //         return;
-            //     }
-            //     system.registerWidget(theInstance)
-            // })
-
-                // shuffle widget order
-                // system.dashboard.shuffleWidgets()
-                // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
+                    // shuffle widget order
+                    // system.dashboard.shuffleWidgets()
+                    // NO! https://www.youtube.com/watch?v=X5trRLX7PQY&t=527s
+            // Additional Widgets
+            system.registerWidget(new KeyboardWidget());
+            system.registerWidget(new MyMouseEvents());
+        }
 
         // POST-REGISTRATION-WIDGET-MUNGING-OPERATIONS
         // set all widgets to canvasID 1 so they're in the "BG" deep canvas
@@ -15409,31 +15894,31 @@ document.body.appendChild(topCanvas);
             newZoom = zoom;
             // make sure we offset the pan to account for the zoom messing with our center
             // we should be passing _towards_ the mouse 
-            // panX += (mouseX - innerWidth / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
-            // panY += (mouseY - innerHeight / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
+            // panX += (mouseX - windowWidth / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
+            // panY += (mouseY - windowHeight / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
     
-            // Implementing simple nudge based on logic
-            // If panX > 0, we're panning right, so we need to nudge left
-            let delta = deltaTime * (oldZoom - newZoom);
-            let delta2 = Math.abs(panX) - 0;
-            let delta3 = Math.abs(panY) - 0;
-            delta*=1.0 - (delta2+delta3);
-            let stepFactor = .09; //1.001;
-            if(panX > 0) {
-                panX -= stepFactor * delta;
-            }
-            // If panX < 0, we're panning left, so we need to nudge right
-            if(panX < 0) {
-                panX += stepFactor * delta;
-            }
-            // If panY > 0, we're panning down, so we need to nudge up
-            if(panY > 0) {
-                panY -= stepFactor * delta;
-            }
-            // If panY < 0, we're panning up, so we need to nudge down
-            if(panY < 0) {
-                panY += stepFactor * delta;
-            }
+            // // Implementing simple nudge based on logic
+            // // If panX > 0, we're panning right, so we need to nudge left
+            // let delta = deltaTime * (oldZoom - newZoom);
+            // let delta2 = Math.abs(panX) - 0;
+            // let delta3 = Math.abs(panY) - 0;
+            // delta*=1.0 - (delta2+delta3);
+            // let stepFactor = .09; //1.001;
+            // if(panX > 0) {
+            //     panX -= stepFactor * delta;
+            // }
+            // // If panX < 0, we're panning left, so we need to nudge right
+            // if(panX < 0) {
+            //     panX += stepFactor * delta;
+            // }
+            // // If panY > 0, we're panning down, so we need to nudge up
+            // if(panY > 0) {
+            //     panY -= stepFactor * delta;
+            // }
+            // // If panY < 0, we're panning up, so we need to nudge down
+            // if(panY < 0) {
+            //     panY += stepFactor * delta;
+            // }
     
     
         }else{
@@ -15711,7 +16196,7 @@ document.body.appendChild(topCanvas);
             }
             
     
-            mainCanvasContext.translate(mouseShifted.x, mouseShifted.y);
+            mainCanvasContext.translate(-mouseShifted.x, -mouseShifted.y);
             mainCanvasContext.scale(zoom);
             // translate(mouseX, mouseY);
             mainCanvasContext.translate(
@@ -16002,6 +16487,7 @@ function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
     let words = string.split(' ');
     let line = '';
     let yLineOffset = 0;
+    let lines = [];
 
     for (let i = 0; i < words.length; i++) {
         let testLine = line + words[i] + ' ';
@@ -16009,10 +16495,7 @@ function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
 
         ctx.textAlign(LEFT,TOP)
         if (testWidth > fitWidth && i > 0) {
-            ctx.text(
-                line.trim(), 
-                x, 
-                y + (lineHeight / 2) + yLineOffset);
+            lines.push({ text: line.trim(), x: x, y: y + (lineHeight / 2) + yLineOffset });
             line = words[i] + ' ';
             yLineOffset += ctx.textSize();
         } else {
@@ -16020,11 +16503,9 @@ function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
         }
     }
 
-    ctx.text(
-        line.trim(), 
-        x, 
-        y + yLineOffset
-    );
+    lines.push({ text: line.trim(), x: x, y: y + yLineOffset });
+
+    lines.forEach(line => ctx.text(line.text, line.x, line.y));
 }
 
 // todo: make a multi-select version
