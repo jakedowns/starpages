@@ -2120,8 +2120,8 @@ const hoveredArray = []
 //     mctx.strokeWeight(_strokeWeight)
 //     mctx.stroke(_strokeColor)
 //     mctx.fill(fillColor)
-//     mctx.rect(10, 10, mctx.innerWidth - 20, mctx.innerHeight - 20)
-//     mctx.rect(20, 20, mctx.innerWidth - 40, mctx.windowHeight - 40)
+//     mctx.rect(10, 10, mctx.windowWidth - 20, mctx.windowHeight - 20)
+//     mctx.rect(20, 20, mctx.windowWidth - 40, mctx.windowHeight - 40)
 //     // draw a rect comprised of 4 dashed lines
 //     drawDashedLine(x, y, x + w, y, dashLength);  // Top side
 //     drawDashedLine(x + w, y, x + w, y + h, dashLength);  // Right side
@@ -2411,8 +2411,8 @@ class Widget extends UndoRedoComponent {
         // default: center with screen bounds
         // TODO: each "system" should have screens attached
         // the system manager should allow viewports that point to screens within various systems
-        this.basePosition.x = innerWidth / 2;
-        this.basePosition.y = innerHeight / 2;
+        this.basePosition.x = windowWidth / 2;
+        this.basePosition.y = windowHeight / 2;
     }
 
     isHovered(){
@@ -2568,11 +2568,11 @@ class Widget extends UndoRedoComponent {
         let affectedY = cBase.y + (parallaxFactor * mouseShifted.y);
 
         // Distance-based scaling
-        let distanceFromCenter = Math.hypot(cBase.x - window.innerWidth / 2, cBase.y - window.innerHeight / 2);
-        let distanceFactor = distanceFromCenter / (window.innerWidth / 2);
+        let distanceFromCenter = Math.hypot(cBase.x - window.windowWidth / 2, cBase.y - window.windowHeight / 2);
+        let distanceFactor = distanceFromCenter / (window.windowWidth / 2);
         distanceFactor = (1 - distanceFactor) * (1 - zoom / 6);
-        affectedX = (cBase.x - window.innerWidth / 2) * distanceFactor + window.innerWidth / 2;
-        affectedY = (cBase.y - window.innerHeight / 2) * distanceFactor + window.innerHeight / 2;
+        affectedX = (cBase.x - window.windowWidth / 2) * distanceFactor + window.windowWidth / 2;
+        affectedY = (cBase.y - window.windowHeight / 2) * distanceFactor + window.windowHeight / 2;
 
         // Update position
         // this.smartPosition.x = affectedX;
@@ -2729,9 +2729,9 @@ class Widget extends UndoRedoComponent {
             we need to do some math to see if the widget is within the rhombus of the viewport
         */
         let deepLeftPXBound = panX * zoom;
-        let deepRightPXBound = (panX - innerWidth) * zoom;
+        let deepRightPXBound = (panX - windowWidth) * zoom;
         let deepTopPXBound = panY * zoom;
-        let deepBottomPXBound = (panY - innerHeight) * zoom;
+        let deepBottomPXBound = (panY - windowHeight) * zoom;
         
         let isWithinXBounds = this.smartPosition.x + this.widgetSize.width > deepLeftPXBound && this.smartPosition.x < deepRightPXBound;
         let isWithinYBounds = this.smartPosition.y + this.widgetSize.height > deepTopPXBound && this.smartPosition.y < deepBottomPXBound;
@@ -2746,7 +2746,7 @@ class Widget extends UndoRedoComponent {
         //     15
         // )
 
-        // const frustum = new ViewFrustum(1, 1000, Math.PI / 4, window.innerWidth / window.innerHeight);
+        // const frustum = new ViewFrustum(1, 1000, Math.PI / 4, window.windowWidth / window.windowHeight);
         // const widget = new Widget(0, 0, 50, 10, 10, 10);
         
         // TODO: use BVH
@@ -3770,9 +3770,9 @@ class MoonPhaseWidget extends Widget {
         // bounds checking
         // if(
         //     this.smartPosition.x < 0 - this.widgetSize.width
-        //     || this.smartPosition.x > innerWidth + this.widgetSize.width
+        //     || this.smartPosition.x > windowWidth + this.widgetSize.width
         //     || this.smartPosition.y < 0 - this.widgetSize.height
-        //     || this.smartPosition.y > innerHeight + this.widgetSize.height
+        //     || this.smartPosition.y > windowHeight + this.widgetSize.height
         // ){
         //     return;
         // }
@@ -4574,7 +4574,7 @@ class Cursor {
         ctx.strokeWeight(1)
         ctx.stroke("red")
         ctx.fill(0,0)
-        drawDashedLine(ctx, ctx.mouseX, ctx.mouseY, ctx.innerWidth / 2, ctx.innerHeight / 2)
+        drawDashedLine(ctx, ctx.mouseX, ctx.mouseY, ctx.windowWidth / 2, ctx.windowHeight / 2)
         
         ctx.stroke("purple")
         ctx.line(ctx.mouseX, ctx.mouseY, ctx.pmouseX, ctx.pmouseY)
@@ -4598,8 +4598,8 @@ class Cursor {
         // seriously tho, how do we map the "Center" of the "virtualCanvas" (dashboard)
         // to screenspace and vice versa?
         let worldOriginAttempt2 = {
-            x: (panX + (ctx.innerWidth/2)) * zoom,
-            y: (panY + (ctx.innerHeight/2)) * zoom
+            x: (panX + (ctx.windowWidth/2)) * zoom,
+            y: (panY + (ctx.windowHeight/2)) * zoom
         }
 
         drawCrosshair(ctx, "red", worldOriginInScreenSpace);
@@ -4618,8 +4618,8 @@ class Cursor {
             ctx,
             worldOriginAttempt2.x,
             worldOriginAttempt2.y,
-            ctx.innerWidth/2,
-            ctx.innerHeight/2
+            ctx.windowWidth/2,
+            ctx.windowHeight/2
         )
         
         
@@ -4729,8 +4729,8 @@ class P53DLayer extends Widget {
     widgetSize = { width: 800, height: 800 }
     updateCanvasAttributes(width, height, left, top, transform) {
         if (this.canvas) {
-            this.canvas.style.width = innerWidth + 'px'; // width + 'px';
-            this.canvas.style.height = innerHeight + 'px';
+            this.canvas.style.width = windowWidth + 'px'; // width + 'px';
+            this.canvas.style.height = windowHeight + 'px';
             // this.canvas.style.left = left + 'px';
             // this.canvas.style.top = top + 'px';
             // this.canvas.style.transform = transform;
@@ -4756,8 +4756,8 @@ class P53DLayer extends Widget {
         // }
     
         this.p5jsContext = createGraphics(
-            innerWidth, //this.widgetSize.width, 
-            innerHeight, //this.widgetSize.height
+            windowWidth, //this.widgetSize.width, 
+            windowHeight, //this.widgetSize.height
             mctx.WEBGL
         );
         // Attach the p5.js canvas to the existing canvas element
@@ -4827,8 +4827,8 @@ class P53DLayer extends Widget {
         //context.directionalLight(255, 255, 255, 0.25, 0.25, -1);
     
         // Control rotation with mouse
-        let centerX = window.innerWidth / 2;
-        let centerY = window.innerHeight / 2;
+        let centerX = window.windowWidth / 2;
+        let centerY = window.windowHeight / 2;
         // Translate the context by the smart position and zoom
         // context.translate(centerX, centerY);
         // context.scale(zoom, zoom);
@@ -5269,8 +5269,8 @@ class iFrameWidget extends Widget {
     pinned = false
     
     widgetSize = {
-        width: Math.min(window.innerWidth * 0.2, 800),
-        height: Math.min(window.innerHeight * 0.2, 800)
+        width: Math.min(window.windowWidth * 0.2, 800),
+        height: Math.min(window.windowHeight * 0.2, 800)
     }
     close(){
         super.close(...arguments)
@@ -6290,7 +6290,7 @@ class GherkinRunnerWidget extends Widget {
         this.running = !this.running;
     }
     recalcDimensions(){
-        this.widgetSize.width = Math.max(600, innerWidth - 60);
+        this.widgetSize.width = Math.max(600, windowWidth - 60);
         this.widgetSize.height = 150 + (this.maxHeight ?? 0);
 
     }
@@ -6595,7 +6595,7 @@ document.addEventListener('mousedown', function(event) {
 
     // draw a raycast from the mouse position
     let from = mctx.createVector(mouseX, mouseY);
-    let to = mctx.createVector(innerWidth, innerHeight);
+    let to = mctx.createVector(windowWidth, windowHeight);
     let raycast = new Raycast(from, to);
     console.warn('RAY CAST RESULTS!',{
         raycast,
@@ -6733,7 +6733,7 @@ class LayereredCanvasRenderer {
         for(let i = 0; i < 3; i++){
             let sketch = function(p) {
                 p.setup = function() {
-                    p.createCanvas(innerWidth, innerHeight);
+                    p.createCanvas(windowWidth, windowHeight);
                 }
                 p.draw = function() {
                     // draw all widgets for this depth
@@ -6751,7 +6751,7 @@ class LayereredCanvasRenderer {
                     })
                 }
                 p.onResize = function(){
-                    p.resizeCanvas(innerWidth, innerHeight);
+                    p.resizeCanvas(windowWidth, windowHeight);
                 }
             };
             this.canvases.push(new p5(sketch, `deep-canvas-${i+1}`));
@@ -6811,7 +6811,7 @@ class LayereredCanvasRenderer {
                 // }
             }
             p.onResize = function(){
-                p.resizeCanvas(innerWidth, innerHeight);
+                p.resizeCanvas(windowWidth, windowHeight);
             }
             // Define the mouseDragged function
             p.mouseDragged = function(event){
@@ -6832,14 +6832,14 @@ class LayereredCanvasRenderer {
         };
         this.uiContext = new p5(sketchUI, `deep-canvas-ui`);
         console.warn('uiContext',{uiContext:this.uiContext})
-        this.uiContext.resizeCanvas(innerWidth, innerHeight);
+        this.uiContext.resizeCanvas(windowWidth, windowHeight);
 
         //this.draw()
     }
     onResize(){
         // update the dimensions to match the window (of all 3 canvases)
         this.canvases.forEach((canvas)=>{
-            canvas.resizeCanvas(innerWidth, innerHeight);
+            canvas.resizeCanvas(windowWidth, windowHeight);
         })
     }
     debugShapes = [
@@ -6902,8 +6902,8 @@ class LayereredCanvasRenderer {
         }
 
         // TODO: object define on window for caching
-        let halfWidth = innerWidth/2
-        let halfHeight = innerHeight/2
+        let halfWidth = windowWidth/2
+        let halfHeight = windowHeight/2
 
         canvas.push();
         canvas.translate(mouseShifted.x, mouseShifted.y);
@@ -6983,11 +6983,11 @@ function extractQueryParamsOrDefaults(string){
     }
     // normalize requestedWidth/height to ints, with defaults based on the current window size
     requestedWidth = requestedWidth 
-        ? Math.min(window.innerWidth - 20, parseInt(requestedWidth)) 
-        : window.innerWidth / 2;
+        ? Math.min(window.windowWidth - 20, parseInt(requestedWidth)) 
+        : window.windowWidth / 2;
     requestedHeight = requestedHeight 
-        ? Math.min(window.innerHeight - 20, parseInt(requestedHeight)) 
-        : window.innerHeight / 2;
+        ? Math.min(window.windowHeight - 20, parseInt(requestedHeight)) 
+        : window.windowHeight / 2;
 
     return {requestedWidth,requestedHeight}
 }
@@ -7122,7 +7122,7 @@ class Dashboard {
             w = w - 20 * padding; // Subtract padding from width
             h = h - 20 * padding; // Subtract padding from height
 
-            // let virtualWidth = innerWidth / zoom;
+            // let virtualWidth = windowWidth / zoom;
             // if (currentRowWidth + w + space > virtualWidth) {
             //     prevRowHeight = currentRowMaxHeight;
             //     currentRowIndex++;
@@ -8586,7 +8586,7 @@ class WizardController {
         mctx.push()
         // center
         mctx.translate(
-            mctx.innerWidth / 2 - ((this.config.steps.length / 2) * 10),
+            mctx.windowWidth / 2 - ((this.config.steps.length / 2) * 10),
             30
         )
         let spacing = 30;
@@ -8631,7 +8631,7 @@ class WizardController {
         // render the name of the current command in the top right
         uictx.textAlign(RIGHT,TOP);
         uictx.textStyle(BOLD)
-        uictx.text(`${this.name}`, uictx.innerWidth - 20, 20);
+        uictx.text(`${this.name}`, uictx.windowWidth - 20, 20);
 
         // render the question
         let offsetY = 30;
@@ -11440,8 +11440,8 @@ const InvokableCommands = {
                 console.log("urls",urls)
                 system.registerWidget(new YoutubePlayerWidget({
                     widgetSize:{
-                        width: innerWidth * 0.25,
-                        height: innerWidth * 0.25 * (9 / 16)
+                        width: windowWidth * 0.25,
+                        height: windowWidth * 0.25 * (9 / 16)
                     },
                     autoPlay: true,
                     tracks: typeof urls === 'string' ? [urls] : urls
@@ -12714,7 +12714,7 @@ class CmdPrompt extends Widget {
         // mctx.fill(0);
         // mctx.rectMode(mctx.CENTER);
         // let gridSize = 16; // Change this to 8 or 1 for different bit styles
-        // let baseWidth = mctx.innerWidth * .80
+        // let baseWidth = mctx.windowWidth * .80
         // let baseHeight = mctx.windowHeight * .80
         // let gridWidth = baseWidth / gridSize;
         // let gridHeight = (baseHeight - 130) / gridSize;
@@ -13538,8 +13538,8 @@ class StarField extends FieldOf(Star){
 class StarFieldWidget extends Widget {
     get widgetSize(){
         return {
-            x: innerWidth,
-            y: innerHeight
+            x: windowWidth,
+            y: windowHeight
         }
     }
 
@@ -13759,7 +13759,7 @@ class DebugPath {
         this.stepPruner();
         let ctx = deepCanvasManager.uiContext;
         ctx.push()
-        //ctx.translate(-panX + innerWidth/2, panY + innerHeight/2);
+        //ctx.translate(-panX + windowWidth/2, panY + windowHeight/2);
         //ctx.scale(zoom, zoom);
         let adjustedLineColor = color("red");
         for(let i = 0; i < this.points.length - 1; i++) {
@@ -14713,8 +14713,8 @@ function setupDefaults(){
                 }
 
                 // normalize requestedWidth/height to ints, with defaults based on the current window size
-                requestedWidth = requestedWidth ? Math.min(window.innerWidth - 20, parseInt(requestedWidth)) : window.innerWidth / 2;
-                requestedHeight = requestedHeight ? Math.min(window.innerHeight - 20, parseInt(requestedHeight)) : window.innerHeight / 2;
+                requestedWidth = requestedWidth ? Math.min(window.windowWidth - 20, parseInt(requestedWidth)) : window.windowWidth / 2;
+                requestedHeight = requestedHeight ? Math.min(window.windowHeight - 20, parseInt(requestedHeight)) : window.windowHeight / 2;
 
                 if(tracks.length){
 
@@ -15067,7 +15067,7 @@ function animateVector(from, to, onUpdate, duration = 1000){
 
 let cursor, MainCanvasContextThing = function(p){
     let _onResize = function(){
-        mctx.resizeCanvas(innerWidth, innerHeight);
+        mctx.resizeCanvas(windowWidth, windowHeight);
         // TODO: call resize on DeepCanvasManager
         system.get("Dashboard")?.reflowLayout?.()
     }
@@ -15093,13 +15093,18 @@ let cursor, MainCanvasContextThing = function(p){
             system.PreloadedSVGs[name] = loadImage(name);
         })
         Object.entries(system.PreloadedSounds).forEach(([_,name])=>{
-            system.PreloadedSounds[name] = system.loadSound(name);
+            system.loadSound(name).then((sound)=>{
+                system.PreloadedSounds[name] = sound;
+            }).catch((e)=>{
+                console.warn('bad sound',name)
+                console.error('failed to load sound',e)
+            });
         })
     }
 
     p.setup = function(){
 
-        p.resizeCanvas(mctx.innerWidth,mctx.innerHeight)
+        p.resizeCanvas(mctx.windowWidth,mctx.windowHeight)
 
         window.addEventListener('mouseup', function(event) {
             // if we clicked on or INSIDE of #html-foreground
@@ -15145,7 +15150,7 @@ let cursor, MainCanvasContextThing = function(p){
             it's a spectrum
         */
         whatTheCenterIs = {
-            x: this.innerWidth / 2,
+            x: this.windowWidth / 2,
             y: this.windowHeight / 2,
             z: 0
         }
@@ -15204,8 +15209,8 @@ void main(void) {
 `;
 let topCanvas = document.createElement('canvas');
 topCanvas.id="topCanvas"; // composited canvas, not really TOP as UI is drawn above this even...
-topCanvas.width = window.innerWidth;
-topCanvas.height = window.innerHeight;
+topCanvas.width = window.windowWidth;
+topCanvas.height = window.windowHeight;
 topCanvas.style.position = 'absolute';
 topCanvas.style.pointerEvents = 'none';
 topCanvas.style.top = 0;
@@ -15222,7 +15227,7 @@ document.body.appendChild(topCanvas);
         // spawn a bunch of BlurSprite
         for(var i=0;i<20;i++){
             let sprite = new Sprite();
-            sprite.x = p.random(-p.innerWidth,p.innerWidth);
+            sprite.x = p.random(-p.windowWidth,p.windowWidth);
             sprite.y = p.random(-p.windowHeight,p.windowHeight);
             sprite.z = p.random(-10,10)
             sprite.radius = p.random(1,10)
@@ -15823,8 +15828,8 @@ document.body.appendChild(topCanvas);
             newZoom = zoom;
             // make sure we offset the pan to account for the zoom messing with our center
             // we should be passing _towards_ the mouse 
-            // panX += (mouseX - innerWidth / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
-            // panY += (mouseY - innerHeight / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
+            // panX += (mouseX - windowWidth / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
+            // panY += (mouseY - windowHeight / 2) * zoom * (oldZoom-zoom > 0 ? 1 : -1);// * (oldZoom - zoom);
     
             // Implementing simple nudge based on logic
             // If panX > 0, we're panning right, so we need to nudge left
@@ -16048,7 +16053,7 @@ document.body.appendChild(topCanvas);
         }
         // center our coordinate system
         // mainCanvasContext.push();
-            const halfWidth = p.innerWidth / 2;
+            const halfWidth = p.windowWidth / 2;
             const halfHeight = p.windowHeight / 2;
             mainCanvasContext.translate(halfWidth, halfHeight)
     
@@ -16487,8 +16492,8 @@ class SuggestionList {
                 console.warn('suggestion is null?',{suggestion,i})
                 continue;
             }
-            let suggestionWidth = mctx.innerWidth * .66;
-            let x = ( mctx.innerWidth / 2 ) - (suggestionWidth/2);
+            let suggestionWidth = mctx.windowWidth * .66;
+            let x = ( mctx.windowWidth / 2 ) - (suggestionWidth/2);
             let y = 10 + (i * 50);
             let w = suggestionWidth;
             let h = 50;
