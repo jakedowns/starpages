@@ -3567,74 +3567,90 @@ class WeatherWidget extends Widget {
 class RubiksCubeWidget extends Widget {
     constructor(){
         super(...arguments)
-        this.cube = [
-            Array(9).fill("white"),
-            Array(9).fill("red"),
-            Array(9).fill("blue"),
-            Array(9).fill("orange"),
-            Array(9).fill("green"),
-            Array(9).fill("yellow")
-        ];
-        this.fsm = new StateMachine({
-            init: 'unsolved',
-            moreSMConfigs: {
-                rotationFSM: {
-                    config:{
-                        init: 'origin',
-                        transitions: [
-                            { name: 'rotate', from: 'origin', to: 'quarter' },
-                            { name: 'rotate', from: 'quarter', to: 'half' },
-                            { name: 'rotate', from: 'half', to: 'threeQuarters' },
-                            { name: 'rotate', from: 'threeQuarters', to: 'full' },
-                            { name: 'rotate', from: 'full', to: 'origin', auto: true, instant: true },
-                        ]
-                    }
-                },
-            },
-            transitions: [
-                { name: 'solve',     from: 'unsolved',  to: 'solved' },
-                { name: 'scramble',  from: 'solved',    to: 'unsolved' },
-            ],
-            methods: {
-                init: function(){
-                    this.nestedSMs.rotationFSM = new StateMachine(this.moreSMConfigs['rotationFSM'].config);
-                },
-                onEnterState: function(lifecycle) {
-                    
-                },
-                rotate: function(){
-                    this.rotationFSM.rotate();
+        this.cubeNodes = [];
+        // Generate cubeNodes programmatically
+        const colors = ["red", "orange", "yellow", "green", "blue", "white"];
+        // const faces = ["front", "top", "left", "back", "bottom", "right"];
+        for(let z = -1; z <= 1; z++){
+            for(let y = -1; y <= 1; y++){
+                for(let x = -1; x <= 1; x++){
+                    let node = { x: x, y: y, z: z, faces: {} };
+                    if(x === -1) node.faces["x-"] = colors[3];
+                    if(x === 1) node.faces["x+"] = colors[4];
+                    if(y === -1) node.faces["y-"] = colors[2];
+                    if(y === 1) node.faces["y+"] = colors[5];
+                    if(z === -1) node.faces["z-"] = colors[0];
+                    if(z === 1) node.faces["z+"] = colors[1];
+                    this.cubeNodes.push(node);
                 }
             }
-        });
+        }
+        console.warn('cubeNodes', {cubeNodes:this.cubeNodes})
+        // this.fsm = new StateMachine({
+        //     init: 'unsolved',
+        //     moreSMConfigs: {
+        //         rotationFSM: {
+        //             config:{
+        //                 init: 'origin',
+        //                 transitions: [
+        //                     { name: 'rotate', from: 'origin', to: 'quarter' },
+        //                     { name: 'rotate', from: 'quarter', to: 'half' },
+        //                     { name: 'rotate', from: 'half', to: 'threeQuarters' },
+        //                     { name: 'rotate', from: 'threeQuarters', to: 'full' },
+        //                     { name: 'rotate', from: 'full', to: 'origin', auto: true, instant: true },
+        //                 ]
+        //             }
+        //         },
+        //     },
+        //     transitions: [
+        //         { name: 'solve',     from: 'unsolved',  to: 'solved' },
+        //         { name: 'scramble',  from: 'solved',    to: 'unsolved' },
+        //     ],
+        //     methods: {
+        //         init: function(){
+        //             this.nestedSMs.rotationFSM = new StateMachine(this.moreSMConfigs['rotationFSM'].config);
+        //         },
+        //         onEnterState: function(lifecycle) {
+                    
+        //         },
+        //         rotate: function(){
+        //             this.rotationFSM.rotate();
+        //         }
+        //     }
+        // });
     }
     // update the fsm state when a face is rotated
-    rotateFace(face,numRotations=1){
-        for(let i = 0; i < numRotations; i++){
-            this.fsm.rotate();
-            this.rotationFSM.rotate();
-        }
-    }
+    // rotateFace(face,numRotations=1){
+    //     for(let i = 0; i < numRotations; i++){
+    //         this.fsm.rotate();
+    //         this.rotationFSM.rotate();
+    //     }
+    // }
 
     //TODO
     // draw3D(){
     // }
-    draw(){
-        super.draw(...arguments)
-        push()
+    onDraw(){
+        super.onDraw(...arguments)
+        this.ctx.push()
 
             // draw the cube
-            for(var i = 0; i < 6; i++){
-                for(var j = 0; j < 9; j++){
-                    // get the color of the current square
-                    var color = this.cube[i][j];
-                    // set the fill color of the square
-                    fill(color);
-                    // draw the square
-                    rect(this.smartPosition.x + (j * 50), this.smartPosition.y + (i * 50), 50, 50);
-                }
-            }
-        pop();
+            this.cubeNodes.forEach((node)=>{
+                Object.entries(node.faces).forEach(([x,faceColor])=>{
+                    this.ctx.fill(faceColor);
+                    this.ctx.stroke("black");
+                    this.ctx.strokeWeight(1);
+                    this.ctx.rectMode(CENTER);
+                    this.ctx.rect(
+                        (node.x + 1) * 100,
+                        (node.y + 1) * 100,
+                        100,
+                        100
+                    )
+
+                })
+            })
+        this.ctx.pop();
     }
 }
 class TetrisWidget extends Widget {
@@ -12302,26 +12318,15 @@ class ToastNotification {
         );
         ctx.fill(255, 255, 255, clampedAlpha);
 
-
-        /**
-         * @see drawStringWordWrapped
-         * @param {string} str
-         * @param {number} x
-         * @param {number} y
-         * @param {number} w
-         * @param {number} lineHeight
-         * @param {p5.Graphics} ctx
-         */
-        //ctx.push();
+        // string, x, y, lineHeight, fitWidth, ctx
         drawStringWordWrapped(
             this.message,
-            windowWidth - tBoxW,
+            windowWidth - tBoxW + 10,
             20,
-            tBoxW,
-            20, // line height
+            40, // line height
+            tBoxW - 20,
             ctx
         )
-        //ctx.pop();
 
         // darken by the lowest index so shadow effect
         // let shadowEffect = map(index, 0, this.options.important ? this.targetCloneCount : 1, 0, 50);
@@ -12699,11 +12704,12 @@ class CmdPrompt extends Widget {
     afterSetup(){
         // TODO: draw the command prompt instead of using html el
         CmdPromptInput = mctx.createInput('');
-        CmdPromptInput.parent('html-foreground');
+        CmdPromptInput.parent(document.body);
         CmdPromptInput.elt.style.backgroundColor = 'transparent';
         CmdPromptInput.elt.style.color = 'white';
         CmdPromptInput.elt.style.zIndex = 9999;
         CmdPromptInput.elt.id = 'cmdprompt-input';
+        //CmdPromptInput.class('z-index-9999');
         //CmdPromptInput.elt.style.filter = 'blur(10px)';
 
         CmdPromptInput.style('border', 'none');
@@ -16502,6 +16508,12 @@ function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
             line = testLine;
         }
     }
+
+    // console.warn("drawStringWordWrapped",{
+    //     input: string,
+    //     x, y, lineHeight, fitWidth, ctx,
+    //     line_count: lines.length
+    // })
 
     lines.push({ text: line.trim(), x: x, y: y + yLineOffset });
 
