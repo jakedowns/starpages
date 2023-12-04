@@ -3859,13 +3859,13 @@ class TetrisWidget extends Widget {
 }
 class GridOfThingsWidget extends Widget {
     pixelDensity = 4;
-    widgetSize = { width: 1000, height: 500 }
+    widgetSize = { width: 2000, height: 200 }
     constructor(){
         super(...arguments)
         this.cacheTheGrid();
     }
     cacheTheGrid(){
-        rectMode(CENTER);
+        rectMode(CORNER);
             
         this.pixelScaledSize = {
             width: this.pixelDensity * this.widgetSize.width,
@@ -3875,14 +3875,14 @@ class GridOfThingsWidget extends Widget {
         this.cachedBitmap = createGraphics(
             this.pixelDensity * this.widgetSize.width, 
             this.pixelDensity * this.widgetSize.height);
-        this.cachedBitmap.rectMode(CENTER);
+        this.cachedBitmap.rectMode(CORNER);
         
         // Define the size of each square
         let squareSize = 20 * this.pixelDensity;
         // Define the number of squares per row
-        let squaresPerRow = 50;
+        let squaresPerRow = 100;
         // Define the number of rows
-        let rows = Math.ceil(500 / squaresPerRow);
+        let rows = Math.ceil(1000 / squaresPerRow);
         // Define the starting position
         let startX = (this.cachedBitmap.width - squaresPerRow * squareSize) / 2;
         let startY = (this.cachedBitmap.height - rows * squareSize) / 2;
@@ -3917,9 +3917,66 @@ class GridOfThingsWidget extends Widget {
     }
     onDraw(){
         super.onDraw(...arguments)
+
+        // show that we can randomly update a sub-rect of the cached bitmap
+        // to prove we could implement real-time drag and drop effects that make the bitmap appear to be a live canvas
+        let hue = (sin(frameCount * 0.01) * 127.5) + 127.5;
+        let saturation = (cos(frameCount * 0.01) * 127.5) + 127.5;
+        let squareSize = 20 * this.pixelDensity;
+        let squaresPerRow = 100;
+        let rows = Math.ceil(1000 / squaresPerRow);
+        let frame = frameCount % (squaresPerRow * rows);
+        let i = Math.floor(frame / squaresPerRow);
+        let j = frame % squaresPerRow;
+        let startX = (this.cachedBitmap.width - squaresPerRow * squareSize) / 2;
+        let startY = (this.cachedBitmap.height - rows * squareSize) / 2;
+        this.cachedBitmap.stroke(hue, saturation, 255);
+        this.cachedBitmap.noFill()
+        this.cachedBitmap.strokeWeight(3)
+        this.cachedBitmap.rect(
+            startX + j * squareSize,
+            startY + i * squareSize, 
+            squareSize,
+            squareSize
+        )
         
         // draw the cached bitmap
         this.ctx.image(this.cachedBitmap, 0, 0, this.widgetSize.width, this.widgetSize.height);   
+
+        // draw 20px cropped view of the cached bitmap
+        let scale = 2;
+        let destWidth = 20 * scale;
+        let destHeight = 20 * scale;
+        let destX = (this.widgetSize.width - destWidth) / 2;
+        let destY = (this.widgetSize.height - destHeight) / 2;
+        let circleRadius = 50;
+        let circleX = this.widgetSize.width / 2 + circleRadius * Math.cos(frameCount * 0.01);
+        let circleY = this.widgetSize.height / 2 + circleRadius * Math.sin(frameCount * 0.01);
+        this.ctx.image(
+            this.cachedBitmap,
+            0, 0, 20*scale, 20*scale,
+            circleX, circleY, destWidth, destHeight
+        );
+
+        // now draw a green circle to prove we know where the mouse is relative to our grid
+        // make the cursor snap to the grid cell's origin to prove we know which division we're in
+        // let squareSize = 20 * this.pixelDensity;
+        // let squaresPerRow = 50;
+        // let rows = Math.ceil(500 / squaresPerRow);
+        // let startX = (this.cachedBitmap.width - squaresPerRow * squareSize) / 2;
+        // let startY = (this.cachedBitmap.height - rows * squareSize) / 2;
+        let mouseX = Math.floor((this.ctx.mouseX) * zoom - panX - startX);
+        let mouseY = Math.floor((this.ctx.mouseY) * zoom - panY - startY);
+        let snappedMouseX = mouseX - (mouseX % squareSize);
+        let snappedMouseY = mouseY - (mouseY % squareSize);
+        this.ctx.push();
+        this.ctx.noStroke();
+        this.ctx.fill("green");
+        this.ctx.circle(
+            snappedMouseX + startX,
+            snappedMouseY + startY,
+            10 * this.pixelDensity
+        )
     }
 }
 class CalendarWidget extends Widget {
@@ -14713,7 +14770,7 @@ function renderDebugUI(){
         // todo: zoom momentum / z-momentum
         { text: `panMomentumVector: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
         { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
-        { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
+        // { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
         { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` },
 
         {
@@ -14727,14 +14784,17 @@ function renderDebugUI(){
         { text: `deepRendererEnabled? ${!store.disableDeepCanvas}`}
     ];
 
-    let baseOffset = 20;
+    ctx.textSize(30);
+    let baseOffset = ctx.textSize();
     let offset = 60;
     debugTexts.forEach((debugText) => {
         ctx.fill("red");
         ctx.stroke("black");
         ctx.strokeWeight(3);
-        ctx.textSize(30);
-        ctx.text(debugText.text, windowWidth - ctx.textSize(), windowHeight - ctx.textSize()*2);
+        ctx.text(
+            debugText.text, 
+            windowWidth - ctx.textSize(), 
+            windowHeight - offset);
         offset += baseOffset;
     });
 
