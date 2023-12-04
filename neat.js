@@ -961,12 +961,12 @@ class System {
     
         if(
             uri?.includes?.("youtube.com")
-            || uri?.includes?.("youtu.be")
+            // || uri?.includes?.("youtu.be")
         ){
             let updatedUrl = uri;
             try {
                 let url = new URL(updatedUrl);
-                url.searchParams.set('autoplay', '1');
+                // url.searchParams.set('autoplay', '1');
                 updatedUrl = url.toString();
             } catch (error) {
                 console.error('Invalid URL:', updatedUrl);
@@ -2694,23 +2694,11 @@ class Widget extends UndoRedoComponent {
             this.onUpdate();
         }
 
-        // handle global translation / scale
-        this.enterDrawingContext();
-        // TODO: doNotDraw isn't reliable yet
-        // need to finish view frustum culling
-        //if(this?.onDraw & !this.doNotDraw){
-            // call extending method
-            if(this?.onDraw){//} && !this.doNotDraw){
-                this?.onDraw?.call(this);
-            }else{
-                //console.warn('skipping draw')
-            }
-        //}
-        this.endDrawingContext();
+        
 
         
-        let ctx = this.ctx;
         this.enterDrawingContext();
+        let ctx = this.ctx;
         ctx.rectMode(CORNER);
         ctx.strokeWeight(1)
         ctx.stroke("darkblue")
@@ -2721,6 +2709,7 @@ class Widget extends UndoRedoComponent {
             this.widgetSize.height,
             20 // this is the radius for the rounded corners
         )
+        // pop
         this.endDrawingContext();
 
         /*
@@ -2733,8 +2722,13 @@ class Widget extends UndoRedoComponent {
         let deepTopPXBound = panY * zoom;
         let deepBottomPXBound = (panY - windowHeight) * zoom;
         
-        let isWithinXBounds = this.smartPosition.x + this.widgetSize.width > deepLeftPXBound && this.smartPosition.x < deepRightPXBound;
-        let isWithinYBounds = this.smartPosition.y + this.widgetSize.height > deepTopPXBound && this.smartPosition.y < deepBottomPXBound;
+        let isWithinXBounds = this.smartPosition.x 
+            + this.widgetSize.width > deepLeftPXBound 
+            && this.smartPosition.x < deepRightPXBound;
+        
+        let isWithinYBounds = this.smartPosition.y 
+            + this.widgetSize.height > deepTopPXBound 
+            && this.smartPosition.y < deepBottomPXBound;
 
         // drawDashedRect(
         //     3, "chartreuse",
@@ -2765,9 +2759,10 @@ class Widget extends UndoRedoComponent {
 
         // toggle show widget debug info
         if(store.showWidgetPositions){
-            // this.ctx.push()
+            this.enterDrawingContext();
             this.ctx.fill("red")
             this.ctx.text(`
+            name: ${this.constructor.name}
             x:${
                 this.basePosition.x.toFixed(2)
             } y:${
@@ -2782,12 +2777,11 @@ class Widget extends UndoRedoComponent {
                 this.zDepth.toFixed(2)
             }`,
 
-
-
+                0,0
                 //this.smartPosition.x,
                 //this.smartPosition.y
             );
-            // this.ctx.pop()
+            this.endDrawingContext()
         }
 
         // canvasContext.strokeWeight(1)
@@ -2862,6 +2856,22 @@ class Widget extends UndoRedoComponent {
         // canvasContext.rect(scaledX, scaledY, scaledWidth, scaledHeight);
 
         // canvasContext.pop()
+
+        // handle global translation / scale
+        this.enterDrawingContext();
+        // TODO: doNotDraw isn't reliable yet
+        // need to finish view frustum culling
+        //if(this?.onDraw & !this.doNotDraw){
+            // call extending method
+            if(this?.onDraw){//} && !this.doNotDraw){
+                this?.onDraw?.call(this);
+            }else{
+                //console.warn('skipping draw')
+            }
+        //}
+
+        // pop
+        this.endDrawingContext();
     }
     onDraw(){
         // override me
@@ -2909,6 +2919,14 @@ class OscilloscopeWidget extends Widget {
     }
     onDraw(){
         super.onDraw(...arguments);
+
+        if(!this.ctx.drawImage){
+            // TODO TODO TODO
+            // console.warn('no drawImage?!?!',this);
+            // debugger;
+            //super.endDraw();
+            return;
+        }
 
         // draw the gridImage
         this.ctx.drawImage(this.gridImage, 0, 0);
@@ -3147,8 +3165,8 @@ class FlashCardWidget extends Widget {
             this.score--;
         }
     }
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
         this.remainingCardIDs.forEach((cardID)=>{
             this.cards[cardID].draw();
         })
@@ -3288,9 +3306,9 @@ class VideoPlayerWidget extends Widget {
         this.video.elt.setAttribute("autoplay", true);
         this.video.elt.setAttribute("controls", true);
     }
-    draw(){
+    onDraw(){
         // try{
-            super.draw(...arguments)
+            super.onDraw(...arguments)
         // }catch(e){
         //     if(e.type === "DoNotDraw"){
         //         // bail the draw call
@@ -3334,27 +3352,27 @@ class MessengerWidget extends Widget {
         super(...arguments);
     }
 
-    draw(){
-        super.draw(...arguments)
-        mctx.push()
+    onDraw(){
+        super.onDraw(...arguments)
+        // mctx.push()
         mctx.rectMode(CENTER);
         mctx.fill("lightblue")
         mctx.rect(
-                this.smartPosition.x + this.widgetSize.width / 2,
-                this.smartPosition.y + this.widgetSize.height / 2,
-                this.widgetSize.width,
-                this.widgetSize.height,
-                20 // this is the radius for the rounded corners
-            );
-            mctx.fill("black")
-            let tpx = this.smartPosition.x + this.widgetSize.width / 2;
-            let tpy = this.smartPosition.y + this.widgetSize.height / 2;
-            let tsx = this.widgetSize.width;
-            let tsy = this.widgetSize.height;
-            mctx.textSize(20)
-            mctx.textAlign(CENTER, CENTER)
-            mctx.text("Messenger!", tpx,tpy,tsx,tsy)
-        mctx.pop()
+            this.widgetSize.width / 2,
+            this.widgetSize.height / 2,
+            this.widgetSize.width,
+            this.widgetSize.height,
+            20 // this is the radius for the rounded corners
+        );
+        mctx.fill("black")
+        let tpx = this.widgetSize.width / 2;
+        let tpy = this.widgetSize.height / 2;
+        let tsx = this.widgetSize.width;
+        let tsy = this.widgetSize.height;
+        mctx.textSize(20)
+        mctx.textAlign(CENTER, CENTER)
+        mctx.text("Messenger!", tpx,tpy,tsx,tsy)
+        // mctx.pop()
     }
 }
 
@@ -3527,9 +3545,8 @@ class WeatherWidget extends Widget {
         });                    
     }
 
-
-    // we already have constructor.name...
-    draw(){
+    onDraw(){
+        super.onDraw()
         // render the current temp in degrees F and list the forecast
         this.weatherData.get("current", (current)=>{
             push()
@@ -3564,7 +3581,98 @@ class WeatherWidget extends Widget {
         });
     }
 }
+
+class Cube {
+    constructor(x, y, z, size) {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+      this.size = size;
+      this.colors = [color(0, 255, 0), color(255, 0, 0), color(0, 0, 255), color(255, 255, 0), color(255, 165, 0), color(255)];
+    }
+  
+    display() {
+      for (let i = 0; i < 6; i++) {
+        ctxP53D.push();
+        ctxP53D.fill(this.colors[i]);
+        if (i === 0) ctxP53D.translate(0, 0, this.size / 2); // front
+        if (i === 1) ctxP53D.translate(0, 0, -this.size / 2); // back
+        if (i === 2) ctxP53D.translate(0, this.size / 2, 0); // top
+        if (i === 3) ctxP53D.translate(0, -this.size / 2, 0); // bottom
+        if (i === 4) ctxP53D.translate(this.size / 2, 0, 0); // right
+        if (i === 5) ctxP53D.translate(-this.size / 2, 0, 0); // left
+        if (i === 0 || i === 1) ctxP53D.box(this.size, this.size, 1);
+        if (i === 2 || i === 3) ctxP53D.box(this.size, 1, this.size);
+        if (i === 4 || i === 5) ctxP53D.box(1, this.size, this.size);
+        ctxP53D.pop();
+      }
+    }
+}
+
+let ctxP53D;
+
+class WidgetGL extends Widget {
+    constructor(){
+        super(...arguments)
+        // this.ctx = ctxP53D;
+    }
+    // // for now, until we allow arbitrary layer types
+    // getCurrentContext(){
+    //     return ctxP53D;
+    // }
+}
+
+class RubiksCubeGL extends WidgetGL {
+    angle = 0;
+    cubes = []
+    cameraPos = {
+        x: 0,
+        y: 0,
+        z: 0
+    }
+    constructor(){
+        super(...arguments)
+        for (let x = -1; x <= 1; x++) {
+            for (let y = -1; y <= 1; y++) {
+                for (let z = -1; z <= 1; z++) {
+                    this.cubes.push(new Cube(x * 50, y * 50, z * 50, 45));
+                }
+            }
+        }
+        ctxP53D.camera(...["x","y","z"].map(v => this.cameraPos[v]));
+        let fovy = PI/3.0;
+        let aspect = windowWidth/windowHeight;
+        let near = 0.1;
+        let far = 10000;
+        ctxP53D.perspective(fovy, aspect, near, far)
+        // ctxP53D.ortho(left, right, bottom, top, near, far)
+        window.rcgl = this;
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+        ctxP53D.background(0);
+        ctxP53D.rotateX(-QUARTER_PI/128);
+        ctxP53D.rotateY(QUARTER_PI/128);
+        this.angle += 0.001;
+
+        ctxP53D.camera(this.cameraPos.x, this.cameraPos.y, this.cameraPos.z)
+
+        for (let i = 0; i < this.cubes.length; i++) {
+            ctxP53D.push();
+            ctxP53D.translate(this.cubes[i].x, this.cubes[i].y, this.cubes[i].z);
+            ctxP53D.rotateX(this.angle);
+            ctxP53D.rotateY(this.angle);
+            this.cubes[i].display();
+            ctxP53D.pop();
+        }
+    }
+}
+
 class RubiksCubeWidget extends Widget {
+    widgetSize = {
+        width: 600,
+        height: 600
+    }
     constructor(){
         super(...arguments)
         this.cubeNodes = [];
@@ -3581,6 +3689,31 @@ class RubiksCubeWidget extends Widget {
                     if(y === 1) node.faces["y+"] = colors[5];
                     if(z === -1) node.faces["z-"] = colors[0];
                     if(z === 1) node.faces["z+"] = colors[1];
+                    node.rotate = (direction)=>{
+                        // rotate the node
+                        // get all the related nodes in the same plane
+                        // rotate them 90 degrees in the desired direction
+                        // 1:clockwise -1:counter-clockwise
+                        let relatedNodes = this.cubeNodes.filter(n => n.x === node.x || n.y === node.y || n.z === node.z);
+                        relatedNodes.forEach(n => {
+                            let temp = {...n.faces};
+                            if(direction === 1) {
+                                n.faces["x+"] = temp["z+"];
+                                n.faces["z+"] = temp["x-"];
+                                n.faces["x-"] = temp["z-"];
+                                n.faces["z-"] = temp["x+"];
+                                n.faces["y+"] = temp["y+"];
+                                n.faces["y-"] = temp["y-"];
+                            } else {
+                                n.faces["x+"] = temp["z-"];
+                                n.faces["z+"] = temp["x+"];
+                                n.faces["x-"] = temp["z+"];
+                                n.faces["z-"] = temp["x-"];
+                                n.faces["y+"] = temp["y+"];
+                                n.faces["y-"] = temp["y-"];
+                            }
+                        });
+                    }
                     this.cubeNodes.push(node);
                 }
             }
@@ -3618,6 +3751,29 @@ class RubiksCubeWidget extends Widget {
         //         }
         //     }
         // });
+
+        // setInterval(()=>{
+        //     // pick a random face
+        //     let face = this.cubeNodes[Math.floor(Math.random() * this.cubeNodes.length)];
+        //     // pick a random rotation direction
+        //     let direction = Math.random() > 0.5 ? 1 : -1;
+        //     // rotate the face
+        //     this.rotateFace(face, direction);
+        // },1000)
+    }
+    rotateFace(face, direction){
+        // foreach z, foreach y, foreach x (the order we pushed into cubeNodes)
+        // if the node is on the face, rotate it
+        this.cubeNodes.forEach((node)=>{
+            if(
+                node.x === face.x 
+                && node.y === face.y 
+                && node.z === face.z
+            ){
+                // rotate the node
+                node.rotate(direction);
+            }
+        })
     }
     // update the fsm state when a face is rotated
     // rotateFace(face,numRotations=1){
@@ -3630,42 +3786,81 @@ class RubiksCubeWidget extends Widget {
     //TODO
     // draw3D(){
     // }
+
+
+
     onDraw(){
         super.onDraw(...arguments)
-        this.ctx.push()
 
-            // draw the cube
-            this.cubeNodes.forEach((node)=>{
-                Object.entries(node.faces).forEach(([x,faceColor])=>{
-                    this.ctx.fill(faceColor);
-                    this.ctx.stroke("black");
-                    this.ctx.strokeWeight(1);
-                    this.ctx.rectMode(CENTER);
-                    this.ctx.rect(
-                        (node.x + 1) * 100,
-                        (node.y + 1) * 100,
-                        100,
-                        100
-                    )
+        // Arguments are: scaleX, skewY, skewX, scaleY, translateX, translateY
+        // this.ctx.drawingContext.rotate(-mctx.PI / 4.0 * mctx.sin(mctx.frameCount / 100.0));
+        this.ctx.drawingContext.transform(0.866, -0.5, 0.5, 1, 0, 0);
 
-                })
+        // draw the cube
+        let layerNode = 0;
+        this.cubeNodes.forEach((node)=>{
+            Object.entries(node.faces).forEach(([faceOffset,faceColor])=>{
+                // faceOffset = "x-" | "x+" | "y-" | "y+" | "z-" | "z+"
+                // this.ctx.fill("black");
+                // this.ctx.rect(
+                //     (node.x + 1) * 100 + (node.z * 100),
+                //     (node.y + 1) * 100 + (node.z * 100),
+                //     100,
+                //     100,
+                //     0
+                // )
+                if(!faceColor){
+                    return;
+                }
+                this.ctx.fill(faceColor);
+                this.ctx.stroke("black");
+                // this.ctx.strokeWeight(3);
+                // this.ctx.rectMode(CENTER);
+                // this.ctx.rect(
+                //     (node.x + 1) * 100 + (node.z * 100),
+                //     (node.y + 1) * 100 + (node.z * 100),
+                //     100,
+                //     100,
+                //     30
+                // )
+
+                let offset = {x:0, y:0, z:0};
+                if(faceOffset === "x-") offset.x = -50;
+                else if(faceOffset === "x+") offset.x = 50;
+                else if(faceOffset === "y-") offset.y = -50;
+                else if(faceOffset === "y+") offset.y = 50;
+                else if(faceOffset === "z-") offset.z = -50;
+                else if(faceOffset === "z+") offset.z = 50;
+
+                this.ctx.drawingContext.save();
+                this.ctx.rotate(radians(-45));
+                this.ctx.drawingContext.transform(0.866, -0.5, 0.5, 1, 0, 0);
+                this.ctx.rect(
+                    (node.x * 50) + offset.x + ((node.z * 50) + offset.z),
+                    (node.y * 50) + offset.y - ((node.z * 50) + offset.z),
+                    50,
+                    50,
+                    5
+                )
+                this.ctx.drawingContext.restore();
+
             })
-        this.ctx.pop();
+        })
     }
 }
 class TetrisWidget extends Widget {
     widgetSize = { width: 300, height: 600 }
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
         fill("red")
-        text("TETRIS!!!", this.smartPosition.x, this.smartPosition.y)
+        text("TETRIS!!!", 0, 0)
     }
 }
 class CalendarWidget extends Widget {
     widgetSize = { width: 400, height: 300 }
-    draw(){
-        super.draw(...arguments)
-        push()
+    onDraw(){
+        super.onDraw(...arguments)
+        
             rectMode(CENTER);
             fill("darkpurple")
             stroke("green")
@@ -3677,15 +3872,15 @@ class CalendarWidget extends Widget {
             // Define the number of rows
             let rows = Math.ceil(31 / squaresPerRow);
             // Define the starting position
-            let startX = this.smartPosition.x + (this.widgetSize.width - squaresPerRow * squareSize) / 2;
-            let startY = this.smartPosition.y + (this.widgetSize.height - rows * squareSize) / 2;
+            let startX = (this.widgetSize.width - squaresPerRow * squareSize) / 2;
+            let startY = (this.widgetSize.height - rows * squareSize) / 2;
             // Draw the grid
             for(let i = 0; i < rows; i++) {
                 for(let j = 0; j < squaresPerRow; j++) {
                     rect(startX + j * squareSize, startY + i * squareSize, squareSize, squareSize);
                 }
             }
-        pop()
+        
     }
 }
 
@@ -3798,7 +3993,6 @@ class MoonPhaseWidget extends Widget {
         //     return;
         // }
 
-        // super.draw(...arguments)
         // draw the moon phase
         // let ctx = this.getCurrentContext();
         // ctx.push()
@@ -4175,19 +4369,21 @@ class ClientResolverDebugWidget extends Widget {
         width: 300,
         height: 600
     }
+    value = "loading..."
     constructor(){
         super(...arguments)
         this.resolver = new ClientResolver();
         // access the value to force it's background resolution
-        this.resolver.valuePromise.then((value)=>{
-            console.warn('value resolved!',value)
+        this.resolver.getValuePromise().then((value)=>{
+            console.warn('ClientResolverDebugWidget: value resolved!',value)
+            this.value = value;
         })
     }
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
         fill("yellow")
         // render just the ip for now
-        text("Client Resolver: \n"+this.resolver.instantValue, this.smartPosition.x + 10, this.smartPosition.y + 10)
+        text("Client Resolver: \n"+this.value, 10, 10)
     }
 }
 
@@ -4312,8 +4508,8 @@ class UIDemoWidget extends Widget {
         }
         this.drawIndex++;
     }
-    draw(){
-        super.draw();
+    onDraw(){
+        super.onDraw();
 
         this.drawIndex = 0;
         this.componentTree.forEach((component)=>{
@@ -5849,6 +6045,111 @@ class PomodoroWidget extends Widget {
     }
 }
 
+// /:-/
+class D3Widget extends Widget {
+}
+
+// we're not re-inventing the wheel,
+// we're just referencing the wheel in a new way
+// d3 compatible data / options
+
+class PieChart extends Widget {
+    name = "Pie Chart"
+    widgetSize = { width: 300, height: 300 }
+    data = [
+        { label: "Thing A 10/30", value: 10 },
+        { label: "Thing B 20/30", value: 20 },
+    ]
+    totalValue = 100
+    arcStart = 0;
+    arcRadius = 50;
+    constructor(){
+        super(...arguments)
+        this.totalValue = this.data.reduce((acc, cur) => acc + cur.value, 0);
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+
+        // draw an arc filled based on relative data contributions to the total
+        
+        
+        for(let i = 0; i < this.data.length; i++){
+            let arc = this.data[i];
+            let arcSize = arc.value / this.totalValue;
+            let arcEnd = this.arcStart + arcSize * TWO_PI;
+            let arcMid = this.arcStart + ((arcEnd - this.arcStart) / 2);
+            
+            let arcX = this.smartPosition.x + (this.widgetSize.width / 2);
+            let arcY = this.smartPosition.y + (this.widgetSize.height / 2);
+            // this.ctx.push()
+            this.ctx.fill("red");
+            drawShape('arc',{arcX, arcY, arcRadius:this.arcRadius, arcStart:this.arcStart, arcEnd}, this.ctx);
+            // this.ctx.pop();
+
+            this.ctx.fill("white", 0, 0);
+            this.ctx.text("Pie Chart", 0, 0)
+
+            // draw a label for each arc
+            let labelX = arcX + this.arcRadius * Math.cos(arcMid);
+            let labelY = arcY + this.arcRadius * Math.sin(arcMid);
+            this.ctx.text(arc.label, labelX, labelY);
+
+            // update arcStart for the next arc
+            this.arcStart = arcEnd;
+        }
+    }
+    
+}
+
+class DonutChart extends PieChart{
+    widgetSize = { width: 300, height: 300 }
+    data = [
+        { label: "Thing A 10/30", value: 10 },
+        { label: "Thing B 20/30", value: 20 },
+    ]
+    onDraw()
+    {
+        super.onDraw(...arguments)
+        let innerRadius = 20;
+        for(let i = 0; i < this.data.length; i++){
+            let arc = this.data[i];
+            let arcSize = arc.value / this.totalValue;
+            let arcEnd = this.arcStart + arcSize * TWO_PI;
+            let arcMid = this.arcStart + ((arcEnd - this.arcStart) / 2);
+            let arcX = this.smartPosition.x + (this.widgetSize.width / 2);
+            let arcY = this.smartPosition.y + (this.widgetSize.height / 2);
+            // this.ctx.push()
+            this.ctx.fill("red");
+            drawShape('arc', {x: arcX, y: arcY, radius: this.arcRadius, startAngle: this.arcStart, endAngle: arcEnd}, this.ctx);
+            this.ctx.fill("white");
+            drawShape('arc', {x: arcX, y: arcY, radius: innerRadius, startAngle: this.arcStart, endAngle: arcEnd}, this.ctx);
+            // this.ctx.pop();
+
+            this.ctx.text("Donut Chart", 0, 0)
+
+            // draw a label for each arc
+            let labelX = arcX + this.arcRadius * Math.cos(arcMid);
+            let labelY = arcY + this.arcRadius * Math.sin(arcMid);
+            this.ctx.text(arc.label, labelX, labelY);
+
+            // update this.arcStart for the next arc
+            this.arcStart = arcEnd;
+        }
+    }
+}
+
+class Sparkline extends Widget {
+    onDraw()
+    {
+        super.onDraw(...arguments)
+        this.ctx.fill("yellow")
+        this.ctx.triangle(
+            0, 0,
+            0, this.widgetSize.height,
+            this.widgetSize.width, this.widgetSize.height
+        )
+    }
+}
 
 class BlockBreaker extends Widget {
 
@@ -6471,7 +6772,7 @@ class GherkinRunnerWidget extends Widget {
                 x -= 20
             })
             // de-indent back to the left
-            x = this.smartPosition.x + 20;
+            x = 20;
         })
     }
 }
@@ -7324,8 +7625,8 @@ class Dashboard {
                 return;
             }
             let scaledTarget = {
-                x: this.layout[widgetID].x * zoom,
-                y: this.layout[widgetID].y * zoom,
+                x: this.layout[widgetID].x, // * zoom,
+                y: this.layout[widgetID].y  //* zoom,
             }
             // aka widget.draw()
             this.widgets[widgetID]
@@ -7367,6 +7668,7 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    showDebugCursor: 0,
     windowHasFocus: true,
     disableDeepCanvas: 0,
     deepCanvasBlurLevel: 10, // in px for now: make relative
@@ -8265,8 +8567,6 @@ class KeyboardWidget extends Widget {
         const keySize = 30;
         const keyLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Z', 'X', 'C', 'V', 'B', 'N', 'M'];
         let keyIndex = 0;
-        ctx.push()
-        ctx.translate(this.smartPosition.x,this.smartPosition.y)
         for(let i = 0; i < 4; i++){
             for(let j = 0; j < 10; j++){
                 const x = (j + 1) * (keySize + padding);
@@ -8294,7 +8594,6 @@ class KeyboardWidget extends Widget {
                 ctx.pop()
             }
         }
-        //ctx.pop()
 
         // Check if the status is failing to update to green
         if(
@@ -8307,7 +8606,6 @@ class KeyboardWidget extends Widget {
         }
 
         ctx.text("Computer Keyboard Preview",0,0)
-        ctx.pop();
     }
 }
 
@@ -9616,12 +9914,13 @@ class ScrollableWidget extends Widget {
     scrollBarWidth = 10
     minScrollBarSize = 10
 
-    draw(){
+    onDraw(){
+        super.onDraw(...arguments)
         // draw the scrollable viewport
         stroke(0); strokeWidth(1); fill(0,0)
         rect(
-            this.smartPosition.x + this.scrollViewportDims.padding,
-            this.smartPosition.y + this.scrollViewportDims.padding,
+            this.scrollViewportDims.padding,
+            this.scrollViewportDims.padding,
             this.widgetSize.width - this.scrollViewportDims.padding * 2,
             this.widgetSize.height - this.scrollViewportDims.padding * 2
         )
@@ -9629,8 +9928,8 @@ class ScrollableWidget extends Widget {
         // vertical
         stroke(0); strokeWidth(1); fill(0,0)
         rect(
-            this.smartPosition.x + this.widgetSize.width - 3 - this.scrollBarWidth,
-            this.smartPosition.y + this.scrollViewportDims.padding,
+            this.widgetSize.width - 3 - this.scrollBarWidth,
+            this.scrollViewportDims.padding,
             this.scrollBarWidth,
             Math.max(
                 this.minScrollBarSize, 
@@ -9652,8 +9951,8 @@ class ConsoleWidget extends ScrollableWidget {
         this.messages.push(message);
     }
 
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
 
         textAlign(LEFT, TOP);
         text("Console Message Length : "+this.messages.length, 10, 10);
@@ -9677,6 +9976,10 @@ class AIWidget extends Widget {
     }
     fromJSON(json){
         return new this.constructor(json.keyname, json);
+    }
+    onDraw(){
+        super.onDraw()
+        text("AI Widget: "+this.preamble, 10, 10);
     }
 }
 
@@ -10494,6 +10797,9 @@ class Timer {
     completedAt = null
     ticker = null
     finalDuration = null;
+    get duration(){
+        return this.durationSec
+    }
     get durationSec(){
         return this.options?.durationSec ?? 0
     }
@@ -10505,6 +10811,12 @@ class Timer {
             durationSec: 60
         }
         this.start()
+    }
+    get timeElapsed(){
+        return this.elapsedSec
+    }
+    get timeRemaining(){
+        return this.remainingSec
     }
     get timeElapsedFormatted(){
         return `${this.elapsedSec} / ${this.durationSec}`
@@ -10596,6 +10908,18 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new oscilloscope"](){
+        system.registerWidget(new OscilloscopeWidget());
+    },
+    ["new pie chart"](){
+        system.registerWidget(new PieChart())
+    },
+    ["new donut chart"](){
+        system.registerWidget(new DonutChart())
+    },
+    ["new spark line"](){
+        system.registerWidget(new Sparkline())
+    },
     ["new moon phase widget"](){
         system.registerWidget(new MoonPhaseWidget())
     },
@@ -10658,13 +10982,13 @@ const InvokableCommands = {
         system.todo("!!! NotYetImplemented !!!")
     },
     ["toggle debug cursor"](){
-
+        store.showDebugCursor = !store.showDebugCursor;
     },
     // 
     ["toggle debug widget info"](){
         store.showWidgetPositions = !store.showWidgetPositions;
     },
-    //
+    // alias
     ["toggle widget debug info"](){
         InvokableCommands["toggle debug widget info"]();
     },
@@ -11142,8 +11466,15 @@ const InvokableCommands = {
     ["new browser bubble"](){
         InvokableCommands["new iframe widget"]()
     },
-    ["new mind map"](){},
-    ["new todo"](){},
+    ["new mind map"](){
+        alert('TODO!')
+    },
+    ["new todo"](){
+        alert('TODO! get current most recent focused todo list, or create a new one, and add the item')
+    },
+    ["open calendar"](){
+        system.registerWidgetInstance(new CalendarWidget())
+    },
     ["new timer"](){
         system.registerWidgetInstance(new TimerWidget())
     },
@@ -11542,6 +11873,10 @@ const InvokableCommands = {
         //     "{?go} home: Optionally go to the home position"
         // ]
     //],
+    ["new rubiks cube widget GL"](){
+        system.registerWidget(new RubiksCubeWidgetGL());
+        new HideCmdPromptCommand().execute();
+    },
     ["new rubiks cube widget"](){
         system.registerWidget(new RubiksCubeWidget());
         new HideCmdPromptCommand().execute();
@@ -11626,8 +11961,8 @@ const BasicBools = [
 ]
 class Solitaire {}
 class Gizmo extends Widget {
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
         console.warn('todo draw'+this.constructor.name)
     }
 }
@@ -11676,8 +12011,8 @@ class FractalTreeGraphViewerWidget extends Widget {}
 // NEW: VISUAL CLIPBOARD! 
 // SHOW WHEN THINGS ARE CUT/COPIED
 class Clipping extends Widget {
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
         // draw the clippings
         fill("pink")
         rect(0,0,100,100)
@@ -11714,8 +12049,8 @@ class IsometricPreview extends Widget {
         [0.5, 0.5, -0.5],    // 1, 1, 0
         [0.5, 0.5, 0.5]      // 1, 1, 1
     ];
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
 
         // Calculate the rotation amount
         let rotationAmount = this.rotationSpeed * deltaTime / 1000; // deltaTime is the time since the last frame in milliseconds
@@ -11909,8 +12244,8 @@ class IsometricPreview extends Widget {
 class VisualClipboard extends Widget {
     clippings = [] // todo: add getter that casts to Clipping[]
 
-    draw(){
-        super.draw(...args)
+    onDraw(){
+        super.onDraw(...args)
         // draw the clippings
         this.clippings.forEach((clipping)=>{
             clipping.draw();
@@ -11931,8 +12266,9 @@ class TimerWidget extends Widget {
         // automatically generates a timerManager.timers[0]
         this.timerManager = new TimerManager(); 
     }
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
+        /** @property timer @see Timer */
         this.timerManager.timers.forEach((timer,index)=>{
             // draw the timer
             textAlign(LEFT,TOP);
@@ -11946,9 +12282,45 @@ class TimerWidget extends Widget {
 
             text(
                 `Timer ${index+1} \n elapsed: ${timer.timeElapsedFormatted} \n remaining: ${timer.timeRemainingFormatted}`,
-                this.smartPosition.x + 20,
-                this.smartPosition.y + 40
+                20,
+                40
             )
+
+            strokeWeight(1)
+            stroke("blue");
+            fill("black")
+            text(timer.timeElapsed, 0,0)
+            text(timer.timeRemaining, 0,20)
+
+            // draw a circular progress bar on a white circle
+            // draw a white circle
+            strokeWeight(10);
+            fill(0);
+            ellipse(100, 100, 180, 180);
+            // draw a circular progress bar
+            noFill();
+            stroke(255, 0, 0);
+
+            // console.warn({
+            //     a: typeof timer.timeElapsed,
+            //     b: typeof timer.duration,
+            // })
+            
+
+            // Ensure timer.timeElapsed and timer.duration are numbers
+            if (typeof timer.timeElapsed === 'number' && typeof timer.duration === 'number') {
+                let end = map(timer.timeElapsed, 0, timer.duration, 0, 360);
+                end = 360 - end
+                //console.warn('end',end);
+                // Ensure end is a number that can be converted to radians
+                if (!isNaN(end)) {
+                    arc(100, 100, 180, 180, -HALF_PI, radians(end) - HALF_PI);
+                } else {
+                    console.error('Invalid end value:', end);
+                }
+            } else {
+                //console.error('Invalid timer values:', timer.timeElapsed, timer.duration);
+            }
         })
     }
 }
@@ -13063,7 +13435,7 @@ class CmdPrompt extends Widget {
         let ctx = deepCanvasManager.uiContext;
         ctx.push();
         const cmdpPosY = 0;
-        ctx.fill(0,0,0,200)
+        ctx.fill(0,0,0,255*.9)
         ctx.strokeWeight(1)
         ctx.stroke("white")
         ctx.rectMode(CORNER);
@@ -13810,7 +14182,7 @@ class DebugPath {
     // todo convert to Widget and use onDraw
     draw(_color){
         // disable ze gizmo
-        if(store.disableDebugPath){
+        if(!store.showDebugCursor){
             return;
         }
         this.stepPruner();
@@ -14247,6 +14619,7 @@ function renderDebugUI(){
     ctx.fill(255, 0, 0);
     ctx.textSize(16);
     ctx.textAlign(RIGHT, BOTTOM);
+    //debugstats
     const debugTexts = [
         { text: `FPS: ${FPS.toFixed(2)}` },
         { text: `current widget count ${Object.keys(system.dashboard.widgets).length}` },
@@ -14272,6 +14645,10 @@ function renderDebugUI(){
     let baseOffset = 20;
     let offset = 60;
     debugTexts.forEach((debugText) => {
+        ctx.fill("black");
+        ctx.stroke("red");
+        ctx.strokeWeight(1);
+        ctx.textSize(30);
         ctx.text(debugText.text, windowWidth - 20, windowHeight - offset);
         offset += baseOffset;
     });
@@ -14957,8 +15334,6 @@ const CoreWidgets = [
     // // display a basic manipulation gizmo cage
     // Gizmo,
 
-    // ClientResolverDebugWidget,
-
     // WizardForge,
 
     // GiphyWidget,
@@ -15274,6 +15649,18 @@ void main(void) {
 }
 `       ;
 
+        function p5glSetup(pgl){
+            pgl.setup = function(){
+                pgl.createCanvas(windowWidth, windowHeight, pgl.WEBGL);
+            }
+
+            // pgl.id('p5-3d');
+            // pgl.parent(document.body);
+            // ctxP53D = pgl.drawingContext;
+        }
+
+        ctxP53D = new p5(p5glSetup, `p5-3d`)
+
         let topCanvas = document.createElement('canvas');
         topCanvas.id="topCanvas"; // composited canvas, not really TOP as UI is drawn above this even...
         topCanvas.width = window.windowWidth;
@@ -15441,7 +15828,7 @@ void main(void) {
                 system.dashboard.centerView();
                 system.alert("focused")   
             }
-            if((e.metaKey || e.ctrlKey) && e.key === '0'){
+            if((e.ctrlKey || e.metaKey) && e.key === '0'){
                 /** @see Dashboard.centerView */
                 system.dashboard.centerView(true);
             }
@@ -15522,8 +15909,6 @@ void main(void) {
         //     "fine.gif",
         //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
-        //     CalendarWidget,
-
         //     MessengerWidget,
         //     TimerWidget,
         //     TodoWidget,
@@ -15536,12 +15921,26 @@ void main(void) {
 
         // "the big widget registration"
         // NEW: init the widget dashboard
+        system.dashboard.init()
+
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
         const grw = new GherkinRunnerWidget();
         grw.centerPosition();
         // attach the results of the self test runner to the widget
         grw.setResults(autorunFeatureTestResults);
-        system.get("Dashboard").init()
+        // demo widgets
+        system.dashboard.registerWidget(grw);
+        system.dashboard.registerWidget(new RubiksCubeWidget());
+        system.dashboard.registerWidget(new RubiksCubeGL());
+        system.dashboard.registerWidget(new ClientResolverDebugWidget());
+
+        // current workbench of demo widgets
+
+        InvokableCommands["open calendar"]();
+        InvokableCommands["new timer"]();
+        InvokableCommands["new oscilloscope"]();
+        InvokableCommands["new pie chart"]();
+        InvokableCommands["new donut chart"]();
 
         // loadTestWidgets
         if(store.showTestWidgets){
@@ -16245,6 +16644,7 @@ void main(void) {
     
         // if the command palette is visible, draw it
         if(store.CmdPromptVisible){
+            /** @see CmdPrompt.renderCommandPrompt */
             cmdprompt?.renderCommandPrompt?.();
         }
     
@@ -16265,18 +16665,41 @@ let mainCanvasContext = new p5(MainCanvasContextThing, "main-canvas-context");
 window.mctx = mainCanvasContext;
 // bind the global api so it can shift contexts
 const properties = [
-    'TWO_PI', 'BOLD', 'NORMAL', 'BOTTOM', 'BLUR', 'CENTER', 'LEFT', 'RIGHT', 'TOP', 
-    'CORNER', 'alpha', 'beginShape', 'endShape', 'cos', 
-    'constrain', 'deltaTime', 'sin', 'vertex', 'line', 
-    'color', 'createGraphics', 'circle', 'ellipse', 
-    'rectMode', 'fill', 'frameCount', 'image', 'lerp', 
-    'lerpColor', 'loadImage', 'millis', 'map', 
-    'mouseX', 'mouseY', 'radians', 'pmouseX', 'pmouseY', 'noFill', 'noTint', 'pop', 
-    'push', 'text', 'textAlign', 'textSize', 'textFont', 'textStyle', 
-    'tint', 'translate', 'rect', 'scale', 'stroke', 
-    'strokeWeight', 'windowHeight', 'windowWidth', 
-    'createElement'
+    'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
+    'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
+    'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
+    'triangle', 
+    'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
+    'windowHeight', 'windowWidth', 'arc', 'beginShape', 'circle', 'color', 'createGraphics', 
+    'ellipse', 'endShape', 'image', 'line', 'rect', 'scale', 'text', 'textAlign', 'textFont', 
+    'textSize', 'textStyle', 'vertex', 'createElement'
 ];
+function drawShape(name, options, context){
+    //'arc', {x: arcX, y: arcY, radius: innerRadius, startAngle: this.arcStart, endAngle: arcEnd}
+    //if(name === 'arc'){
+
+    const ctx = context
+    switch(name){
+        case 'arc':
+            ctx.beginShape();
+            //ctx.arc(options.x, options.y, options.radius, options.startAngle, options.endAngle);
+            let segments = 64;
+            let angle = options.startAngle;
+            let angleStep = (options.endAngle - options.startAngle) / segments;
+            for(let i = 0; i < segments; i++){
+                ctx.vertex(
+                    options.x + Math.cos(angle) * options.radius,
+                    options.y + Math.sin(angle) * options.radius
+                );
+                angle += angleStep;
+            }
+            ctx.endShape();
+            break;
+        default:
+            console.warn('unknown shape', name);
+            break;
+    }
+}
 properties.forEach(prop => {
         Object.defineProperty(window, prop, {
             get: () => {
@@ -16928,7 +17351,11 @@ function drawShape(x, y, type) {
             ellipse(x, y, 100, 100);
             break;
         default:
-            triangle(x - 40, y + 40, x + 40, y + 40, x, y - 40);
+            if(typeof triangle === 'undefined' || !triangle?.call){
+                //console.error("triangle fn missin?")
+                return;
+            }
+            mainCanvasContext.triangle(x - 40, y + 40, x + 40, y + 40, x, y - 40);
     }
     // fill(0);
     // textAlign(CENTER, CENTER);
@@ -17199,8 +17626,8 @@ class FishWidget extends AnimalWidget {
 }
 
 class REPLCommand extends Widget {
-    draw(){
-        super.draw(...arguments)
+    onDraw(){
+        super.onDraw(...arguments)
         fill("purple")
         rect(0,0,100,100)
         fill("white")
@@ -17231,8 +17658,8 @@ class REPLWidget extends Widget {
 
     bufferOrderHistory = []
 
-    draw(){
-        super.draw()
+    onDraw(){
+        super.onDraw()
         this.commandBuffer.forEach((command, index)=>{
             command.draw();
         })
