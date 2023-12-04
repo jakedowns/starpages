@@ -2552,8 +2552,8 @@ class Widget extends UndoRedoComponent {
     
     updatePlax() {
         let apparentDepth = this.zDepth;
-        let parallaxFactor = (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
-        parallaxFactor *= (1 - zoom / MAX_ZOOM); // Flatten effect at higher zoom
+        let parallaxFactor = 1; // (apparentDepth < 0 ? -1 : 1) * (1 - Math.abs(apparentDepth));
+        //parallaxFactor *= (1 - zoom / MAX_ZOOM); // Flatten effect at higher zoom
 
         // parallaxFactor *= 0.1
         // if (store.DISABLE_PARALLAX) {
@@ -2577,7 +2577,8 @@ class Widget extends UndoRedoComponent {
         // this.smartPosition.x = affectedX;
         // this.smartPosition.y = affectedY;
         this.parallaxedPosition = {
-            x: affectedX, y: affectedY
+            x: 0, // affectedX, 
+            y: 0, //affectedY
         }
     }
     
@@ -3856,15 +3857,79 @@ class TetrisWidget extends Widget {
         text("TETRIS!!!", 0, 0)
     }
 }
+class GridOfThingsWidget extends Widget {
+    pixelDensity = 4;
+    widgetSize = { width: 1000, height: 500 }
+    constructor(){
+        super(...arguments)
+        this.cacheTheGrid();
+    }
+    cacheTheGrid(){
+        rectMode(CENTER);
+            
+        this.pixelScaledSize = {
+            width: this.pixelDensity * this.widgetSize.width,
+            height: this.pixelDensity * this.widgetSize.height
+        }
+        // Create an offscreen graphics buffer
+        this.cachedBitmap = createGraphics(
+            this.pixelDensity * this.widgetSize.width, 
+            this.pixelDensity * this.widgetSize.height);
+        this.cachedBitmap.rectMode(CENTER);
+        
+        // Define the size of each square
+        let squareSize = 20 * this.pixelDensity;
+        // Define the number of squares per row
+        let squaresPerRow = 50;
+        // Define the number of rows
+        let rows = Math.ceil(500 / squaresPerRow);
+        // Define the starting position
+        let startX = (this.cachedBitmap.width - squaresPerRow * squareSize) / 2;
+        let startY = (this.cachedBitmap.height - rows * squareSize) / 2;
+        
+        // Draw the grid on the offscreen graphics buffer
+        this.cachedBitmap.push();
+        for(let i = 0; i < rows; i++) {
+            for(let j = 0; j < squaresPerRow; j++) {
+                this.cachedBitmap.stroke("red")
+                this.cachedBitmap.fill("black")
+                this.cachedBitmap.strokeWeight(1 * this.pixelDensity)
+                this.cachedBitmap.rect(startX + j * squareSize, startY + i * squareSize, squareSize, squareSize);
+
+                // draw Text in the Rect
+                this.cachedBitmap.stroke("black")
+                this.cachedBitmap.strokeWeight(5 * this.pixelDensity)
+                this.cachedBitmap.fill("white")
+
+                // This slows ish DOWNNNN if we don't cache it
+                this.cachedBitmap.textSize(9 * this.pixelDensity)
+                this.cachedBitmap.textAlign(CENTER, CENTER)
+                this.cachedBitmap.text(
+                    `${i * squaresPerRow + j + 1}`,
+                    startX + j * squareSize,
+                    startY + i * squareSize,
+                    squareSize,
+                    squareSize
+                )
+            }
+        }
+        this.cachedBitmap.pop();
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+        
+        // draw the cached bitmap
+        this.ctx.image(this.cachedBitmap, 0, 0, this.widgetSize.width, this.widgetSize.height);   
+    }
+}
 class CalendarWidget extends Widget {
     widgetSize = { width: 400, height: 300 }
     onDraw(){
         super.onDraw(...arguments)
         
             rectMode(CENTER);
-            fill("darkpurple")
-            stroke("green")
-            strokeWeight(10)
+            
+            
             // Define the size of each square
             let squareSize = 50;
             // Define the number of squares per row
@@ -3877,7 +3942,24 @@ class CalendarWidget extends Widget {
             // Draw the grid
             for(let i = 0; i < rows; i++) {
                 for(let j = 0; j < squaresPerRow; j++) {
+                    stroke("green")
+                    fill("black")
+                    strokeWeight(10)
                     rect(startX + j * squareSize, startY + i * squareSize, squareSize, squareSize);
+
+                    // draw Text in the Rect
+                    stroke("black")
+                    strokeWeight(5)
+                    fill("white")
+                    textSize(20)
+                    textAlign(CENTER, CENTER)
+                    text(
+                        `${i * squaresPerRow + j + 1}`,
+                        startX + j * squareSize,
+                        startY + i * squareSize,
+                        squareSize,
+                        squareSize
+                    )
                 }
             }
         
@@ -11472,6 +11554,9 @@ const InvokableCommands = {
     ["new todo"](){
         alert('TODO! get current most recent focused todo list, or create a new one, and add the item')
     },
+    ["new grid of things"](){
+        system.registerWidgetInstance(new GridOfThingsWidget())
+    },
     ["open calendar"](){
         system.registerWidgetInstance(new CalendarWidget())
     },
@@ -14645,11 +14730,11 @@ function renderDebugUI(){
     let baseOffset = 20;
     let offset = 60;
     debugTexts.forEach((debugText) => {
-        ctx.fill("black");
-        ctx.stroke("red");
-        ctx.strokeWeight(1);
+        ctx.fill("red");
+        ctx.stroke("black");
+        ctx.strokeWeight(3);
         ctx.textSize(30);
-        ctx.text(debugText.text, windowWidth - 20, windowHeight - offset);
+        ctx.text(debugText.text, windowWidth - ctx.textSize(), windowHeight - ctx.textSize()*2);
         offset += baseOffset;
     });
 
@@ -15934,8 +16019,9 @@ void main(void) {
         system.dashboard.registerWidget(new RubiksCubeGL());
         system.dashboard.registerWidget(new ClientResolverDebugWidget());
 
-        // current workbench of demo widgets
+        // current workbench of demo widgets // work bench
 
+        InvokableCommands["new grid of things"]();
         InvokableCommands["open calendar"]();
         InvokableCommands["new timer"]();
         InvokableCommands["new oscilloscope"]();
@@ -16576,8 +16662,9 @@ void main(void) {
             let targetX = -p.mouseX + halfWidth;
             let targetY = -p.mouseY + halfHeight;
             if(!panningBG){
-                mouseShifted.x = p.lerp(mouseShifted.x, targetX, 0.1);
-                mouseShifted.y = p.lerp(mouseShifted.y, targetY, 0.1);
+                // DISABLED
+                // mouseShifted.x = p.lerp(mouseShifted.x, targetX, 0.1);
+                // mouseShifted.y = p.lerp(mouseShifted.y, targetY, 0.1);
             }
     
             
@@ -17231,14 +17318,14 @@ class SuggestionList {
         ctx.strokeWeight(selected ? 3 : 1);
         // draw box
         ctx.fill(selected ? "purple" : ctx.color(20))
+        ctx.translate(x,y)
         ctx.rect(0,0,w,h);
         ctx.strokeWeight(1);
-        ctx.translate(x,y)
         // draw label
         drawStringWordWrapped(
             label,
-            x + 10,
-            y + 10,
+            10,
+            10,
             20,
             w - 20,
             ctx
