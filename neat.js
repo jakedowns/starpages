@@ -961,12 +961,12 @@ class System {
     
         if(
             uri?.includes?.("youtube.com")
-            || uri?.includes?.("youtu.be")
+            // || uri?.includes?.("youtu.be")
         ){
             let updatedUrl = uri;
             try {
                 let url = new URL(updatedUrl);
-                url.searchParams.set('autoplay', '1');
+                // url.searchParams.set('autoplay', '1');
                 updatedUrl = url.toString();
             } catch (error) {
                 console.error('Invalid URL:', updatedUrl);
@@ -2762,6 +2762,7 @@ class Widget extends UndoRedoComponent {
             this.enterDrawingContext();
             this.ctx.fill("red")
             this.ctx.text(`
+            name: ${this.constructor.name}
             x:${
                 this.basePosition.x.toFixed(2)
             } y:${
@@ -2918,6 +2919,14 @@ class OscilloscopeWidget extends Widget {
     }
     onDraw(){
         super.onDraw(...arguments);
+
+        if(!this.ctx.drawImage){
+            // TODO TODO TODO
+            // console.warn('no drawImage?!?!',this);
+            // debugger;
+            //super.endDraw();
+            return;
+        }
 
         // draw the gridImage
         this.ctx.drawImage(this.gridImage, 0, 0);
@@ -6010,6 +6019,111 @@ class PomodoroWidget extends Widget {
     }
 }
 
+// /:-/
+class D3Widget extends Widget {
+}
+
+// we're not re-inventing the wheel,
+// we're just referencing the wheel in a new way
+// d3 compatible data / options
+
+class PieChart extends Widget {
+    name = "Pie Chart"
+    widgetSize = { width: 300, height: 300 }
+    data = [
+        { label: "Thing A 10/30", value: 10 },
+        { label: "Thing B 20/30", value: 20 },
+    ]
+    totalValue = 100
+    arcStart = 0;
+    arcRadius = 50;
+    constructor(){
+        super(...arguments)
+        this.totalValue = this.data.reduce((acc, cur) => acc + cur.value, 0);
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+
+        // draw an arc filled based on relative data contributions to the total
+        
+        
+        for(let i = 0; i < this.data.length; i++){
+            let arc = this.data[i];
+            let arcSize = arc.value / this.totalValue;
+            let arcEnd = this.arcStart + arcSize * TWO_PI;
+            let arcMid = this.arcStart + ((arcEnd - this.arcStart) / 2);
+            
+            let arcX = this.smartPosition.x + (this.widgetSize.width / 2);
+            let arcY = this.smartPosition.y + (this.widgetSize.height / 2);
+            // this.ctx.push()
+            this.ctx.fill("red");
+            drawShape('arc',{arcX, arcY, arcRadius:this.arcRadius, arcStart:this.arcStart, arcEnd}, this.ctx);
+            // this.ctx.pop();
+
+            this.ctx.fill("white", 0, 0);
+            this.ctx.text("Pie Chart", 0, 0)
+
+            // draw a label for each arc
+            let labelX = arcX + this.arcRadius * Math.cos(arcMid);
+            let labelY = arcY + this.arcRadius * Math.sin(arcMid);
+            this.ctx.text(arc.label, labelX, labelY);
+
+            // update arcStart for the next arc
+            this.arcStart = arcEnd;
+        }
+    }
+    
+}
+
+class DonutChart extends PieChart{
+    widgetSize = { width: 300, height: 300 }
+    data = [
+        { label: "Thing A 10/30", value: 10 },
+        { label: "Thing B 20/30", value: 20 },
+    ]
+    onDraw()
+    {
+        super.onDraw(...arguments)
+        let innerRadius = 20;
+        for(let i = 0; i < this.data.length; i++){
+            let arc = this.data[i];
+            let arcSize = arc.value / this.totalValue;
+            let arcEnd = this.arcStart + arcSize * TWO_PI;
+            let arcMid = this.arcStart + ((arcEnd - this.arcStart) / 2);
+            let arcX = this.smartPosition.x + (this.widgetSize.width / 2);
+            let arcY = this.smartPosition.y + (this.widgetSize.height / 2);
+            // this.ctx.push()
+            this.ctx.fill("red");
+            drawShape('arc', {x: arcX, y: arcY, radius: this.arcRadius, startAngle: this.arcStart, endAngle: arcEnd}, this.ctx);
+            this.ctx.fill("white");
+            drawShape('arc', {x: arcX, y: arcY, radius: innerRadius, startAngle: this.arcStart, endAngle: arcEnd}, this.ctx);
+            // this.ctx.pop();
+
+            this.ctx.text("Donut Chart", 0, 0)
+
+            // draw a label for each arc
+            let labelX = arcX + this.arcRadius * Math.cos(arcMid);
+            let labelY = arcY + this.arcRadius * Math.sin(arcMid);
+            this.ctx.text(arc.label, labelX, labelY);
+
+            // update this.arcStart for the next arc
+            this.arcStart = arcEnd;
+        }
+    }
+}
+
+class Sparkline extends Widget {
+    onDraw()
+    {
+        super.onDraw(...arguments)
+        this.ctx.fill("yellow")
+        this.ctx.triangle(
+            0, 0,
+            0, this.widgetSize.height,
+            this.widgetSize.width, this.widgetSize.height
+        )
+    }
+}
 
 class BlockBreaker extends Widget {
 
@@ -7528,6 +7642,7 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    showDebugCursor: 0,
     windowHasFocus: true,
     disableDeepCanvas: 0,
     deepCanvasBlurLevel: 10, // in px for now: make relative
@@ -10656,6 +10771,9 @@ class Timer {
     completedAt = null
     ticker = null
     finalDuration = null;
+    get duration(){
+        return this.durationSec
+    }
     get durationSec(){
         return this.options?.durationSec ?? 0
     }
@@ -10667,6 +10785,12 @@ class Timer {
             durationSec: 60
         }
         this.start()
+    }
+    get timeElapsed(){
+        return this.elapsedSec
+    }
+    get timeRemaining(){
+        return this.remainingSec
     }
     get timeElapsedFormatted(){
         return `${this.elapsedSec} / ${this.durationSec}`
@@ -10758,6 +10882,18 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new oscilloscope"](){
+        system.registerWidget(new OscilloscopeWidget());
+    },
+    ["new pie chart"](){
+        system.registerWidget(new PieChart())
+    },
+    ["new donut chart"](){
+        system.registerWidget(new DonutChart())
+    },
+    ["new spark line"](){
+        system.registerWidget(new Sparkline())
+    },
     ["new moon phase widget"](){
         system.registerWidget(new MoonPhaseWidget())
     },
@@ -10820,13 +10956,13 @@ const InvokableCommands = {
         system.todo("!!! NotYetImplemented !!!")
     },
     ["toggle debug cursor"](){
-
+        store.showDebugCursor = !store.showDebugCursor;
     },
     // 
     ["toggle debug widget info"](){
         store.showWidgetPositions = !store.showWidgetPositions;
     },
-    //
+    // alias
     ["toggle widget debug info"](){
         InvokableCommands["toggle debug widget info"]();
     },
@@ -12099,6 +12235,7 @@ class TimerWidget extends Widget {
     }
     onDraw(){
         super.onDraw(...arguments)
+        /** @property timer @see Timer */
         this.timerManager.timers.forEach((timer,index)=>{
             // draw the timer
             textAlign(LEFT,TOP);
@@ -12115,6 +12252,42 @@ class TimerWidget extends Widget {
                 20,
                 40
             )
+
+            strokeWeight(1)
+            stroke("blue");
+            fill("black")
+            text(timer.timeElapsed, 0,0)
+            text(timer.timeRemaining, 0,20)
+
+            // draw a circular progress bar on a white circle
+            // draw a white circle
+            strokeWeight(10);
+            fill(0);
+            ellipse(100, 100, 180, 180);
+            // draw a circular progress bar
+            noFill();
+            stroke(255, 0, 0);
+
+            // console.warn({
+            //     a: typeof timer.timeElapsed,
+            //     b: typeof timer.duration,
+            // })
+            
+
+            // Ensure timer.timeElapsed and timer.duration are numbers
+            if (typeof timer.timeElapsed === 'number' && typeof timer.duration === 'number') {
+                let end = map(timer.timeElapsed, 0, timer.duration, 0, 360);
+                end = 360 - end
+                //console.warn('end',end);
+                // Ensure end is a number that can be converted to radians
+                if (!isNaN(end)) {
+                    arc(100, 100, 180, 180, -HALF_PI, radians(end) - HALF_PI);
+                } else {
+                    console.error('Invalid end value:', end);
+                }
+            } else {
+                //console.error('Invalid timer values:', timer.timeElapsed, timer.duration);
+            }
         })
     }
 }
@@ -13976,7 +14149,7 @@ class DebugPath {
     // todo convert to Widget and use onDraw
     draw(_color){
         // disable ze gizmo
-        if(store.disableDebugPath){
+        if(!store.showDebugCursor){
             return;
         }
         this.stepPruner();
@@ -14413,6 +14586,7 @@ function renderDebugUI(){
     ctx.fill(255, 0, 0);
     ctx.textSize(16);
     ctx.textAlign(RIGHT, BOTTOM);
+    //debugstats
     const debugTexts = [
         { text: `FPS: ${FPS.toFixed(2)}` },
         { text: `current widget count ${Object.keys(system.dashboard.widgets).length}` },
@@ -14438,6 +14612,10 @@ function renderDebugUI(){
     let baseOffset = 20;
     let offset = 60;
     debugTexts.forEach((debugText) => {
+        ctx.fill("black");
+        ctx.stroke("red");
+        ctx.strokeWeight(1);
+        ctx.textSize(30);
         ctx.text(debugText.text, windowWidth - 20, windowHeight - offset);
         offset += baseOffset;
     });
@@ -15617,7 +15795,7 @@ void main(void) {
                 system.dashboard.centerView();
                 system.alert("focused")   
             }
-            if((e.metaKey || e.ctrlKey) && e.key === '0'){
+            if((e.ctrlKey || e.metaKey) && e.key === '0'){
                 /** @see Dashboard.centerView */
                 system.dashboard.centerView(true);
             }
@@ -15724,6 +15902,13 @@ void main(void) {
         system.dashboard.registerWidget(new RubiksCubeWidget());
         system.dashboard.registerWidget(new RubiksCubeGL());
         system.dashboard.registerWidget(new ClientResolverDebugWidget());
+
+        // current workbench of demo widgets
+
+        InvokableCommands["new timer"]();
+        InvokableCommands["new oscilloscope"]();
+        InvokableCommands["new pie chart"]();
+        InvokableCommands["new donut chart"]();
 
         // loadTestWidgets
         if(store.showTestWidgets){
@@ -16448,19 +16633,40 @@ let mainCanvasContext = new p5(MainCanvasContextThing, "main-canvas-context");
 window.mctx = mainCanvasContext;
 // bind the global api so it can shift contexts
 const properties = [
-    'QUARTER_PI', 'box',
-    'TWO_PI', 'BOLD', 'NORMAL', 'BOTTOM', 'BLUR', 'CENTER', 'LEFT', 'RIGHT', 'TOP', 
-    'CORNER', 'alpha', 'beginShape', 'endShape', 'cos', 
-    'constrain', 'deltaTime', 'sin', 'vertex', 'line', 
-    'color', 'createGraphics', 'circle', 'ellipse', 
-    'rectMode', 'fill', 'frameCount', 'image', 'lerp', 
-    'lerpColor', 'loadImage', 'millis', 'map', 
-    'mouseX', 'mouseY', 'radians', 'pmouseX', 'pmouseY', 'noFill', 'noTint', 'pop', 
-    'push', 'text', 'triangle', 'textAlign', 'textSize', 'textFont', 'textStyle', 
-    'tint', 'translate', 'rect', 'scale', 'stroke', 
-    'strokeWeight', 'windowHeight', 'windowWidth', 
-    'createElement'
+    'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
+    'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
+    'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY', 
+    'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
+    'windowHeight', 'windowWidth', 'arc', 'beginShape', 'circle', 'color', 'createGraphics', 
+    'ellipse', 'endShape', 'image', 'line', 'rect', 'scale', 'text', 'textAlign', 'textFont', 
+    'textSize', 'textStyle', 'vertex', 'createElement'
 ];
+function drawShape(name, options, context){
+    //'arc', {x: arcX, y: arcY, radius: innerRadius, startAngle: this.arcStart, endAngle: arcEnd}
+    //if(name === 'arc'){
+
+    const ctx = context
+    switch(name){
+        case 'arc':
+            ctx.beginShape();
+            //ctx.arc(options.x, options.y, options.radius, options.startAngle, options.endAngle);
+            let segments = 64;
+            let angle = options.startAngle;
+            let angleStep = (options.endAngle - options.startAngle) / segments;
+            for(let i = 0; i < segments; i++){
+                ctx.vertex(
+                    options.x + Math.cos(angle) * options.radius,
+                    options.y + Math.sin(angle) * options.radius
+                );
+                angle += angleStep;
+            }
+            ctx.endShape();
+            break;
+        default:
+            console.warn('unknown shape', name);
+            break;
+    }
+}
 properties.forEach(prop => {
         Object.defineProperty(window, prop, {
             get: () => {
@@ -17112,7 +17318,11 @@ function drawShape(x, y, type) {
             ellipse(x, y, 100, 100);
             break;
         default:
-            triangle(x - 40, y + 40, x + 40, y + 40, x, y - 40);
+            if(typeof triangle === 'undefined' || !triangle?.call){
+                //console.error("triangle fn missin?")
+                return;
+            }
+            mainCanvasContext.triangle(x - 40, y + 40, x + 40, y + 40, x, y - 40);
     }
     // fill(0);
     // textAlign(CENTER, CENTER);
