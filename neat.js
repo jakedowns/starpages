@@ -3611,9 +3611,25 @@ class Cube {
 
 let ctxP53D;
 
-class RubiksCubeGL extends Widget {
+class WidgetGL extends Widget {
+    constructor(){
+        super(...arguments)
+        // this.ctx = ctxP53D;
+    }
+    // // for now, until we allow arbitrary layer types
+    // getCurrentContext(){
+    //     return ctxP53D;
+    // }
+}
+
+class RubiksCubeGL extends WidgetGL {
     angle = 0;
     cubes = []
+    cameraPos = {
+        x: 0,
+        y: 0,
+        z: 0
+    }
     constructor(){
         super(...arguments)
         for (let x = -1; x <= 1; x++) {
@@ -3623,6 +3639,14 @@ class RubiksCubeGL extends Widget {
                 }
             }
         }
+        ctxP53D.camera(...["x","y","z"].map(v => this.cameraPos[v]));
+        let fovy = PI/3.0;
+        let aspect = windowWidth/windowHeight;
+        let near = 0.1;
+        let far = 10000;
+        ctxP53D.perspective(fovy, aspect, near, far)
+        // ctxP53D.ortho(left, right, bottom, top, near, far)
+        window.rcgl = this;
     }
     onDraw(){
         super.onDraw(...arguments)
@@ -3630,6 +3654,8 @@ class RubiksCubeGL extends Widget {
         ctxP53D.rotateX(-QUARTER_PI/128);
         ctxP53D.rotateY(QUARTER_PI/128);
         this.angle += 0.001;
+
+        ctxP53D.camera(this.cameraPos.x, this.cameraPos.y, this.cameraPos.z)
 
         for (let i = 0; i < this.cubes.length; i++) {
             ctxP53D.push();
@@ -3827,14 +3853,14 @@ class TetrisWidget extends Widget {
     onDraw(){
         super.onDraw(...arguments)
         fill("red")
-        text("TETRIS!!!", this.smartPosition.x, this.smartPosition.y)
+        text("TETRIS!!!", 0, 0)
     }
 }
 class CalendarWidget extends Widget {
     widgetSize = { width: 400, height: 300 }
     onDraw(){
         super.onDraw(...arguments)
-        push()
+        
             rectMode(CENTER);
             fill("darkpurple")
             stroke("green")
@@ -3846,15 +3872,15 @@ class CalendarWidget extends Widget {
             // Define the number of rows
             let rows = Math.ceil(31 / squaresPerRow);
             // Define the starting position
-            let startX = this.smartPosition.x + (this.widgetSize.width - squaresPerRow * squareSize) / 2;
-            let startY = this.smartPosition.y + (this.widgetSize.height - rows * squareSize) / 2;
+            let startX = (this.widgetSize.width - squaresPerRow * squareSize) / 2;
+            let startY = (this.widgetSize.height - rows * squareSize) / 2;
             // Draw the grid
             for(let i = 0; i < rows; i++) {
                 for(let j = 0; j < squaresPerRow; j++) {
                     rect(startX + j * squareSize, startY + i * squareSize, squareSize, squareSize);
                 }
             }
-        pop()
+        
     }
 }
 
@@ -11440,8 +11466,15 @@ const InvokableCommands = {
     ["new browser bubble"](){
         InvokableCommands["new iframe widget"]()
     },
-    ["new mind map"](){},
-    ["new todo"](){},
+    ["new mind map"](){
+        alert('TODO!')
+    },
+    ["new todo"](){
+        alert('TODO! get current most recent focused todo list, or create a new one, and add the item')
+    },
+    ["open calendar"](){
+        system.registerWidgetInstance(new CalendarWidget())
+    },
     ["new timer"](){
         system.registerWidgetInstance(new TimerWidget())
     },
@@ -15876,8 +15909,6 @@ void main(void) {
         //     "fine.gif",
         //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
-        //     CalendarWidget,
-
         //     MessengerWidget,
         //     TimerWidget,
         //     TodoWidget,
@@ -15905,6 +15936,7 @@ void main(void) {
 
         // current workbench of demo widgets
 
+        InvokableCommands["open calendar"]();
         InvokableCommands["new timer"]();
         InvokableCommands["new oscilloscope"]();
         InvokableCommands["new pie chart"]();
@@ -16635,7 +16667,8 @@ window.mctx = mainCanvasContext;
 const properties = [
     'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
-    'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY', 
+    'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
+    'triangle', 
     'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
     'windowHeight', 'windowWidth', 'arc', 'beginShape', 'circle', 'color', 'createGraphics', 
     'ellipse', 'endShape', 'image', 'line', 'rect', 'scale', 'text', 'textAlign', 'textFont', 
