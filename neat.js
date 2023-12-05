@@ -11200,6 +11200,11 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["Inspiration: simple generative graph example - Orion Reed"](){
+        system.registerWidget(new iFrameWidget(
+            "https://x.com/OrionReedOne/status/1731965009981301071?s=20"
+        ));
+    },
     ["sine wave demo"](){
         system.registerWidget(new SineWaveDemonstrator());
     },
@@ -14040,6 +14045,28 @@ class CmdPrompt extends Widget {
         //     }
         // }
         const currentInputBufferTextLC = (currentInputBufferText??"")?.toLowerCase();
+
+        // URL-Pasting Check
+        // if the input contains :// and no spaces, let's assume it's a url and add a suggestion to paste it as an embedded WebObject
+        if(currentInputBufferText.includes('://') && !currentInputBufferText.includes(' ')){
+            recommended_order.push({
+                command: new Command("Embed URL WebObject",{
+                    name: `Embed URL: "${currentInputBufferText}"`,
+                    execute: function(){
+                        //console.warn("TODO: if it was a tweet, make it a fancy iframe!");
+                        //system.todo("implement url embeds for various well-known iframe friendly sites which provide a consistent url structure for embedding")
+                        console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
+
+                        // if the url has a //twitter.com || //x.com domain,
+                        // embed it as an iframe widget
+                        let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
+                        system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                    }
+                })
+            })
+        }
+
+
         // todo: pull available commands from system-wide list
         this.filteredCommands = this.availableCommands.filter(command => {
             if(!command){
@@ -16209,13 +16236,13 @@ void main(void) {
 
             // if pasting 
             if(ctrlOrCmd && e.key === 'v'){
-                /** @see System.OnPaste */
-                system.OnPaste(...arguments);
+                /** @see System.onPaste */
+                system.onPaste(...arguments);
             }
             // copying
             if(ctrlOrCmd && e.key === 'c'){
-                /** @see System.OnCopy */
-                system.OnCopy(...arguments);
+                /** @see System.onCopy */
+                system.onCopy(...arguments);
             }
             
             let KeyboardPanInfluence = { x: 0, y: 0 };
