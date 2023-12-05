@@ -3773,6 +3773,8 @@ class RubiksCubeGL extends WidgetGL {
         y: 0,
         z: 0
     }
+    enableLights = 1;
+    lightPos = {x:1,y:1,z:1}
     constructor(){
         super(...arguments)
         for (let x = -1; x <= 1; x++) {
@@ -3782,6 +3784,10 @@ class RubiksCubeGL extends WidgetGL {
                 }
             }
         }
+        // if (this.enableLights) {
+            this.ambientLight = ctxP53D.ambientLight(100);
+            this.pointLight = ctxP53D.pointLight(255, 255, 255, this.lightPos.x, this.lightPos.y, this.lightPos.z);
+        // }
         // ctxP53D.camera(...["x","y","z"].map(v => this.cameraPos[v]));
         let fovy = PI/3.0;
         let aspect = windowWidth/windowHeight;
@@ -3794,6 +3800,12 @@ class RubiksCubeGL extends WidgetGL {
     onDraw(){
         super.onDraw(...arguments)
         ctxP53D.background(0);
+
+        // update the light position to move in a circle around the vertical axis
+        this.lightPos.x = Math.cos(this.angle) * 100;
+        this.lightPos.z = Math.sin(this.angle) * 100;
+        //ctxP53D.pointLight(255, 255, 255, this.lightPos.x, this.lightPos.y, this.lightPos.z);
+
         ctxP53D.rotateX(-QUARTER_PI/128);
         ctxP53D.rotateY(QUARTER_PI/128);
         this.angle += 0.001;
@@ -11723,6 +11735,9 @@ const InvokableCommands = {
     ["new cheshire cat"](){
         system.registerWidget(new ImageViewerWidget("cheshire-cat.gif"))
     },
+    ["new clock"](){
+        system.registerWidgetInstance(new ImageViewer("clock.webp"))
+    },
     ["new cat"](){
         InvokableCommands["new cheshire cat"]();
         system.registerWidgetInstance(new CatWidget());
@@ -12206,11 +12221,11 @@ const InvokableCommands = {
             "https://editor.p5js.org/jakedowns/full/LM0oRxYGt"
         ))
     },
-    ["new rubiks cube widget GL"](){
-        system.registerWidget(new RubiksCubeWidgetGL());
+    ["new rubiks cube GL"](){
+        system.registerWidget(new RubiksCubeGL());
         new HideCmdPromptCommand().execute();
     },
-    ["new rubiks cube widget"](){
+    ["new rubiks cube 2D"](){
         system.registerWidget(new RubiksCubeWidget());
         new HideCmdPromptCommand().execute();
     },
@@ -16710,8 +16725,11 @@ void main(void) {
         }else{
             // The zoom level affects the pan speed. When zoomed out (zoom = 0.1), we pan further.
             // Conversely, when zoomed in (zoom = 1-3), we pan less far.
-            panX -= event.deltaX * (MAX_ZOOM-zoom);
-            panY -= event.deltaY * (MAX_ZOOM-zoom);
+            // but we never let it go to 0 incase user wants to pan while fully zoomed in
+            let panStepX = Math.max(0.1, (MAX_ZOOM-zoom));
+            let panStepY = Math.max(0.1, (MAX_ZOOM-zoom));
+            panX -= event.deltaX * panStepX;
+            panY -= event.deltaY * panStepY;
         }
         // else{
         //     panX -= event.deltaX;
@@ -16990,7 +17008,7 @@ void main(void) {
             mainCanvasContext.scale(zoom);
             mainCanvasContext.translate(
                 panX - (halfWidth*zoom), 
-                panY -(halfHeight*zoom)
+                panY - (halfHeight*zoom)
             );
     
             if(
