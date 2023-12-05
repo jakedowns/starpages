@@ -3528,15 +3528,26 @@ class CalculatorWidget extends Widget {
         width: 300,
         height: 400
     }
-    buttons = [[
+    buttonRows = [
         ["7","8","9","/"],
         ["4","5","6","*"],
         ["1","2","3","-"],
         ["0",".","=","+"],
-    ]]
+    ]
     onDraw(){
         super.onDraw(...arguments)
         // this.ctx.push()
+
+        if(this.cachedSprite){
+            this.ctx.image(this.cachedSprite, 0, 0);
+            return;
+        }
+
+        this.cacheToSprite()
+        
+    }
+    cacheToSprite(){
+        // BG
         this.ctx.rectMode(CENTER);
         this.ctx.fill("lightgrey")
         this.ctx.rect(
@@ -3547,11 +3558,11 @@ class CalculatorWidget extends Widget {
             20 // this is the radius for the rounded corners
         );
 
-        this.buttons.forEach((row, rowIndex)=>{
+        this.buttonRows.forEach((row, rowIndex)=>{
             row.forEach((button, buttonIndex)=>{
                 let padding = 20;
                 let buttonWidth = (this.widgetSize.width - padding) / row.length;
-                let buttonHeight = (this.widgetSize.height - (padding * this.buttons.length)) / this.buttons.length;
+                let buttonHeight = this.widgetSize.height / 4;
                 this.ctx.rectMode(CENTER);
                 this.ctx.fill("white")
                 this.ctx.stroke("black")
@@ -3564,16 +3575,18 @@ class CalculatorWidget extends Widget {
                     20 // this is the radius for the rounded corners
                 );
 
+                this.ctx.noStroke()
                 this.ctx.fill("black")
                 let tpx = (buttonWidth * buttonIndex) + buttonWidth / 2;
                 let tpy = (buttonHeight * rowIndex) + buttonHeight / 2;
-                let tsx = 0;//buttonWidth;
-                let tsy = 0;//buttonHeight;
-                this.ctx.textSize(20)
+                let tsx = buttonWidth;
+                let tsy = buttonHeight;
+                this.ctx.textSize(50)
                 this.ctx.textAlign(CENTER, CENTER)
-                this.ctx.text(button, tpx,tpy,tsx,tsy)
+                this.ctx.text(`${button}`, tpx,tpy,tsx,tsy)
             })
         })
+        this.cachedSprite = this.ctx.get();
         
 
         // fill("black")
