@@ -31,7 +31,7 @@ const changelog = [
 `
 ]
 
-]
+] 
 
 let todos = [{
     "Overview of neat.js": {
@@ -2887,9 +2887,72 @@ class Widget extends UndoRedoComponent {
     }
 }
 
+
+
+// TODO: rich text / markdown / code editor / multi-cursor, etc backends
+class TextViewerWidget extends Widget {
+    content = "hello this is a text viewer widget"
+
+    
+}
+
+
+// welcome popup
+// welcome message
+class WelcomeMessage extends TextViewerWidget {
+    content = "Hello this is a welcome popup!"
+}
+
+class QuestionWidget extends TextViewerWidget {
+
+}
+
+// under-load for sugar
+class Question extends QuestionWidget {}
+
+class WhatIsYourName extends Question {
+    content = "Hello this is a welcome popup!"
+
+    onDraw(){
+        super.onDraw(...arguments)
+
+
+    }
+}
+
+// version history viewer
+class ChangeLogViewer extends TextViewerWidget {
+    
+}
+
 //class UIButton extends Widget {}
 
 // base of our synthetizer :D
+class SineWaveDemonstrator extends Widget {
+    constructor(){
+        super(...arguments);
+        this.angle = 0;
+        this.amplitude = 50;
+        this.frequency = 0.02;
+    }
+    onDraw(){
+        super.onDraw(...arguments)
+
+        // draw a basic green sin wave curve crossing from right to left on a black rounded rectangle
+        this.ctx.strokeWeight(1)
+        this.ctx.stroke("green")
+        this.ctx.fill("green")
+
+        // Start the shape
+        this.ctx.beginShape();
+        for (let x = 0; x < this.widgetSize.width; x++) {
+            let y = this.amplitude * Math.sin(this.angle);
+            this.ctx.vertex(x, y + this.widgetSize.height / 2);
+            this.angle += this.frequency;
+        }
+        this.ctx.endShape();
+    }
+}
 class OscilloscopeWidget extends Widget {
     constructor(){
         super(...arguments);
@@ -3640,12 +3703,12 @@ class RubiksCubeGL extends WidgetGL {
                 }
             }
         }
-        ctxP53D.camera(...["x","y","z"].map(v => this.cameraPos[v]));
+        // ctxP53D.camera(...["x","y","z"].map(v => this.cameraPos[v]));
         let fovy = PI/3.0;
         let aspect = windowWidth/windowHeight;
         let near = 0.1;
         let far = 10000;
-        ctxP53D.perspective(fovy, aspect, near, far)
+        //ctxP53D.perspective(fovy, aspect, near, far)
         // ctxP53D.ortho(left, right, bottom, top, near, far)
         window.rcgl = this;
     }
@@ -3656,7 +3719,7 @@ class RubiksCubeGL extends WidgetGL {
         ctxP53D.rotateY(QUARTER_PI/128);
         this.angle += 0.001;
 
-        ctxP53D.camera(this.cameraPos.x, this.cameraPos.y, this.cameraPos.z)
+        // ctxP53D.camera(this.cameraPos.x, this.cameraPos.y, this.cameraPos.z)
 
         for (let i = 0; i < this.cubes.length; i++) {
             ctxP53D.push();
@@ -3858,11 +3921,24 @@ class TetrisWidget extends Widget {
     }
 }
 class GridOfThingsWidget extends Widget {
-    pixelDensity = 4;
-    widgetSize = { width: 1000, height: 500 }
+    pixelDensity = 1;
+    widgetSize = { width: 500, height: 500 }
+    // Add new properties for animation
+    animationDuration = 3000; // Animation duration in milliseconds
+    creationTimestamp = null; // Timestamp when the widget was created
+    isAnimationComplete = false; // Flag to check if animation is complete
     constructor(){
         super(...arguments)
+        this.creationTimestamp = Date.now();
         this.cacheTheGrid();
+    }
+    calculateZDepth(i, j, progress) {
+        let delay = 0;// i * j * 0.01; // delay factor based on the position of the element
+        let adjustedProgress = Math.max(0, Math.min(1, (progress - delay) / this.duration)); // adjust progress by delay and duration
+        // Calculate the zDepth value from 0 to 1 over the duration of the animation
+        // The zDepth value increases in a fanned out flourish like a wave reveal of a deck of cards
+        let zDepth = 0.5 * (1 - Math.cos(Math.PI * adjustedProgress));
+        return zDepth;
     }
     cacheTheGrid(){
         rectMode(CENTER);
@@ -3886,6 +3962,10 @@ class GridOfThingsWidget extends Widget {
         // Define the starting position
         let startX = (this.cachedBitmap.width - squaresPerRow * squareSize) / 2;
         let startY = (this.cachedBitmap.height - rows * squareSize) / 2;
+
+        // Calculate the current animation progress
+        let progress = (Date.now() - this.creationTimestamp) / this.animationDuration;
+
         
         // Draw the grid on the offscreen graphics buffer
         this.cachedBitmap.push();
@@ -3894,7 +3974,16 @@ class GridOfThingsWidget extends Widget {
                 this.cachedBitmap.stroke("red")
                 this.cachedBitmap.fill("black")
                 this.cachedBitmap.strokeWeight(1 * this.pixelDensity)
-                this.cachedBitmap.rect(startX + j * squareSize, startY + i * squareSize, squareSize, squareSize);
+                // Calculate the z-depth of the cell based on the animation progress
+                let zDepth = this.calculateZDepth(i,j,progress);
+
+                // Draw the cell at the calculated z-depth
+                this.cachedBitmap.rect(
+                    startX + j * squareSize, 
+                    startY + i * squareSize, 
+                    squareSize * zDepth, 
+                    squareSize * zDepth,
+                    3 * this.pixelDensity);
 
                 // draw Text in the Rect
                 this.cachedBitmap.stroke("black")
@@ -3916,10 +4005,19 @@ class GridOfThingsWidget extends Widget {
         this.cachedBitmap.pop();
     }
     onDraw(){
-        super.onDraw(...arguments)
-        
-        // draw the cached bitmap
-        this.ctx.image(this.cachedBitmap, 0, 0, this.widgetSize.width, this.widgetSize.height);   
+        super.onDraw(...arguments);
+
+        // Check if animation is still ongoing
+        if (!this.isAnimationComplete && Date.now() - this.creationTimestamp <= this.animationDuration) {
+            // If so, update the cached bitmap
+            this.cacheTheGrid();
+        } else {
+            // If not, set the animation complete flag to true
+            this.isAnimationComplete = true;
+        }
+
+        // Draw the cached bitmap
+        this.ctx.image(this.cachedBitmap, 0, 0, this.widgetSize.width, this.widgetSize.height);    
     }
 }
 class CalendarWidget extends Widget {
@@ -10990,6 +11088,17 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["sine wave demo"](){
+        system.registerWidget(new SineWaveDemonstrator());
+    },
+    ["helix demo"](){
+        // uses a p5.js webgl context to draw a basic vector helix which
+        // can be cached and used as bitmap input by other widgets
+    },
+    ["new connector..."](){
+        // connect what to what and how?
+        system.todo("connect what to what, and how?")
+    },
     ["new oscilloscope"](){
         system.registerWidget(new OscilloscopeWidget());
     },
