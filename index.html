@@ -435,6 +435,13 @@
       pointer-events: none;
       z-index: 9003;
     }
+    #file-drop-ui {
+      z-index: 9004;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+    }
     </style>
     <meta charset="utf-8" />
 
@@ -448,8 +455,47 @@
 
   gtag('config', 'G-GYK2ZMX0M9');
 </script>
-  <body>
+  <body ondragover="event.preventDefault();" 
+    ondrop="system.onDrop(event);">
+    <style>
+      #file-drop-ui {
+        opacity: 0;
+        border: 10px dashed yellow;
+        pointer-events: none;
+        backdrop-filter: blur(10px);
+      }
+      #file-drop-ui #drop-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 2em;
+        color: yellow;
+      }
+      body.dragover #file-drop-ui {
+        opacity: 1;
+      }
+    </style>
+    
+    <script>
+      document.body.ondragenter = function(event) {
+        event.preventDefault();
+        document.body.classList.add('dragover');
+      }
+      document.body.ondragleave = function(event) {
+        // if the target is NOT the document element, leave it
+        console.warn('left', event.target);
+        if (event.target !== document) {
+          return;
+        }
+        document.body.classList.remove('dragover');
+      }
+    </script>
     <img id="bg-image" src="./res/bg-1.jpg" alt="">
+    <div id="file-drop-ui">
+      
+      <div id="drop-text">DROP STUFF HERE</div>
+    </div>
     <div id="deep-canvas-1" class="deep-canvas"></div>
     <div id="deep-canvas-2" class="deep-canvas"></div>
     <div id="deep-canvas-3" class="deep-canvas"></div>
