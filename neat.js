@@ -3941,7 +3941,7 @@ class GridOfThingsWidget extends Widget {
         return zDepth;
     }
     cacheTheGrid(){
-        rectMode(CENTER);
+        rectMode(CORNER);
             
         this.pixelScaledSize = {
             width: this.pixelDensity * this.widgetSize.width,
@@ -3951,14 +3951,14 @@ class GridOfThingsWidget extends Widget {
         this.cachedBitmap = createGraphics(
             this.pixelDensity * this.widgetSize.width, 
             this.pixelDensity * this.widgetSize.height);
-        this.cachedBitmap.rectMode(CENTER);
+        this.cachedBitmap.rectMode(CORNER);
         
         // Define the size of each square
         let squareSize = 20 * this.pixelDensity;
         // Define the number of squares per row
-        let squaresPerRow = 50;
+        let squaresPerRow = 100;
         // Define the number of rows
-        let rows = Math.ceil(500 / squaresPerRow);
+        let rows = Math.ceil(1000 / squaresPerRow);
         // Define the starting position
         let startX = (this.cachedBitmap.width - squaresPerRow * squareSize) / 2;
         let startY = (this.cachedBitmap.height - rows * squareSize) / 2;
@@ -14822,7 +14822,7 @@ function renderDebugUI(){
         // todo: zoom momentum / z-momentum
         { text: `panMomentumVector: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
         { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
-        { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
+        // { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
         { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` },
 
         {
@@ -14836,14 +14836,17 @@ function renderDebugUI(){
         { text: `deepRendererEnabled? ${!store.disableDeepCanvas}`}
     ];
 
-    let baseOffset = 20;
+    ctx.textSize(30);
+    let baseOffset = ctx.textSize();
     let offset = 60;
     debugTexts.forEach((debugText) => {
         ctx.fill("red");
         ctx.stroke("black");
         ctx.strokeWeight(3);
-        ctx.textSize(30);
-        ctx.text(debugText.text, windowWidth - ctx.textSize(), windowHeight - ctx.textSize()*2);
+        ctx.text(
+            debugText.text, 
+            windowWidth - ctx.textSize(), 
+            windowHeight - offset);
         offset += baseOffset;
     });
 
