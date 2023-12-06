@@ -686,13 +686,16 @@ class SystemManager {
  *   to the appropriate subsystems...
  */
 class System {
+    snapshotOf(obj){
+        return JSON.parse(JSON.stringify(obj))
+    }
     onCopy(e){
         system.todo("pick up where i left of with Copy integration")
     }
     onPaste(e){
         system.todo("pick up where i left of with Paste integration")
     }
-    onDrop(e){
+    async onDrop(e){
         console.warn('system.onDrop',e)
         document.body.classList.remove('dragover');
         e.preventDefault();
@@ -703,9 +706,7 @@ class System {
 
         // otherwise, throw a system notice that it's un unsupported file
         let files = e.dataTransfer.files;
-        if(files.length > 1){
-            console.warn('TODO: support multiple files!')
-        }
+
         if(files.length > 0){
             for(let i = 0; i < files.length; i++){
                 let file = files[i];
@@ -713,15 +714,25 @@ class System {
                 let validImageTypes = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
                 if(validImageTypes.includes(fileType)){
                     // Create a blob URL pointing to the image data
-                    let imageUrl = URL.createObjectURL(file);
+                    const imageUrl = URL.createObjectURL(file);
                     // Create an ImageViewerWidget with the blob URL
-                    system.registerWidgetInstance(new ImageViewerWidget(imageUrl));
+                    const widget = new ImageViewerWidget(imageUrl)
+                    // Register the widget instance with the system
+                    system.registerWidgetInstance(widget);
+                    // when the server responds with the upload status, inform the widget
+                    try {
+                        let response = await InvokableCommands["SEND_IMAGE_TO_SERVER_ASYNC"](file);
+                        widget.onUploadComplete(response);
+                    } catch (error) {
+                        widget.onUploadError(error);
+                    }
                 } else {
                     system.warn("Unsupported file type: " + fileType);
                 }
             }
         }else{
-            console.warn('no files?', e)
+            /** @see System.define */
+            console.warn('no files?', {e, frozen_e:system.snapshotOf(e)})
         }
     }
     registerWidgetAvailable(invokeable_command_string, widget_class){
@@ -2382,6 +2393,7 @@ class Widget extends UndoRedoComponent {
 
     // smart position is the parallaxed position on top of the local position (falls back to the base local position if no parallax is applied)
     get smartPosition(){
+        console.warn("smartPosition is deprecated")
         if(this.pinned && this.fixedPosition){
             return this.fixedPosition;
         }
@@ -2441,6 +2453,12 @@ class Widget extends UndoRedoComponent {
         this.zDepth = 0
 
         // should we decorate this class with any functionality?
+        
+        if(!this?.created?.call){
+            console.warn('Widget: no created() method found on widget',name)
+        }else{
+            this.created.call(this, name);
+        }
     }
 
     setTargetPosition(vector){
@@ -2916,11 +2934,13 @@ class Widget extends UndoRedoComponent {
             }
         //}
 
-        // print the previous frame duration
-        this.ctx.fill("white")
-        this.ctx.stroke("black")
-        this.ctx.strokeWeight(1)
-        text(`draw ms: ${this.prevFrameDrawDuration.toFixed(2)}ms`, 0, -20);
+        if(store.showWidgetPositions){
+            // print the previous frame duration
+            this.ctx.fill("white")
+            this.ctx.stroke("black")
+            this.ctx.strokeWeight(1)
+            text(`draw ms: ${this.prevFrameDrawDuration.toFixed(2)}ms`, 0, -20);
+        }
 
         // pop
         this.endDrawingContext();
@@ -2950,14 +2970,25 @@ class CopiedToClipboard extends Widget {
 // TODO: rich text / markdown / code editor / multi-cursor, etc backends
 class TextViewerWidget extends Widget {
     content = "hello this is a text viewer widget"
-
+    created(){
+        this.content = arguments[0] ?? this.content
+        console.warn('TextViewerWidget created',{
+            _t: this,
+            content: this.content,
+            _args: arguments
+        })
+    }
     onDraw(){
         super.onDraw(...arguments)
+
+        
 
         this.ctx.fill("black")
         this.ctx.rect(0,0,this.widgetSize.width,this.widgetSize.height)
         this.ctx.fill("white")
-        this.ctx.text(this.content, 0, 0)
+        this.ctx.textSize(12)
+        //this.ctx.text(this.content, 0, 0)
+        drawStringWordWrapped(this.content, 0, 0, 50, this.widgetSize.width, this.ctx);
 
     }
 }
@@ -5030,17 +5061,18 @@ class ImageViewerWidget extends Widget {
         super.onDraw(...arguments)
         // if(this.doNotDraw){ return; }
 
-        this.ctx.push();
-        this.ctx.scale(zoom,zoom)
+        
+        // In p5.js, if scale() is called with one argument, it scales both the x and y dimensions.
+        this.ctx.scale(zoom)
         this.ctx.image(
             this.image, 
-            this.smartPosition.x + (this.widgetSize.width - this.newWidth) / 2,
-            this.smartPosition.y + (this.widgetSize.height - this.newHeight) / 2,
+            (this.widgetSize.width - this.newWidth) / 2,
+            (this.widgetSize.height - this.newHeight) / 2,
             this.widgetSize.width,
             this.widgetSize.height
         );
         
-        this.ctx.pop();
+        
     }
 }
 /* 
@@ -5078,9 +5110,18 @@ function drawCrosshair(ctx, _color, vec2){
     )
 }
 
+// todo extend Widget.onDraw
 class Cursor {
     draw(){
         let ctx = deepCanvasManager.uiContext;
+
+        // draw a crosshair at the mouse position
+        drawCrosshair(ctx, "blue", {x: ctx.mouseX, y: ctx.mouseY})
+
+        if(!store.showDebugCursor){
+            return;
+        }
+
         // debug draw a line from the center of the screen to where we think the mouse is,
         // to help debug the mouse position
         ctx.push();
@@ -5092,8 +5133,7 @@ class Cursor {
         ctx.stroke("purple")
         ctx.line(ctx.mouseX, ctx.mouseY, ctx.pmouseX, ctx.pmouseY)
 
-        // draw a crosshair at the mouse position
-        drawCrosshair(ctx, "blue", {x: ctx.mouseX, y: ctx.mouseY})
+        
 
         ctx.stroke("green")
 
@@ -7236,7 +7276,11 @@ document.addEventListener('mousedown', function(event) {
         raycast,
     })
 
-    raysToVisualize.push(raycast);
+
+    if(store.visualizeRays){
+        raysToVisualize.push(raycast);
+    }
+    // decay: remove them over time
     setTimeout(()=>{
         raysToVisualize.unshift();
     },3000)
@@ -7471,6 +7515,45 @@ class LayereredCanvasRenderer {
 
         //this.draw()
     }
+
+
+    getProcessingJSWebGL3DContext(){
+        // if one exists, it is returned
+        // else none exist, and layer is added and the context is returned
+        if (this.webGLContext) {
+            return this.webGLContext;
+        } else {
+            let newLayer = this.addLayer('webgl');
+            this.webGLContext = newLayer.getContext('webgl');
+            return this.webGLContext;
+        }
+    }
+
+    addLayer(typename){
+        let createdLayer = null;
+        switch(typename){
+            case 'html':
+                createdLayer = this.createHTMLLayer();
+                break;
+            case 'webgl':
+                createdLayer = this.createWebGLLayer();
+                break;
+            case 'three.js':
+                createdLayer = this.createTHREEJSLayer();
+                break;
+            case 'p5js2d':
+                createdLayer = this.createP5JS2DLayer();
+                break;
+            case 'd3js':
+                createdLayer = this.createD3JSLayer();
+                break;
+            default:
+                system.panic(`Failed to create Rendering Layer; unknown layer type ${typename}`)
+                break;
+        }
+        return createdLayer;
+    }
+
     onResize(){
         // update the dimensions to match the window (of all 3 canvases)
         this.canvases.forEach((canvas)=>{
@@ -11200,6 +11283,18 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["List {Invokable Commands}"](){},
+    ["Show {Invokable Commands}"](){},
+    ["Describe {Invokable Commands}"](){},
+    ["Help Page For {Invokable Command}"](){},
+
+    // localized, limited, quick
+    ["Re-Roll AI Cache For This Node"](){},
+    // slow, background, potentially delayed / incomplete results
+    ["Re-Roll AI Cache For This Node AND All Downstream Nodes"](){},
+
+
+
     ["Inspiration: simple generative graph example - Orion Reed"](){
         system.registerWidget(new iFrameWidget(
             "https://x.com/OrionReedOne/status/1731965009981301071?s=20"
@@ -11310,6 +11405,8 @@ const InvokableCommands = {
     ["new trivia"](){
         system.todo("!!! NotYetImplemented !!!")
     },
+    // ["hide debug cursor"](){}
+    // ["show debug cursor"](){}
     ["toggle debug cursor"](){
         store.showDebugCursor = !store.showDebugCursor;
     },
@@ -11525,9 +11622,15 @@ const InvokableCommands = {
         // scrolling="no"></iframe>`
       }))
     },
-    // ["Play SNES Super Mario Kart"]
+    ["cue up..."](){},
+    ["Play SNES Super Mario Kart"](){
+
+    },
     // ["Play SNES Pac Attack"]
-    ["Play Battle Tetris - jstris (from Gather.town)"](){
+    ["Play Battle Tetris - Jstris (from Gather.town)"](){
+        system.registerWidget(new iFrameWidget(
+            "https://jezevec10.com"
+        ))
         system.registerWidget(new iFrameWidget(
             "https://jstris.jezevec10.com/",{
                 widgetSize:{width:800,height:600}
@@ -11553,6 +11656,20 @@ const InvokableCommands = {
         return "https://www.youtube.com/watch?v=T7jH-5YQLcE&width=800&height=600";
     },
     ["Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]"](){
+        // // offer up the lyrics on rap genius
+        // // https://genius.com/Aesop-rock-kyanite-toothpick-lyrics => <div id='rg_embed_link_9519850' class='rg_embed_link' data-song-id='9519850'>Read <a href='https://genius.com/Aesop-rock-kyanite-toothpick-lyrics'>“Kyanite Toothpick” by Aesop Rock</a> on Genius</div> <script crossorigin src='//genius.com/songs/9519850/embed.js'></script>
+        // system.registerWidget(new iFrameWidget(
+        //     "https://genius.com/Aesop-rock-kyanite-toothpick-lyrics"
+        // ))
+
+        // render the lyrics in a text viewer
+        // TODO: make the song appear when lyrics are recognized?
+        system.registerWidget(new TextViewerWidget(
+            "Hello! I'm a text viewer widget! I can render text, markdown, and html!",
+        ))
+
+        // Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]
+        // Rhymesayers Entertainment
         return "https://www.youtube.com/watch?v=1ogz-QzaCQ8"
     },
     ["Play Mindful Solutionism"](){
@@ -11642,6 +11759,26 @@ const InvokableCommands = {
         }
         socketIO.emit('message', sanitized);
     },
+    ["stream PCM Audio Data from microphone to server..."](){
+        system.todo("DO IT ALREADY");
+    },
+    /* async suffix means it returns a promise */
+    ["Send Image To Server Async"](){
+        let file = arguments[0]; /* from a Drop Event */
+        let formData = new FormData();
+        formData.append('file', file);
+        return fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            system.info("Image sent to server!");
+        })
+        .catch((error) => {
+            system.error("Error:", error);
+        });
+    },
     ["DEV: Toggle Clear BG Flag(s)"](){
         // clear the cmd palette first, wait a tick THEN unset the flag
         store.CmdPromptVisible = false;
@@ -11655,9 +11792,10 @@ const InvokableCommands = {
         },1000)
     },
     
-    ["Play: Had What is Love"](){
+    ["Play (Youtube): Haddaway - What Is Love [Official]"](){
+        return "https://www.youtube.com/watch?v=OFNrN_6Ta5I";
         // when AI guesses right?!
-        return "https://www.youtube.com/watch?v=HEXWRTEbj1I";
+        // return "https://www.youtube.com/watch?v=HEXWRTEbj1I";
     },
 
     ["Play: The Avalanches > Frontier Psychiatrist"](){
@@ -14994,8 +15132,36 @@ function handleAnalogStickInput(){
 let FPS;
 let frameTimes = [];
 let lastFrameTime;
+const getCurrentDebugTexts = function(){
+    return [
+        { text: `FPS: ${FPS.toFixed(2)}` },
+        { text: `current widget count ${Object.keys(system.dashboard.widgets).length}` },
+        { text: `DrawCalls: ${store.frameDrawCount}` },
+        { text: `center:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
+        // todo: zoom momentum / z-momentum
+        { text: `panMomentumVector: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
+        { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
+        // { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
+        { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` },
+    
+        {
+            text: `Touch Inputs: ${store.touchInputs.length}`,
+        },
+    
+        {
+            text:`fov ${fov}`
+        },
+        { text: `focusedIndex ${deepCanvasManager.focusedIndex}`},
+        { text: `deepRendererEnabled? ${!store.disableDeepCanvas}`}
+    ]
+};
 
 function renderDebugUI(){
+
+    if(!store.showDebugCursor){
+        return;
+    }
+
     let ctx = deepCanvasManager.uiContext;
     // push into rolling frameTimes array
     frameTimes.push(millis());
@@ -15010,27 +15176,8 @@ function renderDebugUI(){
     ctx.textSize(16);
     ctx.textAlign(RIGHT, BOTTOM);
     //debugstats
-    const debugTexts = [
-        { text: `FPS: ${FPS.toFixed(2)}` },
-        { text: `current widget count ${Object.keys(system.dashboard.widgets).length}` },
-        { text: `DrawCalls: ${store.frameDrawCount}` },
-        { text: `center:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
-        // todo: zoom momentum / z-momentum
-        { text: `panMomentumVector: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
-        { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
-        // { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
-        { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` },
-
-        {
-            text: `Touch Inputs: ${store.touchInputs.length}`,
-        },
-
-        {
-            text:`fov ${fov}`
-        },
-        { text: `focusedIndex ${deepCanvasManager.focusedIndex}`},
-        { text: `deepRendererEnabled? ${!store.disableDeepCanvas}`}
-    ];
+    
+    const debugTexts = getCurrentDebugTexts();
 
     ctx.textSize(30);
     let baseOffset = ctx.textSize();
@@ -15501,7 +15648,7 @@ function setupDefaults(){
                 // if it's an ARRAY of STRINGS, we need to do ths same check and early return
 
                 try{
-                    if(!InvokableCommands[machineizedCmdName] || !InvokableCommands[machineizedCmdName]?.call){c
+                    if(!InvokableCommands[machineizedCmdName] || !InvokableCommands[machineizedCmdName]?.call){
                         console.warn("command must be one of:",Object.keys(InvokableCommands))
                         system.panic("bad command name: "+machineizedCmdName)
                     }
@@ -16189,11 +16336,24 @@ void main(void) {
                 cmdprompt?.onCmdPromptInput(e);
             //}
         })
+        // primary key bindinds...
+
         document.addEventListener('keydown', (e)=>{
             console.warn('keypress',{e})
             const ctrlOrCmd = e.ctrlKey || e.metaKey;
+
+            // TODO: make this a static command matrix... !!!
+
+            if(ctrlOrCmd && e.key === 'd'){
+                system.alert("don't bookmark, just come back.")
+                e.preventDefault();
+                cmdprompt.showCmdPrompt();
+                return;
+            } 
+
             // Check if Ctrl key is pressed along with P
             if (ctrlOrCmd && e.key === 'p') {
+                // ctrl + p, cmd + p, cmd&p||ctrl&p
                 // Prevent the default ctrl p ctrl+p print action!
                 e.preventDefault();
                 //alert("Ctrl+P has been disabled!");
@@ -16335,6 +16495,13 @@ void main(void) {
         // NEW: init the widget dashboard
         system.dashboard.init()
 
+        system.registerWidget(
+            new ImageViewerWidget("fine.gif")
+        )
+
+        system.todo("log time till framerate stable (boot seq time)")
+
+        /*
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
         const grw = new GherkinRunnerWidget();
         grw.centerPosition();
@@ -16342,21 +16509,23 @@ void main(void) {
         grw.setResults(autorunFeatureTestResults);
         // demo widgets
         system.dashboard.registerWidget(grw);
-        system.dashboard.registerWidget(new RubiksCubeWidget());
-        system.dashboard.registerWidget(new RubiksCubeGL());
+        */
+
+       system.dashboard.registerWidget(new RubiksCubeGL());
+       // system.dashboard.registerWidget(new RubiksCubeWidget());
         system.dashboard.registerWidget(new ClientResolverDebugWidget());
 
         system.dashboard.registerWidget(new ImageViewer("cheshire-cat.gif"));
         // system.dashboard.newWidgetInstance(ImageSpinner, "cheshire-cat.gif");
 
         // current workbench of demo widgets // work bench
-        InvokableCommands["new text viewer widget"]()
-        InvokableCommands["view welcome message"]()
-        InvokableCommands["question of the day"]()
-        InvokableCommands["hello my name is..."]()
-        InvokableCommands["text me..."]()
-        InvokableCommands["i'm feeling feelings..."]()
-        InvokableCommands["view ChangeLog"]()
+        // InvokableCommands["new text viewer widget"]()
+        // InvokableCommands["view welcome message"]()
+        // InvokableCommands["question of the day"]()
+        // InvokableCommands["hello my name is..."]()
+        // InvokableCommands["text me..."]()
+        // InvokableCommands["i'm feeling feelings..."]()
+        // InvokableCommands["view ChangeLog"]()
 
         // InvokableCommands["new iframe"](`https://editor.p5js.org/jakedowns/full/LM0oRxYGt`,{
         //     widgetSize: {
@@ -16364,12 +16533,12 @@ void main(void) {
         //         height: 400
         //     }
         // })
-        InvokableCommands["new grid of things"]();
-        InvokableCommands["open calendar"]();
-        InvokableCommands["new timer"]();
-        InvokableCommands["new oscilloscope"]();
-        InvokableCommands["new pie chart"]();
-        InvokableCommands["new donut chart"]();
+        // InvokableCommands["new grid of things"]();
+        // InvokableCommands["open calendar"]();
+        // InvokableCommands["new timer"]();
+        // InvokableCommands["new oscilloscope"]();
+        // InvokableCommands["new pie chart"]();
+        // InvokableCommands["new donut chart"]();
 
         // loadTestWidgets
         if(store.showTestWidgets){
@@ -16526,8 +16695,6 @@ void main(void) {
                 .registerWidget(
                     new ImageViewerWidget("fine.gif")
                 )
-                
-                // .registerWidget("GherkinRunnerWidget",  grw)
                 
                 // // intentionally on a separate line to make it easier to comment out last chained method
                 // ;
@@ -16822,27 +16989,29 @@ void main(void) {
         /**
          * @type {Raycast[]}
          */
-        raysToVisualize.forEach((ray)=>{
-            let uictx = deepCanvasManager.uiContext;
-            uictx.push()
-            // Draw a blue dot at the source
-            uictx.fill(0,0,255);
-            uictx.ellipse(ray.from.x, ray.from.y, 2.5, 2.5);
-            // Draw a red dot at the destination
-            uictx.fill(255,0,0);
-            uictx.ellipse(ray.to.x, ray.to.y, 5, 5);
-            // Draw a line from source to destination
-            uictx.stroke(0, 255, 0);
-            uictx.strokeWeight(1);
-            uictx.line(
-                ray.from.x, 
-                ray.from.y, 
-                //ray.from.z, 
-                ray.to.x, 
-                ray.to.y //, ray.to.z
-            );
-            uictx.pop()
-        })
+        if(store.visualizeRays){
+            raysToVisualize.forEach((ray)=>{
+                let uictx = deepCanvasManager.uiContext;
+                uictx.push()
+                // Draw a blue dot at the source
+                uictx.fill(0,0,255);
+                uictx.ellipse(ray.from.x, ray.from.y, 2.5, 2.5);
+                // Draw a red dot at the destination
+                uictx.fill(255,0,0);
+                uictx.ellipse(ray.to.x, ray.to.y, 5, 5);
+                // Draw a line from source to destination
+                uictx.stroke(0, 255, 0, 0.1);
+                uictx.strokeWeight(100);
+                uictx.line(
+                    ray.from.x, 
+                    ray.from.y, 
+                    //ray.from.z, 
+                    ray.to.x, 
+                    ray.to.y //, ray.to.z
+                );
+                uictx.pop()
+            })
+        }
     }
 
     // Define the mouseReleased function
@@ -17020,8 +17189,7 @@ void main(void) {
                 // mouseShifted.y = p.lerp(mouseShifted.y, targetY, 0.1);
             }
     
-            
-            if(!store.disableDebugPath){    
+            if(store.showDebugCursor){    
                 DebugPathInstance.addPoint(
                     -mouseShifted.x, 
                     -mouseShifted.y, 
@@ -17079,15 +17247,24 @@ void main(void) {
         // reset any transforms
         // mainCanvasContext.pop();
     
-        // render toast notifications
-        system.get("toastManager")?.draw?.();
+        
     
         // ^^^ below the command palette
+        if(store.renderNotificationsBelowCommands){
+            // render toast notifications
+            system.get("toastManager")?.draw?.();
+        }
     
         // if the command palette is visible, draw it
         if(store.CmdPromptVisible){
             /** @see CmdPrompt.renderCommandPrompt */
             cmdprompt?.renderCommandPrompt?.();
+        }
+
+        /// vvv above the command palette
+        if(1 || store.renderNotificationsAboveCommands){
+            // render toast notifications
+            system.get("toastManager")?.draw?.();
         }
     
         // display the current wizard (if any)
@@ -17666,6 +17843,7 @@ class SuggestionList {
      */
     // searchable words:
     // draw suggested / drawSuggested drawSuggestion
+    // drawSuggestedOption / drawSuggestionOption
     renderSuggestionOption(x,y,w,h,label,selected,ctx){
         ctx.push()
         // ctx.translate(x,y);
@@ -17679,6 +17857,7 @@ class SuggestionList {
         ctx.rect(0,0,w,h);
         ctx.fill(255)
         ctx.strokeWeight(3);
+        ctx.textSize(40);
         // draw label
         drawStringWordWrapped(
             label,
