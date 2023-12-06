@@ -696,6 +696,7 @@ class System {
         console.warn('system.onDrop',e)
         document.body.classList.remove('dragover');
         e.preventDefault();
+        store.lastDropEvent = e;
         //console.warn('ON DROP', arguments)
         
         // render the image (if it is an image)
@@ -710,7 +711,8 @@ class System {
             for(let i = 0; i < files.length; i++){
                 let file = files[i];
                 let fileType = file.type;
-                let validImageTypes = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
+                let validImageTypes = ['image/gif', 'image/jpeg', 'image/png', 'image/webp', ];
+                validImageTypes.push('image/svg+xml');
                 if(validImageTypes.includes(fileType)){
                     // Create a blob URL pointing to the image data
                     let imageUrl = URL.createObjectURL(file);
@@ -15011,7 +15013,7 @@ function renderDebugUI(){
     ctx.textAlign(RIGHT, BOTTOM);
     //debugstats
     const debugTexts = [
-        { text: `FPS: ${FPS.toFixed(2)}` },
+        // { text: `FPS: ${FPS.toFixed(2)}` },
         { text: `current widget count ${Object.keys(system.dashboard.widgets).length}` },
         { text: `DrawCalls: ${store.frameDrawCount}` },
         { text: `center:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
@@ -16012,6 +16014,10 @@ let cursor, MainCanvasContextThing = function(p){
         console.info("booting...");
         manager.boot(); 
         rootSystem = system = manager.systems[0];
+
+        // stat.js
+        (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
+
 
         system.plopAudioPlayer = mctx.createAudio('res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3');
         system.plopAudioPlayer.volume(0.1);
