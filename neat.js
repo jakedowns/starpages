@@ -6104,6 +6104,10 @@ class iFrameWidget extends Widget {
         let time = Date.now() * 0.001; // Get current time in seconds
         let skewValueX = Math.sin(time); // Calculate sin value of the current time for x-axis skew
         let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
+        let rollingColor = color(255, 0, 0, 100); // Create a color with alpha
+        // shift the hue of the color over time
+        rollingColor.setHue((time * 100) % 255);
+        this.ctx.fill(rollingColor);
         this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
         // squash scale to account for skew in screen space
         this.ctx.scale(1.5,1)
@@ -11373,6 +11377,15 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["Youtube - Art of the Problem - How Neural Networks Learned to Talk | ChatGPT: A 30 Year History"](){
+        return "https://www.youtube.com/watch?v=OFS90-FX6pg"
+    },
+    ["waves"](){
+        return "https://www.youtube.com/watch?v=2AXv49dDQJw"
+    },
+    ["New Graph 2.0"](){},
+    ["New Lava lamp"](){},
+    ["New Fluid Sim!"](){},
     ["YouTube - Joe Pera Talks you back to sleep"](){
         return "https://www.youtube.com/watch?v=DSUilYKcRMA";
     },
@@ -11830,6 +11843,9 @@ const InvokableCommands = {
     // ["Play N64 > ..."](){
 
     // },
+    ["todo keep track of how many times you execute each command"](){
+
+    },
     ["Play N64 Yoshi's Story"](){
         /*
         <iframe src="https://www.retrogames.cc/embed/32546-yoshi-s-story-usa-en-ja.html" width="600" height="450" frameborder="no" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" scrolling="no"></iframe>
@@ -11875,6 +11891,9 @@ const InvokableCommands = {
             }
         ))
     },
+    ["Youtube - Britney Spears - Stronger"](){
+        return "https://www.youtube.com/watch?v=Cz70JkxsFTA"
+    },
     ["3"](){
         // 3 toggles 3 js mode
         InvokableCommands["Load THREE.js"]()
@@ -11899,6 +11918,8 @@ const InvokableCommands = {
         // system.registerWidget(new iFrameWidget(
         //     "https://genius.com/Aesop-rock-kyanite-toothpick-lyrics"
         // ))
+
+        system.registerWidget(new iFrameWidget("https://en.wikipedia.org/wiki/Kyanite"))
 
         // render the lyrics in a text viewer
         // TODO: make the song appear when lyrics are recognized?
@@ -13884,7 +13905,7 @@ class CmdPrompt extends Widget {
         //CmdPromptInput.elt.style.filter = 'blur(10px)';
 
         CmdPromptInput.style('border', 'none');
-
+        CmdPromptInput.style('');
 
         
         
