@@ -328,6 +328,9 @@
         height: 100vh;
         overflow: hidden;
     }
+    body.monochrome {
+      filter: grayscale(100%);
+    }
     input {
       z-index: 3;
     }
@@ -362,6 +365,10 @@
     }
     #cmdprompt-input {
       border-radius: 100px;
+      outline: none;
+    }
+    #cmdprompt-input:focus {
+      outline: none;
     }
     canvas {
       position: absolute;
