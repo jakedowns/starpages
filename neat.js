@@ -685,17 +685,83 @@ class SystemManager {
  *   then watch them ripple from yellow back to green as the system autonomously accepts and distributes the verified changes
  *   to the appropriate subsystems...
  */
+/** System.constructor(SystemManager manager) */
 class System {
+    fallbackImage = null;
+    // aka .resource(url) // return from cache or fetch,stash and return
+    // aka maybeImage or imageOrNull or imageOrDefault (while loading...)
+    // synchronous tho, no waiting required, so that's nice
+    image(url){
+        // if it's a cache miss, kick off a fire and forget imageAsync call to load it in the background
+        // and in the meantime return a filler image
+        // btw, the call to imageasync is idempotent, it knows if it has a request midflight and won't
+        // stack up multiple requests for the same image
+        // we could call it imageAsyncDebounced || imageAsyncThrottled
+        if(!this.PreloadedImages[url]){
+            // AHHH we fired and forgot some async code, it's the end of teh world!
+            this.imageAsync(url);
+            return system.fallbackImage;
+        }
+        return this.PreloadedImages[url]
+    }
+    // loadImage
+    loadImageAsync(url){
+        return this.imageAsync(url);
+    }
+    // getImage
+    // getImageAsync
+    // async suffix means it returns a promise
+    imageAsync(url){
+        if(!url){
+            return Promise.resolve(this.fallbackImage);
+        }
+
+        let urlLoadable = url;
+        if(!urlLoadable.includes("res/") && !urlLoadable.includes("://")){
+            urlLoadable = url.startsWith('/') ? "/res" + url : "/res/" + url;
+        }
+
+        return new Promise((resolve,reject)=>{
+            // NOTE: some methods can refer to system on the global space
+            // when this method is called, we can ONLY refer to system as "this"
+            const system = this;
+            // returns from cache or adds to cache and returns
+            if(system.PreloadedImages[url]){
+                resolve(system.PreloadedImages[url]);
+                return;
+            }
+            //console.warn('about to load',{url})
+            if(!(url?.trim?.() ?? "")?.length){
+                reject(system.fallbackImage);
+                system.panic("System.imageAsync: no url provided");
+                return;
+            }
+            try{
+                loadImage(urlLoadable, (img) => {
+                    system.PreloadedImages[url] = img;
+                    resolve(img);
+                });
+            }catch(e){
+                //throw new Error(e);
+                reject(system.fallbackImage);
+                system.panic(e)
+            }
+        })
+    }
+    snapshotOf(obj){
+        return JSON.parse(JSON.stringify(obj))
+    }
     onCopy(e){
         system.todo("pick up where i left of with Copy integration")
     }
     onPaste(e){
         system.todo("pick up where i left of with Paste integration")
     }
-    onDrop(e){
+    async onDrop(e){
         console.warn('system.onDrop',e)
         document.body.classList.remove('dragover');
         e.preventDefault();
+        store.lastDropEvent = e;
         //console.warn('ON DROP', arguments)
         
         // render the image (if it is an image)
@@ -703,25 +769,34 @@ class System {
 
         // otherwise, throw a system notice that it's un unsupported file
         let files = e.dataTransfer.files;
-        if(files.length > 1){
-            console.warn('TODO: support multiple files!')
-        }
+
         if(files.length > 0){
             for(let i = 0; i < files.length; i++){
                 let file = files[i];
                 let fileType = file.type;
-                let validImageTypes = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'];
+                let validImageTypes = ['image/gif', 'image/jpeg', 'image/png', 'image/webp', ];
+                validImageTypes.push('image/svg+xml');
                 if(validImageTypes.includes(fileType)){
                     // Create a blob URL pointing to the image data
-                    let imageUrl = URL.createObjectURL(file);
+                    const imageUrl = URL.createObjectURL(file);
                     // Create an ImageViewerWidget with the blob URL
-                    system.registerWidgetInstance(new ImageViewerWidget(imageUrl));
+                    const widget = new ImageViewerWidget(imageUrl)
+                    // Register the widget instance with the system
+                    system.registerWidgetInstance(widget);
+                    // when the server responds with the upload status, inform the widget
+                    try {
+                        let response = await InvokableCommands["SEND_IMAGE_TO_SERVER_ASYNC"](file);
+                        widget.onUploadComplete(response);
+                    } catch (error) {
+                        widget.onUploadError(error);
+                    }
                 } else {
                     system.warn("Unsupported file type: " + fileType);
                 }
             }
         }else{
-            console.warn('no files?', e)
+            /** @see System.define */
+            console.warn('no files?', {e, frozen_e:system.snapshotOf(e)})
         }
     }
     registerWidgetAvailable(invokeable_command_string, widget_class){
@@ -861,6 +936,7 @@ class System {
     notify(){
         this.get("toastManager").showToast(...arguments);
     }
+    // System.constructor(SystemManager manager)
     constructor(manager){
         this.manager = manager;
     }
@@ -912,8 +988,26 @@ class System {
         }
         console.warn('assiging System singleton',{name,instance})
     }
+    boot(){
+        // while the system boots and we're not 100% sure we've got the image loaded yet
+        // let's construct a quick 50x50 image using canvas
+        let buffer = createGraphics(50, 50);
+        buffer.background('black');
+        buffer.stroke('red');
+        buffer.strokeWeight(5);
+        buffer.line(0, 0, 50, 50);
+        buffer.line(50, 0, 0, 50);
+        this.fallbackImage = buffer;
+        loadImage("res/new2this.webp",(img)=>{
+            //this.fallbackImage = img;
+        });
+    }
     panic(){
         try{
+            if(!this?.manager?.panic){
+                console.error(...arguments);
+                return;
+            }
             this.manager.panic(this.tag + ": ",...
             arguments);
         }catch(e){
@@ -926,6 +1020,7 @@ class System {
         console.error(this.tag + ": ", ...arguments);
     }
     warn(){
+        if(!this?.manager?.warn){ console.warn('no manager.warn',this,arguments); return; }
         this.manager.warn(this.tag + ": ", ...arguments);
     }
     print(){
@@ -962,7 +1057,8 @@ class System {
         console.error(message);
     }
     hideCmdPrompt(){
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
+        //cmdprompt.hide();
     }
     get time(){
         // returns either passthrough time or modified time
@@ -1035,6 +1131,7 @@ const manager = rootManager; // alias
  * @see System
  // @property {System} system
  */
+// todo: probably time to start cleaning up any references from "system" to "rootSystem" since we need to think in terms of multi-sandbox features
 let system = new System();
 
 let rootSystem; // alias
@@ -2382,6 +2479,7 @@ class Widget extends UndoRedoComponent {
 
     // smart position is the parallaxed position on top of the local position (falls back to the base local position if no parallax is applied)
     get smartPosition(){
+        //console.warn("smartPosition is deprecated")
         if(this.pinned && this.fixedPosition){
             return this.fixedPosition;
         }
@@ -2441,6 +2539,12 @@ class Widget extends UndoRedoComponent {
         this.zDepth = 0
 
         // should we decorate this class with any functionality?
+        
+        if(!this?.created?.call){
+            console.warn('Widget: no created() method found on widget',name)
+        }else{
+            this.created.call(this, name);
+        }
     }
 
     setTargetPosition(vector){
@@ -2694,6 +2798,11 @@ class Widget extends UndoRedoComponent {
         return ctx;
     }
 
+    /** 
+     * @description more than just this.ctx.push, it zeros the drawing coordinates to the widget's origin and relative scale
+     * make sure to use this.leaveDrawing() when you're done
+     * 
+     */
     enterDrawingContext(){
         this.ctx.push();
         this.ctx.translate(
@@ -2706,6 +2815,11 @@ class Widget extends UndoRedoComponent {
         )
     }
     endDrawingContext(){
+        this.leaveDrawing();
+    }
+    // exitWidgetSpace, exit widget frame of reference?
+    // enter widget, exit widget
+    leaveDrawingContext(){
         this.leaveDrawing();
     }
     leaveDrawing(){
@@ -2916,11 +3030,13 @@ class Widget extends UndoRedoComponent {
             }
         //}
 
-        // print the previous frame duration
-        this.ctx.fill("white")
-        this.ctx.stroke("black")
-        this.ctx.strokeWeight(1)
-        text(`draw ms: ${this.prevFrameDrawDuration.toFixed(2)}ms`, 0, -20);
+        if(store.showWidgetPositions){
+            // print the previous frame duration
+            this.ctx.fill("white")
+            this.ctx.stroke("black")
+            this.ctx.strokeWeight(1)
+            text(`draw ms: ${this.prevFrameDrawDuration.toFixed(2)}ms`, 0, -20);
+        }
 
         // pop
         this.endDrawingContext();
@@ -2950,14 +3066,25 @@ class CopiedToClipboard extends Widget {
 // TODO: rich text / markdown / code editor / multi-cursor, etc backends
 class TextViewerWidget extends Widget {
     content = "hello this is a text viewer widget"
-
+    created(){
+        this.content = arguments[0] ?? this.content
+        console.warn('TextViewerWidget created',{
+            _t: this,
+            content: this.content,
+            _args: arguments
+        })
+    }
     onDraw(){
         super.onDraw(...arguments)
+
+        
 
         this.ctx.fill("black")
         this.ctx.rect(0,0,this.widgetSize.width,this.widgetSize.height)
         this.ctx.fill("white")
-        this.ctx.text(this.content, 0, 0)
+        this.ctx.textSize(12)
+        //this.ctx.text(this.content, 0, 0)
+        drawStringWordWrapped(this.content, 0, 0, 50, this.widgetSize.width, this.ctx);
 
     }
 }
@@ -3237,17 +3364,19 @@ class FlashCard extends Widget {
         this.front = front;
         this.back = back;
     }
-    draw(){
-        mctx.push()
-        mctx.strokeWeight(1)
-        mctx.color("red")
-        mctx.rect(
-            this.smartPosition.x,
-            this.smartPosition.y,
+    onDraw(){
+        super.onDraw(...arguments)
+        
+        strokeWeight(1)
+        stroke("yellow")
+        fill("blue")
+        rect(
+            0, 0,
             this.size.width,
-            this.size.height
+            this.size.height,
+            20
         )
-        mctx.pop()
+        
     }
 }
 
@@ -3333,6 +3462,7 @@ class GreekAlphabetWidget extends FlashCardWidget {
         this.cards = this.alphabet.map((letter,index)=>{
             return new FlashCard(index,letter,this.symbols[index])
         })
+        // postConstructor
         super.afterConstructor();
     }
     
@@ -3501,22 +3631,22 @@ class MessengerWidget extends Widget {
     onDraw(){
         super.onDraw(...arguments)
         // mctx.push()
-        mctx.rectMode(CENTER);
-        mctx.fill("lightblue")
-        mctx.rect(
-            this.widgetSize.width / 2,
-            this.widgetSize.height / 2,
-            this.widgetSize.width,
-            this.widgetSize.height,
-            20 // this is the radius for the rounded corners
-        );
+        // mctx.rectMode(CENTER);
+        // mctx.fill("lightblue")
+        // mctx.rect(
+        //     this.widgetSize.width / 2,
+        //     this.widgetSize.height / 2,
+        //     this.widgetSize.width,
+        //     this.widgetSize.height,
+        //     20 // this is the radius for the rounded corners
+        // );
         mctx.fill("black")
         let tpx = this.widgetSize.width / 2;
         let tpy = this.widgetSize.height / 2;
         let tsx = this.widgetSize.width;
         let tsy = this.widgetSize.height;
-        mctx.textSize(20)
-        mctx.textAlign(CENTER, CENTER)
+        // mctx.textSize(20)
+        // mctx.textAlign(CENTER, CENTER)
         mctx.text("Messenger!", tpx,tpy,tsx,tsy)
         // mctx.pop()
     }
@@ -4968,6 +5098,7 @@ class ImageViewerWidget extends Widget {
         // if the src contains .gif, use a gif renderer
         this.isGif = this.src.includes(".gif");
 
+        // todo: use system.image instead
         if(system.PreloadedImages[this.src]){
             this.image = system.PreloadedImages[this.src];
         }else{
@@ -5030,17 +5161,18 @@ class ImageViewerWidget extends Widget {
         super.onDraw(...arguments)
         // if(this.doNotDraw){ return; }
 
-        this.ctx.push();
-        this.ctx.scale(zoom,zoom)
+        
+        // In p5.js, if scale() is called with one argument, it scales both the x and y dimensions.
+        this.ctx.scale(zoom)
         this.ctx.image(
             this.image, 
-            this.smartPosition.x + (this.widgetSize.width - this.newWidth) / 2,
-            this.smartPosition.y + (this.widgetSize.height - this.newHeight) / 2,
+            (this.widgetSize.width - this.newWidth) / 2,
+            (this.widgetSize.height - this.newHeight) / 2,
             this.widgetSize.width,
             this.widgetSize.height
         );
         
-        this.ctx.pop();
+        
     }
 }
 /* 
@@ -5078,9 +5210,18 @@ function drawCrosshair(ctx, _color, vec2){
     )
 }
 
+// todo extend Widget.onDraw
 class Cursor {
     draw(){
         let ctx = deepCanvasManager.uiContext;
+
+        // draw a crosshair at the mouse position
+        drawCrosshair(ctx, "blue", {x: ctx.mouseX, y: ctx.mouseY})
+
+        if(!store.showDebugCursor && !store.showDebugLayer){
+            return;
+        }
+
         // debug draw a line from the center of the screen to where we think the mouse is,
         // to help debug the mouse position
         ctx.push();
@@ -5092,8 +5233,7 @@ class Cursor {
         ctx.stroke("purple")
         ctx.line(ctx.mouseX, ctx.mouseY, ctx.pmouseX, ctx.pmouseY)
 
-        // draw a crosshair at the mouse position
-        drawCrosshair(ctx, "blue", {x: ctx.mouseX, y: ctx.mouseY})
+        
 
         ctx.stroke("green")
 
@@ -7215,7 +7355,7 @@ document.addEventListener('mousedown', function(event) {
     // we'll add layer-swapping back in later
     // and per-layer shader hooks :D
 
-    system.todo("remember to update drawing canvas based on segmented z depth to allow for objects to traverse the z axis without swapping entire layers (tho if you need to we recommend it for performance reasons)")
+    // system.todo("remember to update drawing canvas based on segmented z depth to allow for objects to traverse the z axis without swapping entire layers (tho if you need to we recommend it for performance reasons)")
         
     // keep the focus, just swap the top layer
     // deepCanvasManager.focusedIndex = deepCanvasManager.focusedIndex === 0 ? 1 : 0;
@@ -7236,7 +7376,11 @@ document.addEventListener('mousedown', function(event) {
         raycast,
     })
 
-    raysToVisualize.push(raycast);
+
+    if(store.visualizeRays){
+        raysToVisualize.push(raycast);
+    }
+    // decay: remove them over time
     setTimeout(()=>{
         raysToVisualize.unshift();
     },3000)
@@ -7245,7 +7389,8 @@ document.addEventListener('mousedown', function(event) {
 document.addEventListener
 ('dblclick', function(event) {
     // Code to be executed on double click
-    system.todo("respond to double click!")
+    //system.todo("respond to double click!")
+    InvokableCommands.RECENTER()
 });
 
 
@@ -7254,17 +7399,17 @@ document.addEventListener('keydown', function(event) {
     if (event.code === 'KeyP' && event.shiftKey && event.metaKey) {
         event.preventDefault();
         if(!store.CmdPromptVisible){
-            new ShowCmdPromptCommand().execute();
+            cmdprompt.show();
         }else{
-            new HideCmdPromptCommand().execute();
+            cmdprompt.hide();
         }
     }
     if (event.code === 'Slash' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         if(!store.CmdPromptVisible){
-            new ShowCmdPromptCommand().execute();
+            cmdprompt.show();
         }else{
-            new HideCmdPromptCommand().execute();
+            cmdprompt.hide();
         }
     }
 });
@@ -7404,12 +7549,12 @@ class LayereredCanvasRenderer {
             }
             p.draw = function() {
                 p.clear()
-                p.fill("black")
-                p.stroke("red")
-                p.strokeWeight(1)
-                p.rect(0,0,50,50)
-                p.rect(10,10,40,40)
-                p.rect(20,20,30,30)
+                // p.fill("purple")
+                // p.stroke("red")
+                // p.strokeWeight(1)
+                // p.rect(0,0,800,800)
+                // p.rect(10,10,850,850)
+                // p.rect(20,20,1000,1000)
             }
             // Define the mousePressed function
             p.mousePressed = function(){
@@ -7471,6 +7616,45 @@ class LayereredCanvasRenderer {
 
         //this.draw()
     }
+
+
+    getProcessingJSWebGL3DContext(){
+        // if one exists, it is returned
+        // else none exist, and layer is added and the context is returned
+        if (this.webGLContext) {
+            return this.webGLContext;
+        } else {
+            let newLayer = this.addLayer('webgl');
+            this.webGLContext = newLayer.getContext('webgl');
+            return this.webGLContext;
+        }
+    }
+
+    addLayer(typename){
+        let createdLayer = null;
+        switch(typename){
+            case 'html':
+                createdLayer = this.createHTMLLayer();
+                break;
+            case 'webgl':
+                createdLayer = this.createWebGLLayer();
+                break;
+            case 'three.js':
+                createdLayer = this.createTHREEJSLayer();
+                break;
+            case 'p5js2d':
+                createdLayer = this.createP5JS2DLayer();
+                break;
+            case 'd3js':
+                createdLayer = this.createD3JSLayer();
+                break;
+            default:
+                system.panic(`Failed to create Rendering Layer; unknown layer type ${typename}`)
+                break;
+        }
+        return createdLayer;
+    }
+
     onResize(){
         // update the dimensions to match the window (of all 3 canvases)
         this.canvases.forEach((canvas)=>{
@@ -7960,6 +8144,10 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    /* motion sick mode by default */
+    disableSprites: 1,
+
+    showDebugLayer: 0,
     showDebugCursor: 0,
     windowHasFocus: true,
     disableDeepCanvas: 0,
@@ -9535,7 +9723,7 @@ extends Config
     finalCallback(wizardInstance){
         console.warn('AddGraphNodeWizardConfig finalCallback')
         
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
 
         if(!store.currentGraph){
             store.currentGraph = new Graph();
@@ -10076,27 +10264,6 @@ class WizardConfig {
     }
 }
 
-// class ToggleDashboardVisibleWizardConfig
-// extends WizardConfig {
-//     name = "Toggle Dashboard: Visible"
-//     steps = [
-//         // TODO: bake into a pre-configured InstantCommandConfig instead of always using Wizard with a dummy first step manually
-//         {question:"",onStepLoaded:(wiz)=>{wiz.end(); system.hideCmdPrompt();}}
-//     ]
-//     finalCallback(wiz){
-//         console.warn("toggle dashboard visible")
-//         system.get("Dashboard").toggleVisibility();
-//     }
-// }
-
-// class ShuffleDashboardWidgetPositionsCommand 
-// extends Config {
-//     name = "Shuffle Dashboard Widget Positions"
-//     execute(){
-//         system.dashboard.shuffleWidgetPositions();
-//     }
-// }
-
 class NewCommandCommand
 extends BaseCmds(Command, new NewCommandWizardConfig()){}
 
@@ -10308,7 +10475,7 @@ extends Config {
             {pinned: false}
         );
         CmdPromptInput.value('');
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
     }
 }
 
@@ -10316,19 +10483,19 @@ class ShowNewToastCommand
 extends BaseCmds(Command, new NewToastWizardConfig()){}
 
 // Define the ShowCmdPromptCommand class
-class ShowCmdPromptCommand extends Command {
-    constructor(){
-        super("Show Command Prompt")
-    }
-    // draw, perform, verb, invoke, execute, run, do,
-    invoke(){
-        // Show Command Prompt
-        store.CmdPromptVisible = true;
+// class ShowCmdPromptCommand extends Command {
+//     constructor(){
+//         super("Show Command Prompt")
+//     }
+//     // draw, perform, verb, invoke, execute, run, do,
+//     invoke(){
+//         // Show Command Prompt
+//         store.CmdPromptVisible = true;
 
-        // focus the command palette input element
-        CmdPromptInput.elt.focus();
-    }
-}
+//         // focus the command palette input element
+//         CmdPromptInput.elt.focus();
+//     }
+// }
 
 class MyJavascriptCommand extends Command {
     constructor(target, ...args){
@@ -10369,32 +10536,32 @@ class HardReloadCommand extends Command {
 }
 
 // Define the HideCmdPromptCommand class
-class HideCmdPromptCommand extends Command {
-    constructor(){
-        super("Hide CMD Prompt")
-    }
+// class HideCmdPromptCommand extends Command {
+//     constructor(){
+//         super("Hide CMD Prompt")
+//     }
 
-    invoke(){
+//     invoke(){
 
-        // clear the command buffer
-        store.commandBuffer = {name:''};
-        CmdPromptInput.value('');
+//         // clear the command buffer
+//         store.commandBuffer = {name:''};
+//         CmdPromptInput.value('');
 
-        // Hide CMD Prompt
-        store.CmdPromptVisible = false;
-    }
-}
+//         // Hide CMD Prompt
+//         store.CmdPromptVisible = false;
+//     }
+// }
 
 // Define the ToggleCmdPromptCommand class
-class ToggleCmdPromptCommand extends Command {
-    constructor(){
-        super("Toggle CMD Prompt")
-    }
-    invoke(){
-        // Toggle CMD Prompt
-        store.CmdPromptVisible = !store.CmdPromptVisible;
-    }
-}
+// class ToggleCmdPromptCommand extends Command {
+//     constructor(){
+//         super("Toggle CMD Prompt")
+//     }
+//     invoke(){
+//         // Toggle CMD Prompt
+//         store.CmdPromptVisible = !store.CmdPromptVisible;
+//     }
+// }
 
 function loadGraph(name){
     // TODO: destruct any current graph
@@ -11028,7 +11195,8 @@ class TodoWizardConfig extends WizardConfig {
             graph: store.currentGraph // todo: just store ID
         })
 
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
+        //cmdprompt.hide();
     }
 }
 class RepeatingTodoWizardConfig extends TodoWizardConfig {
@@ -11200,6 +11368,46 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["YouTube - Joe Pera Talks you back to sleep"](){
+        return "https://www.youtube.com/watch?v=DSUilYKcRMA";
+    },
+    ["New Fact"](){},
+    ["New Thing"](){},
+    ["New Type"](){},
+    ["New Command Argument"](){
+
+    },
+
+    ["Fun Fact..."](){
+        system.todo("Say a fun fact!")
+    },
+
+    ["List {Invokable Commands}"](){
+        system.todo("List {Invokable Commands}")
+    },
+    ["Show {Invokable Commands}"](){
+        system.todo("Show {Invokable Commands}")
+    },
+    ["Describe {Invokable Commands}"](){
+        system.todo("Describe {Invokable Commands}")
+    },
+    ["Help Page For {Invokable Command}"](){
+        system.todo("Help Page For {Invokable Command}")
+    },
+
+    ["How Do I..."](){
+        system.todo("How Do I...")
+    },
+    
+    ["F.A.Q. Frequently Asked Questions"](){},
+
+    // localized, limited, quick
+    ["Re-Roll AI Cache For This Node"](){},
+    // slow, background, potentially delayed / incomplete results
+    ["Re-Roll AI Cache For This Node AND All Downstream Nodes"](){},
+
+
+
     ["Inspiration: simple generative graph example - Orion Reed"](){
         system.registerWidget(new iFrameWidget(
             "https://x.com/OrionReedOne/status/1731965009981301071?s=20"
@@ -11310,6 +11518,8 @@ const InvokableCommands = {
     ["new trivia"](){
         system.todo("!!! NotYetImplemented !!!")
     },
+    // ["hide debug cursor"](){}
+    // ["show debug cursor"](){}
     ["toggle debug cursor"](){
         store.showDebugCursor = !store.showDebugCursor;
     },
@@ -11414,6 +11624,12 @@ const InvokableCommands = {
     ["Study Greek Alphabet Flashcards"](){
         // spawn a new flashcard widget
         system.registerWidget(new GreekAlphabetWidget());
+    },
+    ["simulate resize event"](){
+        window.dispatchEvent(new Event("resize"));
+    },
+    ["refresh the page"](){
+        window.location.reload();
     },
     ["reflow"](){
         window.dispatchEvent(new Event("resize"));
@@ -11525,9 +11741,15 @@ const InvokableCommands = {
         // scrolling="no"></iframe>`
       }))
     },
-    // ["Play SNES Super Mario Kart"]
+    ["cue up..."](){},
+    ["Play SNES Super Mario Kart"](){
+
+    },
     // ["Play SNES Pac Attack"]
-    ["Play Battle Tetris - jstris (from Gather.town)"](){
+    ["Play Battle Tetris - Jstris (from Gather.town)"](){
+        system.registerWidget(new iFrameWidget(
+            "https://jezevec10.com"
+        ))
         system.registerWidget(new iFrameWidget(
             "https://jstris.jezevec10.com/",{
                 widgetSize:{width:800,height:600}
@@ -11553,6 +11775,20 @@ const InvokableCommands = {
         return "https://www.youtube.com/watch?v=T7jH-5YQLcE&width=800&height=600";
     },
     ["Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]"](){
+        // // offer up the lyrics on rap genius
+        // // https://genius.com/Aesop-rock-kyanite-toothpick-lyrics => <div id='rg_embed_link_9519850' class='rg_embed_link' data-song-id='9519850'>Read <a href='https://genius.com/Aesop-rock-kyanite-toothpick-lyrics'>“Kyanite Toothpick” by Aesop Rock</a> on Genius</div> <script crossorigin src='//genius.com/songs/9519850/embed.js'></script>
+        // system.registerWidget(new iFrameWidget(
+        //     "https://genius.com/Aesop-rock-kyanite-toothpick-lyrics"
+        // ))
+
+        // render the lyrics in a text viewer
+        // TODO: make the song appear when lyrics are recognized?
+        system.registerWidget(new TextViewerWidget(
+            "Hello! I'm a text viewer widget! I can render text, markdown, and html!",
+        ))
+
+        // Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]
+        // Rhymesayers Entertainment
         return "https://www.youtube.com/watch?v=1ogz-QzaCQ8"
     },
     ["Play Mindful Solutionism"](){
@@ -11642,6 +11878,26 @@ const InvokableCommands = {
         }
         socketIO.emit('message', sanitized);
     },
+    ["stream PCM Audio Data from microphone to server..."](){
+        system.todo("DO IT ALREADY");
+    },
+    /* async suffix means it returns a promise */
+    ["Send Image To Server Async"](){
+        let file = arguments[0]; /* from a Drop Event */
+        let formData = new FormData();
+        formData.append('file', file);
+        return fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("Image sent to server!",data);
+        })
+        .catch((error) => {
+            system.error("Error:", error);
+        });
+    },
     ["DEV: Toggle Clear BG Flag(s)"](){
         // clear the cmd palette first, wait a tick THEN unset the flag
         store.CmdPromptVisible = false;
@@ -11655,9 +11911,10 @@ const InvokableCommands = {
         },1000)
     },
     
-    ["Play: Had What is Love"](){
+    ["Play (Youtube): Haddaway - What Is Love [Official]"](){
+        return "https://www.youtube.com/watch?v=OFNrN_6Ta5I";
         // when AI guesses right?!
-        return "https://www.youtube.com/watch?v=HEXWRTEbj1I";
+        // return "https://www.youtube.com/watch?v=HEXWRTEbj1I";
     },
 
     ["Play: The Avalanches > Frontier Psychiatrist"](){
@@ -11821,6 +12078,12 @@ const InvokableCommands = {
         let response = prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here","http://iframesafe.url")
         system.registerWidgetInstance(new iFrameWidget(response))
     },
+    ["split bubble"](){},
+    ["duplicate widget"](){},
+    // multicursor.js
+    ["select next occurance"](){},
+    ["select all occurances"](){},
+    ["select previous occurance"](){},
     ["new browser bubble"](){
         InvokableCommands["new iframe widget"]()
     },
@@ -12117,6 +12380,24 @@ const InvokableCommands = {
     ["play with gravity"](){},
     ["disable gravity"](){},
     ["disable friction"](){},
+
+    ["new voice recording"](){},
+    ["new voice memo"](){},
+    
+    ["toggle monochrome mode"](){
+        body.classList.toggle("monochrome");
+    },
+    ["audio only"](){
+
+    },
+    ["toggle captions"](){
+
+    },
+    ["new conversation map"](){
+
+    },
+
+
     ["dark mode"](){},
     ["light mode"](){},
     ["new theme"](){},
@@ -12241,11 +12522,11 @@ const InvokableCommands = {
     },
     ["new rubiks cube GL"](){
         system.registerWidget(new RubiksCubeGL());
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
     },
     ["new rubiks cube 2D"](){
         system.registerWidget(new RubiksCubeWidget());
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
     },
     ["play pacman"](){
         system.registerWidget(new iFrameWidget("https://www.google.com/logos/2010/pacman10-i.html"));
@@ -12256,7 +12537,7 @@ const InvokableCommands = {
         let instance = new TetrisWidget();
         system.registerWidget(instance);
         // hide the command prompt
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
     },
     /*
     {
@@ -13010,14 +13291,14 @@ class ToastNotification {
             }
         }
         this.targetCloneCount = targetCloneCount;
-        ctx.push();
+        
         for(let i = 0; i < targetCloneCount; i++){
             // shift the drawing context with each i
             ctx.translate(0, 50);
 
             this.drawOneInstance(index+i,ctx)
         }
-        ctx.pop();
+        
     }
 
     drawOneInstance(index,ctx){
@@ -13191,7 +13472,7 @@ class SetMaxSuggestionsCommandWizardConfig extends Config {
     finalCallback(wizardInstance){
         store.maxVisibleOptionsCount = parseInt(wizardInstance.stepResponses[0].input);
         CmdPromptInput.value('');
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
         system.get("toastManager").showToast(`Set Max Suggestions: ${store.maxVisibleOptionsCount}`);
     }
 }
@@ -13356,9 +13637,9 @@ const TYPENAME_TO_CONSTRUCTOR_MAP = {
     CommandWizardConfig,
     ShowNewToastCommand,
     StartChatGPTSessionCommand,
-    ShowCmdPromptCommand,
-    HideCmdPromptCommand,
-    ToggleCmdPromptCommand,
+    //ShowCmdPromptCommand,
+    // HideCmdPromptCommand,
+    // ToggleCmdPromptCommand,
     SetCommandIconCommand,
 
     // Config related
@@ -13412,6 +13693,12 @@ function levenshteinDistance(a, b) {
 };
 
 // TODO: need to update the z-index of the canvas ui to be ABOVE any iframes
+/** @see CmdPrompt.draw */
+/** @see CmdPrompt.renderCommandPrompt */
+/** @see CmdPrompt.renderSuggestedCommands */
+/** @see SuggestionList.draw */
+/** @see SuggestionList.drawSuggestedOptions */
+/** @see SuggestionList.renderSuggestionOption */
 class CmdPrompt extends Widget {
     // the current "Command" being constructed
     currentCommand = null; 
@@ -13420,12 +13707,39 @@ class CmdPrompt extends Widget {
     // the list of contextually recommended commands
     filteredCommands = []; 
 
+    toggle(){
+        if(store.CmdPromptVisible){
+            this.hide();
+        }else{
+            this.show()
+        }
+    }
+    show(){
+        this.showCmdPrompt()
+    }
     showCmdPrompt(){
         // Show Command Prompt
         store.CmdPromptVisible = true;
 
         // focus the command palette input element
         CmdPromptInput.elt.focus();
+    }
+    hide(){
+        this.hideCmdPrompt();
+    }
+    hideCmdPrompt(){
+        store.CmdPromptVisible = false;
+        CmdPromptInput.elt.blur();
+
+        // clear the command palette input
+        CmdPromptInput.value('');
+        // reset the command buffer
+        store.commandBuffer = {
+            name: ''
+        };
+        // reset the selectedd  index to 0
+        //this.commandSuggestionList.selectedOptionIndex = 0;
+        this.selectedSuggestionIndex = 0;
     }
 
     get visible(){
@@ -13455,7 +13769,11 @@ class CmdPrompt extends Widget {
 
         
         
-        CmdPromptInput.attribute('placeholder', `${this.timestamp}`);
+        CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}`);
+
+        setInterval(()=>{
+            CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}\n What are you working on? undefined`);
+        },350)
         
         CmdPromptInput.style('font-size', '66px');
 
@@ -13701,7 +14019,7 @@ class CmdPrompt extends Widget {
         //     ],
         //     callback: function(){
         //         console.warn('running self test...')
-        //         new HideCmdPromptCommand().execute();
+        //         cmdprompt.hide();
         //     }
         // }))
         
@@ -13725,7 +14043,8 @@ class CmdPrompt extends Widget {
                     // }
                     store.currentGraph = null;
                     // hide the command palette
-                    new HideCmdPromptCommand().execute();
+                    //cmdprompt.hide();
+                    cmdprompt.hide();
                 }
             })
         )
@@ -13763,7 +14082,8 @@ class CmdPrompt extends Widget {
                         system.get("Dashboard").collapse();
                         loadGraph(prevStepResponse.selectedSuggestionValueOrLabel)
                         // close the command palette
-                        new HideCmdPromptCommand().execute();
+                        //cmdprompt.hide();
+                        cmdprompt.hide();
                     },
                     steps: [
                         {
@@ -13791,9 +14111,9 @@ class CmdPrompt extends Widget {
                     ]
                 }
             }),
-            new ShowCmdPromptCommand(),
-            new HideCmdPromptCommand(),
-            new ToggleCmdPromptCommand(),
+            //new ShowCmdPromptCommand(),
+            //new HideCmdPromptCommand(),
+            //new ToggleCmdPromptCommand(),
         ])
     }
 
@@ -13826,6 +14146,7 @@ class CmdPrompt extends Widget {
 
     renderSuggestedCommands(){
         /* pass the drawing responsibility on to the SuggestionList class instance */
+        /** @see SuggestionList.draw */
         this.commandSuggestionList.draw(deepCanvasManager.uiContext);
     }
 
@@ -13901,7 +14222,8 @@ class CmdPrompt extends Widget {
 
         // if the cmd palette is not visible, show it
         if(store.focused && !store.CmdPromptVisible && /^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]*$/.test(event.key)){
-            new ShowCmdPromptCommand().execute();
+            //cmdprompt.show();
+            cmdprompt.show();
         }
 
         // if there's an active wizard, we need to handle the input differently
@@ -13928,17 +14250,6 @@ class CmdPrompt extends Widget {
         return false    
     }
 
-    hide(){
-        // hide the command palette
-        store.CmdPromptVisible = false;
-        // clear the command palette input
-        CmdPromptInput.value('');
-        // reset the command buffer
-        store.commandBuffer = {
-            name: ''
-        };
-    }
-
     OnPressEscape(){
         // if there's an active wizard, we need to handle the input differently
         if(store.activeWizard){
@@ -13946,9 +14257,8 @@ class CmdPrompt extends Widget {
             //return;
         }
         // escape was pressed
-        this.hide()
-        // blur the input
-        CmdPromptInput.elt.blur();
+        this.hideCmdPrompt()
+        
         // need to decide when the current command is deselected
         // --- 
         // this.currentCommand = null;
@@ -14994,8 +15304,36 @@ function handleAnalogStickInput(){
 let FPS;
 let frameTimes = [];
 let lastFrameTime;
+const getCurrentDebugTexts = function(){
+    return [
+        { text: `FPS: ${FPS.toFixed(2)}` },
+        { text: `current widget count ${Object.keys(system.dashboard.widgets).length}` },
+        { text: `DrawCalls: ${store.frameDrawCount}` },
+        { text: `center:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
+        // todo: zoom momentum / z-momentum
+        { text: `panMomentumVector: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
+        { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
+        // { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
+        { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` },
+    
+        {
+            text: `Touch Inputs: ${store.touchInputs.length}`,
+        },
+    
+        {
+            text:`fov ${fov}`
+        },
+        { text: `focusedIndex ${deepCanvasManager.focusedIndex}`},
+        { text: `deepRendererEnabled? ${!store.disableDeepCanvas}`}
+    ]
+};
 
 function renderDebugUI(){
+
+    if(!store.showDebugCursor){
+        return;
+    }
+
     let ctx = deepCanvasManager.uiContext;
     // push into rolling frameTimes array
     frameTimes.push(millis());
@@ -15010,27 +15348,8 @@ function renderDebugUI(){
     ctx.textSize(16);
     ctx.textAlign(RIGHT, BOTTOM);
     //debugstats
-    const debugTexts = [
-        { text: `FPS: ${FPS.toFixed(2)}` },
-        { text: `current widget count ${Object.keys(system.dashboard.widgets).length}` },
-        { text: `DrawCalls: ${store.frameDrawCount}` },
-        { text: `center:{x:${whatTheCenterIs.x.toFixed(2)},y:${whatTheCenterIs.y.toFixed(2)}}` },
-        // todo: zoom momentum / z-momentum
-        { text: `panMomentumVector: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
-        { text: `xy: ${panMomentumVector.x.toFixed(2)}, ${panMomentumVector.y.toFixed(2)}` },
-        // { text: `thumbstick: ${store.thumbstickMomentumX.toFixed(2)},${store.thumbstickMomentumY.toFixed(2)}` },
-        { text: `scaleFactor ${store.pinchScaleFactor.toFixed(2)}` },
-
-        {
-            text: `Touch Inputs: ${store.touchInputs.length}`,
-        },
-
-        {
-            text:`fov ${fov}`
-        },
-        { text: `focusedIndex ${deepCanvasManager.focusedIndex}`},
-        { text: `deepRendererEnabled? ${!store.disableDeepCanvas}`}
-    ];
+    
+    const debugTexts = getCurrentDebugTexts();
 
     ctx.textSize(30);
     let baseOffset = ctx.textSize();
@@ -15501,7 +15820,7 @@ function setupDefaults(){
                 // if it's an ARRAY of STRINGS, we need to do ths same check and early return
 
                 try{
-                    if(!InvokableCommands[machineizedCmdName] || !InvokableCommands[machineizedCmdName]?.call){c
+                    if(!InvokableCommands[machineizedCmdName] || !InvokableCommands[machineizedCmdName]?.call){
                         console.warn("command must be one of:",Object.keys(InvokableCommands))
                         system.panic("bad command name: "+machineizedCmdName)
                     }
@@ -15914,17 +16233,25 @@ let cursor, MainCanvasContextThing = function(p){
         setTimeout(()=>{_onResize()},150);
     }
 
-    system.PreloadedImages = {};
-    system.PreloadedSVGs = {}
+    /* Central Cache for media instances */
+    system.PreloadedImages = {
+        "icon_NEW_COMMAND.png": null,
+    };
+    system.PreloadedSVGs = {
+
+    }
     system.PreloadedSounds = {
         "res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3": null
     };
+    // videos, etc...
     p.preload = function() {
         Object.entries(system.PreloadedImages).forEach(([_,imgName])=>{
-            system.PreloadedImages[imgName] = loadImage(imgName);
+            system.loadImageAsync(imgName);
         })
+        // do we need to distinguish? p5 treats them identical
+        // maybe useful for other renderers tho, if we end up having to pre-cache svgs to another format at some point...
         Object.entries(system.PreloadedSVGs).forEach(([_,name])=>{
-            system.PreloadedSVGs[name] = loadImage(name);
+            system.loadImageAsync(name);
         })
         Object.entries(system.PreloadedSounds).forEach(([_,name])=>{
             system.loadSound(name).then((sound)=>{
@@ -15937,6 +16264,8 @@ let cursor, MainCanvasContextThing = function(p){
     }
 
     p.setup = function(){
+
+        
 
         p.resizeCanvas(mctx.windowWidth,mctx.windowHeight)
 
@@ -16012,6 +16341,18 @@ let cursor, MainCanvasContextThing = function(p){
         console.info("booting...");
         manager.boot(); 
         rootSystem = system = manager.systems[0];
+
+        // note: there's a bug where calling the rootSystemManager.boot doesn't actually boot sub-systems
+        // kind of makes sense, wouldn't want docker to auto-start all your containers each time
+        // in the future, this will be based on user state
+        // but for now, we'll just kick-start the rootSystem...
+        // needed to defer until rendering was ready for some pre-cache drawing
+        rootSystem.boot();
+
+        // note the reduced volume!
+        // stat.js
+        (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
+
 
         system.plopAudioPlayer = mctx.createAudio('res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3');
         system.plopAudioPlayer.volume(0.1);
@@ -16123,17 +16464,17 @@ void main(void) {
         
         /// === region: Self Test Mode ===
         // TODO: parallelize with Promise.all([])
-        autorunFeatureTestResults.length = 0; // reset results
-        autorunFeatureTests.forEach((FeatureTestConfigOrInstance)=>{
-            runFeatureTest(FeatureTestConfigOrInstance);
-        })
-        // a different approach
-        Object.entries(FEATURE_TESTS).forEach(([name, definition])=>{
-            console.warn('instantiating and running feature tests',{
-                name,definition
-            })
-            runFeatureTest(new FEATURE_TESTS[name]());
-        })
+        // autorunFeatureTestResults.length = 0; // reset results
+        // autorunFeatureTests.forEach((FeatureTestConfigOrInstance)=>{
+        //     runFeatureTest(FeatureTestConfigOrInstance);
+        // })
+        // // a different approach
+        // Object.entries(FEATURE_TESTS).forEach(([name, definition])=>{
+        //     console.warn('instantiating and running feature tests',{
+        //         name,definition
+        //     })
+        //     runFeatureTest(new FEATURE_TESTS[name]());
+        // })
         // our alternative attempt at auto-class registration using
         // a decorator:
         // Object.entries(SELF_TEST_CLASSES).forEach(([name, definition])=>{
@@ -16189,15 +16530,38 @@ void main(void) {
                 cmdprompt?.onCmdPromptInput(e);
             //}
         })
+        // primary key bindinds...
+
         document.addEventListener('keydown', (e)=>{
             console.warn('keypress',{e})
+            // command or control
+            // cmdorcontrol
+            // cmdorctrl
+            // ctrlorcmd
+            // controlorcmd
+            // controlOrCommand
             const ctrlOrCmd = e.ctrlKey || e.metaKey;
+
+            // TODO: make this a static command matrix... !!!
+
+            if(ctrlOrCmd && e.key === 'd'){
+                system.alert("don't bookmark, just come back.")
+                e.preventDefault();
+                InvokableCommands["clear"]();
+                /** @see CmdPrompt.hideCmdPrompt */
+                system.cmdprompt.hideCmdPrompt();
+                system.notify("Cleared! 🧘‍♂️")
+                return;
+            } 
+
             // Check if Ctrl key is pressed along with P
             if (ctrlOrCmd && e.key === 'p') {
+                // ctrl + p, cmd + p, cmd&p||ctrl&p
                 // Prevent the default ctrl p ctrl+p print action!
                 e.preventDefault();
                 //alert("Ctrl+P has been disabled!");
                 // toggle the dashboard
+                /** @see CmdPrompt.showCmdPrompt */
                 system.cmdprompt.showCmdPrompt();
                 return;
             }
@@ -16335,6 +16699,13 @@ void main(void) {
         // NEW: init the widget dashboard
         system.dashboard.init()
 
+        // system.registerWidget(
+        //     new ImageViewerWidget("fine.gif")
+        // )
+
+        //system.todo("log time til framerate stable (boot seq time)")
+
+        /*
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
         const grw = new GherkinRunnerWidget();
         grw.centerPosition();
@@ -16342,21 +16713,25 @@ void main(void) {
         grw.setResults(autorunFeatureTestResults);
         // demo widgets
         system.dashboard.registerWidget(grw);
-        system.dashboard.registerWidget(new RubiksCubeWidget());
-        system.dashboard.registerWidget(new RubiksCubeGL());
-        system.dashboard.registerWidget(new ClientResolverDebugWidget());
+        */
 
-        system.dashboard.registerWidget(new ImageViewer("cheshire-cat.gif"));
+        // NOT NOW NAUSEA!
+
+       //system.dashboard.registerWidget(new RubiksCubeGL());
+       // system.dashboard.registerWidget(new RubiksCubeWidget());
+        //system.dashboard.registerWidget(new ClientResolverDebugWidget());
+
+        //system.dashboard.registerWidget(new ImageViewer("cheshire-cat.gif"));
         // system.dashboard.newWidgetInstance(ImageSpinner, "cheshire-cat.gif");
 
         // current workbench of demo widgets // work bench
-        InvokableCommands["new text viewer widget"]()
-        InvokableCommands["view welcome message"]()
-        InvokableCommands["question of the day"]()
-        InvokableCommands["hello my name is..."]()
-        InvokableCommands["text me..."]()
-        InvokableCommands["i'm feeling feelings..."]()
-        InvokableCommands["view ChangeLog"]()
+        // InvokableCommands["new text viewer widget"]()
+        // InvokableCommands["view welcome message"]()
+        // InvokableCommands["question of the day"]()
+        // InvokableCommands["hello my name is..."]()
+        // InvokableCommands["text me..."]()
+        // InvokableCommands["i'm feeling feelings..."]()
+        // InvokableCommands["view ChangeLog"]()
 
         // InvokableCommands["new iframe"](`https://editor.p5js.org/jakedowns/full/LM0oRxYGt`,{
         //     widgetSize: {
@@ -16364,12 +16739,12 @@ void main(void) {
         //         height: 400
         //     }
         // })
-        InvokableCommands["new grid of things"]();
-        InvokableCommands["open calendar"]();
-        InvokableCommands["new timer"]();
-        InvokableCommands["new oscilloscope"]();
-        InvokableCommands["new pie chart"]();
-        InvokableCommands["new donut chart"]();
+        // InvokableCommands["new grid of things"]();
+        // InvokableCommands["open calendar"]();
+        // InvokableCommands["new timer"]();
+        // InvokableCommands["new oscilloscope"]();
+        // InvokableCommands["new pie chart"]();
+        // InvokableCommands["new donut chart"]();
 
         // loadTestWidgets
         if(store.showTestWidgets){
@@ -16526,8 +16901,6 @@ void main(void) {
                 .registerWidget(
                     new ImageViewerWidget("fine.gif")
                 )
-                
-                // .registerWidget("GherkinRunnerWidget",  grw)
                 
                 // // intentionally on a separate line to make it easier to comment out last chained method
                 // ;
@@ -16822,27 +17195,29 @@ void main(void) {
         /**
          * @type {Raycast[]}
          */
-        raysToVisualize.forEach((ray)=>{
-            let uictx = deepCanvasManager.uiContext;
-            uictx.push()
-            // Draw a blue dot at the source
-            uictx.fill(0,0,255);
-            uictx.ellipse(ray.from.x, ray.from.y, 2.5, 2.5);
-            // Draw a red dot at the destination
-            uictx.fill(255,0,0);
-            uictx.ellipse(ray.to.x, ray.to.y, 5, 5);
-            // Draw a line from source to destination
-            uictx.stroke(0, 255, 0);
-            uictx.strokeWeight(1);
-            uictx.line(
-                ray.from.x, 
-                ray.from.y, 
-                //ray.from.z, 
-                ray.to.x, 
-                ray.to.y //, ray.to.z
-            );
-            uictx.pop()
-        })
+        if(store.visualizeRays){
+            raysToVisualize.forEach((ray)=>{
+                let uictx = deepCanvasManager.uiContext;
+                uictx.push()
+                // Draw a blue dot at the source
+                uictx.fill(0,0,255);
+                uictx.ellipse(ray.from.x, ray.from.y, 2.5, 2.5);
+                // Draw a red dot at the destination
+                uictx.fill(255,0,0);
+                uictx.ellipse(ray.to.x, ray.to.y, 5, 5);
+                // Draw a line from source to destination
+                uictx.stroke(0, 255, 0, 0.1);
+                uictx.strokeWeight(100);
+                uictx.line(
+                    ray.from.x, 
+                    ray.from.y, 
+                    //ray.from.z, 
+                    ray.to.x, 
+                    ray.to.y //, ray.to.z
+                );
+                uictx.pop()
+            })
+        }
     }
 
     // Define the mouseReleased function
@@ -16859,6 +17234,8 @@ void main(void) {
             return;
         }
         mainCanvasContext = p;
+
+        
 
 
         if(!store.disableDeepCanvas){
@@ -17020,8 +17397,7 @@ void main(void) {
                 // mouseShifted.y = p.lerp(mouseShifted.y, targetY, 0.1);
             }
     
-            
-            if(!store.disableDebugPath){    
+            if(store.showDebugCursor){    
                 DebugPathInstance.addPoint(
                     -mouseShifted.x, 
                     -mouseShifted.y, 
@@ -17079,15 +17455,24 @@ void main(void) {
         // reset any transforms
         // mainCanvasContext.pop();
     
-        // render toast notifications
-        system.get("toastManager")?.draw?.();
+        
     
         // ^^^ below the command palette
+        if(store.renderNotificationsBelowCommands){
+            // render toast notifications
+            system.get("toastManager")?.draw?.();
+        }
     
         // if the command palette is visible, draw it
         if(store.CmdPromptVisible){
             /** @see CmdPrompt.renderCommandPrompt */
             cmdprompt?.renderCommandPrompt?.();
+        }
+
+        /// vvv above the command palette
+        if(1 || store.renderNotificationsAboveCommands){
+            // render toast notifications
+            system.get("toastManager")?.draw?.();
         }
     
         // display the current wizard (if any)
@@ -17107,7 +17492,7 @@ let mainCanvasContext = new p5(MainCanvasContextThing, "main-canvas-context");
 window.mctx = mainCanvasContext;
 // bind the global api so it can shift contexts
 const properties = [
-    'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
+    'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'CLOSE', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
     'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
     'triangle', 
@@ -17666,10 +18051,14 @@ class SuggestionList {
      */
     // searchable words:
     // draw suggested / drawSuggested drawSuggestion
+    // drawSuggestedOption / drawSuggestionOption
     renderSuggestionOption(x,y,w,h,label,selected,ctx){
-        ctx.push()
-        // ctx.translate(x,y);
-        // ctx.scale(zoom);
+        
+
+
+        ctx.push();
+        ctx.translate(x,y);
+        ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
         ctx.strokeWeight(selected ? 3 : 1);
@@ -17679,6 +18068,7 @@ class SuggestionList {
         ctx.rect(0,0,w,h);
         ctx.fill(255)
         ctx.strokeWeight(3);
+        ctx.textSize(40);
         // draw label
         drawStringWordWrapped(
             label,
@@ -17688,6 +18078,24 @@ class SuggestionList {
             w - 20,
             ctx
         )
+
+        // NEW: add an image if we have one for this command
+        // if not add a placeholder based on "icon_NEW_COMMAND.png"
+
+        // for now, just draw a cached copy of icon_NEW_COMMAND.png
+        // TODO: scale things so the image (no matter its native dimensions) are stretched to fill the provided 50x50 space and make sure it has a rounded corner
+        /** @see System.image */
+        const img = system.image("icon_NEW_COMMAND.png");
+        ctx.imageMode(CORNER);
+        ctx.image(img, 10, 10, 50, 50);
+        ctx.beginShape();
+        ctx.vertex(10, 10);
+        ctx.vertex(10 + 50, 10);
+        ctx.quadraticVertex(10 + 50, 10 + 50, 10, 10 + 50);
+        ctx.endShape(CLOSE);
+
+        
+
         ctx.pop()
 
         
