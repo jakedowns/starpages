@@ -685,7 +685,69 @@ class SystemManager {
  *   then watch them ripple from yellow back to green as the system autonomously accepts and distributes the verified changes
  *   to the appropriate subsystems...
  */
+/** System.constructor(SystemManager manager) */
 class System {
+    fallbackImage = null;
+    // aka .resource(url) // return from cache or fetch,stash and return
+    // aka maybeImage or imageOrNull or imageOrDefault (while loading...)
+    // synchronous tho, no waiting required, so that's nice
+    image(url){
+        // if it's a cache miss, kick off a fire and forget imageAsync call to load it in the background
+        // and in the meantime return a filler image
+        // btw, the call to imageasync is idempotent, it knows if it has a request midflight and won't
+        // stack up multiple requests for the same image
+        // we could call it imageAsyncDebounced || imageAsyncThrottled
+        if(!this.PreloadedImages[url]){
+            // AHHH we fired and forgot some async code, it's the end of teh world!
+            this.imageAsync(url);
+            return system.fallbackImage;
+        }
+        return this.PreloadedImages[url]
+    }
+    // loadImage
+    loadImageAsync(url){
+        return this.imageAsync(url);
+    }
+    // getImage
+    // getImageAsync
+    // async suffix means it returns a promise
+    imageAsync(url){
+        if(!url){
+            return Promise.resolve(this.fallbackImage);
+        }
+
+        let urlLoadable = url;
+        if(!urlLoadable.includes("res/") && !urlLoadable.includes("://")){
+            urlLoadable = url.startsWith('/') ? "/res" + url : "/res/" + url;
+        }
+
+        return new Promise((resolve,reject)=>{
+            // NOTE: some methods can refer to system on the global space
+            // when this method is called, we can ONLY refer to system as "this"
+            const system = this;
+            // returns from cache or adds to cache and returns
+            if(system.PreloadedImages[url]){
+                resolve(system.PreloadedImages[url]);
+                return;
+            }
+            //console.warn('about to load',{url})
+            if(!(url?.trim?.() ?? "")?.length){
+                reject(system.fallbackImage);
+                system.panic("System.imageAsync: no url provided");
+                return;
+            }
+            try{
+                loadImage(urlLoadable, (img) => {
+                    system.PreloadedImages[url] = img;
+                    resolve(img);
+                });
+            }catch(e){
+                //throw new Error(e);
+                reject(system.fallbackImage);
+                system.panic(e)
+            }
+        })
+    }
     snapshotOf(obj){
         return JSON.parse(JSON.stringify(obj))
     }
@@ -872,6 +934,7 @@ class System {
     notify(){
         this.get("toastManager").showToast(...arguments);
     }
+    // System.constructor(SystemManager manager)
     constructor(manager){
         this.manager = manager;
     }
@@ -923,8 +986,26 @@ class System {
         }
         console.warn('assiging System singleton',{name,instance})
     }
+    boot(){
+        // while the system boots and we're not 100% sure we've got the image loaded yet
+        // let's construct a quick 50x50 image using canvas
+        let buffer = createGraphics(50, 50);
+        buffer.background('black');
+        buffer.stroke('red');
+        buffer.strokeWeight(5);
+        buffer.line(0, 0, 50, 50);
+        buffer.line(50, 0, 0, 50);
+        this.fallbackImage = buffer;
+        loadImage("res/new2this.webp",(img)=>{
+            //this.fallbackImage = img;
+        });
+    }
     panic(){
         try{
+            if(!this?.manager?.panic){
+                console.error(...arguments);
+                return;
+            }
             this.manager.panic(this.tag + ": ",...
             arguments);
         }catch(e){
@@ -937,6 +1018,7 @@ class System {
         console.error(this.tag + ": ", ...arguments);
     }
     warn(){
+        if(!this?.manager?.warn){ console.warn('no manager.warn',this,arguments); return; }
         this.manager.warn(this.tag + ": ", ...arguments);
     }
     print(){
@@ -973,7 +1055,8 @@ class System {
         console.error(message);
     }
     hideCmdPrompt(){
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
+        //cmdprompt.hide();
     }
     get time(){
         // returns either passthrough time or modified time
@@ -1046,6 +1129,7 @@ const manager = rootManager; // alias
  * @see System
  // @property {System} system
  */
+// todo: probably time to start cleaning up any references from "system" to "rootSystem" since we need to think in terms of multi-sandbox features
 let system = new System();
 
 let rootSystem; // alias
@@ -2393,7 +2477,7 @@ class Widget extends UndoRedoComponent {
 
     // smart position is the parallaxed position on top of the local position (falls back to the base local position if no parallax is applied)
     get smartPosition(){
-        console.warn("smartPosition is deprecated")
+        //console.warn("smartPosition is deprecated")
         if(this.pinned && this.fixedPosition){
             return this.fixedPosition;
         }
@@ -2712,6 +2796,11 @@ class Widget extends UndoRedoComponent {
         return ctx;
     }
 
+    /** 
+     * @description more than just this.ctx.push, it zeros the drawing coordinates to the widget's origin and relative scale
+     * make sure to use this.leaveDrawing() when you're done
+     * 
+     */
     enterDrawingContext(){
         this.ctx.push();
         this.ctx.translate(
@@ -2724,6 +2813,11 @@ class Widget extends UndoRedoComponent {
         )
     }
     endDrawingContext(){
+        this.leaveDrawing();
+    }
+    // exitWidgetSpace, exit widget frame of reference?
+    // enter widget, exit widget
+    leaveDrawingContext(){
         this.leaveDrawing();
     }
     leaveDrawing(){
@@ -3268,17 +3362,19 @@ class FlashCard extends Widget {
         this.front = front;
         this.back = back;
     }
-    draw(){
-        mctx.push()
-        mctx.strokeWeight(1)
-        mctx.color("red")
-        mctx.rect(
-            this.smartPosition.x,
-            this.smartPosition.y,
+    onDraw(){
+        super.onDraw(...arguments)
+        
+        strokeWeight(1)
+        stroke("yellow")
+        fill("blue")
+        rect(
+            0, 0,
             this.size.width,
-            this.size.height
+            this.size.height,
+            20
         )
-        mctx.pop()
+        
     }
 }
 
@@ -3364,6 +3460,7 @@ class GreekAlphabetWidget extends FlashCardWidget {
         this.cards = this.alphabet.map((letter,index)=>{
             return new FlashCard(index,letter,this.symbols[index])
         })
+        // postConstructor
         super.afterConstructor();
     }
     
@@ -3532,22 +3629,22 @@ class MessengerWidget extends Widget {
     onDraw(){
         super.onDraw(...arguments)
         // mctx.push()
-        mctx.rectMode(CENTER);
-        mctx.fill("lightblue")
-        mctx.rect(
-            this.widgetSize.width / 2,
-            this.widgetSize.height / 2,
-            this.widgetSize.width,
-            this.widgetSize.height,
-            20 // this is the radius for the rounded corners
-        );
+        // mctx.rectMode(CENTER);
+        // mctx.fill("lightblue")
+        // mctx.rect(
+        //     this.widgetSize.width / 2,
+        //     this.widgetSize.height / 2,
+        //     this.widgetSize.width,
+        //     this.widgetSize.height,
+        //     20 // this is the radius for the rounded corners
+        // );
         mctx.fill("black")
         let tpx = this.widgetSize.width / 2;
         let tpy = this.widgetSize.height / 2;
         let tsx = this.widgetSize.width;
         let tsy = this.widgetSize.height;
-        mctx.textSize(20)
-        mctx.textAlign(CENTER, CENTER)
+        // mctx.textSize(20)
+        // mctx.textAlign(CENTER, CENTER)
         mctx.text("Messenger!", tpx,tpy,tsx,tsy)
         // mctx.pop()
     }
@@ -4999,6 +5096,7 @@ class ImageViewerWidget extends Widget {
         // if the src contains .gif, use a gif renderer
         this.isGif = this.src.includes(".gif");
 
+        // todo: use system.image instead
         if(system.PreloadedImages[this.src]){
             this.image = system.PreloadedImages[this.src];
         }else{
@@ -5118,7 +5216,7 @@ class Cursor {
         // draw a crosshair at the mouse position
         drawCrosshair(ctx, "blue", {x: ctx.mouseX, y: ctx.mouseY})
 
-        if(!store.showDebugCursor){
+        if(!store.showDebugCursor && !store.showDebugLayer){
             return;
         }
 
@@ -7255,7 +7353,7 @@ document.addEventListener('mousedown', function(event) {
     // we'll add layer-swapping back in later
     // and per-layer shader hooks :D
 
-    system.todo("remember to update drawing canvas based on segmented z depth to allow for objects to traverse the z axis without swapping entire layers (tho if you need to we recommend it for performance reasons)")
+    // system.todo("remember to update drawing canvas based on segmented z depth to allow for objects to traverse the z axis without swapping entire layers (tho if you need to we recommend it for performance reasons)")
         
     // keep the focus, just swap the top layer
     // deepCanvasManager.focusedIndex = deepCanvasManager.focusedIndex === 0 ? 1 : 0;
@@ -7289,7 +7387,8 @@ document.addEventListener('mousedown', function(event) {
 document.addEventListener
 ('dblclick', function(event) {
     // Code to be executed on double click
-    system.todo("respond to double click!")
+    //system.todo("respond to double click!")
+    InvokableCommands.RECENTER()
 });
 
 
@@ -7298,17 +7397,17 @@ document.addEventListener('keydown', function(event) {
     if (event.code === 'KeyP' && event.shiftKey && event.metaKey) {
         event.preventDefault();
         if(!store.CmdPromptVisible){
-            new ShowCmdPromptCommand().execute();
+            cmdprompt.show();
         }else{
-            new HideCmdPromptCommand().execute();
+            cmdprompt.hide();
         }
     }
     if (event.code === 'Slash' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         if(!store.CmdPromptVisible){
-            new ShowCmdPromptCommand().execute();
+            cmdprompt.show();
         }else{
-            new HideCmdPromptCommand().execute();
+            cmdprompt.hide();
         }
     }
 });
@@ -7448,12 +7547,12 @@ class LayereredCanvasRenderer {
             }
             p.draw = function() {
                 p.clear()
-                p.fill("black")
-                p.stroke("red")
-                p.strokeWeight(1)
-                p.rect(0,0,50,50)
-                p.rect(10,10,40,40)
-                p.rect(20,20,30,30)
+                // p.fill("purple")
+                // p.stroke("red")
+                // p.strokeWeight(1)
+                // p.rect(0,0,800,800)
+                // p.rect(10,10,850,850)
+                // p.rect(20,20,1000,1000)
             }
             // Define the mousePressed function
             p.mousePressed = function(){
@@ -8043,6 +8142,10 @@ class Dashboard {
 
 // Define the initial state of the store
 let store = {
+    /* motion sick mode by default */
+    disableSprites: 1,
+
+    showDebugLayer: 0,
     showDebugCursor: 0,
     windowHasFocus: true,
     disableDeepCanvas: 0,
@@ -9618,7 +9721,7 @@ extends Config
     finalCallback(wizardInstance){
         console.warn('AddGraphNodeWizardConfig finalCallback')
         
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
 
         if(!store.currentGraph){
             store.currentGraph = new Graph();
@@ -10159,27 +10262,6 @@ class WizardConfig {
     }
 }
 
-// class ToggleDashboardVisibleWizardConfig
-// extends WizardConfig {
-//     name = "Toggle Dashboard: Visible"
-//     steps = [
-//         // TODO: bake into a pre-configured InstantCommandConfig instead of always using Wizard with a dummy first step manually
-//         {question:"",onStepLoaded:(wiz)=>{wiz.end(); system.hideCmdPrompt();}}
-//     ]
-//     finalCallback(wiz){
-//         console.warn("toggle dashboard visible")
-//         system.get("Dashboard").toggleVisibility();
-//     }
-// }
-
-// class ShuffleDashboardWidgetPositionsCommand 
-// extends Config {
-//     name = "Shuffle Dashboard Widget Positions"
-//     execute(){
-//         system.dashboard.shuffleWidgetPositions();
-//     }
-// }
-
 class NewCommandCommand
 extends BaseCmds(Command, new NewCommandWizardConfig()){}
 
@@ -10391,7 +10473,7 @@ extends Config {
             {pinned: false}
         );
         CmdPromptInput.value('');
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
     }
 }
 
@@ -10399,19 +10481,19 @@ class ShowNewToastCommand
 extends BaseCmds(Command, new NewToastWizardConfig()){}
 
 // Define the ShowCmdPromptCommand class
-class ShowCmdPromptCommand extends Command {
-    constructor(){
-        super("Show Command Prompt")
-    }
-    // draw, perform, verb, invoke, execute, run, do,
-    invoke(){
-        // Show Command Prompt
-        store.CmdPromptVisible = true;
+// class ShowCmdPromptCommand extends Command {
+//     constructor(){
+//         super("Show Command Prompt")
+//     }
+//     // draw, perform, verb, invoke, execute, run, do,
+//     invoke(){
+//         // Show Command Prompt
+//         store.CmdPromptVisible = true;
 
-        // focus the command palette input element
-        CmdPromptInput.elt.focus();
-    }
-}
+//         // focus the command palette input element
+//         CmdPromptInput.elt.focus();
+//     }
+// }
 
 class MyJavascriptCommand extends Command {
     constructor(target, ...args){
@@ -10452,32 +10534,32 @@ class HardReloadCommand extends Command {
 }
 
 // Define the HideCmdPromptCommand class
-class HideCmdPromptCommand extends Command {
-    constructor(){
-        super("Hide CMD Prompt")
-    }
+// class HideCmdPromptCommand extends Command {
+//     constructor(){
+//         super("Hide CMD Prompt")
+//     }
 
-    invoke(){
+//     invoke(){
 
-        // clear the command buffer
-        store.commandBuffer = {name:''};
-        CmdPromptInput.value('');
+//         // clear the command buffer
+//         store.commandBuffer = {name:''};
+//         CmdPromptInput.value('');
 
-        // Hide CMD Prompt
-        store.CmdPromptVisible = false;
-    }
-}
+//         // Hide CMD Prompt
+//         store.CmdPromptVisible = false;
+//     }
+// }
 
 // Define the ToggleCmdPromptCommand class
-class ToggleCmdPromptCommand extends Command {
-    constructor(){
-        super("Toggle CMD Prompt")
-    }
-    invoke(){
-        // Toggle CMD Prompt
-        store.CmdPromptVisible = !store.CmdPromptVisible;
-    }
-}
+// class ToggleCmdPromptCommand extends Command {
+//     constructor(){
+//         super("Toggle CMD Prompt")
+//     }
+//     invoke(){
+//         // Toggle CMD Prompt
+//         store.CmdPromptVisible = !store.CmdPromptVisible;
+//     }
+// }
 
 function loadGraph(name){
     // TODO: destruct any current graph
@@ -11111,7 +11193,8 @@ class TodoWizardConfig extends WizardConfig {
             graph: store.currentGraph // todo: just store ID
         })
 
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
+        //cmdprompt.hide();
     }
 }
 class RepeatingTodoWizardConfig extends TodoWizardConfig {
@@ -11283,10 +11366,38 @@ const features = [
 
 ]
 const InvokableCommands = {
-    ["List {Invokable Commands}"](){},
-    ["Show {Invokable Commands}"](){},
-    ["Describe {Invokable Commands}"](){},
-    ["Help Page For {Invokable Command}"](){},
+    ["YouTube - Joe Pera Talks you back to sleep"](){
+        return "https://www.youtube.com/watch?v=DSUilYKcRMA";
+    },
+    ["New Fact"](){},
+    ["New Thing"](){},
+    ["New Type"](){},
+    ["New Command Argument"](){
+
+    },
+
+    ["Fun Fact..."](){
+        system.todo("Say a fun fact!")
+    },
+
+    ["List {Invokable Commands}"](){
+        system.todo("List {Invokable Commands}")
+    },
+    ["Show {Invokable Commands}"](){
+        system.todo("Show {Invokable Commands}")
+    },
+    ["Describe {Invokable Commands}"](){
+        system.todo("Describe {Invokable Commands}")
+    },
+    ["Help Page For {Invokable Command}"](){
+        system.todo("Help Page For {Invokable Command}")
+    },
+
+    ["How Do I..."](){
+        system.todo("How Do I...")
+    },
+    
+    ["F.A.Q. Frequently Asked Questions"](){},
 
     // localized, limited, quick
     ["Re-Roll AI Cache For This Node"](){},
@@ -11511,6 +11622,12 @@ const InvokableCommands = {
     ["Study Greek Alphabet Flashcards"](){
         // spawn a new flashcard widget
         system.registerWidget(new GreekAlphabetWidget());
+    },
+    ["simulate resize event"](){
+        window.dispatchEvent(new Event("resize"));
+    },
+    ["refresh the page"](){
+        window.location.reload();
     },
     ["reflow"](){
         window.dispatchEvent(new Event("resize"));
@@ -11773,7 +11890,7 @@ const InvokableCommands = {
         })
         .then(response => response.json())
         .then(data => {
-            system.info("Image sent to server!");
+            console.log("Image sent to server!",data);
         })
         .catch((error) => {
             system.error("Error:", error);
@@ -11959,6 +12076,12 @@ const InvokableCommands = {
         let response = prompt("what url? (most dont work sadly, look for iframe-embed friendly urls and share links) \n you can paste a whole iframe html snippet here","http://iframesafe.url")
         system.registerWidgetInstance(new iFrameWidget(response))
     },
+    ["split bubble"](){},
+    ["duplicate widget"](){},
+    // multicursor.js
+    ["select next occurance"](){},
+    ["select all occurances"](){},
+    ["select previous occurance"](){},
     ["new browser bubble"](){
         InvokableCommands["new iframe widget"]()
     },
@@ -12255,6 +12378,24 @@ const InvokableCommands = {
     ["play with gravity"](){},
     ["disable gravity"](){},
     ["disable friction"](){},
+
+    ["new voice recording"](){},
+    ["new voice memo"](){},
+    
+    ["toggle monochrome mode"](){
+        body.classList.toggle("monochrome");
+    },
+    ["audio only"](){
+
+    },
+    ["toggle captions"](){
+
+    },
+    ["new conversation map"](){
+
+    },
+
+
     ["dark mode"](){},
     ["light mode"](){},
     ["new theme"](){},
@@ -12379,11 +12520,11 @@ const InvokableCommands = {
     },
     ["new rubiks cube GL"](){
         system.registerWidget(new RubiksCubeGL());
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
     },
     ["new rubiks cube 2D"](){
         system.registerWidget(new RubiksCubeWidget());
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
     },
     ["play pacman"](){
         system.registerWidget(new iFrameWidget("https://www.google.com/logos/2010/pacman10-i.html"));
@@ -12394,7 +12535,7 @@ const InvokableCommands = {
         let instance = new TetrisWidget();
         system.registerWidget(instance);
         // hide the command prompt
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
     },
     /*
     {
@@ -13148,14 +13289,14 @@ class ToastNotification {
             }
         }
         this.targetCloneCount = targetCloneCount;
-        ctx.push();
+        
         for(let i = 0; i < targetCloneCount; i++){
             // shift the drawing context with each i
             ctx.translate(0, 50);
 
             this.drawOneInstance(index+i,ctx)
         }
-        ctx.pop();
+        
     }
 
     drawOneInstance(index,ctx){
@@ -13329,7 +13470,7 @@ class SetMaxSuggestionsCommandWizardConfig extends Config {
     finalCallback(wizardInstance){
         store.maxVisibleOptionsCount = parseInt(wizardInstance.stepResponses[0].input);
         CmdPromptInput.value('');
-        new HideCmdPromptCommand().execute();
+        cmdprompt.hide();
         system.get("toastManager").showToast(`Set Max Suggestions: ${store.maxVisibleOptionsCount}`);
     }
 }
@@ -13494,9 +13635,9 @@ const TYPENAME_TO_CONSTRUCTOR_MAP = {
     CommandWizardConfig,
     ShowNewToastCommand,
     StartChatGPTSessionCommand,
-    ShowCmdPromptCommand,
-    HideCmdPromptCommand,
-    ToggleCmdPromptCommand,
+    //ShowCmdPromptCommand,
+    // HideCmdPromptCommand,
+    // ToggleCmdPromptCommand,
     SetCommandIconCommand,
 
     // Config related
@@ -13550,6 +13691,12 @@ function levenshteinDistance(a, b) {
 };
 
 // TODO: need to update the z-index of the canvas ui to be ABOVE any iframes
+/** @see CmdPrompt.draw */
+/** @see CmdPrompt.renderCommandPrompt */
+/** @see CmdPrompt.renderSuggestedCommands */
+/** @see SuggestionList.draw */
+/** @see SuggestionList.drawSuggestedOptions */
+/** @see SuggestionList.renderSuggestionOption */
 class CmdPrompt extends Widget {
     // the current "Command" being constructed
     currentCommand = null; 
@@ -13558,12 +13705,39 @@ class CmdPrompt extends Widget {
     // the list of contextually recommended commands
     filteredCommands = []; 
 
+    toggle(){
+        if(store.CmdPromptVisible){
+            this.hide();
+        }else{
+            this.show()
+        }
+    }
+    show(){
+        this.showCmdPrompt()
+    }
     showCmdPrompt(){
         // Show Command Prompt
         store.CmdPromptVisible = true;
 
         // focus the command palette input element
         CmdPromptInput.elt.focus();
+    }
+    hide(){
+        this.hideCmdPrompt();
+    }
+    hideCmdPrompt(){
+        store.CmdPromptVisible = false;
+        CmdPromptInput.elt.blur();
+
+        // clear the command palette input
+        CmdPromptInput.value('');
+        // reset the command buffer
+        store.commandBuffer = {
+            name: ''
+        };
+        // reset the selectedd  index to 0
+        //this.commandSuggestionList.selectedOptionIndex = 0;
+        this.selectedSuggestionIndex = 0;
     }
 
     get visible(){
@@ -13593,7 +13767,11 @@ class CmdPrompt extends Widget {
 
         
         
-        CmdPromptInput.attribute('placeholder', `${this.timestamp}`);
+        CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}`);
+
+        setInterval(()=>{
+            CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}\n What are you working on? undefined`);
+        },350)
         
         CmdPromptInput.style('font-size', '66px');
 
@@ -13839,7 +14017,7 @@ class CmdPrompt extends Widget {
         //     ],
         //     callback: function(){
         //         console.warn('running self test...')
-        //         new HideCmdPromptCommand().execute();
+        //         cmdprompt.hide();
         //     }
         // }))
         
@@ -13863,7 +14041,8 @@ class CmdPrompt extends Widget {
                     // }
                     store.currentGraph = null;
                     // hide the command palette
-                    new HideCmdPromptCommand().execute();
+                    //cmdprompt.hide();
+                    cmdprompt.hide();
                 }
             })
         )
@@ -13901,7 +14080,8 @@ class CmdPrompt extends Widget {
                         system.get("Dashboard").collapse();
                         loadGraph(prevStepResponse.selectedSuggestionValueOrLabel)
                         // close the command palette
-                        new HideCmdPromptCommand().execute();
+                        //cmdprompt.hide();
+                        cmdprompt.hide();
                     },
                     steps: [
                         {
@@ -13929,9 +14109,9 @@ class CmdPrompt extends Widget {
                     ]
                 }
             }),
-            new ShowCmdPromptCommand(),
-            new HideCmdPromptCommand(),
-            new ToggleCmdPromptCommand(),
+            //new ShowCmdPromptCommand(),
+            //new HideCmdPromptCommand(),
+            //new ToggleCmdPromptCommand(),
         ])
     }
 
@@ -13964,6 +14144,7 @@ class CmdPrompt extends Widget {
 
     renderSuggestedCommands(){
         /* pass the drawing responsibility on to the SuggestionList class instance */
+        /** @see SuggestionList.draw */
         this.commandSuggestionList.draw(deepCanvasManager.uiContext);
     }
 
@@ -14039,7 +14220,8 @@ class CmdPrompt extends Widget {
 
         // if the cmd palette is not visible, show it
         if(store.focused && !store.CmdPromptVisible && /^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]*$/.test(event.key)){
-            new ShowCmdPromptCommand().execute();
+            //cmdprompt.show();
+            cmdprompt.show();
         }
 
         // if there's an active wizard, we need to handle the input differently
@@ -14066,17 +14248,6 @@ class CmdPrompt extends Widget {
         return false    
     }
 
-    hide(){
-        // hide the command palette
-        store.CmdPromptVisible = false;
-        // clear the command palette input
-        CmdPromptInput.value('');
-        // reset the command buffer
-        store.commandBuffer = {
-            name: ''
-        };
-    }
-
     OnPressEscape(){
         // if there's an active wizard, we need to handle the input differently
         if(store.activeWizard){
@@ -14084,9 +14255,8 @@ class CmdPrompt extends Widget {
             //return;
         }
         // escape was pressed
-        this.hide()
-        // blur the input
-        CmdPromptInput.elt.blur();
+        this.hideCmdPrompt()
+        
         // need to decide when the current command is deselected
         // --- 
         // this.currentCommand = null;
@@ -16061,17 +16231,25 @@ let cursor, MainCanvasContextThing = function(p){
         setTimeout(()=>{_onResize()},150);
     }
 
-    system.PreloadedImages = {};
-    system.PreloadedSVGs = {}
+    /* Central Cache for media instances */
+    system.PreloadedImages = {
+        "icon_NEW_COMMAND.png": null,
+    };
+    system.PreloadedSVGs = {
+
+    }
     system.PreloadedSounds = {
         "res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3": null
     };
+    // videos, etc...
     p.preload = function() {
         Object.entries(system.PreloadedImages).forEach(([_,imgName])=>{
-            system.PreloadedImages[imgName] = loadImage(imgName);
+            system.loadImageAsync(imgName);
         })
+        // do we need to distinguish? p5 treats them identical
+        // maybe useful for other renderers tho, if we end up having to pre-cache svgs to another format at some point...
         Object.entries(system.PreloadedSVGs).forEach(([_,name])=>{
-            system.PreloadedSVGs[name] = loadImage(name);
+            system.loadImageAsync(name);
         })
         Object.entries(system.PreloadedSounds).forEach(([_,name])=>{
             system.loadSound(name).then((sound)=>{
@@ -16084,6 +16262,8 @@ let cursor, MainCanvasContextThing = function(p){
     }
 
     p.setup = function(){
+
+        
 
         p.resizeCanvas(mctx.windowWidth,mctx.windowHeight)
 
@@ -16160,6 +16340,14 @@ let cursor, MainCanvasContextThing = function(p){
         manager.boot(); 
         rootSystem = system = manager.systems[0];
 
+        // note: there's a bug where calling the rootSystemManager.boot doesn't actually boot sub-systems
+        // kind of makes sense, wouldn't want docker to auto-start all your containers each time
+        // in the future, this will be based on user state
+        // but for now, we'll just kick-start the rootSystem...
+        // needed to defer until rendering was ready for some pre-cache drawing
+        rootSystem.boot();
+
+        // note the reduced volume!
         system.plopAudioPlayer = mctx.createAudio('res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3');
         system.plopAudioPlayer.volume(0.1);
         
@@ -16270,17 +16458,17 @@ void main(void) {
         
         /// === region: Self Test Mode ===
         // TODO: parallelize with Promise.all([])
-        autorunFeatureTestResults.length = 0; // reset results
-        autorunFeatureTests.forEach((FeatureTestConfigOrInstance)=>{
-            runFeatureTest(FeatureTestConfigOrInstance);
-        })
-        // a different approach
-        Object.entries(FEATURE_TESTS).forEach(([name, definition])=>{
-            console.warn('instantiating and running feature tests',{
-                name,definition
-            })
-            runFeatureTest(new FEATURE_TESTS[name]());
-        })
+        // autorunFeatureTestResults.length = 0; // reset results
+        // autorunFeatureTests.forEach((FeatureTestConfigOrInstance)=>{
+        //     runFeatureTest(FeatureTestConfigOrInstance);
+        // })
+        // // a different approach
+        // Object.entries(FEATURE_TESTS).forEach(([name, definition])=>{
+        //     console.warn('instantiating and running feature tests',{
+        //         name,definition
+        //     })
+        //     runFeatureTest(new FEATURE_TESTS[name]());
+        // })
         // our alternative attempt at auto-class registration using
         // a decorator:
         // Object.entries(SELF_TEST_CLASSES).forEach(([name, definition])=>{
@@ -16340,6 +16528,12 @@ void main(void) {
 
         document.addEventListener('keydown', (e)=>{
             console.warn('keypress',{e})
+            // command or control
+            // cmdorcontrol
+            // cmdorctrl
+            // ctrlorcmd
+            // controlorcmd
+            // controlOrCommand
             const ctrlOrCmd = e.ctrlKey || e.metaKey;
 
             // TODO: make this a static command matrix... !!!
@@ -16347,7 +16541,10 @@ void main(void) {
             if(ctrlOrCmd && e.key === 'd'){
                 system.alert("don't bookmark, just come back.")
                 e.preventDefault();
-                cmdprompt.showCmdPrompt();
+                InvokableCommands["clear"]();
+                /** @see CmdPrompt.hideCmdPrompt */
+                system.cmdprompt.hideCmdPrompt();
+                system.notify("Cleared! 🧘‍♂️")
                 return;
             } 
 
@@ -16358,6 +16555,7 @@ void main(void) {
                 e.preventDefault();
                 //alert("Ctrl+P has been disabled!");
                 // toggle the dashboard
+                /** @see CmdPrompt.showCmdPrompt */
                 system.cmdprompt.showCmdPrompt();
                 return;
             }
@@ -16495,11 +16693,11 @@ void main(void) {
         // NEW: init the widget dashboard
         system.dashboard.init()
 
-        system.registerWidget(
-            new ImageViewerWidget("fine.gif")
-        )
+        // system.registerWidget(
+        //     new ImageViewerWidget("fine.gif")
+        // )
 
-        system.todo("log time till framerate stable (boot seq time)")
+        //system.todo("log time til framerate stable (boot seq time)")
 
         /*
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
@@ -16511,11 +16709,13 @@ void main(void) {
         system.dashboard.registerWidget(grw);
         */
 
-       system.dashboard.registerWidget(new RubiksCubeGL());
-       // system.dashboard.registerWidget(new RubiksCubeWidget());
-        system.dashboard.registerWidget(new ClientResolverDebugWidget());
+        // NOT NOW NAUSEA!
 
-        system.dashboard.registerWidget(new ImageViewer("cheshire-cat.gif"));
+       //system.dashboard.registerWidget(new RubiksCubeGL());
+       // system.dashboard.registerWidget(new RubiksCubeWidget());
+        //system.dashboard.registerWidget(new ClientResolverDebugWidget());
+
+        //system.dashboard.registerWidget(new ImageViewer("cheshire-cat.gif"));
         // system.dashboard.newWidgetInstance(ImageSpinner, "cheshire-cat.gif");
 
         // current workbench of demo widgets // work bench
@@ -17029,6 +17229,8 @@ void main(void) {
         }
         mainCanvasContext = p;
 
+        
+
 
         if(!store.disableDeepCanvas){
             deepCanvasManager.draw();
@@ -17284,7 +17486,7 @@ let mainCanvasContext = new p5(MainCanvasContextThing, "main-canvas-context");
 window.mctx = mainCanvasContext;
 // bind the global api so it can shift contexts
 const properties = [
-    'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
+    'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'CLOSE', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
     'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
     'triangle', 
@@ -17845,9 +18047,12 @@ class SuggestionList {
     // draw suggested / drawSuggested drawSuggestion
     // drawSuggestedOption / drawSuggestionOption
     renderSuggestionOption(x,y,w,h,label,selected,ctx){
-        ctx.push()
-        // ctx.translate(x,y);
-        // ctx.scale(zoom);
+        
+
+
+        ctx.push();
+        ctx.translate(x,y);
+        ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
         ctx.strokeWeight(selected ? 3 : 1);
@@ -17867,6 +18072,24 @@ class SuggestionList {
             w - 20,
             ctx
         )
+
+        // NEW: add an image if we have one for this command
+        // if not add a placeholder based on "icon_NEW_COMMAND.png"
+
+        // for now, just draw a cached copy of icon_NEW_COMMAND.png
+        // TODO: scale things so the image (no matter its native dimensions) are stretched to fill the provided 50x50 space and make sure it has a rounded corner
+        /** @see System.image */
+        const img = system.image("icon_NEW_COMMAND.png");
+        ctx.imageMode(CORNER);
+        ctx.image(img, 10, 10, 50, 50);
+        ctx.beginShape();
+        ctx.vertex(10, 10);
+        ctx.vertex(10 + 50, 10);
+        ctx.quadraticVertex(10 + 50, 10 + 50, 10, 10 + 50);
+        ctx.endShape(CLOSE);
+
+        
+
         ctx.pop()
 
         
