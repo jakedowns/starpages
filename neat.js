@@ -6152,6 +6152,22 @@ class iFrameWidget extends Widget {
         // Draw a white X on a RED BUTTON
         // this.ctx.push(); // Save current drawing style and transformation matrix
 
+        // Save the default state
+        this.ctx.drawingContext.save(); 
+        // Apply a skew transformation
+        // The parameters are: scale factors (x, y), skew factors (x, y), translate (x, y)
+        let time = Date.now() * 0.001; // Get current time in seconds
+        let skewValueX = Math.sin(time); // Calculate sin value of the current time for x-axis skew
+        let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
+        let rollingColor = color(255, 0, 0, 100); // Create a color with alpha
+        // shift the hue of the color over time
+        rollingColor.setRed((Math.sin(time) * 128) + 127);
+        rollingColor.setGreen((Math.cos(time) * 128) + 127);
+        rollingColor.setBlue((Math.sin(time) * 128) + 127);
+        this.ctx.fill(rollingColor);
+        this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
+        // squash scale to account for skew in screen space
+        this.ctx.scale(1.5,1)
         // // Save the default state
         // this.ctx.drawingContext.save(); 
         // // Apply a skew transformation
@@ -14711,15 +14727,33 @@ class CmdPrompt extends Widget {
                         //console.warn("TODO: if it was a tweet, make it a fancy iframe!");
                         //system.todo("implement url embeds for various well-known iframe friendly sites which provide a consistent url structure for embedding")
                         console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
-                        if(currentInputBufferText.includes('twitter.com')
-                            || currentInputBufferText.includes('x.com')
+
+                        // if the url has a //twitter.com || //x.com domain,
+                        // embed it as an iframe widget
+                        if(currentInputBufferText.includes('//twitter.com')
+                            || currentInputBufferText.includes('//x.com')
                         ){
-                            // if the url has a //twitter.com || //x.com domain,
-                            // embed it as an iframe widget
                             let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
                             system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                        }else if(currentInputBufferText.includes('//youtube.com')
+                            || currentInputBufferText.includes('//youtu.be')
+                        ){
+                            system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('.png')
+                            || currentInputBufferText.includes('.jpg')
+                            || currentInputBufferText.includes('.jpeg')
+                            || currentInputBufferText.includes('.gif')
+                            || currentInputBufferText.includes('.bmp')
+                            || currentInputBufferText.includes('.svg')
+                            || currentInputBufferText.includes('.webp')
+                        ){
+                            // if it's a Image, embed it as an image
+                            system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('://')){
+                            // if it's a url, embed it as an iframe
+                            system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
                         }else{
-                            // 
+                            system.panic("i dont know what to do with my hands")
                         }
                     }
                 })
@@ -18369,7 +18403,7 @@ class SuggestionList {
         }
         store.rendererHasOptionsToRender = true;
         
-        const offsetY = 200;
+        const offsetY = 0;
 
         // render the list of the top maxVisibleOptionsCount suggestions
         this.visibleSuggestions.forEach((suggestion, i) => {
@@ -18418,7 +18452,9 @@ class SuggestionList {
 
 
         ctx.push();
-        // ctx.translate(x,y);
+        ctx.translate(x,y);
+        // ctx.scale(zoom);
+        //ctx.translate(x,y);
         //ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
