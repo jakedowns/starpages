@@ -687,6 +687,48 @@ class SystemManager {
  */
 /** System.constructor(SystemManager manager) */
 class System {
+    playSuccessTone(){
+        try{
+            // Play a sound using p5.js
+            let sound = new p5.Oscillator();
+            sound.setType('sine');
+            sound.start();
+            sound.amp(0.5, 0.05);
+            let duration = 500;
+            let d2 = 100;
+            for(let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    sound.freq(200 + (i * 100)); // Increase the pitch with each beep
+                    sound.start();
+                    sound.amp(0.5, 0.05);
+                }, d2 * i); // Make the beeps quicker
+                setTimeout(() => sound.stop(), duration + (d2 * i)); // Make the beeps quicker
+            }
+        }catch(e){
+            console.error('error playing sound',e)
+        }
+    }
+    playErrorTone(){
+        try{
+            // Play a sound using p5.js
+            let sound = new p5.Oscillator();
+            sound.setType('sine');
+            sound.start();
+            sound.amp(0.5, 0.05);
+            let duration = 500;
+            let d2 = 100;
+            for(let i = 2; i >= 0; i--) { // Iterate from high to low
+                setTimeout(() => {
+                    sound.freq(200 + (i * 100)); // Decrease the pitch with each beep
+                    sound.start();
+                    sound.amp(0.5, 0.05);
+                }, d2 * (2 - i)); // Make the beeps quicker
+                setTimeout(() => sound.stop(), duration + (d2 * (2 - i))); // Make the beeps quicker
+            }
+        }catch(e){
+            console.error('error playing sound',e)
+        }
+    }
     fallbackImage = null;
     // aka .resource(url) // return from cache or fetch,stash and return
     // aka maybeImage or imageOrNull or imageOrDefault (while loading...)
@@ -699,7 +741,11 @@ class System {
         // we could call it imageAsyncDebounced || imageAsyncThrottled
         if(!this.PreloadedImages[url]){
             // AHHH we fired and forgot some async code, it's the end of teh world!
-            this.imageAsync(url);
+            this.imageAsync(url).catch((e)=>{
+                console.warn("error loading",e)
+                this.PreloadedImages[url] = system.fallbackImage;
+            });
+            
             return system.fallbackImage;
         }
         return this.PreloadedImages[url]
@@ -732,7 +778,7 @@ class System {
             }
             //console.warn('about to load',{url})
             if(!(url?.trim?.() ?? "")?.length){
-                reject(system.fallbackImage);
+                resolve(system.fallbackImage);
                 system.panic("System.imageAsync: no url provided");
                 return;
             }
@@ -1085,6 +1131,7 @@ class System {
             || uri?.includes?.(".jpg")
             || uri?.includes?.(".gif")
             || uri?.includes?.(".jpeg")
+            || uri?.includes?.(".webp")
         ) {
             // it's an image!
             return system.registerWidget(new ImageViewerWidget(uri))
@@ -5086,6 +5133,12 @@ class ImageViewerWidget extends Widget {
         width: 300, 
         height: 300 
     }
+    onUploadComplete(){
+        console.warn("widget.onUploadComplete",arguments)
+    }
+    onUploadError(){
+        console.warn("widget.onUploadError",arguments)
+    }
     src = "alien2.jpeg"
     isGif = false
     static bind(src){
@@ -5293,7 +5346,7 @@ extends ImageViewerWidget {
     rotationSpeedDegreesPerSecond = .05
     currentRotationDegrees = 0
     onDraw(){
-        super.onDraw(...arguments)
+        //super.onDraw(...arguments)
         this.ctx.push()
         // rotate the drawing context
         this.currentRotationDegrees += this.rotationSpeedDegreesPerSecond * deltaTime;
@@ -5313,7 +5366,7 @@ extends ImageViewerWidget {
             this.widgetSize.height,
             this.widgetSize.width
         );
-        //super.draw(...arguments)
+
         this.ctx.pop()
     }
 }
@@ -6192,17 +6245,19 @@ class iFrameWidget extends Widget {
         // this.ctx.pop(); // Restore drawing style and transformation matrix
 
         let iFrameX = ( 
-            this.smartPositionNew.x + (panX * zoom)
+            //this.smartPositionNew.x + 
+            (panX * zoom)
         );
         
         let iFrameY = (
-            this.smartPositionNew.y + (panY * zoom)
+            //this.smartPositionNew.y + 
+            (panY * zoom)
         );
         
-        this.iframe.position(
-            iFrameX,
-            iFrameY
-        );
+        // this.iframe.position(
+        //     iFrameX,
+        //     iFrameY
+        // );
 
         // set pointerEvents none when deepCanvasManager.focusedIndex < 1
         const panning = Math.abs(panMomentumVector.x ?? panMomentumVector.y)
@@ -6214,13 +6269,7 @@ class iFrameWidget extends Widget {
             ? 'none' 
             : 'auto';
 
-        //debugger;
-        //this.iframe.scale(zoom)
-        // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
-        // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
-        // this.iframe.elt.id = this.id;
-        // t
-        this.iframe.elt.style.transform = `scale(${zoom})`;
+        this.iframe.elt.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
     }
 }
 /* 
@@ -7065,6 +7114,7 @@ class GherkinRunnerWidget extends Widget {
         system.warn('Widget.setResults: results',results)
         this.results = results
         setTimeout(()=>{
+            /** @see Dashboard.reflowLayout */
             system.dashboard.reflowLayout()
         },100)
     }
@@ -7927,7 +7977,7 @@ class Dashboard {
         prevRowHeight = 0,
         currentRowIndex = 0;
 
-        const space = 1; //420;
+        const space = 0; //420;
         
         // Sort widgets by height in descending order
         this.widgetLayoutOrder.sort((a, b) => {
@@ -7947,17 +7997,18 @@ class Dashboard {
             let w = widget.widgetSize.width;
             let h = widget.widgetSize.height;
 
-            let padding = 1; // Define padding
-            w = w - 20 * padding; // Subtract padding from width
-            h = h - 20 * padding; // Subtract padding from height
+            let padding = 10; // Define padding
+            // w = w - 20 * padding; // Subtract padding from width
+            // h = h - 20 * padding; // Subtract padding from height
 
-            // let virtualWidth = windowWidth / zoom;
-            // if (currentRowWidth + w + space > virtualWidth) {
-            //     prevRowHeight = currentRowMaxHeight;
-            //     currentRowIndex++;
-            //     currentRowWidth = 0; // Reset row width
-            //     accumulatedRowOffset += prevRowHeight + space; // Increase space between widgets vertically
-            // }
+            // decide when to start a new row
+            let virtualWidth = windowWidth / zoom;
+            if (currentRowWidth + w + space > virtualWidth) {
+                prevRowHeight = currentRowMaxHeight;
+                currentRowIndex++;
+                currentRowWidth = 0; // Reset row width
+                accumulatedRowOffset += prevRowHeight + space; // Increase space between widgets vertically
+            }
             currentRowMaxHeight = Math.max(currentRowMaxHeight, h);
             let x = currentRowWidth;
             let y = accumulatedRowOffset;
@@ -11312,6 +11363,7 @@ class Timer {
         this.completedAt = performance.now();
         this.ticking = false;
         this?.onComplete?.();
+        this?.onTimerEnded?.(); // better, more searchable name
     }
     start(){
         this.pausedAt = null
@@ -11378,8 +11430,24 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new color"](){},
+    ["new color picker widget"](){},
+    ["new color theme"](){},
+    ["new palette"](){},
+    ["new color paleltte"](){},
+    ["new style guide"](){},
+    ["new style bible"](){},
     ["new graph"](){
 
+    },
+    ["system > play success tone"](){
+        system.playSuccessTone();
+    },
+    ["system > play error tone"](){
+        system.playErrorTone();
+    },
+    ["search for a youtube video"](){
+        prompt('search...')
     },
     ["search wikipedia"](){
 
@@ -11393,7 +11461,11 @@ const InvokableCommands = {
     ["new connector"](){
 
     },
+    ["random"](){
+        return "stumble"
+    },
     ["stumble"](){
+        system.warn("launching random command...")
         // invoke a random command
         let keys = Object.keys(InvokableCommands);
         let randomKey = keys[Math.floor(Math.random() * keys.length)];
@@ -11942,12 +12014,18 @@ const InvokableCommands = {
     ["dehydrated onion dip"](){
         return "https://www.youtube.com/watch?v=T7jH-5YQLcE&width=800&height=600";
     },
+    ["always sunny charlie day conspiracy reaction gif"](){
+        return "always-sunny-charlie-day-conspiracy.webp"
+    },
     ["Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]"](){
         // // offer up the lyrics on rap genius
         // // https://genius.com/Aesop-rock-kyanite-toothpick-lyrics => <div id='rg_embed_link_9519850' class='rg_embed_link' data-song-id='9519850'>Read <a href='https://genius.com/Aesop-rock-kyanite-toothpick-lyrics'>“Kyanite Toothpick” by Aesop Rock</a> on Genius</div> <script crossorigin src='//genius.com/songs/9519850/embed.js'></script>
         // system.registerWidget(new iFrameWidget(
         //     "https://genius.com/Aesop-rock-kyanite-toothpick-lyrics"
         // ))
+
+        system.registerWidget(new ImageViewerWidget("kyanite-definition.png"))
+        system.registerWidget(new ImageViewerWidget("kyanite.jpg"))
 
         system.registerWidget(new iFrameWidget("https://en.wikipedia.org/wiki/Kyanite"))
 
@@ -12439,7 +12517,7 @@ const InvokableCommands = {
 
     ["Play Bestie"]:"https://www.youtube.com/watch?v=5SH69RyqLA4",
 
-    this_is_fine: "fine.gif",
+    ["this is fine"]: "fine.gif",
     feels_good_man: "feelsgoodman.gif",
 
     "new hand-written digit recognizer": "",
@@ -13138,8 +13216,39 @@ class TimerWidget extends Widget {
     }
     constructor(){
         super(...arguments)
+
+        // request permission to show notifications
+        if (!("Notification" in window)) {
+            console.log("This browser does not support desktop notification");
+        } else if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+            Notification.requestPermission();
+        }
+
         // automatically generates a timerManager.timers[0]
         this.timerManager = new TimerManager(); 
+        // bind our timer.onTimerEnded
+        this.timerManager.timers[0].onTimerEnded = function(){
+            //alert('timer ended!')
+            /** @see System.playSuccessTone */
+            system.playSuccessTone();
+
+            // Trigger a browser notification
+            if (!("Notification" in window)) {
+                console.log("This browser does not support desktop notification");
+            } else if (Notification.permission === "granted") {
+                let notification = new Notification("Timer ended!")
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(function (permission) {
+                    if (permission === "granted") {
+                        let notification = new Notification("Timer ended!");
+                    }else{  
+                        console.warn("Notification permission denied");
+                    }
+                });
+            } else {
+                console.warn("Notification permission denied?");
+            }
+        }
     }
     onDraw(){
         super.onDraw(...arguments)
@@ -14602,11 +14711,16 @@ class CmdPrompt extends Widget {
                         //console.warn("TODO: if it was a tweet, make it a fancy iframe!");
                         //system.todo("implement url embeds for various well-known iframe friendly sites which provide a consistent url structure for embedding")
                         console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
-
-                        // if the url has a //twitter.com || //x.com domain,
-                        // embed it as an iframe widget
-                        let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
-                        system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                        if(currentInputBufferText.includes('twitter.com')
+                            || currentInputBufferText.includes('x.com')
+                        ){
+                            // if the url has a //twitter.com || //x.com domain,
+                            // embed it as an iframe widget
+                            let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
+                            system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                        }else{
+                            // 
+                        }
                     }
                 })
             })
@@ -16577,6 +16691,14 @@ let cursor, MainCanvasContextThing = function(p){
         console.info("booting...");
         manager.boot(); 
         rootSystem = system = manager.systems[0];
+        system.playSuccessTone(); // the boot sound
+
+        const keysStartingWithT = Object.keys(InvokableCommands)
+            .filter(key => key.toLowerCase().startsWith('t'));
+        const sortedKeys = keysStartingWithT
+            .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+        console.log(sortedKeys);
 
         // note: there's a bug where calling the rootSystemManager.boot doesn't actually boot sub-systems
         // kind of makes sense, wouldn't want docker to auto-start all your containers each time
@@ -18296,18 +18418,18 @@ class SuggestionList {
 
 
         ctx.push();
-        //ctx.translate(x,y);
+        // ctx.translate(x,y);
         //ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
         ctx.strokeWeight(selected ? 3 : 1);
         // draw box
         ctx.fill(selected ? "purple" : ctx.color(25))
-        // ctx.translate(x,y)
+        ctx.translate(x,y)
         ctx.rect(0,0,w,h);
         ctx.fill(255)
         ctx.strokeWeight(3);
-        ctx.textSize(40);
+        ctx.textSize(30);
         // draw label
         drawStringWordWrapped(
             label,
@@ -18344,7 +18466,7 @@ class SuggestionList {
 
         
 
-        // ctx.pop()
+        ctx.pop()
 
         
     }

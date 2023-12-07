@@ -29,7 +29,7 @@
         socketIO.connect();
       });
     </script>
-    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/addons/p5.sound.min.js"></script> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
 
     <script type="module">
       // TODO: make these "toggle-able" via flipping state bool
@@ -335,6 +335,7 @@
       z-index: 3;
     }
     #bg-image {
+      opacity: 0;
       position: fixed;
       width: 100vw;
       height: 100vh;
@@ -343,6 +344,7 @@
       opacity: 0.3;
       z-index: 1;
       object-fit: cover;
+      transition: filter 1s ease-in-out, opacity 1s ease-in-out;
       filter: blur(1000px);
     }
     main {
