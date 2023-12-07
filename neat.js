@@ -737,6 +737,8 @@ class System {
                 return;
             }
             try{
+                reject(system.fallbackImage);
+                return system.fallbackImage;
                 loadImage(urlLoadable, (img) => {
                     system.PreloadedImages[url] = img;
                     resolve(img);
@@ -2388,16 +2390,16 @@ class Widget extends UndoRedoComponent {
 
     get idArr(){
         return [
-            this.smartPosition.x,
-            this.smartPosition.y,
+            this.smartPositionNew.x,
+            this.smartPositionNew.y,
             this.widgetSize.width,
             this.widgetSize.height,
         ]
     }
     get idObj(){
         return {
-            x: this.smartPosition.x,
-            y: this.smartPosition.y,
+            x: this.smartPositionNew.x,
+            y: this.smartPositionNew.y,
             w: this.widgetSize.width,
             h: this.widgetSize.height,
         }
@@ -2442,12 +2444,12 @@ class Widget extends UndoRedoComponent {
     // TODO: enable debug rendering of widget bounding boxes
     getBoundingBox() {
         return {
-            left: this.smartPosition.x,
-            right: this.smartPosition.x + this.widgetSize.width,
-            top: this.smartPosition.y,
-            bottom: this.smartPosition.y + this.widgetSize.height,
-            near: this.smartPosition.z,
-            far: this.smartPosition.z + this.widgetSize.depth
+            left: 0,
+            right: this.widgetSize.width,
+            top: 0,
+            bottom: this.widgetSize.height,
+            near: 0,
+            far: this.widgetSize.depth
         };
     }
 
@@ -2811,8 +2813,8 @@ class Widget extends UndoRedoComponent {
     enterDrawingContext(){
         this.ctx.push();
         this.ctx.translate(
-            this.smartPosition.x,
-            this.smartPosition.y
+            this.smartPositionNew.x,
+            this.smartPositionNew.y
         )
         this.ctx.scale(
             zoom,
@@ -6055,11 +6057,11 @@ class iFrameWidget extends Widget {
     // main iframe draw
     // draw iframe main
     onDraw(){
-        super.onDraw(...arguments)
+        //super.onDraw(...arguments)
 
-        this.ctx.push()
-        this.ctx.translate(-this.smartPosition.x, -this.smartPosition.y)
-        this.ctx.scale(zoom)
+        // this.ctx.push()
+        // this.ctx.translate(-this.smartPosition.x, -this.smartPosition.y)
+        // this.ctx.scale(zoom)
         this.ctx.fill("red")
         this.ctx.text(`url:${this.url}`, 0, 0, 100, 100);
         //this.ctx.pop()
@@ -6095,7 +6097,7 @@ class iFrameWidget extends Widget {
         const negYOffset = - buttonSize - 10;
         
         // Draw a white X on a RED BUTTON
-        this.ctx.push(); // Save current drawing style and transformation matrix
+        // this.ctx.push(); // Save current drawing style and transformation matrix
 
         // Save the default state
         this.ctx.drawingContext.save(); 
@@ -6113,92 +6115,105 @@ class iFrameWidget extends Widget {
         this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
         // squash scale to account for skew in screen space
         this.ctx.scale(1.5,1)
+        // // Save the default state
+        // this.ctx.drawingContext.save(); 
+        // // Apply a skew transformation
+        // // The parameters are: scale factors (x, y), skew factors (x, y), translate (x, y)
+        // let time = Date.now() * 0.001; // Get current time in seconds
+        // let skewValueX = Math.sin(time); // Calculate sin value of the current time for x-axis skew
+        // let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
+        // let rollingColor = color(255, 0, 0, 100); // Create a color with alpha
+        // // shift the hue of the color over time
+        // let hue = (time * 10) % 360; // Slowing down the hue shift even more
+        // rollingColor = color('hsb(' + hue + ', 100%, 50%)'); // Increasing saturation to avoid white flickering
+        // this.ctx.fill(rollingColor);
+        // this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
+        // // squash scale to account for skew in screen space
+        // this.ctx.scale(1.5,1)
 
-        // Draw your objects here
-        this.ctx.rect(50, 50, 100, 100);
+        // // Draw your objects here
+        // this.ctx.rect(50, 50, 100, 100);
 
-        // Restore the context to its original state
-        this.ctx.drawingContext.restore();
+        // // Restore the context to its original state
+        // this.ctx.drawingContext.restore();
 
-            this.ctx.translate(
-                this.smartPosition.x,
-                this.smartPosition.y
-            )
-            this.ctx.noStroke();
-            this.ctx.rectMode(CORNER)
-            this.ctx.fill("red");
-            this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
-            this.ctx.rectMode(CENTER)
-            this.ctx.fill("white");
-            this.ctx.translate(halfButtonSize, halfButtonSize)
-            this.ctx.rotate(radians(45));
-            this.ctx.rect(0, 0, 30, 10, borderRadius);
-            this.ctx.rect(0, 0, 10, 30, borderRadius);
-            this.ctx.rotate(radians(-45));
-            this.ctx.translate(-halfButtonSize, -halfButtonSize)
-        this.ctx.pop(); // Restore drawing style and transformation matrix
+        //     this.ctx.translate(
+        //         this.smartPosition.x,
+        //         this.smartPosition.y
+        //     )
+        //     this.ctx.noStroke();
+        //     this.ctx.rectMode(CORNER)
+        //     this.ctx.fill("red");
+        //     this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
+        //     this.ctx.rectMode(CENTER)
+        //     this.ctx.fill("white");
+        //     this.ctx.translate(halfButtonSize, halfButtonSize)
+        //     this.ctx.rotate(radians(45));
+        //     this.ctx.rect(0, 0, 30, 10, borderRadius);
+        //     this.ctx.rect(0, 0, 10, 30, borderRadius);
+        //     this.ctx.rotate(radians(-45));
+        //     this.ctx.translate(-halfButtonSize, -halfButtonSize)
+        // this.ctx.pop(); // Restore drawing style and transformation matrix
 
-        // Draw a white minus on a yellow button
-        this.ctx.push(); // Save current drawing style and transformation matrix
-        this.ctx.translate(
-            this.smartPosition.x,
-            this.smartPosition.y
-        )
-            this.ctx.rectMode(CORNER)
-            this.ctx.fill("goldenrod");
-            this.ctx.rect(
-                            buttonSize + 10, 
-                            negYOffset, 
-                            buttonSize, 
-                            buttonSize, 
-                            borderRadius);
-            this.ctx.rectMode(CENTER);
-            this.ctx.fill("white");
-            this.ctx.rect(
-                            halfButtonSize + buttonSize + 10, 
-                            negYOffset + halfButtonSize, 
-                            30, 
-                            10, 
-                            borderRadius);
-        this.ctx.pop(); // Restore drawing style and transformation matrix
+        // // Draw a white minus on a yellow button
+        // this.ctx.push(); // Save current drawing style and transformation matrix
+        // this.ctx.translate(
+        //     this.smartPosition.x,
+        //     this.smartPosition.y
+        // )
+        //     this.ctx.rectMode(CORNER)
+        //     this.ctx.fill("goldenrod");
+        //     this.ctx.rect(
+        //                     buttonSize + 10, 
+        //                     negYOffset, 
+        //                     buttonSize, 
+        //                     buttonSize, 
+        //                     borderRadius);
+        //     this.ctx.rectMode(CENTER);
+        //     this.ctx.fill("white");
+        //     this.ctx.rect(
+        //                     halfButtonSize + buttonSize + 10, 
+        //                     negYOffset + halfButtonSize, 
+        //                     30, 
+        //                     10, 
+        //                     borderRadius);
+        // this.ctx.pop(); // Restore drawing style and transformation matrix
 
-        // Draw a white plus on a green button
-        this.ctx.push(); // Save current drawing style and transformation matrix
-            this.ctx.translate(
-                this.smartPosition.x,
-                this.smartPosition.y
-            )
-            this.ctx.translate(0, buttonSize + 10)
-            this.ctx.noStroke();
-            this.ctx.rectMode(CORNER)
-            this.ctx.fill("green");
-            this.ctx.rect(0, 0, buttonSize, buttonSize, borderRadius);
-            this.ctx.rectMode(CENTER)
-            this.ctx.fill("white");
-            this.ctx.rect(
-                halfButtonSize, 
-                halfButtonSize, 
-                30, 
-                10, 
-                borderRadius
-            );
-            this.ctx.rect(
-                halfButtonSize, 
-                halfButtonSize, 
-                10, 
-                30, 
-                borderRadius);
-        this.ctx.pop(); // Restore drawing style and transformation matrix
+        // // Draw a white plus on a green button
+        // this.ctx.push(); // Save current drawing style and transformation matrix
+        //     this.ctx.translate(
+        //         this.smartPosition.x,
+        //         this.smartPosition.y
+        //     )
+        //     this.ctx.translate(0, buttonSize + 10)
+        //     this.ctx.noStroke();
+        //     this.ctx.rectMode(CORNER)
+        //     this.ctx.fill("green");
+        //     this.ctx.rect(0, 0, buttonSize, buttonSize, borderRadius);
+        //     this.ctx.rectMode(CENTER)
+        //     this.ctx.fill("white");
+        //     this.ctx.rect(
+        //         halfButtonSize, 
+        //         halfButtonSize, 
+        //         30, 
+        //         10, 
+        //         borderRadius
+        //     );
+        //     this.ctx.rect(
+        //         halfButtonSize, 
+        //         halfButtonSize, 
+        //         10, 
+        //         30, 
+        //         borderRadius);
+        // this.ctx.pop(); // Restore drawing style and transformation matrix
 
         let iFrameX = ( 
-            (mouseShifted.x + panX)
-            + this.smartPosition.x 
-        ) * zoom;
+            this.smartPositionNew.x + (panX * zoom)
+        );
         
         let iFrameY = (
-            (mouseShifted.y + panY)
-            + this.smartPosition.y
-        ) * zoom;
+            this.smartPositionNew.y + (panY * zoom)
+        );
         
         this.iframe.position(
             iFrameX,
@@ -11379,6 +11394,32 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["new graph"](){
+
+    },
+    ["search wikipedia"](){
+
+    },
+    ["new cellular automata"](){
+    },
+    ["new game of life (which one?)"](){
+    },
+    ["new disambiguation"](){
+    },
+    ["new connector"](){
+
+    },
+    ["stumble"](){
+        // invoke a random command
+        let keys = Object.keys(InvokableCommands);
+        let randomKey = keys[Math.floor(Math.random() * keys.length)];
+        InvokableCommands[randomKey]();
+    },
+    ["youtube - coding adventures"](){
+        return "https://www.youtube.com/watch?v=rSKMYc1CQHE"
+    },
+    ["https://www.youtube.com/watch?v=QtZT7hcMltg"](){},
+    ["Youtube - aesop rock - klutz"](){return "https://www.youtube.com/watch?v=QtZT7hcMltg"},
     ["Youtube - Art of the Problem - How Neural Networks Learned to Talk | ChatGPT: A 30 Year History"](){
         return "https://www.youtube.com/watch?v=OFS90-FX6pg"
     },
@@ -11982,6 +12023,45 @@ const InvokableCommands = {
             console.error("Error reading clipboard contents: ", err);
         });
     },
+    // we can use multi-view to debug our view frustum
+    // otherwise, within the preview, we can't see or visualize the view frustum
+    // which makes debugging the view frustum difficult
+    ["launch secondary viewer"](){
+        return "implement multi-view"
+    },
+    ["fix zoom scaling cmd options"](){
+        // add a regression test to make sure command prompt options don't render at different sizes
+        // they should be consistent and Scale independent
+    },
+    ["fix cmdprompt textarea overshadowing other inputs"](){
+        // need to reduce the clickable hit area of the command prompt
+        // input text area html element when the cmdPrompt is in it's
+        // hidden or closed state,
+        // or add a dynamic pointer-events:none toggle
+    },
+    ["implement multi-view"](){
+        // in the future, you can specify which system
+        // for now, let's assume the viewer views rootSystem 
+        // rootSystemManager.systems[0]
+        system.registerWidget(new SecondaryViewer());
+    },
+    ["implement projection matrix"](){},
+    ["implement view frustum"](){},
+    ["implement ray casting"](){},
+    ["pre-req: implement BVH"](){},
+    ["todo implement widget hit tests"](){},
+    ["new counter"](){
+        system.registerWidget(new Counter());
+    },
+    ["new button"](){
+        system.registerWidget(new UIButton());
+    },
+    ["new numeric display"](){
+
+    },
+    ["new flow chart"](){},
+    ["new work flow"](){},
+
     ["Set Command Icon"](){},
     ["New Icon"](){},
     ["open photopea"]:"https://www.photopea.com/",
@@ -12741,8 +12821,8 @@ Object.entries(InvokableCommands).forEach(([key, val]) => {
     if (normalizedKey !== key) {
         // console.warn(`remapping ${key} to ${normalizedKey}`);
         if (normalizedKey in InvokableCommands) {
-            console.error(`collision! ${normalizedKey} already exists!`);
-            throw new Error(`collision! ${normalizedKey} already exists!`);
+            system.warn(`collision! ${normalizedKey} already existed!`);
+            //throw new Error(`collision! ${normalizedKey} already exists!`);
         }
         InvokableCommands[normalizedKey] = val;
         // delete InvokableCommands[key];
@@ -12756,6 +12836,25 @@ class Gizmo extends Widget {
     onDraw(){
         super.onDraw(...arguments)
         console.warn('todo draw'+this.constructor.name)
+    }
+}
+
+// in the future, you can specify which system
+// for now, let's assume the viewer views rootSystem 
+// rootSystemManager.systems[0]
+class SecondaryViewer extends Widget {
+    // I don't think we need to call this anymore
+    // constructor(){
+    //     super(...arguments)
+    // }
+
+    onDraw(){
+        // I don't think we need to call this anymore
+        //super.onDraw(...arguments)
+
+        stroke("green")
+        fill("purple")
+        rect(0,0, 300, 100, 50)
     }
 }
 
@@ -13900,12 +13999,18 @@ class CmdPrompt extends Widget {
 
     afterSetup(){
         // TODO: draw the command prompt instead of using html el
-        CmdPromptInput = mctx.createInput('');
+        CmdPromptInput = mctx.createElement('textarea');
         CmdPromptInput.parent(document.body);
+        CmdPromptInput.attribute('rows', '10');
+        CmdPromptInput.attribute('cols', '50');
+        CmdPromptInput.style('width', 'auto');
+        CmdPromptInput.style('height', 'auto');
         CmdPromptInput.elt.style.backgroundColor = 'transparent';
         CmdPromptInput.elt.style.color = 'white';
         CmdPromptInput.elt.style.zIndex = 9999;
         CmdPromptInput.elt.id = 'cmdprompt-input';
+        // important no border radius
+        CmdPromptInput.elt.style.borderRadius = '0px';
         //CmdPromptInput.class('z-index-9999');
         //CmdPromptInput.elt.style.filter = 'blur(10px)';
 
@@ -13917,7 +14022,8 @@ class CmdPrompt extends Widget {
         CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}`);
 
         setInterval(()=>{
-            CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}\n What are you working on? undefined`);
+            // \nWhat are you working on? undefined
+            CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}`);
         },350)
         
         CmdPromptInput.style('font-size', '66px');
@@ -14262,6 +14368,7 @@ class CmdPrompt extends Widget {
         ])
     }
 
+    // aol keywords: drawcmdprompt rendercmdprompt
     renderCommandPrompt(){
         let ctx = deepCanvasManager.uiContext;
         ctx.push();
@@ -17636,6 +17743,8 @@ void main(void) {
             /** @see CmdPrompt.renderCommandPrompt */
             cmdprompt?.renderCommandPrompt?.();
         }
+        // temp hack fix
+        CmdPromptInput.style('pointer-events', store.CmdPromptVisible ? 'auto' : 'none');
 
         /// vvv above the command palette
         if(1 || store.renderNotificationsAboveCommands){
@@ -17990,9 +18099,9 @@ class SuggestionList {
             }
             let suggestionWidth = mctx.windowWidth * .66;
             let x = ( mctx.windowWidth / 2 ) - (suggestionWidth/2);
-            let y = 10 + (i * 50);
+            let y = 10 + (i * 70);
             let w = suggestionWidth;
-            let h = 50;
+            let h = 70;
             let label = suggestion.name;
             let selected = this.selectedOptionIndex === i;
             output.push({
@@ -18164,6 +18273,7 @@ class SuggestionList {
     draw(ctx){
         this.drawSuggestedOptions(ctx);
     }
+    /** @see SuggestionList.renderSuggestionOption */
     drawSuggestedOptions(ctx){
         store.rendererStarted = true;
         
@@ -18227,6 +18337,8 @@ class SuggestionList {
         ctx.push();
         ctx.translate(x,y);
         // ctx.scale(zoom);
+        //ctx.translate(x,y);
+        //ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
         ctx.strokeWeight(selected ? 3 : 1);
@@ -18240,10 +18352,10 @@ class SuggestionList {
         // draw label
         drawStringWordWrapped(
             label,
-            10,
+            80,
             10,
             20,
-            w - 20,
+            w - 100,
             ctx
         )
 
@@ -18255,12 +18367,21 @@ class SuggestionList {
         /** @see System.image */
         const img = system.image("icon_NEW_COMMAND.png");
         ctx.imageMode(CORNER);
-        ctx.image(img, 10, 10, 50, 50);
-        ctx.beginShape();
-        ctx.vertex(10, 10);
-        ctx.vertex(10 + 50, 10);
-        ctx.quadraticVertex(10 + 50, 10 + 50, 10, 10 + 50);
-        ctx.endShape(CLOSE);
+        let aspectRatio = img.width / img.height;
+        let newWidth, newHeight;
+        if (img.width > img.height) {
+            newWidth = 50;
+            newHeight = newWidth / aspectRatio;
+        } else {
+            newHeight = 50;
+            newWidth = newHeight * aspectRatio;
+        }
+        ctx.image(img, 10, 10, newWidth, newHeight);
+        // ctx.beginShape();
+        // ctx.vertex(10, 10);
+        // ctx.vertex(10 + 50, 10);
+        // ctx.quadraticVertex(10 + 50, 10 + 50, 10, 10 + 50);
+        // ctx.endShape(CLOSE);
 
         
 
