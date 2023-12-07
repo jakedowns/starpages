@@ -2477,8 +2477,13 @@ class Widget extends UndoRedoComponent {
         return accumulatedPosition;
     }
 
-    // smart position is the parallaxed position on top of the local position (falls back to the base local position if no parallax is applied)
+    // old, deprecated
     get smartPosition(){
+        return {x:0,y:0}
+    }
+
+    // smart position is the parallaxed position on top of the local position (falls back to the base local position if no parallax is applied)
+    get smartPositionNew(){
         //console.warn("smartPosition is deprecated")
         if(this.pinned && this.fixedPosition){
             return this.fixedPosition;
@@ -6099,6 +6104,10 @@ class iFrameWidget extends Widget {
         let time = Date.now() * 0.001; // Get current time in seconds
         let skewValueX = Math.sin(time); // Calculate sin value of the current time for x-axis skew
         let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
+        let rollingColor = color(255, 0, 0, 100); // Create a color with alpha
+        // shift the hue of the color over time
+        rollingColor.setHue((time * 100) % 255);
+        this.ctx.fill(rollingColor);
         this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
         // squash scale to account for skew in screen space
         this.ctx.scale(1.5,1)
@@ -11368,6 +11377,15 @@ const features = [
 
 ]
 const InvokableCommands = {
+    ["Youtube - Art of the Problem - How Neural Networks Learned to Talk | ChatGPT: A 30 Year History"](){
+        return "https://www.youtube.com/watch?v=OFS90-FX6pg"
+    },
+    ["waves"](){
+        return "https://www.youtube.com/watch?v=2AXv49dDQJw"
+    },
+    ["New Graph 2.0"](){},
+    ["New Lava lamp"](){},
+    ["New Fluid Sim!"](){},
     ["toggle fps"](){
         
     },
@@ -11487,8 +11505,122 @@ const InvokableCommands = {
     todo_fix_cmd_prompt_rendering_order_incorrect(){
         system.todo("i'll get there!")
     },
-    todo_add_analytics_tracking_code(){
-        system.todo('yeah yeah yeah')
+    // todo_add_analytics_tracking_code(){
+    //     system.todo('yeah yeah yeah')
+    // },
+    todo_ability_to_remember_todo_DONE_status_locally(){
+
+    },
+    todo_ability_to_remember_todo_DONE_status_remotely(){
+
+    },
+    ["track thing"](){},
+    ["graph thing over time"](){},
+    ["new sparkline tracker"](){},
+    ["new stream"](){},
+    ["new stream event"](){},
+    ["new event stream"](){},
+    ["new metadata cluster"](){},
+    ["view metadata"](){},
+    ["remove metadata"](){},
+    // public, private, protected
+    ["set protection level to Public"](){}, 
+    ["set protection level to Private"](){}, 
+    ["set protection level to Protected"](){}, 
+    ["load all things tagged {tag}"](){}, 
+    ["add tag to thing {tag} {thing}"](){},
+    ["remove tag from thing {tag} {thing}"](){},
+    ["add tag(s) to thing(s)"](){},
+    ["remove tag(s) from thing(s)"](){},
+    ["hide all things tagged {tag(s)}"](){},
+    ["tokenized inputs (like discord commands for midjourney)"](){},
+    ["self-symbol viewer"](){},
+    ["new force-directed graph"](){},
+    ["handle pasted dotviz input"](){
+        system.todo("parse graphviz dotlang to our ast for viewing and modification and enhancement")
+    },
+    ["export graph as graphviz dotlang"](){},
+    ["set graphviz dotlang export settings"](){},
+    ["recall user graphviz dotlang export settings"](){},
+    ["new settings group"](){},
+    ["new setting profile template"](){},
+    ["new notion widget"](){},
+    ["new obsidian widget"](){},
+    ["new trello widget"](){},
+    ["new google sheets widget"](){},
+    ["new google slides widget"](){},
+    ["new google drawing"](){},
+    // private bookmarks
+    ["PRIVATE open mortgage website"](){},
+    ["PRIVATE open personal checking website"](){},
+    ["PRIVATE open quick books self employed :<"](){},
+    ["PRIVATE open turbotax :<"](){},
+    ["PRIVATE open mint :<"](){},
+    ["PRIVATE did the mortgage payment go through?"](){},
+    ["PRIVATE did the truck payment go through?"](){},
+    ["PRIVATE did the credit card(s) {x,y,z} payment(s) go through?"](){},
+    ["PRIVATE what is my business checking account balance?"](){},
+    ["PRIVATE what is my business savings account balance?"](){},
+    ["PRIVATE what is my personal savings account balance?"](){},
+    ["PRIVATE what is my retirement account balance?"](){},
+    ["PRIVATE how is saving for disneyland going?"](){},
+    ["PRIVATE how close are we to paying off the HVAC repairs?"](){},
+    ["PRIVATE what's our total unsecured debt?"](){},
+    ["PRIVATE what's our options for debt reconsolidation (debt securitization)?"](){},
+    ["PRIVATE what's our payoff on the truck?"](){},
+    ["PRIVATE how long until the truck is paid off?"](){},
+    ["PRIVATE open google keep"](){},
+    ["PRIVATE open workflowy"](){},
+    ["new whisper session"](){
+        //startWhisperSession() {
+            // Create a new MediaRecorder instance
+            let mediaRecorder;
+            let audioChunks = [];
+            const audioType = 'audio/webm';
+            const constraints = { audio: true };
+
+            system.mediaRecorder = mediaRecorder;
+
+            // Request access to the microphone
+            navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+                mediaRecorder = new MediaRecorder(stream);
+                system.mediaRecorder = mediaRecorder;
+
+                // Start recording
+                mediaRecorder.start();
+
+                // On data available, push it to our array
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                // On stop, send the audio data to the server
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: audioType });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audio = new Audio(audioUrl);
+
+                    // Send the audio data to the server
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/api/audio', true);
+                    xhr.send(audioBlob);
+
+                    // Clear the audio chunks
+                    audioChunks = [];
+                };
+            });
+
+            // Stop recording after 5 seconds
+            // setTimeout(() => {
+            //     mediaRecorder.stop();
+            // }, 5000);
+        //}
+    },
+    ["start recording to whisper"](){
+        system?.mediaRecorder?.start?.();
+    },
+    ["stop recording to whisper"](){
+        system?.mediaRecorder?.stop?.();
     },
     todo_add_user_account_system(){
         system.todo('yeah yeah yeah')
@@ -11714,6 +11846,9 @@ const InvokableCommands = {
     // ["Play N64 > ..."](){
 
     // },
+    ["todo keep track of how many times you execute each command"](){
+
+    },
     ["Play N64 Yoshi's Story"](){
         /*
         <iframe src="https://www.retrogames.cc/embed/32546-yoshi-s-story-usa-en-ja.html" width="600" height="450" frameborder="no" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" scrolling="no"></iframe>
@@ -11759,6 +11894,9 @@ const InvokableCommands = {
             }
         ))
     },
+    ["Youtube - Britney Spears - Stronger"](){
+        return "https://www.youtube.com/watch?v=Cz70JkxsFTA"
+    },
     ["3"](){
         // 3 toggles 3 js mode
         InvokableCommands["Load THREE.js"]()
@@ -11783,6 +11921,8 @@ const InvokableCommands = {
         // system.registerWidget(new iFrameWidget(
         //     "https://genius.com/Aesop-rock-kyanite-toothpick-lyrics"
         // ))
+
+        system.registerWidget(new iFrameWidget("https://en.wikipedia.org/wiki/Kyanite"))
 
         // render the lyrics in a text viewer
         // TODO: make the song appear when lyrics are recognized?
@@ -11847,7 +11987,7 @@ const InvokableCommands = {
     // you don't have to invent something if someone has iframes and import/export already
     ["new pixel art"]:"https://www.piskelapp.com/p/create/sprite",
     ["New Resource"](){},
-    ["New Stream"](){},
+    //["New Stream"](){},
     // ["New Goal"](){},
     ["New Promise"](){},
     ["Bucket List Item Completed"](){},
@@ -13768,7 +13908,7 @@ class CmdPrompt extends Widget {
         //CmdPromptInput.elt.style.filter = 'blur(10px)';
 
         CmdPromptInput.style('border', 'none');
-
+        CmdPromptInput.style('');
 
         
         
