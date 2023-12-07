@@ -6106,7 +6106,9 @@ class iFrameWidget extends Widget {
         let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
         let rollingColor = color(255, 0, 0, 100); // Create a color with alpha
         // shift the hue of the color over time
-        rollingColor.setHue((time * 100) % 255);
+        rollingColor.setRed((Math.sin(time) * 128) + 127);
+        rollingColor.setGreen((Math.cos(time) * 128) + 127);
+        rollingColor.setBlue((Math.sin(time) * 128) + 127);
         this.ctx.fill(rollingColor);
         this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
         // squash scale to account for skew in screen space
@@ -14512,8 +14514,31 @@ class CmdPrompt extends Widget {
 
                         // if the url has a //twitter.com || //x.com domain,
                         // embed it as an iframe widget
-                        let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
-                        system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                        if(currentInputBufferText.includes('//twitter.com')
+                            || currentInputBufferText.includes('//x.com')
+                        ){
+                            let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
+                            system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                        }else if(currentInputBufferText.includes('//youtube.com')
+                            || currentInputBufferText.includes('//youtu.be')
+                        ){
+                            system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('.png')
+                            || currentInputBufferText.includes('.jpg')
+                            || currentInputBufferText.includes('.jpeg')
+                            || currentInputBufferText.includes('.gif')
+                            || currentInputBufferText.includes('.bmp')
+                            || currentInputBufferText.includes('.svg')
+                            || currentInputBufferText.includes('.webp')
+                        ){
+                            // if it's a Image, embed it as an image
+                            system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('://')){
+                            // if it's a url, embed it as an iframe
+                            system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
+                        }else{
+                            system.panic("i dont know what to do with my hands")
+                        }
                     }
                 })
             })
@@ -18151,7 +18176,7 @@ class SuggestionList {
         }
         store.rendererHasOptionsToRender = true;
         
-        const offsetY = 200;
+        const offsetY = 0;
 
         // render the list of the top maxVisibleOptionsCount suggestions
         this.visibleSuggestions.forEach((suggestion, i) => {
@@ -18200,14 +18225,14 @@ class SuggestionList {
 
 
         ctx.push();
-        // ctx.translate(x,y);
+        ctx.translate(x,y);
         // ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
         ctx.strokeWeight(selected ? 3 : 1);
         // draw box
         ctx.fill(selected ? "purple" : ctx.color(25))
-        // ctx.translate(x,y)
+        ctx.translate(x,y)
         ctx.rect(0,0,w,h);
         ctx.fill(255)
         ctx.strokeWeight(3);
@@ -18239,7 +18264,7 @@ class SuggestionList {
 
         
 
-        // ctx.pop()
+        ctx.pop()
 
         
     }
