@@ -9760,64 +9760,64 @@ extends Config
 }
 */
 
-class AddGraphNodeWizardConfig
-extends Config
-{
-    name = "Add Graph Node..."
-    altnames = [
-        "New Graph Node...",
-        "New Node...",
-        "New..." // our default NEW
-    ]
-    steps = [
-        // {
-        //     question: "what type of node would you like to add?",
-        //     suggestions: [
-        //         {
-        //             name: "Rect",
-        //             value: "rect"
-        //         }
-        //     ]
-        // },
-        {
-            question: "what is the name of the node?",
-            answerStorageKey: "name",
+// class AddGraphNodeWizardConfig
+// extends Config
+// {
+//     name = "Add Graph Node..."
+//     altnames = [
+//         "New Graph Node...",
+//         "New Node...",
+//         "New..." // our default NEW
+//     ]
+//     steps = [
+//         // {
+//         //     question: "what type of node would you like to add?",
+//         //     suggestions: [
+//         //         {
+//         //             name: "Rect",
+//         //             value: "rect"
+//         //         }
+//         //     ]
+//         // },
+//         {
+//             question: "what is the name of the node?",
+//             answerStorageKey: "name",
 
-            subQuestions: [
-                {
-                    question: "what type of node?",
-                    answerDefaultValue: "rect",
-                    suggestions: [
-                        {
-                            name: "Rect", value: "rect"
-                        }
-                    ]
-                }
-            ]
-        }
-    ]
-    // overload the default finalCallback
-    finalCallback(wizardInstance){
-        console.warn('AddGraphNodeWizardConfig finalCallback')
+//             subQuestions: [
+//                 {
+//                     question: "what type of node?",
+//                     answerDefaultValue: "rect",
+//                     suggestions: [
+//                         {
+//                             name: "Rect", value: "rect"
+//                         }
+//                     ]
+//                 }
+//             ]
+//         }
+//     ]
+//     // overload the default finalCallback
+//     finalCallback(wizardInstance){
+//         console.warn('AddGraphNodeWizardConfig finalCallback')
         
-        cmdprompt.hide();
+//         cmdprompt.hide();
 
-        if(!store.currentGraph){
-            store.currentGraph = new Graph();
-        }
-        const id = store.currentGraph.nodes.length;
-        store.currentGraph.addNode({
-            id,
-            name: wizardInstance?.stepResponses?.[0]?.input,
-            x: (id % Math.floor(windowWidth / 200)) * 200,
-            y: Math.floor(id / Math.floor(windowWidth / 200)) * 100,
-            width: 200,
-            height: 100,
-            shape: 'rect',
-            graph: store.currentGraph // todo: just store ID
-        })
-    }
-}
+//         if(!store.currentGraph){
+//             store.currentGraph = new Graph();
+//         }
+//         const id = store.currentGraph.nodes.length;
+//         store.currentGraph.addNode({
+//             id,
+//             name: wizardInstance?.stepResponses?.[0]?.input,
+//             x: (id % Math.floor(windowWidth / 200)) * 200,
+//             y: Math.floor(id / Math.floor(windowWidth / 200)) * 100,
+//             width: 200,
+//             height: 100,
+//             shape: 'rect',
+//             graph: store.currentGraph // todo: just store ID
+//         })
+//     }
+// }
 
 // should we extend WizardConfig?
 class RunGherkinCommandWizardConfig extends Config {
@@ -11445,16 +11445,31 @@ const bugs = [
 const features = [
 
 ]
+// central command definitions
 const InvokableCommands = {
-    ["new color"](){},
-    ["new color picker widget"](){},
-    ["new color theme"](){},
-    ["new palette"](){},
-    ["new color paleltte"](){},
-    ["new style guide"](){},
-    ["new style bible"](){},
+    ["new color"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new color picker widget"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new color theme"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new palette"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new color paleltte"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new style guide"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new style bible"](){
+        system.todo("🪃 so do it then!")
+    },
     ["new graph"](){
-
+        system.todo("🪃 so do it then!")
     },
     ["system > play success tone"](){
         system.playSuccessTone();
@@ -11465,6 +11480,11 @@ const InvokableCommands = {
     ["search for a youtube video"](){
         prompt('search...')
     },
+    ["new newton's cradle 2D"](){},
+    ["new netwon's cradle 3D"](){},
+    ["new hypercube"](){},
+    ["new quaternion demonstrator"](){},
+    ["new molecule sandbox"](){},
     ["search wikipedia"](){
 
     },
