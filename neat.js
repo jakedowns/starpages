@@ -7734,56 +7734,56 @@ class LayereredCanvasRenderer {
         let halfWidth = windowWidth/2
         let halfHeight = windowHeight/2
 
-        canvas.push();
-        canvas.translate(mouseShifted.x, mouseShifted.y);
-        canvas.translate(
-            panX - (halfWidth*zoom), 
-            panY -(halfHeight*zoom)
-        );
-        canvas.scale(zoom);
-        const shape = this.debugShapes[canvasIndex];
-        // p5.js automatically knows which canvas to draw on based on the canvas object we're calling the methods on.
-        // There's no need to call setcontext or currentCanvas.
-        // The canvas object encapsulates its own context.
-        canvas.strokeWeight(5);
-        canvas.stroke("black");
-        canvas.fill(shape.color);
+        // canvas.push();
+        // canvas.translate(mouseShifted.x, mouseShifted.y);
+        // canvas.translate(
+        //     panX - (halfWidth*zoom), 
+        //     panY -(halfHeight*zoom)
+        // );
+        // canvas.scale(zoom);
+        // const shape = this.debugShapes[canvasIndex];
+        // // p5.js automatically knows which canvas to draw on based on the canvas object we're calling the methods on.
+        // // There's no need to call setcontext or currentCanvas.
+        // // The canvas object encapsulates its own context.
+        // canvas.strokeWeight(5);
+        // canvas.stroke("black");
+        // canvas.fill(shape.color);
 
-        //canvas.rect(0,0,100,100);
-        let inargs = [...shape.args]
-        let angle = this.angles[canvasIndex];
-        //  invert the angle if the index is odd
-        if(canvasIndex % 2 === 1){
-            angle = -angle;
-        }
-        let radius = 20;
-        // x
-        inargs[0] += (panX * zoom) + (radius * Math.cos(angle));
-        // y
-        inargs[1] += (panY * zoom) + (radius * Math.sin(angle));
-        if(shape.name === "triangle"){
-            // x2
-            inargs[2] += (panX * zoom) + (radius * Math.cos(angle));
-            // y2
-            inargs[3] += (panY * zoom) + (radius * Math.sin(angle));
-            // x3
-            inargs[4] += (panX * zoom) + (radius * Math.cos(angle));
-            // y3
-            inargs[5] += (panY * zoom) + (radius * Math.sin(angle));
-        }
-        this.angles[canvasIndex] += .01;
-        // if angle is 2pi, reset to 0
-        if(this.angles[canvasIndex] >= Math.PI * 2){
-            this.angles[canvasIndex] = 0;
-        }
-        canvas[shape.name](...inargs);
-        canvas.textAlign(CENTER, CENTER)
-        canvas.textSize(32)
-        // canvas.fill("white")
-        canvas.stroke("black")
-        canvas.strokeWeight(1)
-        canvas.text(canvasIndex, panX*zoom, panY*zoom)
-        canvas.pop();
+        // //canvas.rect(0,0,100,100);
+        // let inargs = [...shape.args]
+        // let angle = this.angles[canvasIndex];
+        // //  invert the angle if the index is odd
+        // if(canvasIndex % 2 === 1){
+        //     angle = -angle;
+        // }
+        // let radius = 20;
+        // // x
+        // inargs[0] += (panX * zoom) + (radius * Math.cos(angle));
+        // // y
+        // inargs[1] += (panY * zoom) + (radius * Math.sin(angle));
+        // if(shape.name === "triangle"){
+        //     // x2
+        //     inargs[2] += (panX * zoom) + (radius * Math.cos(angle));
+        //     // y2
+        //     inargs[3] += (panY * zoom) + (radius * Math.sin(angle));
+        //     // x3
+        //     inargs[4] += (panX * zoom) + (radius * Math.cos(angle));
+        //     // y3
+        //     inargs[5] += (panY * zoom) + (radius * Math.sin(angle));
+        // }
+        // this.angles[canvasIndex] += .01;
+        // // if angle is 2pi, reset to 0
+        // if(this.angles[canvasIndex] >= Math.PI * 2){
+        //     this.angles[canvasIndex] = 0;
+        // }
+        // canvas[shape.name](...inargs);
+        // canvas.textAlign(CENTER, CENTER)
+        // canvas.textSize(32)
+        // // canvas.fill("white")
+        // canvas.stroke("black")
+        // canvas.strokeWeight(1)
+        // canvas.text(canvasIndex, panX*zoom, panY*zoom)
+        // canvas.pop();
 
     }
 }
@@ -7927,7 +7927,7 @@ class Dashboard {
         prevRowHeight = 0,
         currentRowIndex = 0;
 
-        const space = 3; //420;
+        const space = 1; //420;
         
         // Sort widgets by height in descending order
         this.widgetLayoutOrder.sort((a, b) => {
@@ -11413,6 +11413,9 @@ const InvokableCommands = {
     ["New Graph 2.0"](){},
     ["New Lava lamp"](){},
     ["New Fluid Sim!"](){},
+    ["toggle fps"](){
+        
+    },
     ["YouTube - Joe Pera Talks you back to sleep"](){
         return "https://www.youtube.com/watch?v=DSUilYKcRMA";
     },
@@ -18300,7 +18303,7 @@ class SuggestionList {
         ctx.strokeWeight(selected ? 3 : 1);
         // draw box
         ctx.fill(selected ? "purple" : ctx.color(25))
-        ctx.translate(x,y)
+        // ctx.translate(x,y)
         ctx.rect(0,0,w,h);
         ctx.fill(255)
         ctx.strokeWeight(3);
@@ -18341,7 +18344,7 @@ class SuggestionList {
 
         
 
-        ctx.pop()
+        // ctx.pop()
 
         
     }
