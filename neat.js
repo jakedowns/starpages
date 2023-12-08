@@ -904,8 +904,16 @@ class System {
             }
         });
     }
-    playSound(name){
+    playSound(name, loop=false){
         switch(name){
+            case "grandfather_clock":
+                system.grandfatherClockAudioPlayer.loop();
+                // system.grandfatherClockAudioPlayer.play();
+                break;
+            case "widget_opened":
+                //system.widgetOpenAudioPlayer.play();
+                system.todo("widget open sound");
+                break;
             case "widget_closed":
                 // let duration = 0.5; // Set the duration for the sound
                 // let osc = new p5.Oscillator();
@@ -929,7 +937,7 @@ class System {
                 system.plopAudioPlayer.play();
             break;
             default:
-                system.panic("unknown sound?! 👀")
+                system.panic("unknown sound?! 👀", arguments)
             break;
         }
     }
@@ -969,6 +977,9 @@ class System {
         }else{
             return launched;
         }
+        if(typeof InvokableCommands[name] !== 'function'){
+            system.panic("System.invoke: InvokableCommands[" + name + "] is not a function");
+        }
         return InvokableCommands[name]();
     }
     todo(){
@@ -982,7 +993,8 @@ class System {
     // aka alert
     // aka notification
     notify(){
-        this.get("toastManager").showToast(...arguments);
+        this.get("toastManager")?.showToast?.(...arguments);
+        console.warn(...arguments);
     }
     // System.constructor(SystemManager manager)
     constructor(manager){
@@ -1148,8 +1160,8 @@ class System {
         }
     
         if(
-            uri?.includes?.("youtube.com")
-            // || uri?.includes?.("youtu.be")
+            uri?.includes?.("youtube.com/")
+            || uri?.includes?.("youtu.be")
         ){
             let updatedUrl = uri;
             try {
@@ -1166,6 +1178,26 @@ class System {
             // it's an iframe, chuck!
             return system.registerWidget(new iFrameWidget(uri))
         }
+
+        try{
+            // see if it's an invokeable command!
+            let result = InvokableCommands[uri];
+            if(typeof result === 'string'){
+                return this.tryInvokeHandlerForUri(result);
+            }else if(typeof result === 'function'){
+                // if it's a function... return it's result
+                return result.call(result);
+            }else{
+                console.warn(`tryInvoke ${uri}`,typeof result, result);
+            }
+            if(result){
+                return result;
+            }
+        }catch(e){
+            console.error("error trying string as command ",e);
+            throw e;
+        }
+
         return -1;
     }
 }
@@ -2428,6 +2460,9 @@ function isWidgetInFrustum(widget, frustum) {
     return true;
 }
 
+/*
+    todo: make this have a prototype proxy that makes it  so when you set the size we re--cache the half width size so we don't have to keep dividing every frame, only once when size changes which is rare for most widgets
+*/
 class Widget extends UndoRedoComponent {
     hovered = false
     // allow forcing a widget to draw on a specific canvas for a cool depth of field effect
@@ -2486,6 +2521,14 @@ class Widget extends UndoRedoComponent {
 
     get size(){
         return this?.widgetSize ?? {width:100,height:100};
+    }
+
+    get halfWidth(){
+        return this.size.width / 2;
+    }
+
+    get halfHeight(){
+        return this.size.height / 2;
     }
 
     // TODO: enable debug rendering of widget bounding boxes
@@ -3106,13 +3149,24 @@ class Widget extends UndoRedoComponent {
         /** @see System.playSound */
         system.playSound("widget_closed")
         if(this.parentWidget){
-            console.warn("tell parent to close me!",this.parentWidget)
+            console.warn("tell parent i'm closing!",this,{parent:this.parentWidget})
         }
+        this?.onClose?.call(this);
     }
 }
 
-class CopiedToClipboard extends Widget {
+class ClipboardManager extends Widget {
+    constructor(){
+        super(...arguments);
+        system.todo("Copy to clipboard!")
+        //system.registerCallback
+        system.invoke("copyToClipboard_register_callback", ()=>{
+            system.warn("copy to clipboard callback invoked!")
+        })
+    }
+    onDraw(){
 
+    }
 }
 
 
@@ -6990,6 +7044,47 @@ class PrioritizerWidget extends TodoWidget {
     }
 }
 
+class SolarSystemWidget extends Widget {
+    name = "Solar System Widget"
+    widgetSize = { width: 300, height: 150 }
+    constructor(){
+        super(...arguments)
+        this.sun = {
+            x: 0, y: 0, radius: 50, color: "yellow"
+        }
+        this.earth = {
+            x: 10, y: 0, radius: 10, color: "blue"
+        }
+        // Assuming we have a variable to keep track of the earth's angle
+        this.earth.angle = 0;
+    }
+    /* disable Widget's default draw behavior */
+    disableDefaultFrame = true;
+    updateModel(){
+        
+
+        // In the updateModel method
+        this.earth.angle += 0.01; // Adjust this value to change the speed of the earth's orbit
+        this.earth.x = this.sun.x + this.earth.orbitRadius * Math.cos(this.earth.angle);
+        this.earth.y = this.sun.y + this.earth.orbitRadius * Math.sin(this.earth.angle);
+    }
+    onDraw(){
+        strokeWeight(0)
+        fill(this.sun.color)
+        circle(
+            this.halfWidth,
+            this.halfHeight,
+            this.sun.radius
+        )
+        fill(this.earth.color)
+        circle(
+            this.halfWidth + this.earth.x,
+            this.halfHeight + this.earth.y,
+            this.earth.radius
+        )
+    }
+}
+
 class ClockWidget extends Widget {
     name = "Clock Widget"
     widgetSize = { width: 300, height: 150 }
@@ -10347,8 +10442,8 @@ extends BaseCmds(Command, new NewCommandWizardConfig()){}
 class RunGherkinCommand
 extends BaseCmds(Command, new RunGherkinCommandWizardConfig()){}
 
-class AddGraphNodeCommand
-extends BaseCmds(Command, new AddGraphNodeWizardConfig()){}
+// class AddGraphNodeCommand
+// extends BaseCmds(Command, new AddGraphNodeWizardConfig()){}
 
 /*
 class NewFlashCardGame
@@ -11347,10 +11442,17 @@ class Timer {
         this.options = options ?? {
             durationSec: 60
         }
+        // use ONE timer for the ended callback
+        // this way if the user leaves the tab,
+        // the browser will still execute the callback
+        this.mainTimeout = setTimeout(()=>{
+            this.ended();
+        },this.durationSec * 1000);
+
         this.start()
     }
     get timeElapsed(){
-        return this.elapsedSec
+        return performance.now() - this.startedAt - this.pausedDuration;
     }
     get timeRemaining(){
         return this.remainingSec
@@ -11367,7 +11469,7 @@ class Timer {
         }
         this.elapsedSec = performance.now() - this.startedAt - this.pausedDuration;
         this.elapsedSec = Math.floor(this.elapsedSec / 1000);
-        if(this.elapsedSec >= this.durationSec){
+        if(this.elapsedSec >= this.durationSec && !this.completedAt){
             this.ended();
             return;
         }
@@ -11447,6 +11549,25 @@ const features = [
 ]
 // central command definitions
 const InvokableCommands = {
+    ["copyToClipboard_register_callback"](){
+        // todo system.registerCallback
+        // for now, store is separate,
+        // we might integrate it to per-system
+        store.copyToClipboardCallbacks = store.copyToClipboardCallbacks ?? [];
+        store.copyToClipboardCallbacks.push(arguments[0]);
+    },
+    ["new error"](){
+
+    },
+    ["new error type"](){
+
+    },
+    ["new stacktrace"](){
+
+    },
+    ["wave function collapse"](){
+        return "https://jakedowns.com/oasis/"
+    },
     ["new color"](){
         system.todo("🪃 so do it then!")
     },
@@ -11459,14 +11580,42 @@ const InvokableCommands = {
     ["new palette"](){
         system.todo("🪃 so do it then!")
     },
+    ["addition"](){
+        // if no arguments,
+        // show a prompt for 2 numbers
+        if (!arguments.length) {
+            let num1 = Number(prompt("Enter the first number:"));
+            let num2 = Number(prompt("Enter the second number:"));
+            return num1 + num2;
+        }
+        let result = arguments[0] + arguments[1];
+        console.warn('addition result',result)
+        system.info(result);
+        return result;
+    },
     ["new color paleltte"](){
         system.todo("🪃 so do it then!")
     },
     ["new style guide"](){
         system.todo("🪃 so do it then!")
     },
+    ["new default cube"](){
+
+    },
+    ["new rounded cube"](){
+
+    },
+    ["new sdf 2d"](){
+
+    },
+    ["new sdf 3d"](){
+
+    },
     ["new style bible"](){
         system.todo("🪃 so do it then!")
+    },
+    ["new Mandelbrot viewer"](){
+        system.registerWidget(new MandelbrotViewerWidget())
     },
     ["new graph"](){
         system.todo("🪃 so do it then!")
@@ -11480,6 +11629,8 @@ const InvokableCommands = {
     ["search for a youtube video"](){
         prompt('search...')
     },
+    ["new register"](){},
+    ["new memory address"](){}, // alloc
     ["new newton's cradle 2D"](){},
     ["new netwon's cradle 3D"](){},
     ["new hypercube"](){},
@@ -11674,6 +11825,10 @@ const InvokableCommands = {
     ["handle pasted dotviz input"](){
         system.todo("parse graphviz dotlang to our ast for viewing and modification and enhancement")
     },
+    ["new solar system demo"](){
+        /* render a solar system with planets and moons and stuff */
+        system.registerWidget(new SolarSystemWidget())
+    },
     ["export graph as graphviz dotlang"](){},
     ["set graphviz dotlang export settings"](){},
     ["recall user graphviz dotlang export settings"](){},
@@ -11781,6 +11936,9 @@ const InvokableCommands = {
     ["new quiz..."](){
         system.todo("!!! NotYetImplemented !!!")
     },
+    ["todo: refactoring helpers"](){
+        system.todo("💪 do eet!")
+    },
     ["todo: convert and clean up old wizard code"](){
         system.todo("how much space is dead code %-wise?")
         system.todo("TRACK IT OVER TIME!")
@@ -11801,6 +11959,7 @@ const InvokableCommands = {
     ["toggle widget debug info"](){
         InvokableCommands["toggle debug widget info"]();
     },
+    /** adds a key:value pair to Invokable Commands */
     ["new alias..."](){
         let results = prompt("alias a word or phrase to another word or phrase","Key...","Value...")
         if(!results){
@@ -11895,9 +12054,16 @@ const InvokableCommands = {
         // spawn a new flashcard widget
         system.registerWidget(new GreekAlphabetWidget());
     },
+    ["resize"] : "dispatch a window resize event",
+    ["dispatch a window resize event"]: "simulate resize event",
     ["simulate resize event"](){
         window.dispatchEvent(new Event("resize"));
     },
+    ["window > refresh"]: "reload",
+    ["window > reload"]: "reload",
+    ["window.refresh"]: "reload",
+    ["window.reload"]: "reload",
+    ["reload"]: "refresh the page",
     ["refresh the page"](){
         window.location.reload();
     },
@@ -11918,7 +12084,10 @@ const InvokableCommands = {
     //     "Yoshi's Story",
     // ],
 
-    ["todo: add daily progress bar of time"](){},
+    // main todo list:
+    //["todo: "],
+    ["todo: more icons!!!"]:()=>{system.todo(system.currentCommand.name)},
+    ["todo: add daily progress bar of time spent (timeline / history view)"](){},
     ["todo: more themes / time of day stuff"]:"",
 
     // alias
@@ -12127,11 +12296,20 @@ const InvokableCommands = {
     ["launch secondary viewer"](){
         return "implement multi-view"
     },
+    ["new scatter plot"](){},
+    ["new spacetime diagram"](){},
+    ["new black hole"](){},
+    ["new gravity well"](){},
+    ["new star"](){},
+    ["new planet"](){},
+    ["new moon"](){},
+    ["new rythm game"](){},
     ["fix zoom scaling cmd options"](){
         // add a regression test to make sure command prompt options don't render at different sizes
         // they should be consistent and Scale independent
     },
-    ["fix cmdprompt textarea overshadowing other inputs"](){
+    ["todo [✅ done] fix cmdprompt textarea overshadowing other inputs"](){
+        system.todo("✅ done! fixed it (for now!) [no unit test added]")
         // need to reduce the clickable hit area of the command prompt
         // input text area html element when the cmdPrompt is in it's
         // hidden or closed state,
@@ -12285,11 +12463,14 @@ const InvokableCommands = {
 
     },
     // BG Effects
-    ["disable sprites"](){
-        store.disableSprites = true;
-    },
-    ["enable sprites"](){
-        store.disableSprites = false;
+    // ["disable sprites"](){
+    //     store.disableSprites = true;
+    // },
+    // ["enable sprites"](){
+    //     store.disableSprites = false;
+    // },
+    ["toggle sprites"](){
+        store.disableSprites = !store.disableSprites;
     },
     // ["enable deep renderer"](){
     //     store.disableDeepCanvas = false;
@@ -12344,12 +12525,32 @@ const InvokableCommands = {
         system.registerWidgetInstance(new SketchpadWidget());
     },
     // workflows
-    ["new workflow"](){},
-    ["new flow field"](){},
-    ["new idea"](){},
+    ["new workflow"](){
+        system.todo("graph engine in progres... @try: `Load Graph...` command")
+        system.todo("loading ajax flux graph preview...")
+        system.loadGraph("ajaxFlux")
+    },
+    ["🌀 new flow field"](){
+        system.todo("working on that ... 🌀")
+    },
+    ["new idea"](){
+        system.todo("💡 so do it!")
+    },
     // start a random favorite or similar youtube video
     ["enter chore mode"](){},
-    ["enter vacuuming mode"](){},
+    ["toothpick"]:"kyanite toothpick",
+    ["kyanite toothpick"]:"kyanite",
+    ["kyanite"]:"Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]",
+    ["enter vacuuming mode"](){
+        //system.todo("🎯 do it")
+        system.invoke("toothpick")
+    },
+    ["vacuuming mini game"](){
+        system.todo("🎯 do it 🧹")
+    },
+    ["leaf blower"](){
+        system.todo("🎯 do it")
+    },
     new_tab: "new_browser_bubble",
     ["new synthesizer"](){
         // spawn a Synth Widget :D
@@ -12373,6 +12574,40 @@ const InvokableCommands = {
     },
     ["undo"](){
         alert("todo: undo")
+    },
+    ["new brain"](){},
+    ["new graph"](){},
+    ["new network"](){},
+    ["new timeline"](){},
+    ["new research project"](){},
+    ["new topic exploration space"](){},
+    ["new sandbox"](){},
+    ["new a/b test"](){},
+    ["new evolutionary algorithm test"](){},
+    ["new handwriting recognizer"](){},
+    ["new network visualizer 2d"](){},
+    ["new network visualizer 3d"](){},
+    ["new agent"](){},
+    ["new character"](){},
+    ["new personality"](){},
+    ["new workload"](){},
+    ["new review"](){},
+    ["new issue"](){},
+    ["new bug"](){},
+    ["new task"](){},
+    ["new project"](){},
+    ["new callback"](){},
+    ["new lambda"](){},
+    ["new function"](){},
+    ["new equation"](){},
+    ["new field"](){},
+    ["new property"](){},
+    ["new constant"](){},
+    ["Math > Infinity"](){
+        return Math.Infinity;
+    },
+    ["Math > Negative Infinity"](){
+        return Math.NegativeInfinity;
     },
     ["redo"](){
         alert("todo: redo")
@@ -12407,6 +12642,29 @@ const InvokableCommands = {
     ["select next occurance"](){},
     ["select all occurances"](){},
     ["select previous occurance"](){},
+    ["new flow momentum tracker"](){
+        // a fidget toy that tracks how fast you're typing to show others at a glance
+        // how IN THE ZONE you are and to not break your focus!
+        system.registerWidgetInstance(new MomentumTrackerWidget());
+    },
+    ["new new"](){
+
+    },
+    ["new browser notification"](){
+        if (!("Notification" in window)) {
+            console.log("This browser does not support desktop notification");
+        }
+        else if (Notification.permission === "granted") {
+            let notification = new Notification("Hi there!");
+        }
+        else if (Notification.permission !== 'denied' || Notification.permission === "default") {
+            Notification.requestPermission(function (permission) {
+                if (permission === "granted") {
+                    let notification = new Notification("Hi there!");
+                }
+            });
+        }
+    },
     ["new browser bubble"](){
         InvokableCommands["new iframe widget"]()
     },
@@ -12963,7 +13221,7 @@ class BasicPlatformerDemoWidget extends Widget {}
 class WidgetForge extends Widget {}
 class WizardForge extends WidgetForge {}
 class GiphyWidget extends Widget {}
-class MandlebrotWidget extends Widget {}
+class MandelbrotWidget extends Widget {}
 class FileBrowserWidget extends Widget {}
 class WebBrowserWidget extends Widget {}
 class IFTTTWidget extends Widget {}
@@ -13260,6 +13518,9 @@ class TimerWidget extends Widget {
             Notification.requestPermission();
         }
 
+        // start playing this sound on a loop:
+        // system.playSound("grandfather_clock",true)
+
         // automatically generates a timerManager.timers[0]
         this.timerManager = new TimerManager(); 
         // bind our timer.onTimerEnded
@@ -13267,6 +13528,9 @@ class TimerWidget extends Widget {
             //alert('timer ended!')
             /** @see System.playSuccessTone */
             system.playSuccessTone();
+
+            system.grandfatherClockAudioPlayer.stop();
+            //system.stopSound("grandfather_clock",true)
 
             // Trigger a browser notification
             if (!("Notification" in window)) {
@@ -13286,6 +13550,9 @@ class TimerWidget extends Widget {
             }
         }
     }
+    onClose(){
+        system.grandfatherClockAudioPlayer.stop();
+    }
     onDraw(){
         super.onDraw(...arguments)
         /** @property timer @see Timer */
@@ -13298,19 +13565,15 @@ class TimerWidget extends Widget {
             //     this.smartPosition.y + (index * 20)
             // )
             // draw the time elapsed vs. time remaining
-            fill("red")
+            // fill("red")
 
-            text(
-                `Timer ${index+1} \n elapsed: ${timer.timeElapsedFormatted} \n remaining: ${timer.timeRemainingFormatted}`,
-                20,
-                40
-            )
+            // text(
+            //     `Timer ${index+1} \n elapsed: ${timer.timeElapsedFormatted} \n remaining: ${timer.timeRemainingFormatted}`,
+            //     20,
+            //     40
+            // )
 
-            strokeWeight(1)
-            stroke("blue");
-            fill("black")
-            text(timer.timeElapsed, 0,0)
-            text(timer.timeRemaining, 0,20)
+            
 
             // draw a circular progress bar on a white circle
             // draw a white circle
@@ -13325,11 +13588,37 @@ class TimerWidget extends Widget {
             //     a: typeof timer.timeElapsed,
             //     b: typeof timer.duration,
             // })
+
+            // draw a pendulum
+            // draw a pendulum that ticks once a second
+            let angle = map(second(), 0, 60, 0, 360);
+            push();
+            translate(100, 100);
+            rotate(radians(angle));
+            stroke(millis%255,0,0);
+            strokeWeight(1);
+            line(0, 0, 0, 50); // Draw the pendulum arm
+            fill(255,255,0);
+            ellipse(0, 50, 16, 16);
+            pop();
+
+            // draw a pendulum
+            // draw a pendulum that swings back and forth
+            let angle2 = Math.sin(millis() / 1000) * Math.PI / 4; // Swing back and forth between -45 and 45 degrees
+            push();
+            translate(100, 100);
+            rotate(angle2);
+            stroke(millis%255,0,0);
+            strokeWeight(1);
+            line(0, 255, 0, 50); // Draw the pendulum arm
+            fill(255,255,0);
+            ellipse(0, 50, 16, 16); // Draw the pendulum weight
+            pop();
             
 
             // Ensure timer.timeElapsed and timer.duration are numbers
             if (typeof timer.timeElapsed === 'number' && typeof timer.duration === 'number') {
-                let end = map(timer.timeElapsed, 0, timer.duration, 0, 360);
+                let end = map(timer.timeElapsed/1000, 0, timer.duration, 0, 360);
                 end = 360 - end
                 //console.warn('end',end);
                 // Ensure end is a number that can be converted to radians
@@ -13341,6 +13630,16 @@ class TimerWidget extends Widget {
             } else {
                 //console.error('Invalid timer values:', timer.timeElapsed, timer.duration);
             }
+
+            strokeWeight(1)
+            stroke("blue");
+            fill("black")
+            textAlign(CENTER,CENTER)
+            text((timer.timeElapsed/1000).toFixed(0), this.widgetSize.width/2,this.widgetSize.height/2)
+            textSize(40)
+            textAlign(CENTER,CENTER)
+            textSize(40)
+            text(timer.timeRemaining, this.widgetSize.width/2,this.widgetSize.height/2+20)
         })
     }
 }
@@ -13939,6 +14238,7 @@ class LoadStateFromLocalStorage
 extends BaseCmds(Command, new LoadStateFromLocalStorageWizardConfig()){}
 
 // Mode Switching Commands
+// TODO: bake into a FSM
 class ModeSwitch_SELECT 
 extends BaseCmds(Command, {
     name: "Select Mode",
@@ -13975,28 +14275,30 @@ extends BaseCmds(Command,{
     }
 }){}
 
+class Household {}
+class Appointment {}
+class FamilyMember {}
+class Family {}
+class Chore {}
+class Bill {}
+class Creditor {}
+class Pickup {}
+class Dropoff {}
+class Work {}
+class Meeting {}
+class Task {}
+class Project {}
+class Coworker {}
+class Review {}
+class Invoice {}
+
+
 const TYPENAME_TO_CONSTRUCTOR_MAP = {
     // Graph related
     Graph,
     GraphNode,
     Edge,
-    AddGraphNodeWizardConfig,
-    AddGraphNodeCommand,
-
-    // // Household
-    // Chore,
-    // Bill,
-
-    // // Family
-    // Pickup,
-    // Dropoff,
-    // Appointment,
-
-    // // Work
-    // Meeting,
-    // Task,
-    // Project,
-    // Coworker,
+    // AddGraphNodeCommand,
 
     // Todo related
     TodoNode,
@@ -14356,8 +14658,8 @@ class CmdPrompt extends Widget {
             wizardConfig: new TimerWizardConfig("New Timer Wizard")
         }))
         
-        // this.availableCommands.push(new Command("New Error",{}))
-        // this.availableCommands.push(new Command("New Graph",{}))
+
+
         // this.availableCommands.push(new Command("New Node Type",{}))
         this.availableCommands.push(new Command("New Requirement",{}))
         this.availableCommands.push(new Command("New FeatureTest",{}))
@@ -16224,11 +16526,17 @@ function setupDefaults(){
                 // if it's an ARRAY of STRINGS, we need to do ths same check and early return
 
                 try{
-                    if(!InvokableCommands[machineizedCmdName] || !InvokableCommands[machineizedCmdName]?.call){
+                    if(
+                        !InvokableCommands[machineizedCmdName]
+                    ){
                         console.warn("command must be one of:",Object.keys(InvokableCommands))
                         system.panic("bad command name: "+machineizedCmdName)
+                    }else if(!InvokableCommands[machineizedCmdName]?.call){
+                        // it's a string, see if it's another aliased command name
+                        result = system.tryInvokeHandlerForUri(InvokableCommands[machineizedCmdName]);
+                    }else{
+                        result = InvokableCommands[machineizedCmdName].call(this);
                     }
-                    result = InvokableCommands[machineizedCmdName].call(this);
                 }catch(e){
                     console.error('failed to execute command!',e)
                     // what to do if call can't be 
@@ -16454,7 +16762,7 @@ const CoreWidgets = [
 
     // GiphyWidget,
 
-    // MandlebrotWidget,
+    // MandelbrotWidget,
     // FileBrowserWidget,
     // WebBrowserWidget, // iframeWidget wrapper
     // IFTTTWidget, // IFTTT Integration
@@ -16617,6 +16925,7 @@ function animateVector(from, to, onUpdate, duration = 1000){
 }
 
 let cursor, MainCanvasContextThing = function(p){
+    let registerKeyBindings; // a fn we define later
     let _onResize = function(){
         mctx.resizeCanvas(windowWidth, windowHeight);
         // document.querySelectorAll('canvas').forEach((canvii)=>{
@@ -16744,11 +17053,43 @@ let cursor, MainCanvasContextThing = function(p){
         // boot routine
         console.info("booting...");
         manager.boot(); 
+        // window.onbeforeunload = async function() {
+        //     return new Promise((resolve, reject) => {
+        //         system.playErrorTone();
+        //         manager.shutdown();
+        //         setTimeout(resolve, 1000);
+        //     })
+        // }
+
+        // init the system clipboard monitor / history
+        system.ClipboardManager = new ClipboardManager();
+
+
+        let isPageUnloading = false;
+
+        // Set up the beforeunload listener
+        window.addEventListener('beforeunload', function() {
+            isPageUnloading = true;
+        });
+
+        // Set up the interval to check the condition
+        setInterval(function() {
+            if (isPageUnloading) {
+                // Play the sound here
+                let audio = new Audio('path_to_your_audio_file.mp3');
+                audio.play();
+
+                // Clear the interval after playing the sound
+                clearInterval(this);
+            }
+        }, 100); // Check every 100ms
+
+
         rootSystem = system = manager.systems[0];
         system.playSuccessTone(); // the boot sound
 
         const keysStartingWithT = Object.keys(InvokableCommands)
-            .filter(key => key.toLowerCase().startsWith('t'));
+            //.filter(key => key.toLowerCase().startsWith('t'));
         const sortedKeys = keysStartingWithT
             .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
@@ -16765,6 +17106,9 @@ let cursor, MainCanvasContextThing = function(p){
         // stat.js
         (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
 
+        system.grandfatherClockAudioPlayer = mctx.createAudio('res/onlymp3.to - Household Grandfather Clock Tick Tock Sound Effect-SBSuIA0TxK0-192k-1701988301.mp3');
+
+        // system.widgetOpenAudioPlayer = mctx.createAudio('');
 
         system.plopAudioPlayer = mctx.createAudio('res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3');
         system.plopAudioPlayer.volume(0.1);
@@ -16820,8 +17164,6 @@ void main(void) {
         document.body.appendChild(topCanvas);
         window.iCanvasCompositor = new CanvasCompositor(canvases, fragmentShaderSource, topCanvas);
 
-        //initTHREEMode();
-
         // system.get("Dashboard").registerWidget(new IsometricPreview());
 
         // spawn a bunch of BlurSprite
@@ -16845,6 +17187,7 @@ void main(void) {
         zoom = 0.0001;
 
         // fancy
+        // animatezoom
         // intro animation
         // our nice zoom in effect
         // TODO: camera path recording / playback system (slideshow presentation mode)
@@ -16905,186 +17248,8 @@ void main(void) {
         // // bootstrap our self-test
         // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
 
-        document.addEventListener('keydown',(e)=>{
-            // console.warn('keydown',{e})
-            if(store.shiftIsMomentary){
-                store.shiftIsPressed = e.shiftKey;
-            }else{
-                // shiftIsToggle, not shiftIsMomentary
-                if(e.shiftKey){
-                    store.shiftIsPressed = !store.shiftIsPressed;
-                }
-            }
-
-            document.querySelectorAll('iframe').forEach((iframe)=>{
-                // toggle pointerEvents none when shift is pressed
-                if(store.shiftIsPressed){
-                    iframe.style.pointerEvents = 'none';
-                } else {
-                    iframe.style.pointerEvents = 'auto';
-                }
-            });
-
-
-            // if we're not focused on any fields
-            if(store.focusedField === null){
-
-            }
-
-            // if we're focused on the main command prompt input,,
-            //if(store.focusedField === CmdPromptInput.elt){
-                // arrow key down should cycle through the suggestion list
-                // call the input handler
-                cmdprompt = system.cmdprompt;
-                if(!cmdprompt){
-                    system.warn("cmdprompt not ready");
-                }
-                cmdprompt?.onCmdPromptInput(e);
-            //}
-        })
-        // primary key bindinds...
-
-        document.addEventListener('keydown', (e)=>{
-            console.warn('keypress',{e})
-            // command or control
-            // cmdorcontrol
-            // cmdorctrl
-            // ctrlorcmd
-            // controlorcmd
-            // controlOrCommand
-            const ctrlOrCmd = e.ctrlKey || e.metaKey;
-
-            // TODO: make this a static command matrix... !!!
-
-            if(ctrlOrCmd && e.key === 'd'){
-                system.alert("don't bookmark, just come back.")
-                e.preventDefault();
-                InvokableCommands["clear"]();
-                /** @see CmdPrompt.hideCmdPrompt */
-                system.cmdprompt.hideCmdPrompt();
-                system.notify("Cleared! 🧘‍♂️")
-                return;
-            } 
-
-            // Check if Ctrl key is pressed along with P
-            if (ctrlOrCmd && e.key === 'p') {
-                // ctrl + p, cmd + p, cmd&p||ctrl&p
-                // Prevent the default ctrl p ctrl+p print action!
-                e.preventDefault();
-                //alert("Ctrl+P has been disabled!");
-                // toggle the dashboard
-                /** @see CmdPrompt.showCmdPrompt */
-                system.cmdprompt.showCmdPrompt();
-                return;
-            }
-
-            // override default ctrlOrCmd + f behavior
-            if (ctrlOrCmd && e.key === 'f') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
-            }
-
-            // override default ctrlOrCmd + k behavior
-            if (ctrlOrCmd && e.key === 'k') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
-            }
-
-            // override default ctrlOrCmd + l behavior
-            if (ctrlOrCmd && e.key === 'l') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
-            }
-
-            // if the key is `f` and we don't have any inputs focused,
-            // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
-            if(e.key === 'f' && !store.focusedField){
-                system.dashboard.centerView();
-                system.alert("focused")   
-            }
-            // toggle 100% zoom
-            // ctrl+0
-            // cmd+0
-            if(ctrlOrCmd && e.key === '0'){
-                /** @see Dashboard.centerView */
-                system.dashboard.centerView(true);
-            }
-
-            // if pasting 
-            if(ctrlOrCmd && e.key === 'v'){
-                /** @see System.onPaste */
-                system.onPaste(...arguments);
-            }
-            // copying
-            if(ctrlOrCmd && e.key === 'c'){
-                /** @see System.onCopy */
-                system.onCopy(...arguments);
-            }
-            
-            let KeyboardPanInfluence = { x: 0, y: 0 };
-            let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
-            let maxInfluence = 100 * (zoom); // 1/zoom?
-            let decayFactor = 0.99;
-            let lerpFactor = 0.001; // control the speed of lerp
-            let ignore = false;
-            let baseStepSize = 100;
-            let stepSize = baseStepSize * (zoom); // 1/zoom?
-            switch(e.key) {
-                case 'w':
-                    zoom += 0.1;
-                    break;
-                case 's':
-                    zoom -= 0.1;
-                    break;
-                case 'a':
-                case 'ArrowLeft':
-                    KeyboardPanInfluenceTarget.x = Math.max(KeyboardPanInfluenceTarget.x - stepSize / zoom, -maxInfluence);
-                    break;
-                case 'd':
-                case 'ArrowRight':
-                    KeyboardPanInfluenceTarget.x = Math.min(KeyboardPanInfluenceTarget.x + stepSize / zoom, maxInfluence);
-                    break;
-                case 'q':
-                case 'ArrowUp':
-                    KeyboardPanInfluenceTarget.y = Math.max(KeyboardPanInfluenceTarget.y - stepSize / zoom, -maxInfluence);
-                    break;
-                case 'e':
-                case 'ArrowDown':
-                    KeyboardPanInfluenceTarget.y = Math.min(KeyboardPanInfluenceTarget.y + stepSize / zoom, maxInfluence);
-                    break;
-                default:
-                    ignore = true;
-                    break;
-            }
-
-            // Lerp the influence values over time
-            KeyboardPanInfluence.x += (KeyboardPanInfluenceTarget.x - KeyboardPanInfluence.x) * lerpFactor;
-            KeyboardPanInfluence.y += (KeyboardPanInfluenceTarget.y - KeyboardPanInfluence.y) * lerpFactor;
-
-            // Decay the influence when the keyboard movement stops
-            KeyboardPanInfluence.x *= decayFactor;
-            KeyboardPanInfluence.y *= decayFactor;
-
-            // Apply the influence to the pan with lerp towards the target
-            //if(!ignore){
-                panX += (KeyboardPanInfluence.x - panX) * lerpFactor;
-                panY += (KeyboardPanInfluence.y - panY) * lerpFactor;
-            //}
-        })
-        document.addEventListener('keyup',(e)=>{
-            if(store.shiftIsMomentary){
-                store.shiftIsPressed = false
-            }
-            // console.warn('keyup',{e})
-            // if the cmdprompt is active, pipe the event
-            if(store.CmdPromptVisible){
-                cmdprompt = system.cmdprompt;
-                if(!cmdprompt){
-                    system.warn("cmdprompt not ready");
-                }
-                cmdprompt?.onCmdPromptInput(e);
-            }
-        })
+        // setup keyboard shortcuts n such
+        registerKeyBindings();
 
         
 
@@ -17098,7 +17263,6 @@ void main(void) {
         //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
         //     MessengerWidget,
-        //     TimerWidget,
         //     TodoWidget,
         //     UIDemoWidget,
         //     WeatherWidget,
@@ -17126,6 +17290,9 @@ void main(void) {
         // demo widgets
         system.dashboard.registerWidget(grw);
         */
+
+        system.invoke("new timer")
+        //system.registerWidget(new TimerWidget());
 
         // NOT NOW NAUSEA!
 
@@ -17269,7 +17436,7 @@ void main(void) {
 
                 .registerWidget(new AStarPathfindingDemoWidget())
 
-                .registerWidget(new MandlebrotWidget())
+                .registerWidget(new MandelbrotWidget())
 
                     //     .registerWidget(new IsometricPreview())
 
@@ -17496,7 +17663,7 @@ void main(void) {
         // kickoff loaded animation
         setTimeout(()=>{
             requestAnimationFrame(stepZoomAnimation);
-        },3000)
+        },0)
     }
 
     p.onMouseDown = function(){
@@ -17639,6 +17806,189 @@ void main(void) {
             panningBG = false;
             stopDragging(); // ~> stepPanMomentum
         }
+    }
+
+    registerKeyBindings = ()=>{
+        document.addEventListener('keydown',(e)=>{
+            // console.warn('keydown',{e})
+            if(store.shiftIsMomentary){
+                store.shiftIsPressed = e.shiftKey;
+            }else{
+                // shiftIsToggle, not shiftIsMomentary
+                if(e.shiftKey){
+                    store.shiftIsPressed = !store.shiftIsPressed;
+                }
+            }
+
+            document.querySelectorAll('iframe').forEach((iframe)=>{
+                // toggle pointerEvents none when shift is pressed
+                if(store.shiftIsPressed){
+                    iframe.style.pointerEvents = 'none';
+                } else {
+                    iframe.style.pointerEvents = 'auto';
+                }
+            });
+
+
+            // if we're not focused on any fields
+            if(store.focusedField === null){
+
+            }
+
+            // if we're focused on the main command prompt input,,
+            //if(store.focusedField === CmdPromptInput.elt){
+                // arrow key down should cycle through the suggestion list
+                // call the input handler
+                cmdprompt = system.cmdprompt;
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            //}
+        })
+        // primary key bindinds...
+
+        document.addEventListener('keydown', (e)=>{
+            console.warn('keypress',{e})
+            // command or control
+            // cmdorcontrol
+            // cmdorctrl
+            // ctrlorcmd
+            // controlorcmd
+            // controlOrCommand
+            const ctrlOrCmd = e.ctrlKey || e.metaKey;
+
+            // TODO: make this a static command matrix... !!!
+
+            if(ctrlOrCmd && e.key === 'd'){
+                system.alert("don't bookmark, just come back.")
+                e.preventDefault();
+                InvokableCommands["clear"]();
+                /** @see CmdPrompt.hideCmdPrompt */
+                system.cmdprompt.hideCmdPrompt();
+                system.notify("Cleared! 🧘‍♂️")
+                return;
+            } 
+
+            // Check if Ctrl key is pressed along with P
+            if (ctrlOrCmd && e.key === 'p') {
+                // ctrl + p, cmd + p, cmd&p||ctrl&p
+                // Prevent the default ctrl p ctrl+p print action!
+                e.preventDefault();
+                //alert("Ctrl+P has been disabled!");
+                // toggle the dashboard
+                /** @see CmdPrompt.showCmdPrompt */
+                system.cmdprompt.showCmdPrompt();
+                return;
+            }
+
+            // override default ctrlOrCmd + f behavior
+            if (ctrlOrCmd && e.key === 'f') {
+                e.preventDefault();
+                system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
+            }
+
+            // override default ctrlOrCmd + k behavior
+            if (ctrlOrCmd && e.key === 'k') {
+                e.preventDefault();
+                system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
+            }
+
+            // override default ctrlOrCmd + l behavior
+            if (ctrlOrCmd && e.key === 'l') {
+                e.preventDefault();
+                system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
+            }
+
+            // if the key is `f` and we don't have any inputs focused,
+            // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
+            if(e.key === 'f' && !store.focusedField){
+                system.dashboard.centerView();
+                system.alert("focused")   
+            }
+            // toggle 100% zoom
+            // ctrl+0
+            // cmd+0
+            if(ctrlOrCmd && e.key === '0'){
+                /** @see Dashboard.centerView */
+                system.dashboard.centerView(true);
+            }
+
+            // if pasting 
+            if(ctrlOrCmd && e.key === 'v'){
+                /** @see System.onPaste */
+                system.onPaste(...arguments);
+            }
+            // copying
+            if(ctrlOrCmd && e.key === 'c'){
+                /** @see System.onCopy */
+                system.onCopy(...arguments);
+            }
+            
+            let KeyboardPanInfluence = { x: 0, y: 0 };
+            let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
+            let maxInfluence = 100 * (zoom); // 1/zoom?
+            let decayFactor = 0.99;
+            let lerpFactor = 0.001; // control the speed of lerp
+            let ignore = false;
+            let baseStepSize = 100;
+            let stepSize = baseStepSize * (zoom); // 1/zoom?
+            switch(e.key) {
+                case 'w':
+                    zoom += 0.1;
+                    break;
+                case 's':
+                    zoom -= 0.1;
+                    break;
+                case 'a':
+                case 'ArrowLeft':
+                    KeyboardPanInfluenceTarget.x = Math.max(KeyboardPanInfluenceTarget.x - stepSize / zoom, -maxInfluence);
+                    break;
+                case 'd':
+                case 'ArrowRight':
+                    KeyboardPanInfluenceTarget.x = Math.min(KeyboardPanInfluenceTarget.x + stepSize / zoom, maxInfluence);
+                    break;
+                case 'q':
+                case 'ArrowUp':
+                    KeyboardPanInfluenceTarget.y = Math.max(KeyboardPanInfluenceTarget.y - stepSize / zoom, -maxInfluence);
+                    break;
+                case 'e':
+                case 'ArrowDown':
+                    KeyboardPanInfluenceTarget.y = Math.min(KeyboardPanInfluenceTarget.y + stepSize / zoom, maxInfluence);
+                    break;
+                default:
+                    ignore = true;
+                    break;
+            }
+
+            // Lerp the influence values over time
+            KeyboardPanInfluence.x += (KeyboardPanInfluenceTarget.x - KeyboardPanInfluence.x) * lerpFactor;
+            KeyboardPanInfluence.y += (KeyboardPanInfluenceTarget.y - KeyboardPanInfluence.y) * lerpFactor;
+
+            // Decay the influence when the keyboard movement stops
+            KeyboardPanInfluence.x *= decayFactor;
+            KeyboardPanInfluence.y *= decayFactor;
+
+            // Apply the influence to the pan with lerp towards the target
+            //if(!ignore){
+                panX += (KeyboardPanInfluence.x - panX) * lerpFactor;
+                panY += (KeyboardPanInfluence.y - panY) * lerpFactor;
+            //}
+        })
+        document.addEventListener('keyup',(e)=>{
+            if(store.shiftIsMomentary){
+                store.shiftIsPressed = false
+            }
+            // console.warn('keyup',{e})
+            // if the cmdprompt is active, pipe the event
+            if(store.CmdPromptVisible){
+                cmdprompt = system.cmdprompt;
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            }
+        })
     }
     
     window.myMainDrawFN = function() {
@@ -17909,6 +18259,7 @@ const properties = [
     'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'CLOSE', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
     'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
+    'second','rotate',
     'triangle', 
     'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
     'windowHeight', 'windowWidth', 'arc', 'beginShape', 'circle', 'color', 'createGraphics', 
