@@ -3175,16 +3175,16 @@ class ClipboardManager extends Widget {
         })
     }
     onDraw(){
+    }
+}
 class BarGraph2D extends Widget {
 
 }
 class BarGraph3D extends Widget {
 
 }
-
 class CopiedToClipboard extends Widget {
 
-    }
 }
 
 
