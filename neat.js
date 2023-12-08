@@ -697,6 +697,10 @@ class SystemManager {
  */
 /** System.constructor(SystemManager manager) */
 class System {
+    info(){
+        console.warn(...arguments)
+        system.todo(...arguments)
+    }
     playSuccessTone(){
         try{
             // Play a sound using p5.js
@@ -1010,6 +1014,11 @@ class System {
     constructor(manager){
         this.manager = manager;
     }
+    newImageViewer(uri){
+        // actually, use whatever the registered handler is for this uri :D
+        return this.tryInvokeHandlerForUri(uri);
+        //return system.registerWidget(new ImageViewerWidget(uri))
+    }
     get(singletonName){
         return this.lazySingleton(singletonName);
         //return this.singletons[singletonName] ?? null;
@@ -1148,6 +1157,9 @@ class System {
         return this.registerWidgetInstance(...arguments)
     }
     tryInvokeHandlerForUri(uri){
+        if(uri === -1){
+            // invoke the KEY name InvokableCommands[]
+        }
         if(
             uri?.includes?.(".png")
             || uri?.includes?.(".jpg")
@@ -3164,6 +3176,16 @@ class Widget extends UndoRedoComponent {
         this?.onClose?.call(this);
     }
 }
+
+let LinkDump = [
+    // AESOP ROCK - Integrated Tech Solutions: Vile Groove DLC Pack [FULL EP STREAM]
+    "https://www.youtube.com/watch?v=7odw9RfEPYY",
+
+    // NEW: use titles instead, we'll look up and cache urls in the backend
+    "Aesop Bach | non-a (Full Album)"
+    // actually, use human guesses too like,
+    //"Aesop and Bach", etc... "did you mean?" style
+]
 
 class ClipboardManager extends Widget {
     constructor(){
@@ -7087,6 +7109,7 @@ class SolarSystemWidget extends Widget {
         this.earth.y = this.sun.y + this.earth.orbitRadius * Math.sin(this.earth.angle);
     }
     onDraw(){
+        this.updateModel();
         strokeWeight(0)
         fill(this.sun.color)
         circle(
@@ -11567,6 +11590,36 @@ const features = [
 ]
 // central command definitions
 const InvokableCommands = {
+    ["https://www.youtube.com/watch?v=2RSsoTJA6cA"]:-1,
+    ["VOD102 SPINNING BALLERINA ILLUSION"]:"https://www.youtube.com/watch?v=2RSsoTJA6cA",
+    ["VOD102"]:"https://www.youtube.com/@VOD102",
+    ["new deck of cards"](){
+
+    },
+    ["new pack of cards"](){
+
+    },
+    ["new ball and cup game"](){
+
+    },
+    ["Katamari"](){
+        //system.registerWidget(new GoogleResults("Katamari"));
+        system.todo("open google results")
+        window.open("https://www.google.com/search?q=katamari")
+        
+        system.newImageViewer("katamari.mp4")
+    },
+
+    ["Bills.png"]:-1, // self reference, load the key name as a uri
+
+    ["Bills"](){
+        system.registerWidget(new ImageViewerWidget("Bills.png"))
+        //system.newWindow("private-value", "bills.url");
+
+        window.open('https://docs.google.com', '_newtab');
+
+    },
+
     ["copyToClipboard_register_callback"](){
         // todo system.registerCallback
         // for now, store is separate,
@@ -16552,6 +16605,17 @@ function setupDefaults(){
                     }else if(!InvokableCommands[machineizedCmdName]?.call){
                         // it's a string, see if it's another aliased command name
                         result = system.tryInvokeHandlerForUri(InvokableCommands[machineizedCmdName]);
+                        if(result === -1){
+                            // TODO: make this a uniquish CONST like 80184
+                            // when it's ^ this special value, we should
+                            // it means that we should invoke the uri as the keyname
+                            system.info("trying  again with uri as keyname",{
+                                machineizedCmdName,
+                                a: InvokableCommands[machineizedCmdName],
+                                b: InvokableCommands[InvokableCommands[machineizedCmdName]]
+                            })
+                            result = system.tryInvokeHandlerForUri(InvokableCommands[InvokableCommands[machineizedCmdName]]);
+                        }
                     }else{
                         result = InvokableCommands[machineizedCmdName].call(this);
                     }
@@ -18522,35 +18586,68 @@ lines.forEach(line => ctx.text(line.text, windowWidth - 10 - tBoxW + 10, line.y)
 ctx.pop();
 */
 
-function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
-    let words = string.split(' ');
-    let line = '';
-    let yLineOffset = 0;
+function drawStringWordWrapped(line, x, y, fitWidth, lineHeight, ctx) {
+    let lines = processStringIntoLines(
+        line,
+        fitWidth,
+        lineHeight,
+        ctx
+    )
+    drawLines(lines, x, y, ctx)
+}
+
+function processStringIntoLines(string, fitWidth, lineHeight, ctx, wrapWholeWords = false) {
     let lines = [];
+    let yLineOffset = 0;
 
-    for (let i = 0; i < words.length; i++) {
-        let testLine = line + words[i] + ' ';
-        let testWidth = ctx.textWidth(testLine);
+    string = string.replace(/<br\/>/g, '\n');
+    string = string.replace(/<br>/g, '\n');
+    let preSplitLines = string.split('\n');
 
-        ctx.textAlign(LEFT,TOP)
-        if (testWidth > fitWidth && i > 0) {
-            lines.push({ text: line.trim(), x: x, y: y + (lineHeight / 2) + yLineOffset });
-            line = words[i] + ' ';
-            yLineOffset += ctx.textSize();
-        } else {
-            line = testLine;
+    preSplitLines.forEach((line) => {
+        let words = line.split(' ');
+        let lineText = '';
+
+        for (let i = 0; i < words.length; i++) {
+            let testLine = lineText + words[i] + ' ';
+            let testWidth = ctx.textWidth(testLine);
+
+            if (testWidth > fitWidth) {
+                if (wrapWholeWords && i > 0) {
+                    lines.push({ text: lineText.trim(), y: yLineOffset });
+                    lineText = words[i] + ' ';
+                } else {
+                    // If the word is too long to fit on a line, break it up
+                    let word = words[i];
+                    while (ctx.textWidth(lineText + word) > fitWidth) {
+                        let charIndex = 0;
+                        while (ctx.textWidth(lineText + word.substring(0, charIndex + 1)) <= fitWidth) {
+                            charIndex++;
+                        }
+                        lines.push({ text: (lineText + word.substring(0, charIndex)).trim(), y: yLineOffset });
+                        word = word.substring(charIndex);
+                        lineText = '';
+                        yLineOffset += lineHeight;
+                    }
+                    lineText = word + ' ';
+                }
+                yLineOffset += lineHeight;
+            } else {
+                lineText = testLine;
+            }
         }
-    }
 
-    // console.warn("drawStringWordWrapped",{
-    //     input: string,
-    //     x, y, lineHeight, fitWidth, ctx,
-    //     line_count: lines.length
-    // })
+        lines.push({ text: lineText.trim(), y: yLineOffset });
+        yLineOffset += lineHeight;
+    });
 
-    lines.push({ text: line.trim(), x: x, y: y + yLineOffset });
+    return lines;
+}
 
-    lines.forEach(line => ctx.text(line.text, line.x, line.y));
+function drawLines(lines, x, y, ctx) {
+    lines.forEach(line => {
+        ctx.text(line.text, x, line.y + y);
+    });
 }
 
 // todo: make a multi-select version
@@ -18842,8 +18939,6 @@ class SuggestionList {
 
         ctx.push();
         ctx.translate(x,y);
-        // ctx.scale(zoom);
-        //ctx.translate(x,y);
         //ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
