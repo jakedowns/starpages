@@ -699,7 +699,7 @@ class SystemManager {
 class System {
     info(){
         console.warn(...arguments)
-        system.todo(...arguments)
+        //system.todo(...arguments)
     }
     playSuccessTone(){
         try{
@@ -796,18 +796,20 @@ class System {
                 system.panic("System.imageAsync: no url provided");
                 return;
             }
+            /*
             try{
-                reject(system.fallbackImage);
-                return system.fallbackImage;
+                //reject(system.fallbackImage);
+                // return system.fallbackImage;
                 loadImage(urlLoadable, (img) => {
                     system.PreloadedImages[url] = img;
                     resolve(img);
                 });
             }catch(e){
-                //throw new Error(e);
-                reject(system.fallbackImage);
+                throw new Error(e);
+                //reject(system.fallbackImage);
                 system.panic(e)
             }
+            */
         })
     }
     snapshotOf(obj){
@@ -870,8 +872,8 @@ class System {
             if (typeof widget_class === 'string') {
                 // Try to invoke it as a URI
                 let result = tryInvokeHandlerForUri(widget_class);
-                // If it returns -1, it wasn't invokable
-                if (result === -1) {
+                // check if it was invokable
+                if (result === UNINVOKABLE) {
                     throw new Error("Unable to invoke URI: " + widget_class);
                 }
                 return result;
@@ -1157,8 +1159,9 @@ class System {
         return this.registerWidgetInstance(...arguments)
     }
     tryInvokeHandlerForUri(uri){
-        if(uri === -1){
+        if(uri === -9000){
             // invoke the KEY name InvokableCommands[]
+            console.warn("url -9000",arguments);
         }
         if(
             uri?.includes?.(".png")
@@ -1220,7 +1223,7 @@ class System {
             throw e;
         }
 
-        return -1;
+        return -1000;
     }
 }
 const rootSystemManager = new SystemManager();
@@ -3177,7 +3180,13 @@ class Widget extends UndoRedoComponent {
     }
 }
 
+// link dump
 let LinkDump = [
+
+    // Hawking radiation
+    // ScienceClic English
+    "https://www.youtube.com/watch?v=isezfMo8kWQ",
+
     // AESOP ROCK - Integrated Tech Solutions: Vile Groove DLC Pack [FULL EP STREAM]
     "https://www.youtube.com/watch?v=7odw9RfEPYY",
 
@@ -11588,19 +11597,21 @@ const bugs = [
 const features = [
 
 ]
+const UNINVOKABLE = -9999;
+const INVOKABLE = -9000;
 // central command definitions
 const InvokableCommands = {
-    ["https://www.youtube.com/watch?v=2RSsoTJA6cA"]:-1,
+    ["https://www.youtube.com/watch?v=2RSsoTJA6cA"]:INVOKABLE,
     ["VOD102 SPINNING BALLERINA ILLUSION"]:"https://www.youtube.com/watch?v=2RSsoTJA6cA",
     ["VOD102"]:"https://www.youtube.com/@VOD102",
     ["new deck of cards"](){
-
+        system.todo("new deck of cards")
     },
     ["new pack of cards"](){
-
+        system.todo("new pack of cards")
     },
     ["new ball and cup game"](){
-
+        system.todo("new ball and cup game")
     },
     ["Katamari"](){
         //system.registerWidget(new GoogleResults("Katamari"));
@@ -11610,7 +11621,7 @@ const InvokableCommands = {
         system.newImageViewer("katamari.mp4")
     },
 
-    ["Bills.png"]:-1, // self reference, load the key name as a uri
+    ["Bills.png"]:INVOKABLE, // self reference, load the key name as a uri
 
     ["Bills"](){
         system.registerWidget(new ImageViewerWidget("Bills.png"))
@@ -11628,16 +11639,16 @@ const InvokableCommands = {
         store.copyToClipboardCallbacks.push(arguments[0]);
     },
     ["new error"](){
-
+        system.todo("🪃 so do it then!")
     },
     ["new error type"](){
-
+        system.todo("🪃 so do it then!")
     },
     ["new stacktrace"](){
-
+        system.todo("🪃 so do it then!")
     },
     ["wave function collapse"](){
-        return "https://jakedowns.com/oasis/"
+        return "https://jakedowns.com/oasis/?width=1000&height=1000"
     },
     ["new color"](){
         system.todo("🪃 so do it then!")
@@ -13576,8 +13587,8 @@ class VisualClipboard extends Widget {
 // of rendering multiple Timer instances in a single widget
 class TimerWidget extends Widget {
     widgetSize = {
-        width: 200,
-        height: 200
+        width: 400,
+        height: 400
     }
     constructor(){
         super(...arguments)
@@ -13666,7 +13677,8 @@ class TimerWidget extends Widget {
             push();
             translate(100, 100);
             rotate(radians(angle));
-            stroke(millis%255,0,0);
+            //stroke(255 - parseInt(millis%255),0,0);
+            stroke("limegreen")
             strokeWeight(1);
             line(0, 0, 0, 50); // Draw the pendulum arm
             fill(255,255,0);
@@ -13679,7 +13691,7 @@ class TimerWidget extends Widget {
             push();
             translate(100, 100);
             rotate(angle2);
-            stroke(millis%255,0,0);
+            stroke(parseInt((millis%255).toFixed(0)),0,0);
             strokeWeight(1);
             line(0, 255, 0, 50); // Draw the pendulum arm
             fill(255,255,0);
@@ -16604,8 +16616,8 @@ function setupDefaults(){
                         system.panic("bad command name: "+machineizedCmdName)
                     }else if(!InvokableCommands[machineizedCmdName]?.call){
                         // it's a string, see if it's another aliased command name
-                        result = system.tryInvokeHandlerForUri(InvokableCommands[machineizedCmdName]);
-                        if(result === -1){
+                        //result = system.tryInvokeHandlerForUri(InvokableCommands[machineizedCmdName]);
+                        if(result === UNINVOKABLE){
                             // TODO: make this a uniquish CONST like 80184
                             // when it's ^ this special value, we should
                             // it means that we should invoke the uri as the keyname
@@ -16614,7 +16626,8 @@ function setupDefaults(){
                                 a: InvokableCommands[machineizedCmdName],
                                 b: InvokableCommands[InvokableCommands[machineizedCmdName]]
                             })
-                            result = system.tryInvokeHandlerForUri(InvokableCommands[InvokableCommands[machineizedCmdName]]);
+                            //result = system.tryInvokeHandlerForUri(machineizedCmdName);
+                            console.warn('UNINVOKABLE',{machineizedCmdName})
                         }
                     }else{
                         result = InvokableCommands[machineizedCmdName].call(this);
