@@ -16,6 +16,16 @@ const testOpenAIServer = "http://127.0.0.1:4001/";
 
 const changelog = [
     [
+        "12.7.23",
+`- working on refactoring / cleanup to widget rendering system
+- upstream calls down to .draw, Widget super class calls .onDraw, pre-translated and scaled into the widget's local drawing coordinate space
+- downstream does not need to call super.onDraw(...) [i need to clean those up]
+- once BVH culling is working, the .onDraw method for out of bounds widgets will not be called
+- if a widget needs to update when it is not being drawn, it should use the onTick() method
+        
+`
+    ]
+    [
         "12.4.2023",
 `
         - 
@@ -3109,6 +3119,13 @@ class Widget extends UndoRedoComponent {
             console.warn("tell parent to close me!",this.parentWidget)
         }
     }
+}
+
+class BarGraph2D extends Widget {
+
+}
+class BarGraph3D extends Widget {
+
 }
 
 class CopiedToClipboard extends Widget {
