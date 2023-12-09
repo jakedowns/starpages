@@ -13307,7 +13307,15 @@ class MandelbrotWidget extends Widget {}
 class FileBrowserWidget extends Widget {}
 class WebBrowserWidget extends Widget {}
 class IFTTTWidget extends Widget {}
-class ShaderToyWidget extends Widget {}
+class ShaderToyWidget extends iFrameWidget {
+    // render as a iframe for now
+    // <iframe width="640" height="360" frameborder="0" src="https://www.shadertoy.com/embed/DllXzX?gui=true&t=10&paused=true&muted=false" allowfullscreen></iframe>
+    url = "https://www.shadertoy.com/embed/DllXzX?gui=true&t=10&paused=true&muted=false"
+    widgetSize = {
+        width: 640,
+        height: 360
+    }
+}
 class PixelArtWidget extends Widget {}
 class VectorArtWidget extends Widget {}
 class TextEditorWidget extends Widget {}
@@ -17955,69 +17963,62 @@ void main(void) {
 
             // TODO: make this a static command matrix... !!!
 
-            if(ctrlOrCmd && e.key === 'd'){
-                system.alert("don't bookmark, just come back.")
-                e.preventDefault();
-                InvokableCommands["clear"]();
-                /** @see CmdPrompt.hideCmdPrompt */
-                system.cmdprompt.hideCmdPrompt();
-                system.notify("Cleared! 🧘‍♂️")
-                return;
-            } 
+            const keyActions = {
+                'd': () => {
+                    if(ctrlOrCmd){
+                        system.alert("don't bookmark, just come back.")
+                        e.preventDefault();
+                        InvokableCommands["clear"]();
+                        system.cmdprompt.hideCmdPrompt();
+                        system.notify("Cleared! 🧘‍♂️")
+                    }
+                },
+                'p': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.cmdprompt.showCmdPrompt();
+                    }
+                },
+                'f': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
+                    } else if(!store.focusedField){
+                        system.dashboard.centerView();
+                        system.alert("focused")   
+                    }
+                },
+                'k': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
+                    }
+                },
+                'l': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
+                    }
+                },
+                '0': () => {
+                    if(ctrlOrCmd){
+                        system.dashboard.centerView(true);
+                    }
+                },
+                'v': () => {
+                    if(ctrlOrCmd){
+                        system.onPaste(...arguments);
+                    }
+                },
+                'c': () => {
+                    if(ctrlOrCmd){
+                        system.onCopy(...arguments);
+                    }
+                }
+            };
 
-            // Check if Ctrl key is pressed along with P
-            if (ctrlOrCmd && e.key === 'p') {
-                // ctrl + p, cmd + p, cmd&p||ctrl&p
-                // Prevent the default ctrl p ctrl+p print action!
-                e.preventDefault();
-                //alert("Ctrl+P has been disabled!");
-                // toggle the dashboard
-                /** @see CmdPrompt.showCmdPrompt */
-                system.cmdprompt.showCmdPrompt();
-                return;
-            }
-
-            // override default ctrlOrCmd + f behavior
-            if (ctrlOrCmd && e.key === 'f') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
-            }
-
-            // override default ctrlOrCmd + k behavior
-            if (ctrlOrCmd && e.key === 'k') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
-            }
-
-            // override default ctrlOrCmd + l behavior
-            if (ctrlOrCmd && e.key === 'l') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
-            }
-
-            // if the key is `f` and we don't have any inputs focused,
-            // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
-            if(e.key === 'f' && !store.focusedField){
-                system.dashboard.centerView();
-                system.alert("focused")   
-            }
-            // toggle 100% zoom
-            // ctrl+0
-            // cmd+0
-            if(ctrlOrCmd && e.key === '0'){
-                /** @see Dashboard.centerView */
-                system.dashboard.centerView(true);
-            }
-
-            // if pasting 
-            if(ctrlOrCmd && e.key === 'v'){
-                /** @see System.onPaste */
-                system.onPaste(...arguments);
-            }
-            // copying
-            if(ctrlOrCmd && e.key === 'c'){
-                /** @see System.onCopy */
-                system.onCopy(...arguments);
+            if(keyActions.hasOwnProperty(e.key)){
+                keyActions[e.key]();
             }
             
             let KeyboardPanInfluence = { x: 0, y: 0 };
