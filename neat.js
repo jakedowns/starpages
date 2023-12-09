@@ -1488,6 +1488,7 @@ class Command {
         // if this.___type === Config (somehow)
         // and this.config.execute is a function,
         // call it instead
+        // TODO: deprecate these Config classes
         if(this.__type === 'Config' && typeof this.config.execute === 'function'){
             this.config.execute();
             return;
@@ -1496,7 +1497,9 @@ class Command {
         try{
             this.execute();
         }catch(e){
-            system.panic("Command.tryExecute: ",e);
+            //system.panic("Command.tryExecute: ",e);
+            console.error(e);
+            throw e;
         }
     }
     updateFromBuffer(){
@@ -14977,6 +14980,7 @@ class CmdPrompt extends Widget {
             name: CmdPromptInput.value()
         }
 
+        // TODO: deprecate these...
         if(this.currentCommand?.constructor?.name === "Config"){
             // turn it into an executable command instance
             this.currentCommand = new Command(this.currentCommand.config.name,this.currentCommand.config);
@@ -15112,6 +15116,7 @@ class CmdPrompt extends Widget {
 
     initCommand(){
         this.currentCommand = new Command();
+        /** @see Command.updateFromBuffer */
         this.currentCommand.updateFromBuffer();
     }
     
@@ -15144,7 +15149,7 @@ class CmdPrompt extends Widget {
 
 
         // todo: pull available commands from system-wide list
-        this.filteredCommands = this.availableCommands.filter(command => {
+        this.filteredCommands = this.availableCommands.slice(0,10) /*.filter(command => {
             if(!command){
                 return false;
             }
@@ -15189,7 +15194,7 @@ class CmdPrompt extends Widget {
             }
         
             return 
-        });
+        });*/
 
         let filteredCommandsSorted = recommended_order.sort((a,b)=>{
             return b.matches - a.matches;
@@ -15289,11 +15294,11 @@ class CmdPrompt extends Widget {
                             || currentInputBufferText.includes('//x.com')
                         ){
                             let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
-                            this.system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                            system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
                         }else if(currentInputBufferText.includes('//youtube.com')
                             || currentInputBufferText.includes('//youtu.be')
                         ){
-                            this.system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
+                            system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
                         }else if(currentInputBufferText.includes('.png')
                             || currentInputBufferText.includes('.jpg')
                             || currentInputBufferText.includes('.jpeg')
@@ -15302,11 +15307,12 @@ class CmdPrompt extends Widget {
                             || currentInputBufferText.includes('.svg')
                             || currentInputBufferText.includes('.webp')
                         ){
-                            this.system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
+                            system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
                         }else if(currentInputBufferText.includes('://')){
-                            this.system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
+                            system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
                         }else{
-                            this.system.panic("i dont know what to do with my hands")
+                            //this.system.panic("i dont know what to do with my hands")
+                            throw new Error("i dont know what to do with my hands")
                         }
                     }
                 })
@@ -17649,7 +17655,7 @@ void main(void) {
         const widVals = Object.values(system.get("Dashboard").widgets);
         let count = widVals.length;
         widVals.forEach((widget,index)=>{
-            widget.canvasID = Math.round(mctx.random(-1,1)); //-1;
+            widget.canvasID = 0; //Math.round(mctx.random(-1,1)); //-1;
             // if(index === count -1){
             //     widget.canvasID = 1;
             // }
@@ -18769,6 +18775,8 @@ class SuggestionList {
 
     }
     handleInput(event){
+
+
         // console.warn('suggestion list handleInput',{
         //     keyCode: event.keyCode,
         //     event
