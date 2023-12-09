@@ -11599,11 +11599,19 @@ const features = [
 ]
 const UNINVOKABLE = -9999;
 const INVOKABLE = -9000;
+const RESOURCE = -9000;
+const RES = RESOURCE;
 // central command definitions
 const InvokableCommands = {
-    ["https://www.youtube.com/watch?v=2RSsoTJA6cA"]:INVOKABLE,
+
+    ["time-cost-quality.png"]: RES,
+
+    ["https://www.youtube.com/watch?v=2RSsoTJA6cA"]: RES,
+
     ["VOD102 SPINNING BALLERINA ILLUSION"]:"https://www.youtube.com/watch?v=2RSsoTJA6cA",
+    
     ["VOD102"]:"https://www.youtube.com/@VOD102",
+    
     ["new deck of cards"](){
         system.todo("new deck of cards")
     },
@@ -15132,46 +15140,7 @@ class CmdPrompt extends Widget {
 
         // URL-Pasting Check
         // if the input contains :// and no spaces, let's assume it's a url and add a suggestion to paste it as an embedded WebObject
-        if(currentInputBufferText.includes('://') && !currentInputBufferText.includes(' ')){
-            recommended_order.push({
-                command: new Command("Embed URL WebObject",{
-                    name: `Embed URL: "${currentInputBufferText}"`,
-                    execute: function(){
-                        //console.warn("TODO: if it was a tweet, make it a fancy iframe!");
-                        //system.todo("implement url embeds for various well-known iframe friendly sites which provide a consistent url structure for embedding")
-                        console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
-
-                        // if the url has a //twitter.com || //x.com domain,
-                        // embed it as an iframe widget
-                        if(currentInputBufferText.includes('//twitter.com')
-                            || currentInputBufferText.includes('//x.com')
-                        ){
-                            let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
-                            system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
-                        }else if(currentInputBufferText.includes('//youtube.com')
-                            || currentInputBufferText.includes('//youtu.be')
-                        ){
-                            system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
-                        }else if(currentInputBufferText.includes('.png')
-                            || currentInputBufferText.includes('.jpg')
-                            || currentInputBufferText.includes('.jpeg')
-                            || currentInputBufferText.includes('.gif')
-                            || currentInputBufferText.includes('.bmp')
-                            || currentInputBufferText.includes('.svg')
-                            || currentInputBufferText.includes('.webp')
-                        ){
-                            // if it's a Image, embed it as an image
-                            system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
-                        }else if(currentInputBufferText.includes('://')){
-                            // if it's a url, embed it as an iframe
-                            system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
-                        }else{
-                            system.panic("i dont know what to do with my hands")
-                        }
-                    }
-                })
-            })
-        }
+        recommended_order = this.checkAndEmbedUrl(currentInputBufferText, recommended_order);
 
 
         // todo: pull available commands from system-wide list
@@ -15306,6 +15275,44 @@ class CmdPrompt extends Widget {
 
         //     filteredLengthCurrently: this.filteredCommands.length,
         // } );
+    }
+
+    checkAndEmbedUrl(currentInputBufferText, recommended_order) {
+        if(currentInputBufferText.includes('://') && !currentInputBufferText.includes(' ')){
+            recommended_order.push({
+                command: new Command("Embed URL WebObject",{
+                    name: `Embed URL: "${currentInputBufferText}"`,
+                    execute: () => {
+                        console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
+
+                        if(currentInputBufferText.includes('//twitter.com')
+                            || currentInputBufferText.includes('//x.com')
+                        ){
+                            let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
+                            this.system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                        }else if(currentInputBufferText.includes('//youtube.com')
+                            || currentInputBufferText.includes('//youtu.be')
+                        ){
+                            this.system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('.png')
+                            || currentInputBufferText.includes('.jpg')
+                            || currentInputBufferText.includes('.jpeg')
+                            || currentInputBufferText.includes('.gif')
+                            || currentInputBufferText.includes('.bmp')
+                            || currentInputBufferText.includes('.svg')
+                            || currentInputBufferText.includes('.webp')
+                        ){
+                            this.system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('://')){
+                            this.system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
+                        }else{
+                            this.system.panic("i dont know what to do with my hands")
+                        }
+                    }
+                })
+            })
+        }
+        return recommended_order;
     }
 }
 
@@ -16625,18 +16632,18 @@ function setupDefaults(){
                     }else if(!InvokableCommands[machineizedCmdName]?.call){
                         // it's a string, see if it's another aliased command name
                         //result = system.tryInvokeHandlerForUri(InvokableCommands[machineizedCmdName]);
-                        if(result === UNINVOKABLE){
-                            // TODO: make this a uniquish CONST like 80184
-                            // when it's ^ this special value, we should
-                            // it means that we should invoke the uri as the keyname
-                            system.info("trying  again with uri as keyname",{
-                                machineizedCmdName,
-                                a: InvokableCommands[machineizedCmdName],
-                                b: InvokableCommands[InvokableCommands[machineizedCmdName]]
-                            })
-                            //result = system.tryInvokeHandlerForUri(machineizedCmdName);
-                            console.warn('UNINVOKABLE',{machineizedCmdName})
-                        }
+                        // if(result === UNINVOKABLE){
+                        //     // TODO: make this a uniquish CONST like 80184
+                        //     // when it's ^ this special value, we should
+                        //     // it means that we should invoke the uri as the keyname
+                        //     // system.info("trying  again with uri as keyname",{
+                        //     //     machineizedCmdName,
+                        //     //     a: InvokableCommands[machineizedCmdName],
+                        //     //     b: InvokableCommands[InvokableCommands[machineizedCmdName]]
+                        //     // })
+                        //     //result = system.tryInvokeHandlerForUri(machineizedCmdName);
+                        //     console.warn('UNINVOKABLE',{machineizedCmdName})
+                        // }
                     }else{
                         result = InvokableCommands[machineizedCmdName].call(this);
                     }
@@ -17172,31 +17179,34 @@ let cursor, MainCanvasContextThing = function(p){
 
         // Set up the beforeunload listener
         window.addEventListener('beforeunload', function() {
+            console.warn('beforeunload');
             isPageUnloading = true;
         });
 
         // Set up the interval to check the condition
-        setInterval(function() {
-            if (isPageUnloading) {
-                // Play the sound here
-                let audio = new Audio('path_to_your_audio_file.mp3');
-                audio.play();
+        // setInterval(function() {
+        //     if (isPageUnloading) {
+        //         // Play the sound here
+        //         let audio = new Audio('path_to_your_audio_file.mp3');
+        //         audio.play();
 
-                // Clear the interval after playing the sound
-                clearInterval(this);
-            }
-        }, 100); // Check every 100ms
+        //         // Clear the interval after playing the sound
+        //         clearInterval(this);
+        //     }
+        // }, 100); // Check every 100ms
 
 
         rootSystem = system = manager.systems[0];
-        system.playSuccessTone(); // the boot sound
+        // the boot sound
+        //system.playSuccessTone(); 
 
-        const keysStartingWithT = Object.keys(InvokableCommands)
-            //.filter(key => key.toLowerCase().startsWith('t'));
-        const sortedKeys = keysStartingWithT
-            .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        // logging 1024+ keys slows things down...
+        // const keysStartingWithT = Object.keys(InvokableCommands)
+        //     //.filter(key => key.toLowerCase().startsWith('t'));
+        // const sortedKeys = keysStartingWithT
+        //     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
-        console.log(sortedKeys);
+        // console.log(sortedKeys);
 
         // note: there's a bug where calling the rootSystemManager.boot doesn't actually boot sub-systems
         // kind of makes sense, wouldn't want docker to auto-start all your containers each time
