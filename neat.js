@@ -17394,7 +17394,7 @@ void main(void) {
         system.dashboard.registerWidget(grw);
         */
 
-        system.invoke("new timer")
+        // system.invoke("new timer")
         //system.registerWidget(new TimerWidget());
 
         // NOT NOW NAUSEA!
