@@ -2,9 +2,10 @@
 <html lang="en">
   <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/peers/peerjs@1.3.1/dist/peerjs.min.js"></script>
-    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <!-- <script src="https://d3js.org/d3.v6.min.js"></script> -->
     <script>
       document.addEventListener('DOMContentLoaded', (event) => {
         window.socketIO = io('http://127.0.0.1:4001/', { transports: ['websocket', 'polling'] });
@@ -30,7 +31,7 @@
         socketIO.connect();
       });
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+    
 
     <script type="module">
       // TODO: make these "toggle-able" via flipping state bool

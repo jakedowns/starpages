@@ -818,8 +818,35 @@ class System {
     onCopy(e){
         system.todo("pick up where i left of with Copy integration")
     }
-    onPaste(e){
+    onCut(e){
+        system.todo("pick up where i left of with Cut integration")
+    }
+    async onPaste(e){
         system.todo("pick up where i left of with Paste integration")
+        
+        //async onPaste(e){
+            
+            
+            // Request permission to access clipboard
+            const permissionStatus = await navigator.permissions.query({name: "clipboard-read"});
+            
+            // If permission is granted, invoke the pasted data
+            if(permissionStatus.state == "granted" || permissionStatus.state == "prompt") {
+                const clipboardData = e.clipboardData || window.clipboardData;
+                const pastedData = clipboardData?.getData?.('text');
+                console.warn({
+                    clipboardData,
+                    pastedData
+                })
+                if (pastedData?.startsWith?.('data:image')) {
+                    system.invoke(pastedData);
+                } else {
+                    system.todo("pick up where i left of with Paste integration")
+                }
+            }else{
+                system.warn("Clipboard access denied");
+            }
+        //}
     }
     async onDrop(e){
         console.warn('system.onDrop',e)
@@ -1159,9 +1186,11 @@ class System {
         return this.registerWidgetInstance(...arguments)
     }
     tryInvokeHandlerForUri(uri){
-        if(uri === -9000){
+        console.warn('tryInvokeHandlerForUri',{uri})
+        if(uri === RES || uri === RESOURCE || uri === INVOKABLE){
             // invoke the KEY name InvokableCommands[]
-            console.warn("url -9000",arguments);
+            console.warn("url RES,RESOURCE,INVOKABLE",arguments);
+            //return tryInvokeHandlerForUri(url);
         }
         if(
             uri?.includes?.(".png")
@@ -6368,11 +6397,13 @@ class iFrameWidget extends Widget {
 
         let iFrameX = ( 
             //this.smartPositionNew.x + 
+            (this.basePosition.x * zoom) +
             (panX * zoom)
         );
         
         let iFrameY = (
             //this.smartPositionNew.y + 
+            (this.basePosition.y * zoom) +
             (panY * zoom)
         );
         
@@ -8437,7 +8468,7 @@ let store = {
     Dashboard: null,
     // maybe we just store these IN dashboard manager?...
     widgets: {},
-    showWidgetPositions: 1, //false,
+    showWidgetPositions: 0, //false,
 
     // viewValue: '',
     // controllerValue: '',
@@ -12395,7 +12426,7 @@ const InvokableCommands = {
     ["new gravity well"](){},
     ["new star"](){},
     ["new planet"](){},
-    ["new moon"](){},
+    //["new moon"](){},
     ["new rythm game"](){},
     ["fix zoom scaling cmd options"](){
         // add a regression test to make sure command prompt options don't render at different sizes
@@ -15149,7 +15180,7 @@ class CmdPrompt extends Widget {
 
 
         // todo: pull available commands from system-wide list
-        this.filteredCommands = this.availableCommands.slice(0,10) /*.filter(command => {
+        this.filteredCommands = this.availableCommands.filter(command => {
             if(!command){
                 return false;
             }
@@ -15194,7 +15225,7 @@ class CmdPrompt extends Widget {
             }
         
             return 
-        });*/
+        });
 
         let filteredCommandsSorted = recommended_order.sort((a,b)=>{
             return b.matches - a.matches;
@@ -17400,6 +17431,8 @@ void main(void) {
 
         //system.todo("log time til framerate stable (boot seq time)")
 
+        system.invoke("new moon phase widget")
+
         /*
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
         const grw = new GherkinRunnerWidget();
@@ -17783,6 +17816,33 @@ void main(void) {
         setTimeout(()=>{
             requestAnimationFrame(stepZoomAnimation);
         },0)
+
+        // TODO: time-boxing, color changes per hour:
+        // 12am: black
+        // 1am: dark blue
+        // 2am: dark blue
+        // 3am: dark blue
+        // 4am: dark blue
+        // 5am: dark blue
+        // 6am: dark blue
+        // 7am: dark blue
+        // 8am: dark blue
+        // 9am: dark blue
+        // 10am: dark blue
+        // 11am: dark blue
+        // 12pm: dark blue
+        // 1pm: dark blue
+        // 2pm: dark blue
+        // 3pm: dark blue
+        // 4pm: dark blue
+        // 5pm: dark blue
+        // 6pm: dark blue
+        // 7pm: dark blue
+        // 8pm: dark blue
+        // 9pm: dark blue
+        // 10pm: dark blue
+        // 11pm: dark blue
+        
     }
 
     p.onMouseDown = function(){
@@ -18019,6 +18079,11 @@ void main(void) {
                 '0': () => {
                     if(ctrlOrCmd){
                         system.dashboard.centerView(true);
+                    }
+                },
+                'x':()=>{
+                    if(ctrlOrCmd){
+                        system.onCut(...arguments);
                     }
                 },
                 'v': () => {
@@ -18372,6 +18437,7 @@ const properties = [
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
     'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
     'second','rotate',
+    'textWidth',
     'triangle', 
     'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
     'windowHeight', 'windowWidth', 'arc', 'beginShape', 'circle', 'color', 'createGraphics', 
@@ -18616,17 +18682,16 @@ lines.forEach(line => ctx.text(line.text, windowWidth - 10 - tBoxW + 10, line.y)
 ctx.pop();
 */
 
-function drawStringWordWrapped(line, x, y, fitWidth, lineHeight, ctx) {
-    let lines = processStringIntoLines(
-        line,
-        fitWidth,
-        lineHeight,
-        ctx
-    )
-    drawLines(lines, x, y, ctx)
+function drawStringWordWrapped(line, x, y, fitWidth, lineHeight) {
+    let lines = processStringIntoLines(line, fitWidth, lineHeight);
+    // console.warn('drawStringWordWrapped',{
+    //     line,lines
+    // })
+    mctx.text(line, x, y)
+    drawLines(lines, x, y);
 }
 
-function processStringIntoLines(string, fitWidth, lineHeight, ctx, wrapWholeWords = false) {
+function processStringIntoLines(string, fitWidth, lineHeight) {
     let lines = [];
     let yLineOffset = 0;
 
@@ -18640,27 +18705,11 @@ function processStringIntoLines(string, fitWidth, lineHeight, ctx, wrapWholeWord
 
         for (let i = 0; i < words.length; i++) {
             let testLine = lineText + words[i] + ' ';
-            let testWidth = ctx.textWidth(testLine);
+            let testWidth = textWidth(testLine);
 
             if (testWidth > fitWidth) {
-                if (wrapWholeWords && i > 0) {
-                    lines.push({ text: lineText.trim(), y: yLineOffset });
-                    lineText = words[i] + ' ';
-                } else {
-                    // If the word is too long to fit on a line, break it up
-                    let word = words[i];
-                    while (ctx.textWidth(lineText + word) > fitWidth) {
-                        let charIndex = 0;
-                        while (ctx.textWidth(lineText + word.substring(0, charIndex + 1)) <= fitWidth) {
-                            charIndex++;
-                        }
-                        lines.push({ text: (lineText + word.substring(0, charIndex)).trim(), y: yLineOffset });
-                        word = word.substring(charIndex);
-                        lineText = '';
-                        yLineOffset += lineHeight;
-                    }
-                    lineText = word + ' ';
-                }
+                lines.push({ text: lineText.trim(), y: yLineOffset });
+                lineText = words[i] + ' ';
                 yLineOffset += lineHeight;
             } else {
                 lineText = testLine;
@@ -18674,9 +18723,9 @@ function processStringIntoLines(string, fitWidth, lineHeight, ctx, wrapWholeWord
     return lines;
 }
 
-function drawLines(lines, x, y, ctx) {
+function drawLines(lines, x, y) {
     lines.forEach(line => {
-        ctx.text(line.text, x, line.y + y);
+        text(line.text, x, line.y + y);
     });
 }
 
@@ -18983,14 +19032,15 @@ class SuggestionList {
         ctx.strokeWeight(3);
         ctx.textSize(30);
         // draw label
-        drawStringWordWrapped(
-            label,
-            80,
-            10,
-            20,
-            w - 100,
-            ctx
-        )
+        // drawStringWordWrapped(
+        //     label,
+        //     80,
+        //     10,
+        //     20,
+        //     w - 100,
+        //     ctx
+        // )
+        ctx.text(label, 80, 10);
 
         // NEW: add an image if we have one for this command
         // if not add a placeholder based on "icon_NEW_COMMAND.png"
