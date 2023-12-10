@@ -16,6 +16,16 @@ const testOpenAIServer = "http://127.0.0.1:4001/";
 
 const changelog = [
     [
+        "12.7.23",
+`- working on refactoring / cleanup to widget rendering system
+- upstream calls down to .draw, Widget super class calls .onDraw, pre-translated and scaled into the widget's local drawing coordinate space
+- downstream does not need to call super.onDraw(...) [i need to clean those up]
+- once BVH culling is working, the .onDraw method for out of bounds widgets will not be called
+- if a widget needs to update when it is not being drawn, it should use the onTick() method
+        
+`
+    ]
+    [
         "12.4.2023",
 `
         - 
@@ -687,6 +697,10 @@ class SystemManager {
  */
 /** System.constructor(SystemManager manager) */
 class System {
+    info(){
+        console.warn(...arguments)
+        //system.todo(...arguments)
+    }
     playSuccessTone(){
         try{
             // Play a sound using p5.js
@@ -782,18 +796,20 @@ class System {
                 system.panic("System.imageAsync: no url provided");
                 return;
             }
+            /*
             try{
-                reject(system.fallbackImage);
-                return system.fallbackImage;
+                //reject(system.fallbackImage);
+                // return system.fallbackImage;
                 loadImage(urlLoadable, (img) => {
                     system.PreloadedImages[url] = img;
                     resolve(img);
                 });
             }catch(e){
-                //throw new Error(e);
-                reject(system.fallbackImage);
+                throw new Error(e);
+                //reject(system.fallbackImage);
                 system.panic(e)
             }
+            */
         })
     }
     snapshotOf(obj){
@@ -802,8 +818,35 @@ class System {
     onCopy(e){
         system.todo("pick up where i left of with Copy integration")
     }
-    onPaste(e){
+    onCut(e){
+        system.todo("pick up where i left of with Cut integration")
+    }
+    async onPaste(e){
         system.todo("pick up where i left of with Paste integration")
+        
+        //async onPaste(e){
+            
+            
+            // Request permission to access clipboard
+            const permissionStatus = await navigator.permissions.query({name: "clipboard-read"});
+            
+            // If permission is granted, invoke the pasted data
+            if(permissionStatus.state == "granted" || permissionStatus.state == "prompt") {
+                const clipboardData = e.clipboardData || window.clipboardData;
+                const pastedData = clipboardData?.getData?.('text');
+                console.warn({
+                    clipboardData,
+                    pastedData
+                })
+                if (pastedData?.startsWith?.('data:image')) {
+                    system.invoke(pastedData);
+                } else {
+                    system.todo("pick up where i left of with Paste integration")
+                }
+            }else{
+                system.warn("Clipboard access denied");
+            }
+        //}
     }
     async onDrop(e){
         console.warn('system.onDrop',e)
@@ -856,8 +899,8 @@ class System {
             if (typeof widget_class === 'string') {
                 // Try to invoke it as a URI
                 let result = tryInvokeHandlerForUri(widget_class);
-                // If it returns -1, it wasn't invokable
-                if (result === -1) {
+                // check if it was invokable
+                if (result === UNINVOKABLE) {
                     throw new Error("Unable to invoke URI: " + widget_class);
                 }
                 return result;
@@ -1000,6 +1043,11 @@ class System {
     constructor(manager){
         this.manager = manager;
     }
+    newImageViewer(uri){
+        // actually, use whatever the registered handler is for this uri :D
+        return this.tryInvokeHandlerForUri(uri);
+        //return system.registerWidget(new ImageViewerWidget(uri))
+    }
     get(singletonName){
         return this.lazySingleton(singletonName);
         //return this.singletons[singletonName] ?? null;
@@ -1138,6 +1186,12 @@ class System {
         return this.registerWidgetInstance(...arguments)
     }
     tryInvokeHandlerForUri(uri){
+        console.warn('tryInvokeHandlerForUri',{uri})
+        if(uri === RES || uri === RESOURCE || uri === INVOKABLE){
+            // invoke the KEY name InvokableCommands[]
+            console.warn("url RES,RESOURCE,INVOKABLE",arguments);
+            //return tryInvokeHandlerForUri(url);
+        }
         if(
             uri?.includes?.(".png")
             || uri?.includes?.(".jpg")
@@ -1197,7 +1251,7 @@ class System {
             throw e;
         }
 
-        return -1;
+        return -1000;
     }
 }
 const rootSystemManager = new SystemManager();
@@ -1462,6 +1516,7 @@ class Command {
         // if this.___type === Config (somehow)
         // and this.config.execute is a function,
         // call it instead
+        // TODO: deprecate these Config classes
         if(this.__type === 'Config' && typeof this.config.execute === 'function'){
             this.config.execute();
             return;
@@ -1470,7 +1525,9 @@ class Command {
         try{
             this.execute();
         }catch(e){
-            system.panic("Command.tryExecute: ",e);
+            //system.panic("Command.tryExecute: ",e);
+            console.error(e);
+            throw e;
         }
     }
     updateFromBuffer(){
@@ -3154,6 +3211,22 @@ class Widget extends UndoRedoComponent {
     }
 }
 
+// link dump
+let LinkDump = [
+
+    // Hawking radiation
+    // ScienceClic English
+    "https://www.youtube.com/watch?v=isezfMo8kWQ",
+
+    // AESOP ROCK - Integrated Tech Solutions: Vile Groove DLC Pack [FULL EP STREAM]
+    "https://www.youtube.com/watch?v=7odw9RfEPYY",
+
+    // NEW: use titles instead, we'll look up and cache urls in the backend
+    "Aesop Bach | non-a (Full Album)"
+    // actually, use human guesses too like,
+    //"Aesop and Bach", etc... "did you mean?" style
+]
+
 class ClipboardManager extends Widget {
     constructor(){
         super(...arguments);
@@ -3164,8 +3237,16 @@ class ClipboardManager extends Widget {
         })
     }
     onDraw(){
-
     }
+}
+class BarGraph2D extends Widget {
+
+}
+class BarGraph3D extends Widget {
+
+}
+class CopiedToClipboard extends Widget {
+
 }
 
 
@@ -6314,11 +6395,13 @@ class iFrameWidget extends Widget {
 
         let iFrameX = ( 
             //this.smartPositionNew.x + 
+            (this.basePosition.x * zoom) +
             (panX * zoom)
         );
         
         let iFrameY = (
             //this.smartPositionNew.y + 
+            (this.basePosition.y * zoom) +
             (panY * zoom)
         );
         
@@ -7067,6 +7150,7 @@ class SolarSystemWidget extends Widget {
         this.earth.y = this.sun.y + this.earth.orbitRadius * Math.sin(this.earth.angle);
     }
     onDraw(){
+        this.updateModel();
         strokeWeight(0)
         fill(this.sun.color)
         circle(
@@ -8382,7 +8466,7 @@ let store = {
     Dashboard: null,
     // maybe we just store these IN dashboard manager?...
     widgets: {},
-    showWidgetPositions: 1, //false,
+    showWidgetPositions: 0, //false,
 
     // viewValue: '',
     // controllerValue: '',
@@ -11550,6 +11634,42 @@ const SO_DO_IT = ()=>{
 }
 // central command definitions
 const InvokableCommands = {
+
+    ["time-cost-quality.png"]: RES,
+
+    ["https://www.youtube.com/watch?v=2RSsoTJA6cA"]: RES,
+
+    ["VOD102 SPINNING BALLERINA ILLUSION"]:"https://www.youtube.com/watch?v=2RSsoTJA6cA",
+    
+    ["VOD102"]:"https://www.youtube.com/@VOD102",
+    
+    ["new deck of cards"](){
+        system.todo("new deck of cards")
+    },
+    ["new pack of cards"](){
+        system.todo("new pack of cards")
+    },
+    ["new ball and cup game"](){
+        system.todo("new ball and cup game")
+    },
+    ["Katamari"](){
+        //system.registerWidget(new GoogleResults("Katamari"));
+        system.todo("open google results")
+        window.open("https://www.google.com/search?q=katamari")
+        
+        system.newImageViewer("katamari.mp4")
+    },
+
+    ["Bills.png"]:INVOKABLE, // self reference, load the key name as a uri
+
+    ["Bills"](){
+        system.registerWidget(new ImageViewerWidget("Bills.png"))
+        //system.newWindow("private-value", "bills.url");
+
+        window.open('https://docs.google.com', '_newtab');
+
+    },
+
     ["copyToClipboard_register_callback"](){
         // todo system.registerCallback
         // for now, store is separate,
@@ -11558,16 +11678,16 @@ const InvokableCommands = {
         store.copyToClipboardCallbacks.push(arguments[0]);
     },
     ["new error"](){
-
+        system.todo("🪃 so do it then!")
     },
     ["new error type"](){
-
+        system.todo("🪃 so do it then!")
     },
     ["new stacktrace"](){
-
+        system.todo("🪃 so do it then!")
     },
     ["wave function collapse"](){
-        return "https://jakedowns.com/oasis/"
+        return "https://jakedowns.com/oasis/?width=1000&height=1000"
     },
     ["new color"]:SO_DO_IT,
     ["new color picker widget"]:SO_DO_IT,
@@ -12301,7 +12421,7 @@ const InvokableCommands = {
     ["new gravity well"](){},
     ["new star"](){},
     ["new planet"](){},
-    ["new moon"](){},
+    //["new moon"](){},
     ["new rythm game"](){},
     ["fix zoom scaling cmd options"](){
         // add a regression test to make sure command prompt options don't render at different sizes
@@ -13258,7 +13378,15 @@ class MandelbrotWidget extends Widget {}
 class FileBrowserWidget extends Widget {}
 class WebBrowserWidget extends Widget {}
 class IFTTTWidget extends Widget {}
-class ShaderToyWidget extends Widget {}
+class ShaderToyWidget extends iFrameWidget {
+    // render as a iframe for now
+    // <iframe width="640" height="360" frameborder="0" src="https://www.shadertoy.com/embed/DllXzX?gui=true&t=10&paused=true&muted=false" allowfullscreen></iframe>
+    url = "https://www.shadertoy.com/embed/DllXzX?gui=true&t=10&paused=true&muted=false"
+    widgetSize = {
+        width: 640,
+        height: 360
+    }
+}
 class PixelArtWidget extends Widget {}
 class VectorArtWidget extends Widget {}
 class TextEditorWidget extends Widget {}
@@ -13538,8 +13666,8 @@ class VisualClipboard extends Widget {
 // of rendering multiple Timer instances in a single widget
 class TimerWidget extends Widget {
     widgetSize = {
-        width: 200,
-        height: 200
+        width: 400,
+        height: 400
     }
     constructor(){
         super(...arguments)
@@ -13628,7 +13756,8 @@ class TimerWidget extends Widget {
             push();
             translate(100, 100);
             rotate(radians(angle));
-            stroke(millis%255,0,0);
+            //stroke(255 - parseInt(millis%255),0,0);
+            stroke("limegreen")
             strokeWeight(1);
             line(0, 0, 0, 50); // Draw the pendulum arm
             fill(255,255,0);
@@ -13641,7 +13770,7 @@ class TimerWidget extends Widget {
             push();
             translate(100, 100);
             rotate(angle2);
-            stroke(millis%255,0,0);
+            stroke(parseInt((millis%255).toFixed(0)),0,0);
             strokeWeight(1);
             line(0, 255, 0, 50); // Draw the pendulum arm
             fill(255,255,0);
@@ -14911,6 +15040,7 @@ class CmdPrompt extends Widget {
             name: CmdPromptInput.value()
         }
 
+        // TODO: deprecate these...
         if(this.currentCommand?.constructor?.name === "Config"){
             // turn it into an executable command instance
             this.currentCommand = new Command(this.currentCommand.config.name,this.currentCommand.config);
@@ -15046,6 +15176,7 @@ class CmdPrompt extends Widget {
 
     initCommand(){
         this.currentCommand = new Command();
+        /** @see Command.updateFromBuffer */
         this.currentCommand.updateFromBuffer();
     }
     
@@ -15074,46 +15205,7 @@ class CmdPrompt extends Widget {
 
         // URL-Pasting Check
         // if the input contains :// and no spaces, let's assume it's a url and add a suggestion to paste it as an embedded WebObject
-        if(currentInputBufferText.includes('://') && !currentInputBufferText.includes(' ')){
-            recommended_order.push({
-                command: new Command("Embed URL WebObject",{
-                    name: `Embed URL: "${currentInputBufferText}"`,
-                    execute: function(){
-                        //console.warn("TODO: if it was a tweet, make it a fancy iframe!");
-                        //system.todo("implement url embeds for various well-known iframe friendly sites which provide a consistent url structure for embedding")
-                        console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
-
-                        // if the url has a //twitter.com || //x.com domain,
-                        // embed it as an iframe widget
-                        if(currentInputBufferText.includes('//twitter.com')
-                            || currentInputBufferText.includes('//x.com')
-                        ){
-                            let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
-                            system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
-                        }else if(currentInputBufferText.includes('//youtube.com')
-                            || currentInputBufferText.includes('//youtu.be')
-                        ){
-                            system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
-                        }else if(currentInputBufferText.includes('.png')
-                            || currentInputBufferText.includes('.jpg')
-                            || currentInputBufferText.includes('.jpeg')
-                            || currentInputBufferText.includes('.gif')
-                            || currentInputBufferText.includes('.bmp')
-                            || currentInputBufferText.includes('.svg')
-                            || currentInputBufferText.includes('.webp')
-                        ){
-                            // if it's a Image, embed it as an image
-                            system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
-                        }else if(currentInputBufferText.includes('://')){
-                            // if it's a url, embed it as an iframe
-                            system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
-                        }else{
-                            system.panic("i dont know what to do with my hands")
-                        }
-                    }
-                })
-            })
-        }
+        recommended_order = this.checkAndEmbedUrl(currentInputBufferText, recommended_order);
 
 
         // todo: pull available commands from system-wide list
@@ -15248,6 +15340,45 @@ class CmdPrompt extends Widget {
 
         //     filteredLengthCurrently: this.filteredCommands.length,
         // } );
+    }
+
+    checkAndEmbedUrl(currentInputBufferText, recommended_order) {
+        if(currentInputBufferText.includes('://') && !currentInputBufferText.includes(' ')){
+            recommended_order.push({
+                command: new Command("Embed URL WebObject",{
+                    name: `Embed URL: "${currentInputBufferText}"`,
+                    execute: () => {
+                        console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
+
+                        if(currentInputBufferText.includes('//twitter.com')
+                            || currentInputBufferText.includes('//x.com')
+                        ){
+                            let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
+                            system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                        }else if(currentInputBufferText.includes('//youtube.com')
+                            || currentInputBufferText.includes('//youtu.be')
+                        ){
+                            system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('.png')
+                            || currentInputBufferText.includes('.jpg')
+                            || currentInputBufferText.includes('.jpeg')
+                            || currentInputBufferText.includes('.gif')
+                            || currentInputBufferText.includes('.bmp')
+                            || currentInputBufferText.includes('.svg')
+                            || currentInputBufferText.includes('.webp')
+                        ){
+                            system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('://')){
+                            system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
+                        }else{
+                            //this.system.panic("i dont know what to do with my hands")
+                            throw new Error("i dont know what to do with my hands")
+                        }
+                    }
+                })
+            })
+        }
+        return recommended_order;
     }
 }
 
@@ -16566,7 +16697,19 @@ function setupDefaults(){
                         system.panic("bad command name: "+machineizedCmdName)
                     }else if(!InvokableCommands[machineizedCmdName]?.call){
                         // it's a string, see if it's another aliased command name
-                        result = system.tryInvokeHandlerForUri(InvokableCommands[machineizedCmdName]);
+                        //result = system.tryInvokeHandlerForUri(InvokableCommands[machineizedCmdName]);
+                        // if(result === UNINVOKABLE){
+                        //     // TODO: make this a uniquish CONST like 80184
+                        //     // when it's ^ this special value, we should
+                        //     // it means that we should invoke the uri as the keyname
+                        //     // system.info("trying  again with uri as keyname",{
+                        //     //     machineizedCmdName,
+                        //     //     a: InvokableCommands[machineizedCmdName],
+                        //     //     b: InvokableCommands[InvokableCommands[machineizedCmdName]]
+                        //     // })
+                        //     //result = system.tryInvokeHandlerForUri(machineizedCmdName);
+                        //     console.warn('UNINVOKABLE',{machineizedCmdName})
+                        // }
                     }else{
                         result = InvokableCommands[machineizedCmdName].call(this);
                     }
@@ -17102,31 +17245,34 @@ let cursor, MainCanvasContextThing = function(p){
 
         // Set up the beforeunload listener
         window.addEventListener('beforeunload', function() {
+            console.warn('beforeunload');
             isPageUnloading = true;
         });
 
         // Set up the interval to check the condition
-        setInterval(function() {
-            if (isPageUnloading) {
-                // Play the sound here
-                let audio = new Audio('path_to_your_audio_file.mp3');
-                audio.play();
+        // setInterval(function() {
+        //     if (isPageUnloading) {
+        //         // Play the sound here
+        //         let audio = new Audio('path_to_your_audio_file.mp3');
+        //         audio.play();
 
-                // Clear the interval after playing the sound
-                clearInterval(this);
-            }
-        }, 100); // Check every 100ms
+        //         // Clear the interval after playing the sound
+        //         clearInterval(this);
+        //     }
+        // }, 100); // Check every 100ms
 
 
         rootSystem = system = manager.systems[0];
-        system.playSuccessTone(); // the boot sound
+        // the boot sound
+        //system.playSuccessTone(); 
 
-        const keysStartingWithT = Object.keys(InvokableCommands)
-            //.filter(key => key.toLowerCase().startsWith('t'));
-        const sortedKeys = keysStartingWithT
-            .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+        // logging 1024+ keys slows things down...
+        // const keysStartingWithT = Object.keys(InvokableCommands)
+        //     //.filter(key => key.toLowerCase().startsWith('t'));
+        // const sortedKeys = keysStartingWithT
+        //     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 
-        console.log(sortedKeys);
+        // console.log(sortedKeys);
 
         // note: there's a bug where calling the rootSystemManager.boot doesn't actually boot sub-systems
         // kind of makes sense, wouldn't want docker to auto-start all your containers each time
@@ -17314,6 +17460,8 @@ void main(void) {
 
         //system.todo("log time til framerate stable (boot seq time)")
 
+        system.invoke("new moon phase widget")
+
         /*
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
         const grw = new GherkinRunnerWidget();
@@ -17324,7 +17472,7 @@ void main(void) {
         system.dashboard.registerWidget(grw);
         */
 
-        system.invoke("new timer")
+        // system.invoke("new timer")
         //system.registerWidget(new TimerWidget());
 
         // NOT NOW NAUSEA!
@@ -17569,7 +17717,7 @@ void main(void) {
         const widVals = Object.values(system.get("Dashboard").widgets);
         let count = widVals.length;
         widVals.forEach((widget,index)=>{
-            widget.canvasID = Math.round(mctx.random(-1,1)); //-1;
+            widget.canvasID = 0; //Math.round(mctx.random(-1,1)); //-1;
             // if(index === count -1){
             //     widget.canvasID = 1;
             // }
@@ -17697,6 +17845,33 @@ void main(void) {
         setTimeout(()=>{
             requestAnimationFrame(stepZoomAnimation);
         },0)
+
+        // TODO: time-boxing, color changes per hour:
+        // 12am: black
+        // 1am: dark blue
+        // 2am: dark blue
+        // 3am: dark blue
+        // 4am: dark blue
+        // 5am: dark blue
+        // 6am: dark blue
+        // 7am: dark blue
+        // 8am: dark blue
+        // 9am: dark blue
+        // 10am: dark blue
+        // 11am: dark blue
+        // 12pm: dark blue
+        // 1pm: dark blue
+        // 2pm: dark blue
+        // 3pm: dark blue
+        // 4pm: dark blue
+        // 5pm: dark blue
+        // 6pm: dark blue
+        // 7pm: dark blue
+        // 8pm: dark blue
+        // 9pm: dark blue
+        // 10pm: dark blue
+        // 11pm: dark blue
+        
     }
 
     p.onMouseDown = function(){
@@ -17893,69 +18068,67 @@ void main(void) {
 
             // TODO: make this a static command matrix... !!!
 
-            if(ctrlOrCmd && e.key === 'd'){
-                system.alert("don't bookmark, just come back.")
-                e.preventDefault();
-                InvokableCommands["clear"]();
-                /** @see CmdPrompt.hideCmdPrompt */
-                system.cmdprompt.hideCmdPrompt();
-                system.notify("Cleared! 🧘‍♂️")
-                return;
-            } 
+            const keyActions = {
+                'd': () => {
+                    if(ctrlOrCmd){
+                        system.alert("don't bookmark, just come back.")
+                        e.preventDefault();
+                        InvokableCommands["clear"]();
+                        system.cmdprompt.hideCmdPrompt();
+                        system.notify("Cleared! 🧘‍♂️")
+                    }
+                },
+                'p': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.cmdprompt.showCmdPrompt();
+                    }
+                },
+                'f': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
+                    } else if(!store.focusedField){
+                        system.dashboard.centerView();
+                        system.alert("focused")   
+                    }
+                },
+                'k': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
+                    }
+                },
+                'l': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
+                    }
+                },
+                '0': () => {
+                    if(ctrlOrCmd){
+                        system.dashboard.centerView(true);
+                    }
+                },
+                'x':()=>{
+                    if(ctrlOrCmd){
+                        system.onCut(...arguments);
+                    }
+                },
+                'v': () => {
+                    if(ctrlOrCmd){
+                        system.onPaste(...arguments);
+                    }
+                },
+                'c': () => {
+                    if(ctrlOrCmd){
+                        system.onCopy(...arguments);
+                    }
+                }
+            };
 
-            // Check if Ctrl key is pressed along with P
-            if (ctrlOrCmd && e.key === 'p') {
-                // ctrl + p, cmd + p, cmd&p||ctrl&p
-                // Prevent the default ctrl p ctrl+p print action!
-                e.preventDefault();
-                //alert("Ctrl+P has been disabled!");
-                // toggle the dashboard
-                /** @see CmdPrompt.showCmdPrompt */
-                system.cmdprompt.showCmdPrompt();
-                return;
-            }
-
-            // override default ctrlOrCmd + f behavior
-            if (ctrlOrCmd && e.key === 'f') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
-            }
-
-            // override default ctrlOrCmd + k behavior
-            if (ctrlOrCmd && e.key === 'k') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
-            }
-
-            // override default ctrlOrCmd + l behavior
-            if (ctrlOrCmd && e.key === 'l') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
-            }
-
-            // if the key is `f` and we don't have any inputs focused,
-            // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
-            if(e.key === 'f' && !store.focusedField){
-                system.dashboard.centerView();
-                system.alert("focused")   
-            }
-            // toggle 100% zoom
-            // ctrl+0
-            // cmd+0
-            if(ctrlOrCmd && e.key === '0'){
-                /** @see Dashboard.centerView */
-                system.dashboard.centerView(true);
-            }
-
-            // if pasting 
-            if(ctrlOrCmd && e.key === 'v'){
-                /** @see System.onPaste */
-                system.onPaste(...arguments);
-            }
-            // copying
-            if(ctrlOrCmd && e.key === 'c'){
-                /** @see System.onCopy */
-                system.onCopy(...arguments);
+            if(keyActions.hasOwnProperty(e.key)){
+                keyActions[e.key]();
             }
             
             let KeyboardPanInfluence = { x: 0, y: 0 };
@@ -18293,6 +18466,7 @@ const properties = [
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
     'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
     'second','rotate',
+    'textWidth',
     'triangle', 
     'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
     'windowHeight', 'windowWidth', 'arc', 'beginShape', 'circle', 'color', 'createGraphics', 
@@ -18537,35 +18711,51 @@ lines.forEach(line => ctx.text(line.text, windowWidth - 10 - tBoxW + 10, line.y)
 ctx.pop();
 */
 
-function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
-    let words = string.split(' ');
-    let line = '';
-    let yLineOffset = 0;
-    let lines = [];
-
-    for (let i = 0; i < words.length; i++) {
-        let testLine = line + words[i] + ' ';
-        let testWidth = ctx.textWidth(testLine);
-
-        ctx.textAlign(LEFT,TOP)
-        if (testWidth > fitWidth && i > 0) {
-            lines.push({ text: line.trim(), x: x, y: y + (lineHeight / 2) + yLineOffset });
-            line = words[i] + ' ';
-            yLineOffset += ctx.textSize();
-        } else {
-            line = testLine;
-        }
-    }
-
-    // console.warn("drawStringWordWrapped",{
-    //     input: string,
-    //     x, y, lineHeight, fitWidth, ctx,
-    //     line_count: lines.length
+function drawStringWordWrapped(line, x, y, fitWidth, lineHeight) {
+    let lines = processStringIntoLines(line, fitWidth, lineHeight);
+    // console.warn('drawStringWordWrapped',{
+    //     line,lines
     // })
+    mctx.text(line, x, y)
+    drawLines(lines, x, y);
+}
 
-    lines.push({ text: line.trim(), x: x, y: y + yLineOffset });
+function processStringIntoLines(string, fitWidth, lineHeight) {
+    let lines = [];
+    let yLineOffset = 0;
 
-    lines.forEach(line => ctx.text(line.text, line.x, line.y));
+    string = string.replace(/<br\/>/g, '\n');
+    string = string.replace(/<br>/g, '\n');
+    let preSplitLines = string.split('\n');
+
+    preSplitLines.forEach((line) => {
+        let words = line.split(' ');
+        let lineText = '';
+
+        for (let i = 0; i < words.length; i++) {
+            let testLine = lineText + words[i] + ' ';
+            let testWidth = textWidth(testLine);
+
+            if (testWidth > fitWidth) {
+                lines.push({ text: lineText.trim(), y: yLineOffset });
+                lineText = words[i] + ' ';
+                yLineOffset += lineHeight;
+            } else {
+                lineText = testLine;
+            }
+        }
+
+        lines.push({ text: lineText.trim(), y: yLineOffset });
+        yLineOffset += lineHeight;
+    });
+
+    return lines;
+}
+
+function drawLines(lines, x, y) {
+    lines.forEach(line => {
+        text(line.text, x, line.y + y);
+    });
 }
 
 // todo: make a multi-select version
@@ -18663,6 +18853,8 @@ class SuggestionList {
 
     }
     handleInput(event){
+
+
         // console.warn('suggestion list handleInput',{
         //     keyCode: event.keyCode,
         //     event
@@ -18857,8 +19049,6 @@ class SuggestionList {
 
         ctx.push();
         ctx.translate(x,y);
-        // ctx.scale(zoom);
-        //ctx.translate(x,y);
         //ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
@@ -18871,14 +19061,15 @@ class SuggestionList {
         ctx.strokeWeight(3);
         ctx.textSize(30);
         // draw label
-        drawStringWordWrapped(
-            label,
-            80,
-            10,
-            20,
-            w - 100,
-            ctx
-        )
+        // drawStringWordWrapped(
+        //     label,
+        //     80,
+        //     10,
+        //     20,
+        //     w - 100,
+        //     ctx
+        // )
+        ctx.text(label, 80, 10);
 
         // NEW: add an image if we have one for this command
         // if not add a placeholder based on "icon_NEW_COMMAND.png"
