@@ -1203,17 +1203,16 @@ class System {
             return system.registerWidget(new ImageViewerWidget(uri))
         }
     
-        // if it's a soundcloud url, return a new soundcloud widget instance instead
-        if(
+        else if(
             uri?.includes?.("soundcloud.com")
         ) {
+            // if it's a soundcloud url, return a new soundcloud widget instance instead
             const MySoundCloudClass = class extends SoundCloudWidget {
                 url = uri
             } 
             return system.registerWidget(new MySoundCloudClass())
         }
-    
-        if(
+        else if(
             uri?.includes?.("youtube.com/")
             || uri?.includes?.("youtu.be")
         ){
@@ -1228,7 +1227,7 @@ class System {
             // it's a youtube url!
             return system.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
         }
-        if(uri?.includes?.("://")){
+        else if(uri?.includes?.("://")){
             // it's an iframe, chuck!
             return system.registerWidget(new iFrameWidget(uri))
         }
@@ -3394,13 +3393,13 @@ class OscilloscopeWidget extends Widget {
     onDraw(){
         super.onDraw(...arguments);
 
-        if(!this.ctx.drawImage){
-            // TODO TODO TODO
-            // console.warn('no drawImage?!?!',this);
-            // debugger;
-            //super.endDraw();
-            return;
-        }
+        // if(!this.ctx.drawImage){
+        //     // TODO TODO TODO
+        //     // console.warn('no drawImage?!?!',this);
+        //     // debugger;
+        //     //super.endDraw();
+        //     return;
+        // }
 
         // draw the gridImage
         this.ctx.drawImage(this.gridImage, 0, 0);
@@ -6234,15 +6233,14 @@ class iFrameWidget extends Widget {
                     height: pxHeightOrNull
                 }
             }
-        
-        // if width/height opts were not provided
-        // check the string for ?width=w&height=h or ?w=w&h=h
 
-        /*
-        if(arguments[1]?.fullTag?.length){
-                arguments[1]?.fullTag
-            }
-            */
+        let urlAsUrl = new URL(this.url);
+        if(urlAsUrl.searchParams.has("w") || urlAsUrl.searchParams.has("width")){
+            this.widgetSize.width = urlAsUrl.searchParams.get("w") || urlAsUrl.searchParams.get("width");
+        }
+        if(urlAsUrl.searchParams.has("h") || urlAsUrl.searchParams.has("height")){
+            this.widgetSize.height = urlAsUrl.searchParams.get("h") || urlAsUrl.searchParams.get("height");
+        }
 
         this.createIFrame()
     }
@@ -11643,10 +11641,9 @@ const bugs = [
 const features = [
 
 ]
-const UNINVOKABLE = -9999;
-const INVOKABLE = -9000;
-const RESOURCE = -9000;
-const RES = RESOURCE;
+const SO_DO_IT = ()=>{
+    system.todo("🪃 so do it then!")
+}
 // central command definitions
 const InvokableCommands = {
 
@@ -11707,18 +11704,10 @@ const InvokableCommands = {
     ["wave function collapse"](){
         return "https://jakedowns.com/oasis/?width=1000&height=1000"
     },
-    ["new color"](){
-        system.todo("🪃 so do it then!")
-    },
-    ["new color picker widget"](){
-        system.todo("🪃 so do it then!")
-    },
-    ["new color theme"](){
-        system.todo("🪃 so do it then!")
-    },
-    ["new palette"](){
-        system.todo("🪃 so do it then!")
-    },
+    ["new color"]:SO_DO_IT,
+    ["new color picker widget"]:SO_DO_IT,
+    ["new color theme"]:SO_DO_IT,
+    ["new palette"]:SO_DO_IT,
     ["addition"](){
         // if no arguments,
         // show a prompt for 2 numbers
@@ -11756,9 +11745,18 @@ const InvokableCommands = {
     ["new Mandelbrot viewer"](){
         system.registerWidget(new MandelbrotViewerWidget())
     },
-    ["new graph"](){
+    ["new sliding image puzzle"](){
+        system.registerWidget(new SlidingImagePuzzle())
+    },
+    ["new pill tracker"](){
+        // system.registerWidget(new PillTracker())
         system.todo("🪃 so do it then!")
     },
+    ["new graph"]:SO_DO_IT,
+    ["play snes > thomas and friends"]:"https://www.retrogames.cc/embed/19601-thomas-the-tank-engine-and-friends-usa.html?width=1920&height=1080",
+    /*
+    `<iframe src="https://www.retrogames.cc/embed/19601-thomas-the-tank-engine-and-friends-usa.html?width=600&height=450" width="600" height="450" frameborder="no" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" scrolling="no"></iframe>`,
+    */
     ["system > play success tone"](){
         system.playSuccessTone();
     },
@@ -11854,11 +11852,9 @@ const InvokableCommands = {
 
 
 
-    ["Inspiration: simple generative graph example - Orion Reed"](){
-        system.registerWidget(new iFrameWidget(
-            "https://x.com/OrionReedOne/status/1731965009981301071?s=20"
-        ));
-    },
+    ["Inspiration: simple generative graph example - Orion Reed"]:
+            "https://x.com/OrionReedOne/status/1731965009981301071?s=20",
+
     ["sine wave demo"](){
         system.registerWidget(new SineWaveDemonstrator());
     },
@@ -12283,9 +12279,8 @@ const InvokableCommands = {
     ["Play SNES > Super Mario World"](){
         system.todo("paste iframe url!")
     },
-    ["Play SNES > Pac Attack"](){
-        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/n64-games/super-mario-64-sky-stories.html"))
-    },
+    ["Play SNES > Pac Attack"]:
+        "https://www.retrogames.cc/embed/20198-pac-attack-usa.html?width=1920&height=1080",
     // ["Play N64 > ..."](){
 
     // },
@@ -12953,25 +12948,28 @@ const InvokableCommands = {
     ["this is fine"]: "fine.gif",
     feels_good_man: "feelsgoodman.gif",
 
-    "new hand-written digit recognizer": "",
-    "new hand-drawn shape recognizer": "",
-    "new classifer": "",
+    "new hand-written digit recognizer": SO_DO_IT,
+    "new hand-drawn shape recognizer": SO_DO_IT,
+    "new classifer": SO_DO_IT,
     // textual inversion, style transfer
-    "new AI training run": "",
-    "generate an image of...": "",
-    "convert this image to a video": "",
-    "combine these images!": "",
+    "new AI training run": SO_DO_IT,
+    "generate an image of...": SO_DO_IT,
+    "convert this image to a video": SO_DO_IT,
+    "combine these images!": SO_DO_IT,
 
-    "watch bob ross": "",
-    "watch wheel of fortune": "",
-    "watch powerpuff girls": "",
-    "watch the simpsons": "",
+    "watch bob ross": SO_DO_IT,
+    "watch wheel of fortune": SO_DO_IT,
+    "watch powerpuff girls": SO_DO_IT,
+    "watch the simpsons": SO_DO_IT,
 
-    "play half life": "",
-    "play portal 2": "",
+    "play half life": SO_DO_IT,
+    "play portal 2": SO_DO_IT,
 
-    "remember...": "",
-    "forget...": "",
+    "new flight simulation": SO_DO_IT,
+    "new rocket simulation": SO_DO_IT,
+
+    "remember...": SO_DO_IT,
+    "forget...": SO_DO_IT,
 
     "YouTube - The Coding Train - Coding Challenge 177: Soft Body Physics": "https://www.youtube.com/watch?v=IxdGyqhppis",
 
@@ -13323,6 +13321,37 @@ Object.entries(InvokableCommands).forEach(([key, val]) => {
         // delete InvokableCommands[key];
     }
 })
+
+
+class SineWavePreview extends Widget {
+        constructor() {
+            super(...arguments);
+            this.angle = 0; // Initialize angle for oscillation
+            this.waveWidth = this.widgetSize.width; // Width of the wave display
+            this.amplitude = this.widgetSize.height / 2; // Height of the wave
+        }
+    
+        onDraw() {
+            //push(); // Start a new drawing state
+            translate(this.x, this.y); // Move to the position of the widget
+    
+            stroke(0);
+            strokeWeight(20);
+            noFill();
+            beginShape();
+            for (let x = 0; x < this.waveWidth; x++) {
+                let y = sin(this.angle + TWO_PI * x / this.waveWidth) * this.amplitude;
+                vertex(x, this.height / 2 + y);
+            }
+            endShape();
+    
+            this.angle += 0.05; // Increment the angle for the next frame
+    
+            //pop(); // Restore original state
+        }
+    
+}
+
 const BasicBools = [
     "DISABLE_PARALLAX"
 ]
@@ -13666,7 +13695,7 @@ class TimerWidget extends Widget {
         }
 
         // start playing this sound on a loop:
-        // system.playSound("grandfather_clock",true)
+        //system.playSound("grandfather_clock",true)
 
         // automatically generates a timerManager.timers[0]
         this.timerManager = new TimerManager(); 
