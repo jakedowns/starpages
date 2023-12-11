@@ -3212,6 +3212,18 @@ class Widget extends UndoRedoComponent {
     }
 }
 
+const watchHistory = [
+    "AI: Grappling with a New Kind of Intelligence World Science Festival",
+
+]
+const toWatch = [
+    "AI: Grappling with a New Kind of Intelligence World Science Festival",
+]
+
+const bookmarkBin = [
+    "http://localhost:8888/notebooks/HelloWorldStickfigure.ipynb"
+]
+
 // link dump
 let LinkDump = [
 
@@ -11637,6 +11649,9 @@ const RESOURCE = -9000;
 const RES = RESOURCE;
 // central command definitions
 const InvokableCommands = {
+
+    ["https://www.shadertoy.com/view/mtyGWy"]: RES,
+    ["An introduction to Shader Art Coding | kishimisu"]: RES,
 
     ["time-cost-quality.png"]: RES,
 
