@@ -695,6 +695,7 @@ class SystemManager {
  *   then watch them ripple from yellow back to green as the system autonomously accepts and distributes the verified changes
  *   to the appropriate subsystems...
  */
+const RES = -9999, RESOURCE = -9999, INVOKABLE = -9998, UNINVOKABLE = -8888;
 /** System.constructor(SystemManager manager) */
 class System {
     info(){
@@ -2579,12 +2580,25 @@ class Widget extends UndoRedoComponent {
         return this?.widgetSize ?? {width:100,height:100};
     }
 
+    _halfWidthCache = null;
+    _halfHeightCache = null;
+    _widthCache = null;
+    _heightCache = null;
+
     get halfWidth(){
-        return this.size.width / 2;
+        if (this._widthCache !== this.size.width || this._halfWidthCache === null) {
+            this._halfWidthCache = this.size.width / 2;
+            this._widthCache = this.size.width;
+        }
+        return this._halfWidthCache;
     }
 
     get halfHeight(){
-        return this.size.height / 2;
+        if (this._heightCache !== this.size.height || this._halfHeightCache === null) {
+            this._halfHeightCache = this.size.height / 2;
+            this._heightCache = this.size.height;
+        }
+        return this._halfHeightCache;
     }
 
     // TODO: enable debug rendering of widget bounding boxes
@@ -5348,8 +5362,8 @@ class ImageViewerWidget extends Widget {
             // Calculate new width and height while maintaining aspect ratio
             this.newWidth = this.widgetSize.width;
             this.newHeight = this.newWidth / aspectRatio;
-            this.halfWidth = this.newWidth * .5;
-            this.halfHeight = this.newHeight * .5;
+            // this.halfWidth = this.newWidth * .5;
+            // this.halfHeight = this.newHeight * .5;
             // If new height is greater than widget height, adjust width instead
             if (this.newHeight > this.widgetSize.height) {
                 this.newHeight = this.widgetSize.height;
@@ -6151,6 +6165,14 @@ class iFrameWidget extends Widget {
         }
     }
     createIFrame(){
+        // console.warn remember for youtube, the url is in this.tracks[i]
+        console.warn('createIFrame',{
+            constructorName: this.constructor.name,
+            _this: this,
+            url: this.url,
+            tracks: this?.tracks
+        })
+
         const style = {
             'border-radius': '20px',
             'border': '3px solid red',
@@ -6214,7 +6236,7 @@ class iFrameWidget extends Widget {
         //     opts = pxWidthOrOptsOrNull;
         // }
 
-        console.warn('iframe',{
+        console.warn('iframe constructor',{
             url,
             two: arguments[1],
             three: arguments[2],
@@ -6224,9 +6246,11 @@ class iFrameWidget extends Widget {
 
             if(arguments[0]?.widgetSize){
                 this.widgetSize = arguments[0].widgetSize;
+                this.options = arguments[0];
             }
             else if(arguments[1]?.widgetSize){
                 this.widgetSize = arguments[1].widgetSize;
+                this.options = arguments[1];
             }else if(pxHeightOrNull){
                 this.widgetSize = {
                     width: pxWidthOrOptsOrNull,
@@ -6234,12 +6258,26 @@ class iFrameWidget extends Widget {
                 }
             }
 
-        let urlAsUrl = new URL(this.url);
-        if(urlAsUrl.searchParams.has("w") || urlAsUrl.searchParams.has("width")){
-            this.widgetSize.width = urlAsUrl.searchParams.get("w") || urlAsUrl.searchParams.get("width");
-        }
-        if(urlAsUrl.searchParams.has("h") || urlAsUrl.searchParams.has("height")){
-            this.widgetSize.height = urlAsUrl.searchParams.get("h") || urlAsUrl.searchParams.get("height");
+            if(arguments[1]?.tracks){
+                this.options = arguments[1];
+            }else if(arguments[2]?.tracks){
+                this.options = arguments[2];
+            }
+
+            let _url = this?.options?.tracks?.[0] ?? this.url;
+
+            console.warn('checking for w/h in url',{_url})
+
+        try{
+            let urlAsUrl = new URL(_url);
+            if(urlAsUrl.searchParams.has("w") || urlAsUrl.searchParams.has("width")){
+                this.widgetSize.width = urlAsUrl.searchParams.get("w") || urlAsUrl.searchParams.get("width");
+            }
+            if(urlAsUrl.searchParams.has("h") || urlAsUrl.searchParams.has("height")){
+                this.widgetSize.height = urlAsUrl.searchParams.get("h") || urlAsUrl.searchParams.get("height");
+            }
+        }catch(e){
+            console.error(e)
         }
 
         this.createIFrame()
@@ -6444,8 +6482,7 @@ class iFrameWidget extends Widget {
     extends="iFrame" />
 
 <YoutubePlayerWidget
-    track0="https://www.youtube.com/embed/5qap5aO4i9A"
-    track1="https://www.youtube.com/embed/5qap5aO4i9A"
+    tracks="['https://www.youtube.com/embed/5qap5aO4i9A']"
     />
 
 */
@@ -6466,47 +6503,52 @@ extends iFrameWidget {
         if(this.options.widgetSize){
             this.widgetSize = this.options.widgetSize;
         }
-        this.setTrackList(this.getTrackList());
-        this.updateUrl(this.getFirstTrack());
+        //this.setTrackList(this.getTrackList());
+        this.updateUrl(this.iframeSafeUrl(this.getFirstTrack()));
     }
     get tracks(){
-        // valid cache hit
-        if(this._tracks && !this.tracksChanged){
-            return this._tracks;
-        }
-        // cache miss
-        this.setTrackList(
-            this.getTrackList()
-        );
-        return this._tracks;
+        return this.options?.tracks ?? [];
+        // // valid cache hit
+        // if(this._tracks && !this.tracksChanged){
+        //     return this._tracks;
+        // }
+        // // cache miss
+        // this.setTrackList(
+        //     this.getTrackList()
+        // );
+        // return this._tracks;
     }
-    setTrackList(tracks){
-        // should we override value in options?
-        if(!tracks || !tracks.length){
-            system.panic("we don't support empty tracks here")
-        }
-        this.tracksChanged = true;
-        // get tracks will pull from here and cache
-        this.options.tracks = tracks.map(this.iframeSafeUrl);
-        // unset any track0..trackN on options that may be lingering
-        let i = 0;
-        while(this.options[`track${i}`]){
-            delete this.options[`track${i}`];
-            i++;
-        }
-        // update cache
-        this._tracks = this.options.tracks;
-    }
+    // setTrackList(tracks){
+    //     // should we override value in options?
+    //     if(!tracks || !tracks.length){
+    //         //system.panic("we don't support empty tracks here")
+    //         tracks = [this.iframeSafeUrl(this.url)];
+    //     }
+    //     this.tracksChanged = true;
+
+    //     this.options.tracks = [];
+    //     // get tracks will pull from here and cache
+    //     this.options.tracks = tracks.map(this.iframeSafeUrl);
+    //     // // unset any tracks[0]..tracks[N] on options that may be lingering
+    //     // let i = 0;
+    //     // while(this.options.tracks){
+    //     //     delete this.options.tracks[i];
+    //     //     i++;
+    //     // }
+    //     // update cache
+    //     this._tracks = this.options.tracks;
+    // }
     // pluck from options
-    getTrackList(){
-        let tracks = [];
-        let i = 0;
-        while(this.options[`track${i}`]){
-            tracks.push(this.options[`track${i}`]);
-            i++;
-        }
-        return [...tracks, ...this.options?.tracks ?? []];
-    }
+    // getTrackList(){
+    //     // let tracks = [];
+    //     // let i = 0;
+    //     // while(this.options[`track${i}`]){
+    //     //     tracks.push(this.options[`track${i}`]);
+    //     //     i++;
+    //     // }
+    //     // ...tracks, 
+    //     return [...(this.options?.tracks ?? [])];
+    // }
     getUnplayedTracks(){
         return this.tracks.filter(track => !this.playedTracks.includes(track));
     }
