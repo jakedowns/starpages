@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Linked List Viewer</title>
+    <style>
+        #controls button {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Linked List Viewer</h1>
+    <div id="currentNode"></div>
+    <div id="controls"></div>
+
+    <script>
+        class Node {
+            constructor(value) {
+                this.value = value;
+                this.references = [];
+            }
+
+            addReference(node) {
+                this.references.push(node);
+            }
+        }
+
+        class LinkedListViewer {
+            constructor(root) {
+                this.root = root;
+                this.currentNode = root;
+                this.updateView();
+            }
+
+            view(node = this.root, depth = 1, visited = new Set()) {
+                if (!node || visited.has(node) || depth < 1) return;
+                visited.add(node);
+                console.log(node.value);
+                node.references.forEach(ref => this.view(ref, depth - 1, visited));
+            }
+
+            updateView() {
+                const currentNodeDiv = document.getElementById('currentNode');
+                currentNodeDiv.innerHTML = `<h2>${this.currentNode.value}</h2>`;
+
+                const controlsDiv = document.getElementById('controls');
+                controlsDiv.innerHTML = '';
+                this.currentNode.references.forEach(ref => {
+                    const btn = document.createElement('button');
+                    btn.textContent = ref.value;
+                    btn.onclick = () => {
+                        this.currentNode = ref;
+                        this.updateView();
+                    };
+                    controlsDiv.appendChild(btn);
+                });
+            }
+        }
+
+        // Sample data
+        const root = new Node('root');
+        const home = new Node('home');
+        const myRoom = new Node('my room');
+        const mySketchbook = new Node('my sketchbook');
+        const myIdeas = new Node('my ideas');
+        const boomerangIdeas = new Node('boomerang ideas');
+        const conversationMapperApp = new Node('conversation mapper app');
+        const space = new Node('space');
+        const spacetime = new Node('spacetime');
+        const time = new Node('time');
+
+        root.addReference(home);
+        home.addReference(myRoom);
+        myRoom.addReference(mySketchbook);
+        mySketchbook.addReference(myIdeas);
+        myIdeas.addReference(boomerangIdeas);
+        boomerangIdeas.addReference(conversationMapperApp);
+
+        space.addReference(root);
+        spacetime.addReference(root);
+        spacetime.addReference(space);
+        spacetime.addReference(time);
+
+        // Additional my room references
+        const myVideos = new Node('my videos');
+        const myPictures = new Node('my pictures');
+        const myMusic = new Node('my music');
+        const myBookmarks = new Node('my bookmarks');
+        const myWorkbench = new Node('my workbench');
+
+        myRoom.addReference(myVideos);
+        myRoom.addReference(myPictures);
+        myRoom.addReference(myMusic);
+        myRoom.addReference(myBookmarks);
+        myRoom.addReference(myWorkbench);
+
+        // Initialize viewer
+        document.addEventListener('DOMContentLoaded', () => {
+            new LinkedListViewer(root);
+        });
+    </script>
+</body>
+</html>

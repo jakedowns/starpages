@@ -1186,73 +1186,79 @@ class System {
     registerWidget(){
         return this.registerWidgetInstance(...arguments)
     }
-    tryInvokeHandlerForUri(uri){
-        console.warn('tryInvokeHandlerForUri',{uri})
-        if(uri === RES || uri === RESOURCE || uri === INVOKABLE){
-            // invoke the KEY name InvokableCommands[]
-            console.warn("url RES,RESOURCE,INVOKABLE",arguments);
-            //return tryInvokeHandlerForUri(url);
-        }
-        if(
-            uri?.includes?.(".png")
-            || uri?.includes?.(".jpg")
-            || uri?.includes?.(".gif")
-            || uri?.includes?.(".jpeg")
-            || uri?.includes?.(".webp")
-        ) {
-            // it's an image!
-            return system.registerWidget(new ImageViewerWidget(uri))
-        }
     
-        else if(
-            uri?.includes?.("soundcloud.com")
-        ) {
-            // if it's a soundcloud url, return a new soundcloud widget instance instead
+    // Helper function to check if a URL contains a certain keyword
+    checkUrl(uri, keyword) {
+        return uri?.includes?.(keyword);
+    }
+
+    // Handlers for different types of URLs
+    urlHandlers = {
+        'soundcloud.com': uri => {
             const MySoundCloudClass = class extends SoundCloudWidget {
                 url = uri
-            } 
-            return system.registerWidget(new MySoundCloudClass())
-        }
-        else if(
-            uri?.includes?.("youtube.com/")
-            || uri?.includes?.("youtu.be")
-        ){
-            let updatedUrl = uri;
-            try {
-                let url = new URL(updatedUrl);
-                // url.searchParams.set('autoplay', '1');
-                updatedUrl = url.toString();
-            } catch (error) {
-                console.error('Invalid URL:', updatedUrl);
             }
-            // it's a youtube url!
-            return system.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
+            return system.registerWidget(new MySoundCloudClass())
+        },
+        'youtube.com/': uri => handleYoutube(uri),
+        'youtu.be': uri => handleYoutube(uri),
+        // '://': uri => system.registerWidget(new iFrameWidget(uri))
+    }
+
+    bindImgHandlers(){
+        // Add image handlers in a loop to reduce redundancy
+        ['.png', '.jpg', '.gif', '.jpeg', '.webp'].forEach(ext => {
+            urlHandlers[ext] = uri => system.registerWidget(new ImageViewerWidget(uri));
+        });
+    }
+
+    // Handler for YouTube URLs
+    handleYoutube(uri) {
+        let updatedUrl = uri;
+        try {
+            let url = new URL(updatedUrl);
+            updatedUrl = url.toString();
+        } catch (error) {
+            console.error('Invalid URL:', updatedUrl);
         }
-        else if(uri?.includes?.("://")){
-            // it's an iframe, chuck!
-            return system.registerWidget(new iFrameWidget(uri))
+        return system.registerWidget(new YoutubePlayerWidget("", {tracks: [updatedUrl]}));
+    }
+
+    // Refactored tryInvokeHandlerForUri function
+    tryInvokeHandlerForUri(uri) {
+        console.warn('tryInvokeHandlerForUri', {uri});
+
+        // Check if the URL matches any of the handlers
+        for (let keyword in this.urlHandlers) {
+            if (checkUrl(uri, keyword)) {
+                return this.urlHandlers[keyword](uri);
+            }
         }
 
-        try{
-            // see if it's an invokeable command!
+        // If none of the above, check if it's a generic URL and handle it as an iframe
+        if (uri?.includes?.("://")) {
+            return this.registerWidget(new iFrameWidget(uri));
+        }
+
+        // If no handler matched, try to invoke a command
+        try {
             let result = InvokableCommands[uri];
-            if(typeof result === 'string'){
+            if (typeof result === 'string') {
                 return this.tryInvokeHandlerForUri(result);
-            }else if(typeof result === 'function'){
-                // if it's a function... return it's result
+            } else if (typeof result === 'function') {
                 return result.call(result);
-            }else{
-                console.warn(`tryInvoke ${uri}`,typeof result, result);
+            } else {
+                console.warn(`tryInvoke ${uri}`, typeof result, result);
             }
-            if(result){
+            if (result) {
                 return result;
             }
-        }catch(e){
-            console.error("error trying string as command ",e);
+        } catch(e) {
+            console.error("error trying string as command ", e);
             throw e;
         }
 
-        return -1000;
+        return UNINVOKABLE;
     }
 }
 const rootSystemManager = new SystemManager();
@@ -3788,6 +3794,9 @@ class VideoPlayerWidget extends Widget {
     constructor(src){
         super(...arguments)
         this.src = src ?? "video_731defd5b618ee03304ad345511f0e54.mp4"
+        if(!this.src?.includes?.('://') && !this.src?.includes?.('/res')){
+            this.src = `/res/${this.src}`
+        }
         this.video = createVideo(this.src);
         this.video.parent(document.body);
         this.widgetSize = {width: 640, height: 480}; // Set the size of the video player
@@ -3795,10 +3804,11 @@ class VideoPlayerWidget extends Widget {
         // autoplay, show controls
         this.video.elt.setAttribute("autoplay", true);
         this.video.elt.setAttribute("controls", true);
+        this.video.elt.setAttribute("loop", true);
     }
     onDraw(){
         // try{
-            super.onDraw(...arguments)
+            //super.onDraw(...arguments)
         // }catch(e){
         //     if(e.type === "DoNotDraw"){
         //         // bail the draw call
@@ -7287,7 +7297,7 @@ class TimeToSunSetWidget extends ClockWidget {
         return `${hours}h ${minutes}m ${seconds}s \nto sunset`
     }
     get timeFormatted(){
-        return 'sunset'
+        return '';//'sunset'
     }
     draw(){
         super.draw(...arguments)
@@ -11688,6 +11698,64 @@ const SO_DO_IT = ()=>{
 }
 // central command definitions
 const InvokableCommands = {
+    
+    ["https://5calls.org/"]: RES,
+    ["5 calls . org"]: "https://5calls.org/",
+    ["five calls"]: "https://5calls.org/",
+    ["5calls"]: "https://5calls.org/",
+    "5calls.org": "https://5calls.org/",
+    ["5 calls"]: "https://5calls.org/",
+    ["Contact My Reps (United States of America)"]: "5 calls",
+
+    ["clear"](){
+        system.dashboard?.recenter?.();
+        system.dashboard?.centerView?.();
+    },
+    ["🚿SHOWER😸"]: INVOKABLE,
+
+    ["Brew a tea! 🍵"](){},
+
+    ["wage an all out war"](){},
+    [
+        "play war, the card game"
+    ](){},
+    ["to read"](){
+        // https://exsto.app/
+        //"Infinity Zoom Art: Find Object by Crazy Labs"
+        // "https://endlesspaper.app/index.html"
+        // "Mental Canvas"
+        // "https://concepts.app/"
+        // "workflowy"
+        // "notion"
+
+        
+    },
+    ["good watches"](){
+        // "Richard Feynman - Ode To A Flower" :"https://www.youtube.com/watch?v=VSG9q_YKZLI"
+    },
+    ["unless"](){},
+    ["contact my representative 🎩"](){},
+    /**
+     * Oh hey, did you look out side?
+     * theres a beautiful sunset that appears to hide
+     * the fact that there's an all out war happening just around the corner
+     * on the other side of the block, our neighbor's been callin to warn us
+     * askin for help, like our neighbor's who never saw a hand lifted by a fema
+     * a female leader might not be so evil
+     * but we'll never know as long as ego-clad, bastards of society
+     * keep running us up the pole like we don't bring variety
+     * like we don't keep the spicy life flaky with cakey tastey treats sold in packages to eat when the food's gone
+     * landfill a palooza, diggin in the junk yard
+     * someone found a welder, now that's gonna be frank's job
+     * the robots ate our homework
+     * kicked our new dog
+     * asimo move over there's a new hog
+     * cash pony on the loan-y baloney loan terms
+     * balooning interest payments until blue moon learns
+     * level up your shit consolidate your debts and move on
+     * they want you curled up like a sucker with no moves, pawn
+     */
+    ["nuclear de-armament"](){},
 
     ["https://www.shadertoy.com/view/mtyGWy"]: RES,
     ["An introduction to Shader Art Coding | kishimisu"]: RES,
@@ -11808,6 +11876,8 @@ const InvokableCommands = {
     ["search for a youtube video"](){
         prompt('search...')
     },
+    ["moon_720p30.mp4"]:RES,
+    ["moon hi res timelapse"]:"moon_720p30.mp4",
     ["new register"](){},
     ["new memory address"](){}, // alloc
     ["new newton's cradle 2D"](){},
@@ -16727,14 +16797,71 @@ function setupDefaults(){
         baseCmds.push(new Config({
             name: `${cmdName}`,
             execute(){
+                // how do we see if base cmd needs to call "tryInvokeHandlerForUri" on cmdName?
                 console.log("base cmd execute: ",{
                     cmdName,
                     machineizedCmdName,
+                    val: InvokableCommands[machineizedCmdName],
+                    argz: arguments
                 })
+
+                const val = InvokableCommands?.[machineizedCmdName]
+                if(val === RES || val === RESOURCE){
+                    // if the KEY reflects a .mp4, we should spawn a video player widget
+                    if(machineizedCmdName?.includes?.('.mp4')){
+                        // if(!cmdName.includes('/res/') && !cmdName.includes('://')){
+                        //     cmdName = '/res/'+cmdName;
+                        // }
+                        return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                    }
+                }
+
+                //console.warn('here is where we need to see if were referencing a key of a different invokable, we need a recursive getBaseInvokable() for a given string lookup keyname');
+                // function getBaseInvokable(key, depth = 0) {
+                //     const MAX_DEPTH = 10;
+                //     if (depth > MAX_DEPTH) {
+                //         throw new Error(`Max lookup depth exceeded for key: ${key}`);
+                //     }
+                //     const value = InvokableCommands[key];
+                //     if (typeof value === 'function') {
+                //         return value;
+                //     } else if (value === RES || value === RESOURCE) {
+                //         return getBaseInvokable(value, depth + 1);
+                //     } else {
+                //         throw new Error(`Invalid value encountered for key: ${key}`);
+                //     }
+                // }
+
+                // if(InvokableCommands[machineizedCmdName]?.includes?.('.mp4')){
+                //     return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                // }
+
+                // const baseInvokable = getBaseInvokable(machineizedCmdName);
+                const baseInvokable = InvokableCommands[machineizedCmdName];
+                
+
                 // if(!InvokableCommands[cmdName]){
                 //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
                 // }
                 let result;
+
+                if(InvokableCommands[machineizedCmdName] === RES || InvokableCommands[machineizedCmdName] === RESOURCE){
+                    if(machineizedCmdName?.includes?.('.mp4')){
+                        console.warn('we found it')
+                        return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                    }
+                }
+
+                console.warn('baseCmd.execute: cmdNameIncludesMP4? getBaseInvokable', {
+                    baseInvokable,
+                    cmdName, 
+                    isMp4:cmdName?.includes?.('.mp4')
+                })
+                if(cmdName?.includes?.('.mp4')){
+                    // video player widget
+                    return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                };
+
 
                 // if the cmdName includes https:// or a file extension,
                 // we should return a new instance of an appropriate widget
@@ -18522,7 +18649,7 @@ const properties = [
     'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'CLOSE', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
     'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
-    'second','rotate',
+    'second','rotate', 'createVideo',
     'textWidth',
     'triangle', 
     'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
