@@ -696,6 +696,8 @@ class SystemManager {
  *   to the appropriate subsystems...
  */
 const RES = -9999, RESOURCE = -9999, INVOKABLE = -9998, UNINVOKABLE = -8888;
+const FILE = -9999;
+
 /** System.constructor(SystemManager manager) */
 class System {
     info(){
@@ -1011,7 +1013,7 @@ class System {
     invoke(name){
         let launched = -2;
         if(typeof InvokableCommands[name] === 'string'){
-            launched = this.invokeHandlerForUri(name);
+            launched = this.tryInvokeHandlerForUri(name);
         }
         if(
             launched === -2
@@ -1200,8 +1202,8 @@ class System {
             }
             return system.registerWidget(new MySoundCloudClass())
         },
-        'youtube.com/': uri => handleYoutube(uri),
-        'youtu.be': uri => handleYoutube(uri),
+        'youtube.com/': uri => this.handleYoutube(uri),
+        'youtu.be': uri => this.handleYoutube(uri),
         // '://': uri => system.registerWidget(new iFrameWidget(uri))
     }
 
@@ -1230,7 +1232,7 @@ class System {
 
         // Check if the URL matches any of the handlers
         for (let keyword in this.urlHandlers) {
-            if (checkUrl(uri, keyword)) {
+            if (this.checkUrl(uri, keyword)) {
                 return this.urlHandlers[keyword](uri);
             }
         }
@@ -3827,13 +3829,14 @@ class VideoPlayerWidget extends Widget {
 
         // this video player position
         // this player.position
-        this.video.position(
-            this.smartPosition.x, 
-            this.smartPosition.y
-        );
+        // this.video.position(
+        //     this.smartPosition.x, 
+        //     this.smartPosition.y
+        // );
         // Apply the size to the video
-        this.video.size(this.widgetSize.width * zoom, this.widgetSize.height * zoom); 
-        this.video.elt.style.transform = `scale(${zoom})`;
+        //this.video.size(this.widgetSize.width * zoom, this.widgetSize.height * zoom); 
+        //this.video.elt.style.transform = `scale(${zoom})`;
+        this.video.elt.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
     }
 }
 
@@ -11698,6 +11701,20 @@ const SO_DO_IT = ()=>{
 }
 // central command definitions
 const InvokableCommands = {
+    "Test Driven Development"(){
+        system.invoke("https://en.wikipedia.org/wiki/List_of_unit_testing_frameworks")
+    },
+    "🧺 LAUNDRYspacetime⏰⌛"(){
+        system.invoke("new timer")
+    },
+    "Test Anything Protocol"(){
+        system.invoke("https://en.wikipedia.org/wiki/Test_Anything_Protocol");
+    },
+    "Extreme Programming"(){
+        system.invoke('Extreme_Programming.svg')
+        system.invoke("https://en.wikiquote.org/wiki/Extreme_programming")
+    },
+    "Extreme_Programming.svg": FILE, // same as RES or RESOURCE
     
     ["https://5calls.org/"]: RES,
     ["5 calls . org"]: "https://5calls.org/",
@@ -11878,6 +11895,8 @@ const InvokableCommands = {
     },
     ["moon_720p30.mp4"]:RES,
     ["moon hi res timelapse"]:"moon_720p30.mp4",
+    "moon timelapse": "moon hi res timelapse",
+    ["moon"]: "moon timelapse",
     ["new register"](){},
     ["new memory address"](){}, // alloc
     ["new newton's cradle 2D"](){},
@@ -12468,6 +12487,10 @@ const InvokableCommands = {
     ["always sunny charlie day conspiracy reaction gif"](){
         return "always-sunny-charlie-day-conspiracy.webp"
     },
+    ["huygens optics"]:"https://www.youtube.com/user/huygensoptics",
+    ["https://www.youtube.com/user/huygensoptics"]:RES,
+    "https://www.youtube.com/watch?v=7ctORopHfjQ":RES,
+    "PROF - High Priced Shoes (Official Music Video)":"https://www.youtube.com/watch?v=7ctORopHfjQ",
     ["Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]"](){
         // // offer up the lyrics on rap genius
         // // https://genius.com/Aesop-rock-kyanite-toothpick-lyrics => <div id='rg_embed_link_9519850' class='rg_embed_link' data-song-id='9519850'>Read <a href='https://genius.com/Aesop-rock-kyanite-toothpick-lyrics'>“Kyanite Toothpick” by Aesop Rock</a> on Genius</div> <script crossorigin src='//genius.com/songs/9519850/embed.js'></script>
@@ -12475,16 +12498,15 @@ const InvokableCommands = {
         //     "https://genius.com/Aesop-rock-kyanite-toothpick-lyrics"
         // ))
 
-        system.registerWidget(new ImageViewerWidget("kyanite-definition.png"))
-        system.registerWidget(new ImageViewerWidget("kyanite.jpg"))
+        // system.invoke("kyanite-definition.png")
+        // system.invoke("kyanite.jpg")
+        // system.invoke("https://en.wikipedia.org/wiki/Kyanite")
 
-        system.registerWidget(new iFrameWidget("https://en.wikipedia.org/wiki/Kyanite"))
-
-        // render the lyrics in a text viewer
-        // TODO: make the song appear when lyrics are recognized?
-        system.registerWidget(new TextViewerWidget(
-            "Hello! I'm a text viewer widget! I can render text, markdown, and html!",
-        ))
+        // // render the lyrics in a text viewer
+        // // TODO: make the song appear when lyrics are recognized?
+        // system.registerWidget(new TextViewerWidget(
+        //     "Hello! I'm a text viewer widget! I can render text, markdown, and html! <h1>Neat!</h1>",
+        // ))
 
         // Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]
         // Rhymesayers Entertainment
@@ -17644,7 +17666,9 @@ void main(void) {
 
         //system.todo("log time til framerate stable (boot seq time)")
 
-        system.invoke("new moon phase widget")
+        //system.invoke("new moon phase widget")
+        system.invoke("kyanite");
+        system.invoke("moon");
 
         /*
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
