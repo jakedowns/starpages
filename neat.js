@@ -12,11 +12,6 @@
     ---
 */
 
-const UNINVOKABLE = -8888;
-const INVOKABLE = -9999;
-const RESOURCE = -9999;
-const RES = -9999;
-
 const testOpenAIServer = "http://127.0.0.1:4001/";
 
 const changelog = [
@@ -12494,8 +12489,6 @@ const InvokableCommands = {
     },
     ["huygens optics"]:"https://www.youtube.com/user/huygensoptics",
     ["https://www.youtube.com/user/huygensoptics"]:RES,
-    "https://www.youtube.com/watch?v=7ctORopHfjQ":RES,
-    "PROF - High Priced Shoes (Official Music Video)":"https://www.youtube.com/watch?v=7ctORopHfjQ",
     ["Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]"](){
         // // offer up the lyrics on rap genius
         // // https://genius.com/Aesop-rock-kyanite-toothpick-lyrics => <div id='rg_embed_link_9519850' class='rg_embed_link' data-song-id='9519850'>Read <a href='https://genius.com/Aesop-rock-kyanite-toothpick-lyrics'>“Kyanite Toothpick” by Aesop Rock</a> on Genius</div> <script crossorigin src='//genius.com/songs/9519850/embed.js'></script>
@@ -16879,7 +16872,7 @@ function setupDefaults(){
                     }
                 }
 
-                console.warn('baseCmd.execute: cmdNameIncludesMP4? getBaseInvokable', {
+                console.warn('baseCmd.execute: executing... cmdNameIncludesMP4? getBaseInvokable', {
                     baseInvokable,
                     cmdName, 
                     isMp4:cmdName?.includes?.('.mp4')
@@ -16888,6 +16881,13 @@ function setupDefaults(){
                     // video player widget
                     return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
                 };
+
+                if(baseInvokable?.includes?.('youtube.') || baseInvokable?.includes?.('youtu.be')){
+                    return system.registerWidgetInstance(new YoutubePlayerWidget({tracks:[baseInvokable]}));
+                }else if(baseInvokable?.includes?.('://')){
+                    // try an iframe
+                    return system.registerWidgetInstance(new iFrameWidget(baseInvokable));
+                }
 
 
                 // if the cmdName includes https:// or a file extension,
