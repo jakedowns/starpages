@@ -700,6 +700,9 @@ class SystemManager {
  *   then watch them ripple from yellow back to green as the system autonomously accepts and distributes the verified changes
  *   to the appropriate subsystems...
  */
+const RES = -9999, RESOURCE = -9999, INVOKABLE = -9998, UNINVOKABLE = -8888;
+const FILE = -9999;
+
 /** System.constructor(SystemManager manager) */
 class System {
     info(){
@@ -1015,7 +1018,7 @@ class System {
     invoke(name){
         let launched = -2;
         if(typeof InvokableCommands[name] === 'string'){
-            launched = this.invokeHandlerForUri(name);
+            launched = this.tryInvokeHandlerForUri(name);
         }
         if(
             launched === -2
@@ -1190,73 +1193,79 @@ class System {
     registerWidget(){
         return this.registerWidgetInstance(...arguments)
     }
-    tryInvokeHandlerForUri(uri){
-        console.warn('tryInvokeHandlerForUri',{uri})
-        if(uri === RES || uri === RESOURCE || uri === INVOKABLE){
-            // invoke the KEY name InvokableCommands[]
-            console.warn("url RES,RESOURCE,INVOKABLE",arguments);
-            //return tryInvokeHandlerForUri(url);
-        }
-        if(
-            uri?.includes?.(".png")
-            || uri?.includes?.(".jpg")
-            || uri?.includes?.(".gif")
-            || uri?.includes?.(".jpeg")
-            || uri?.includes?.(".webp")
-        ) {
-            // it's an image!
-            return system.registerWidget(new ImageViewerWidget(uri))
-        }
     
-        else if(
-            uri?.includes?.("soundcloud.com")
-        ) {
-            // if it's a soundcloud url, return a new soundcloud widget instance instead
+    // Helper function to check if a URL contains a certain keyword
+    checkUrl(uri, keyword) {
+        return uri?.includes?.(keyword);
+    }
+
+    // Handlers for different types of URLs
+    urlHandlers = {
+        'soundcloud.com': uri => {
             const MySoundCloudClass = class extends SoundCloudWidget {
                 url = uri
-            } 
-            return system.registerWidget(new MySoundCloudClass())
-        }
-        else if(
-            uri?.includes?.("youtube.com/")
-            || uri?.includes?.("youtu.be")
-        ){
-            let updatedUrl = uri;
-            try {
-                let url = new URL(updatedUrl);
-                // url.searchParams.set('autoplay', '1');
-                updatedUrl = url.toString();
-            } catch (error) {
-                console.error('Invalid URL:', updatedUrl);
             }
-            // it's a youtube url!
-            return system.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
+            return system.registerWidget(new MySoundCloudClass())
+        },
+        'youtube.com/': uri => this.handleYoutube(uri),
+        'youtu.be': uri => this.handleYoutube(uri),
+        // '://': uri => system.registerWidget(new iFrameWidget(uri))
+    }
+
+    bindImgHandlers(){
+        // Add image handlers in a loop to reduce redundancy
+        ['.png', '.jpg', '.gif', '.jpeg', '.webp'].forEach(ext => {
+            urlHandlers[ext] = uri => system.registerWidget(new ImageViewerWidget(uri));
+        });
+    }
+
+    // Handler for YouTube URLs
+    handleYoutube(uri) {
+        let updatedUrl = uri;
+        try {
+            let url = new URL(updatedUrl);
+            updatedUrl = url.toString();
+        } catch (error) {
+            console.error('Invalid URL:', updatedUrl);
         }
-        else if(uri?.includes?.("://")){
-            // it's an iframe, chuck!
-            return system.registerWidget(new iFrameWidget(uri))
+        return system.registerWidget(new YoutubePlayerWidget("", {tracks: [updatedUrl]}));
+    }
+
+    // Refactored tryInvokeHandlerForUri function
+    tryInvokeHandlerForUri(uri) {
+        console.warn('tryInvokeHandlerForUri', {uri});
+
+        // Check if the URL matches any of the handlers
+        for (let keyword in this.urlHandlers) {
+            if (this.checkUrl(uri, keyword)) {
+                return this.urlHandlers[keyword](uri);
+            }
         }
 
-        try{
-            // see if it's an invokeable command!
+        // If none of the above, check if it's a generic URL and handle it as an iframe
+        if (uri?.includes?.("://")) {
+            return this.registerWidget(new iFrameWidget(uri));
+        }
+
+        // If no handler matched, try to invoke a command
+        try {
             let result = InvokableCommands[uri];
-            if(typeof result === 'string'){
+            if (typeof result === 'string') {
                 return this.tryInvokeHandlerForUri(result);
-            }else if(typeof result === 'function'){
-                // if it's a function... return it's result
+            } else if (typeof result === 'function') {
                 return result.call(result);
-            }else{
-                console.warn(`tryInvoke ${uri}`,typeof result, result);
+            } else {
+                console.warn(`tryInvoke ${uri}`, typeof result, result);
             }
-            if(result){
+            if (result) {
                 return result;
             }
-        }catch(e){
-            console.error("error trying string as command ",e);
+        } catch(e) {
+            console.error("error trying string as command ", e);
             throw e;
         }
 
-        return -1000;
+        return UNINVOKABLE;
     }
 }
 const rootSystemManager = new SystemManager();
@@ -2584,12 +2593,25 @@ class Widget extends UndoRedoComponent {
         return this?.widgetSize ?? {width:100,height:100};
     }
 
+    _halfWidthCache = null;
+    _halfHeightCache = null;
+    _widthCache = null;
+    _heightCache = null;
+
     get halfWidth(){
-        return this.size.width / 2;
+        if (this._widthCache !== this.size.width || this._halfWidthCache === null) {
+            this._halfWidthCache = this.size.width / 2;
+            this._widthCache = this.size.width;
+        }
+        return this._halfWidthCache;
     }
 
     get halfHeight(){
-        return this.size.height / 2;
+        if (this._heightCache !== this.size.height || this._halfHeightCache === null) {
+            this._halfHeightCache = this.size.height / 2;
+            this._heightCache = this.size.height;
+        }
+        return this._halfHeightCache;
     }
 
     // TODO: enable debug rendering of widget bounding boxes
@@ -3216,6 +3238,18 @@ class Widget extends UndoRedoComponent {
     }
 }
 
+const watchHistory = [
+    "AI: Grappling with a New Kind of Intelligence World Science Festival",
+
+]
+const toWatch = [
+    "AI: Grappling with a New Kind of Intelligence World Science Festival",
+]
+
+const bookmarkBin = [
+    "http://localhost:8888/notebooks/HelloWorldStickfigure.ipynb"
+]
+
 // link dump
 let LinkDump = [
 
@@ -3767,6 +3801,9 @@ class VideoPlayerWidget extends Widget {
     constructor(src){
         super(...arguments)
         this.src = src ?? "video_731defd5b618ee03304ad345511f0e54.mp4"
+        if(!this.src?.includes?.('://') && !this.src?.includes?.('/res')){
+            this.src = `/res/${this.src}`
+        }
         this.video = createVideo(this.src);
         this.video.parent(document.body);
         this.widgetSize = {width: 640, height: 480}; // Set the size of the video player
@@ -3774,10 +3811,11 @@ class VideoPlayerWidget extends Widget {
         // autoplay, show controls
         this.video.elt.setAttribute("autoplay", true);
         this.video.elt.setAttribute("controls", true);
+        this.video.elt.setAttribute("loop", true);
     }
     onDraw(){
         // try{
-            super.onDraw(...arguments)
+            //super.onDraw(...arguments)
         // }catch(e){
         //     if(e.type === "DoNotDraw"){
         //         // bail the draw call
@@ -3796,13 +3834,14 @@ class VideoPlayerWidget extends Widget {
 
         // this video player position
         // this player.position
-        this.video.position(
-            this.smartPosition.x, 
-            this.smartPosition.y
-        );
+        // this.video.position(
+        //     this.smartPosition.x, 
+        //     this.smartPosition.y
+        // );
         // Apply the size to the video
-        this.video.size(this.widgetSize.width * zoom, this.widgetSize.height * zoom); 
-        this.video.elt.style.transform = `scale(${zoom})`;
+        //this.video.size(this.widgetSize.width * zoom, this.widgetSize.height * zoom); 
+        //this.video.elt.style.transform = `scale(${zoom})`;
+        this.video.elt.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
     }
 }
 
@@ -5341,8 +5380,8 @@ class ImageViewerWidget extends Widget {
             // Calculate new width and height while maintaining aspect ratio
             this.newWidth = this.widgetSize.width;
             this.newHeight = this.newWidth / aspectRatio;
-            this.halfWidth = this.newWidth * .5;
-            this.halfHeight = this.newHeight * .5;
+            // this.halfWidth = this.newWidth * .5;
+            // this.halfHeight = this.newHeight * .5;
             // If new height is greater than widget height, adjust width instead
             if (this.newHeight > this.widgetSize.height) {
                 this.newHeight = this.widgetSize.height;
@@ -6144,6 +6183,14 @@ class iFrameWidget extends Widget {
         }
     }
     createIFrame(){
+        // console.warn remember for youtube, the url is in this.tracks[i]
+        console.warn('createIFrame',{
+            constructorName: this.constructor.name,
+            _this: this,
+            url: this.url,
+            tracks: this?.tracks
+        })
+
         const style = {
             'border-radius': '20px',
             'border': '3px solid red',
@@ -6207,7 +6254,7 @@ class iFrameWidget extends Widget {
         //     opts = pxWidthOrOptsOrNull;
         // }
 
-        console.warn('iframe',{
+        console.warn('iframe constructor',{
             url,
             two: arguments[1],
             three: arguments[2],
@@ -6217,9 +6264,11 @@ class iFrameWidget extends Widget {
 
             if(arguments[0]?.widgetSize){
                 this.widgetSize = arguments[0].widgetSize;
+                this.options = arguments[0];
             }
             else if(arguments[1]?.widgetSize){
                 this.widgetSize = arguments[1].widgetSize;
+                this.options = arguments[1];
             }else if(pxHeightOrNull){
                 this.widgetSize = {
                     width: pxWidthOrOptsOrNull,
@@ -6227,12 +6276,26 @@ class iFrameWidget extends Widget {
                 }
             }
 
-        let urlAsUrl = new URL(this.url);
-        if(urlAsUrl.searchParams.has("w") || urlAsUrl.searchParams.has("width")){
-            this.widgetSize.width = urlAsUrl.searchParams.get("w") || urlAsUrl.searchParams.get("width");
-        }
-        if(urlAsUrl.searchParams.has("h") || urlAsUrl.searchParams.has("height")){
-            this.widgetSize.height = urlAsUrl.searchParams.get("h") || urlAsUrl.searchParams.get("height");
+            if(arguments[1]?.tracks){
+                this.options = arguments[1];
+            }else if(arguments[2]?.tracks){
+                this.options = arguments[2];
+            }
+
+            let _url = this?.options?.tracks?.[0] ?? this.url;
+
+            console.warn('checking for w/h in url',{_url})
+
+        try{
+            let urlAsUrl = new URL(_url);
+            if(urlAsUrl.searchParams.has("w") || urlAsUrl.searchParams.has("width")){
+                this.widgetSize.width = urlAsUrl.searchParams.get("w") || urlAsUrl.searchParams.get("width");
+            }
+            if(urlAsUrl.searchParams.has("h") || urlAsUrl.searchParams.has("height")){
+                this.widgetSize.height = urlAsUrl.searchParams.get("h") || urlAsUrl.searchParams.get("height");
+            }
+        }catch(e){
+            console.error(e)
         }
 
         this.createIFrame()
@@ -6437,8 +6500,7 @@ class iFrameWidget extends Widget {
     extends="iFrame" />
 
 <YoutubePlayerWidget
-    track0="https://www.youtube.com/embed/5qap5aO4i9A"
-    track1="https://www.youtube.com/embed/5qap5aO4i9A"
+    tracks="['https://www.youtube.com/embed/5qap5aO4i9A']"
     />
 
 */
@@ -6459,47 +6521,52 @@ extends iFrameWidget {
         if(this.options.widgetSize){
             this.widgetSize = this.options.widgetSize;
         }
-        this.setTrackList(this.getTrackList());
-        this.updateUrl(this.getFirstTrack());
+        //this.setTrackList(this.getTrackList());
+        this.updateUrl(this.iframeSafeUrl(this.getFirstTrack()));
     }
     get tracks(){
-        // valid cache hit
-        if(this._tracks && !this.tracksChanged){
-            return this._tracks;
-        }
-        // cache miss
-        this.setTrackList(
-            this.getTrackList()
-        );
-        return this._tracks;
+        return this.options?.tracks ?? [];
+        // // valid cache hit
+        // if(this._tracks && !this.tracksChanged){
+        //     return this._tracks;
+        // }
+        // // cache miss
+        // this.setTrackList(
+        //     this.getTrackList()
+        // );
+        // return this._tracks;
     }
-    setTrackList(tracks){
-        // should we override value in options?
-        if(!tracks || !tracks.length){
-            system.panic("we don't support empty tracks here")
-        }
-        this.tracksChanged = true;
-        // get tracks will pull from here and cache
-        this.options.tracks = tracks.map(this.iframeSafeUrl);
-        // unset any track0..trackN on options that may be lingering
-        let i = 0;
-        while(this.options[`track${i}`]){
-            delete this.options[`track${i}`];
-            i++;
-        }
-        // update cache
-        this._tracks = this.options.tracks;
-    }
+    // setTrackList(tracks){
+    //     // should we override value in options?
+    //     if(!tracks || !tracks.length){
+    //         //system.panic("we don't support empty tracks here")
+    //         tracks = [this.iframeSafeUrl(this.url)];
+    //     }
+    //     this.tracksChanged = true;
+
+    //     this.options.tracks = [];
+    //     // get tracks will pull from here and cache
+    //     this.options.tracks = tracks.map(this.iframeSafeUrl);
+    //     // // unset any tracks[0]..tracks[N] on options that may be lingering
+    //     // let i = 0;
+    //     // while(this.options.tracks){
+    //     //     delete this.options.tracks[i];
+    //     //     i++;
+    //     // }
+    //     // update cache
+    //     this._tracks = this.options.tracks;
+    // }
     // pluck from options
-    getTrackList(){
-        let tracks = [];
-        let i = 0;
-        while(this.options[`track${i}`]){
-            tracks.push(this.options[`track${i}`]);
-            i++;
-        }
-        return [...tracks, ...this.options?.tracks ?? []];
-    }
+    // getTrackList(){
+    //     // let tracks = [];
+    //     // let i = 0;
+    //     // while(this.options[`track${i}`]){
+    //     //     tracks.push(this.options[`track${i}`]);
+    //     //     i++;
+    //     // }
+    //     // ...tracks, 
+    //     return [...(this.options?.tracks ?? [])];
+    // }
     getUnplayedTracks(){
         return this.tracks.filter(track => !this.playedTracks.includes(track));
     }
@@ -7238,7 +7305,7 @@ class TimeToSunSetWidget extends ClockWidget {
         return `${hours}h ${minutes}m ${seconds}s \nto sunset`
     }
     get timeFormatted(){
-        return 'sunset'
+        return '';//'sunset'
     }
     draw(){
         super.draw(...arguments)
@@ -11639,6 +11706,81 @@ const SO_DO_IT = ()=>{
 }
 // central command definitions
 const InvokableCommands = {
+    "Test Driven Development"(){
+        system.invoke("https://en.wikipedia.org/wiki/List_of_unit_testing_frameworks")
+    },
+    "🧺 LAUNDRYspacetime⏰⌛"(){
+        system.invoke("new timer")
+    },
+    "Test Anything Protocol"(){
+        system.invoke("https://en.wikipedia.org/wiki/Test_Anything_Protocol");
+    },
+    "Extreme Programming"(){
+        system.invoke('Extreme_Programming.svg')
+        system.invoke("https://en.wikiquote.org/wiki/Extreme_programming")
+    },
+    "Extreme_Programming.svg": FILE, // same as RES or RESOURCE
+    
+    ["https://5calls.org/"]: RES,
+    ["5 calls . org"]: "https://5calls.org/",
+    ["five calls"]: "https://5calls.org/",
+    ["5calls"]: "https://5calls.org/",
+    "5calls.org": "https://5calls.org/",
+    ["5 calls"]: "https://5calls.org/",
+    ["Contact My Reps (United States of America)"]: "5 calls",
+
+    ["clear"](){
+        system.dashboard?.recenter?.();
+        system.dashboard?.centerView?.();
+    },
+    ["🚿SHOWER😸"]: INVOKABLE,
+
+    ["Brew a tea! 🍵"](){},
+
+    ["wage an all out war"](){},
+    [
+        "play war, the card game"
+    ](){},
+    ["to read"](){
+        // https://exsto.app/
+        //"Infinity Zoom Art: Find Object by Crazy Labs"
+        // "https://endlesspaper.app/index.html"
+        // "Mental Canvas"
+        // "https://concepts.app/"
+        // "workflowy"
+        // "notion"
+
+        
+    },
+    ["good watches"](){
+        // "Richard Feynman - Ode To A Flower" :"https://www.youtube.com/watch?v=VSG9q_YKZLI"
+    },
+    ["unless"](){},
+    ["contact my representative 🎩"](){},
+    /**
+     * Oh hey, did you look out side?
+     * theres a beautiful sunset that appears to hide
+     * the fact that there's an all out war happening just around the corner
+     * on the other side of the block, our neighbor's been callin to warn us
+     * askin for help, like our neighbor's who never saw a hand lifted by a fema
+     * a female leader might not be so evil
+     * but we'll never know as long as ego-clad, bastards of society
+     * keep running us up the pole like we don't bring variety
+     * like we don't keep the spicy life flaky with cakey tastey treats sold in packages to eat when the food's gone
+     * landfill a palooza, diggin in the junk yard
+     * someone found a welder, now that's gonna be frank's job
+     * the robots ate our homework
+     * kicked our new dog
+     * asimo move over there's a new hog
+     * cash pony on the loan-y baloney loan terms
+     * balooning interest payments until blue moon learns
+     * level up your shit consolidate your debts and move on
+     * they want you curled up like a sucker with no moves, pawn
+     */
+    ["nuclear de-armament"](){},
+
+    ["https://www.shadertoy.com/view/mtyGWy"]: RES,
+    ["An introduction to Shader Art Coding | kishimisu"]: RES,
 
     ["time-cost-quality.png"]: RES,
 
@@ -11756,6 +11898,10 @@ const InvokableCommands = {
     ["search for a youtube video"](){
         prompt('search...')
     },
+    ["moon_720p30.mp4"]:RES,
+    ["moon hi res timelapse"]:"moon_720p30.mp4",
+    "moon timelapse": "moon hi res timelapse",
+    ["moon"]: "moon timelapse",
     ["new register"](){},
     ["new memory address"](){}, // alloc
     ["new newton's cradle 2D"](){},
@@ -12346,6 +12492,10 @@ const InvokableCommands = {
     ["always sunny charlie day conspiracy reaction gif"](){
         return "always-sunny-charlie-day-conspiracy.webp"
     },
+    ["huygens optics"]:"https://www.youtube.com/user/huygensoptics",
+    ["https://www.youtube.com/user/huygensoptics"]:RES,
+    "https://www.youtube.com/watch?v=7ctORopHfjQ":RES,
+    "PROF - High Priced Shoes (Official Music Video)":"https://www.youtube.com/watch?v=7ctORopHfjQ",
     ["Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]"](){
         // // offer up the lyrics on rap genius
         // // https://genius.com/Aesop-rock-kyanite-toothpick-lyrics => <div id='rg_embed_link_9519850' class='rg_embed_link' data-song-id='9519850'>Read <a href='https://genius.com/Aesop-rock-kyanite-toothpick-lyrics'>“Kyanite Toothpick” by Aesop Rock</a> on Genius</div> <script crossorigin src='//genius.com/songs/9519850/embed.js'></script>
@@ -12353,16 +12503,15 @@ const InvokableCommands = {
         //     "https://genius.com/Aesop-rock-kyanite-toothpick-lyrics"
         // ))
 
-        system.registerWidget(new ImageViewerWidget("kyanite-definition.png"))
-        system.registerWidget(new ImageViewerWidget("kyanite.jpg"))
+        // system.invoke("kyanite-definition.png")
+        // system.invoke("kyanite.jpg")
+        // system.invoke("https://en.wikipedia.org/wiki/Kyanite")
 
-        system.registerWidget(new iFrameWidget("https://en.wikipedia.org/wiki/Kyanite"))
-
-        // render the lyrics in a text viewer
-        // TODO: make the song appear when lyrics are recognized?
-        system.registerWidget(new TextViewerWidget(
-            "Hello! I'm a text viewer widget! I can render text, markdown, and html!",
-        ))
+        // // render the lyrics in a text viewer
+        // // TODO: make the song appear when lyrics are recognized?
+        // system.registerWidget(new TextViewerWidget(
+        //     "Hello! I'm a text viewer widget! I can render text, markdown, and html! <h1>Neat!</h1>",
+        // ))
 
         // Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]
         // Rhymesayers Entertainment
@@ -16675,14 +16824,71 @@ function setupDefaults(){
         baseCmds.push(new Config({
             name: `${cmdName}`,
             execute(){
+                // how do we see if base cmd needs to call "tryInvokeHandlerForUri" on cmdName?
                 console.log("base cmd execute: ",{
                     cmdName,
                     machineizedCmdName,
+                    val: InvokableCommands[machineizedCmdName],
+                    argz: arguments
                 })
+
+                const val = InvokableCommands?.[machineizedCmdName]
+                if(val === RES || val === RESOURCE){
+                    // if the KEY reflects a .mp4, we should spawn a video player widget
+                    if(machineizedCmdName?.includes?.('.mp4')){
+                        // if(!cmdName.includes('/res/') && !cmdName.includes('://')){
+                        //     cmdName = '/res/'+cmdName;
+                        // }
+                        return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                    }
+                }
+
+                //console.warn('here is where we need to see if were referencing a key of a different invokable, we need a recursive getBaseInvokable() for a given string lookup keyname');
+                // function getBaseInvokable(key, depth = 0) {
+                //     const MAX_DEPTH = 10;
+                //     if (depth > MAX_DEPTH) {
+                //         throw new Error(`Max lookup depth exceeded for key: ${key}`);
+                //     }
+                //     const value = InvokableCommands[key];
+                //     if (typeof value === 'function') {
+                //         return value;
+                //     } else if (value === RES || value === RESOURCE) {
+                //         return getBaseInvokable(value, depth + 1);
+                //     } else {
+                //         throw new Error(`Invalid value encountered for key: ${key}`);
+                //     }
+                // }
+
+                // if(InvokableCommands[machineizedCmdName]?.includes?.('.mp4')){
+                //     return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                // }
+
+                // const baseInvokable = getBaseInvokable(machineizedCmdName);
+                const baseInvokable = InvokableCommands[machineizedCmdName];
+                
+
                 // if(!InvokableCommands[cmdName]){
                 //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
                 // }
                 let result;
+
+                if(InvokableCommands[machineizedCmdName] === RES || InvokableCommands[machineizedCmdName] === RESOURCE){
+                    if(machineizedCmdName?.includes?.('.mp4')){
+                        console.warn('we found it')
+                        return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                    }
+                }
+
+                console.warn('baseCmd.execute: cmdNameIncludesMP4? getBaseInvokable', {
+                    baseInvokable,
+                    cmdName, 
+                    isMp4:cmdName?.includes?.('.mp4')
+                })
+                if(cmdName?.includes?.('.mp4')){
+                    // video player widget
+                    return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                };
+
 
                 // if the cmdName includes https:// or a file extension,
                 // we should return a new instance of an appropriate widget
@@ -17465,7 +17671,9 @@ void main(void) {
 
         //system.todo("log time til framerate stable (boot seq time)")
 
-        system.invoke("new moon phase widget")
+        //system.invoke("new moon phase widget")
+        system.invoke("kyanite");
+        system.invoke("moon");
 
         /*
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
@@ -18470,7 +18678,7 @@ const properties = [
     'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'CLOSE', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
     'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
-    'second','rotate',
+    'second','rotate', 'createVideo',
     'textWidth',
     'triangle', 
     'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
