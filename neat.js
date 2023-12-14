@@ -16,6 +16,16 @@ const testOpenAIServer = "http://127.0.0.1:4001/";
 
 const changelog = [
     [
+        "12.7.23",
+`- working on refactoring / cleanup to widget rendering system
+- upstream calls down to .draw, Widget super class calls .onDraw, pre-translated and scaled into the widget's local drawing coordinate space
+- downstream does not need to call super.onDraw(...) [i need to clean those up]
+- once BVH culling is working, the .onDraw method for out of bounds widgets will not be called
+- if a widget needs to update when it is not being drawn, it should use the onTick() method
+        
+`
+    ]
+    [
         "12.4.2023",
 `
         - 
@@ -685,8 +695,57 @@ class SystemManager {
  *   then watch them ripple from yellow back to green as the system autonomously accepts and distributes the verified changes
  *   to the appropriate subsystems...
  */
+const RES = -9999, RESOURCE = -9999, INVOKABLE = -9998, UNINVOKABLE = -8888;
+const FILE = -9999;
+
 /** System.constructor(SystemManager manager) */
 class System {
+    info(){
+        console.warn(...arguments)
+        //system.todo(...arguments)
+    }
+    playSuccessTone(){
+        try{
+            // Play a sound using p5.js
+            let sound = new p5.Oscillator();
+            sound.setType('sine');
+            sound.start();
+            sound.amp(0.5, 0.05);
+            let duration = 500;
+            let d2 = 100;
+            for(let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    sound.freq(200 + (i * 100)); // Increase the pitch with each beep
+                    sound.start();
+                    sound.amp(0.5, 0.05);
+                }, d2 * i); // Make the beeps quicker
+                setTimeout(() => sound.stop(), duration + (d2 * i)); // Make the beeps quicker
+            }
+        }catch(e){
+            console.error('error playing sound',e)
+        }
+    }
+    playErrorTone(){
+        try{
+            // Play a sound using p5.js
+            let sound = new p5.Oscillator();
+            sound.setType('sine');
+            sound.start();
+            sound.amp(0.5, 0.05);
+            let duration = 500;
+            let d2 = 100;
+            for(let i = 2; i >= 0; i--) { // Iterate from high to low
+                setTimeout(() => {
+                    sound.freq(200 + (i * 100)); // Decrease the pitch with each beep
+                    sound.start();
+                    sound.amp(0.5, 0.05);
+                }, d2 * (2 - i)); // Make the beeps quicker
+                setTimeout(() => sound.stop(), duration + (d2 * (2 - i))); // Make the beeps quicker
+            }
+        }catch(e){
+            console.error('error playing sound',e)
+        }
+    }
     fallbackImage = null;
     // aka .resource(url) // return from cache or fetch,stash and return
     // aka maybeImage or imageOrNull or imageOrDefault (while loading...)
@@ -699,7 +758,11 @@ class System {
         // we could call it imageAsyncDebounced || imageAsyncThrottled
         if(!this.PreloadedImages[url]){
             // AHHH we fired and forgot some async code, it's the end of teh world!
-            this.imageAsync(url);
+            this.imageAsync(url).catch((e)=>{
+                console.warn("error loading",e)
+                this.PreloadedImages[url] = system.fallbackImage;
+            });
+            
             return system.fallbackImage;
         }
         return this.PreloadedImages[url]
@@ -732,20 +795,24 @@ class System {
             }
             //console.warn('about to load',{url})
             if(!(url?.trim?.() ?? "")?.length){
-                reject(system.fallbackImage);
+                resolve(system.fallbackImage);
                 system.panic("System.imageAsync: no url provided");
                 return;
             }
+            /*
             try{
+                //reject(system.fallbackImage);
+                // return system.fallbackImage;
                 loadImage(urlLoadable, (img) => {
                     system.PreloadedImages[url] = img;
                     resolve(img);
                 });
             }catch(e){
-                //throw new Error(e);
-                reject(system.fallbackImage);
+                throw new Error(e);
+                //reject(system.fallbackImage);
                 system.panic(e)
             }
+            */
         })
     }
     snapshotOf(obj){
@@ -754,8 +821,35 @@ class System {
     onCopy(e){
         system.todo("pick up where i left of with Copy integration")
     }
-    onPaste(e){
+    onCut(e){
+        system.todo("pick up where i left of with Cut integration")
+    }
+    async onPaste(e){
         system.todo("pick up where i left of with Paste integration")
+        
+        //async onPaste(e){
+            
+            
+            // Request permission to access clipboard
+            const permissionStatus = await navigator.permissions.query({name: "clipboard-read"});
+            
+            // If permission is granted, invoke the pasted data
+            if(permissionStatus.state == "granted" || permissionStatus.state == "prompt") {
+                const clipboardData = e.clipboardData || window.clipboardData;
+                const pastedData = clipboardData?.getData?.('text');
+                console.warn({
+                    clipboardData,
+                    pastedData
+                })
+                if (pastedData?.startsWith?.('data:image')) {
+                    system.invoke(pastedData);
+                } else {
+                    system.todo("pick up where i left of with Paste integration")
+                }
+            }else{
+                system.warn("Clipboard access denied");
+            }
+        //}
     }
     async onDrop(e){
         console.warn('system.onDrop',e)
@@ -808,8 +902,8 @@ class System {
             if (typeof widget_class === 'string') {
                 // Try to invoke it as a URI
                 let result = tryInvokeHandlerForUri(widget_class);
-                // If it returns -1, it wasn't invokable
-                if (result === -1) {
+                // check if it was invokable
+                if (result === UNINVOKABLE) {
                     throw new Error("Unable to invoke URI: " + widget_class);
                 }
                 return result;
@@ -856,8 +950,16 @@ class System {
             }
         });
     }
-    playSound(name){
+    playSound(name, loop=false){
         switch(name){
+            case "grandfather_clock":
+                system.grandfatherClockAudioPlayer.loop();
+                // system.grandfatherClockAudioPlayer.play();
+                break;
+            case "widget_opened":
+                //system.widgetOpenAudioPlayer.play();
+                system.todo("widget open sound");
+                break;
             case "widget_closed":
                 // let duration = 0.5; // Set the duration for the sound
                 // let osc = new p5.Oscillator();
@@ -881,7 +983,7 @@ class System {
                 system.plopAudioPlayer.play();
             break;
             default:
-                system.panic("unknown sound?! 👀")
+                system.panic("unknown sound?! 👀", arguments)
             break;
         }
     }
@@ -911,7 +1013,7 @@ class System {
     invoke(name){
         let launched = -2;
         if(typeof InvokableCommands[name] === 'string'){
-            launched = this.invokeHandlerForUri(name);
+            launched = this.tryInvokeHandlerForUri(name);
         }
         if(
             launched === -2
@@ -920,6 +1022,9 @@ class System {
             // system.panic("System.invoke: no handler found for uri: " + name);
         }else{
             return launched;
+        }
+        if(typeof InvokableCommands[name] !== 'function'){
+            system.panic("System.invoke: InvokableCommands[" + name + "] is not a function");
         }
         return InvokableCommands[name]();
     }
@@ -934,11 +1039,17 @@ class System {
     // aka alert
     // aka notification
     notify(){
-        this.get("toastManager").showToast(...arguments);
+        this.get("toastManager")?.showToast?.(...arguments);
+        console.warn(...arguments);
     }
     // System.constructor(SystemManager manager)
     constructor(manager){
         this.manager = manager;
+    }
+    newImageViewer(uri){
+        // actually, use whatever the registered handler is for this uri :D
+        return this.tryInvokeHandlerForUri(uri);
+        //return system.registerWidget(new ImageViewerWidget(uri))
     }
     get(singletonName){
         return this.lazySingleton(singletonName);
@@ -1077,47 +1188,79 @@ class System {
     registerWidget(){
         return this.registerWidgetInstance(...arguments)
     }
-    tryInvokeHandlerForUri(uri){
-        if(
-            uri?.includes?.(".png")
-            || uri?.includes?.(".jpg")
-            || uri?.includes?.(".gif")
-            || uri?.includes?.(".jpeg")
-        ) {
-            // it's an image!
-            return system.registerWidget(new ImageViewerWidget(uri))
-        }
     
-        // if it's a soundcloud url, return a new soundcloud widget instance instead
-        if(
-            uri?.includes?.("soundcloud.com")
-        ) {
+    // Helper function to check if a URL contains a certain keyword
+    checkUrl(uri, keyword) {
+        return uri?.includes?.(keyword);
+    }
+
+    // Handlers for different types of URLs
+    urlHandlers = {
+        'soundcloud.com': uri => {
             const MySoundCloudClass = class extends SoundCloudWidget {
                 url = uri
-            } 
-            return system.registerWidget(new MySoundCloudClass())
-        }
-    
-        if(
-            uri?.includes?.("youtube.com")
-            // || uri?.includes?.("youtu.be")
-        ){
-            let updatedUrl = uri;
-            try {
-                let url = new URL(updatedUrl);
-                // url.searchParams.set('autoplay', '1');
-                updatedUrl = url.toString();
-            } catch (error) {
-                console.error('Invalid URL:', updatedUrl);
             }
-            // it's a youtube url!
-            return system.registerWidget(new YoutubePlayerWidget("",{tracks:[updatedUrl]}))
+            return system.registerWidget(new MySoundCloudClass())
+        },
+        'youtube.com/': uri => this.handleYoutube(uri),
+        'youtu.be': uri => this.handleYoutube(uri),
+        // '://': uri => system.registerWidget(new iFrameWidget(uri))
+    }
+
+    bindImgHandlers(){
+        // Add image handlers in a loop to reduce redundancy
+        ['.png', '.jpg', '.gif', '.jpeg', '.webp'].forEach(ext => {
+            urlHandlers[ext] = uri => system.registerWidget(new ImageViewerWidget(uri));
+        });
+    }
+
+    // Handler for YouTube URLs
+    handleYoutube(uri) {
+        let updatedUrl = uri;
+        try {
+            let url = new URL(updatedUrl);
+            updatedUrl = url.toString();
+        } catch (error) {
+            console.error('Invalid URL:', updatedUrl);
         }
-        if(uri?.includes?.("://")){
-            // it's an iframe, chuck!
-            return system.registerWidget(new iFrameWidget(uri))
+        return system.registerWidget(new YoutubePlayerWidget("", {tracks: [updatedUrl]}));
+    }
+
+    // Refactored tryInvokeHandlerForUri function
+    tryInvokeHandlerForUri(uri) {
+        console.warn('tryInvokeHandlerForUri', {uri});
+
+        // Check if the URL matches any of the handlers
+        for (let keyword in this.urlHandlers) {
+            if (this.checkUrl(uri, keyword)) {
+                return this.urlHandlers[keyword](uri);
+            }
         }
-        return -1;
+
+        // If none of the above, check if it's a generic URL and handle it as an iframe
+        if (uri?.includes?.("://")) {
+            return this.registerWidget(new iFrameWidget(uri));
+        }
+
+        // If no handler matched, try to invoke a command
+        try {
+            let result = InvokableCommands[uri];
+            if (typeof result === 'string') {
+                return this.tryInvokeHandlerForUri(result);
+            } else if (typeof result === 'function') {
+                return result.call(result);
+            } else {
+                console.warn(`tryInvoke ${uri}`, typeof result, result);
+            }
+            if (result) {
+                return result;
+            }
+        } catch(e) {
+            console.error("error trying string as command ", e);
+            throw e;
+        }
+
+        return UNINVOKABLE;
     }
 }
 const rootSystemManager = new SystemManager();
@@ -1382,6 +1525,7 @@ class Command {
         // if this.___type === Config (somehow)
         // and this.config.execute is a function,
         // call it instead
+        // TODO: deprecate these Config classes
         if(this.__type === 'Config' && typeof this.config.execute === 'function'){
             this.config.execute();
             return;
@@ -1390,7 +1534,9 @@ class Command {
         try{
             this.execute();
         }catch(e){
-            system.panic("Command.tryExecute: ",e);
+            //system.panic("Command.tryExecute: ",e);
+            console.error(e);
+            throw e;
         }
     }
     updateFromBuffer(){
@@ -2379,6 +2525,9 @@ function isWidgetInFrustum(widget, frustum) {
     return true;
 }
 
+/*
+    todo: make this have a prototype proxy that makes it  so when you set the size we re--cache the half width size so we don't have to keep dividing every frame, only once when size changes which is rare for most widgets
+*/
 class Widget extends UndoRedoComponent {
     hovered = false
     // allow forcing a widget to draw on a specific canvas for a cool depth of field effect
@@ -2388,16 +2537,16 @@ class Widget extends UndoRedoComponent {
 
     get idArr(){
         return [
-            this.smartPosition.x,
-            this.smartPosition.y,
+            this.smartPositionNew.x,
+            this.smartPositionNew.y,
             this.widgetSize.width,
             this.widgetSize.height,
         ]
     }
     get idObj(){
         return {
-            x: this.smartPosition.x,
-            y: this.smartPosition.y,
+            x: this.smartPositionNew.x,
+            y: this.smartPositionNew.y,
             w: this.widgetSize.width,
             h: this.widgetSize.height,
         }
@@ -2439,15 +2588,36 @@ class Widget extends UndoRedoComponent {
         return this?.widgetSize ?? {width:100,height:100};
     }
 
+    _halfWidthCache = null;
+    _halfHeightCache = null;
+    _widthCache = null;
+    _heightCache = null;
+
+    get halfWidth(){
+        if (this._widthCache !== this.size.width || this._halfWidthCache === null) {
+            this._halfWidthCache = this.size.width / 2;
+            this._widthCache = this.size.width;
+        }
+        return this._halfWidthCache;
+    }
+
+    get halfHeight(){
+        if (this._heightCache !== this.size.height || this._halfHeightCache === null) {
+            this._halfHeightCache = this.size.height / 2;
+            this._heightCache = this.size.height;
+        }
+        return this._halfHeightCache;
+    }
+
     // TODO: enable debug rendering of widget bounding boxes
     getBoundingBox() {
         return {
-            left: this.smartPosition.x,
-            right: this.smartPosition.x + this.widgetSize.width,
-            top: this.smartPosition.y,
-            bottom: this.smartPosition.y + this.widgetSize.height,
-            near: this.smartPosition.z,
-            far: this.smartPosition.z + this.widgetSize.depth
+            left: 0,
+            right: this.widgetSize.width,
+            top: 0,
+            bottom: this.widgetSize.height,
+            near: 0,
+            far: this.widgetSize.depth
         };
     }
 
@@ -2811,8 +2981,8 @@ class Widget extends UndoRedoComponent {
     enterDrawingContext(){
         this.ctx.push();
         this.ctx.translate(
-            this.smartPosition.x,
-            this.smartPosition.y
+            this.smartPositionNew.x,
+            this.smartPositionNew.y
         )
         this.ctx.scale(
             zoom,
@@ -3057,11 +3227,58 @@ class Widget extends UndoRedoComponent {
         /** @see System.playSound */
         system.playSound("widget_closed")
         if(this.parentWidget){
-            console.warn("tell parent to close me!",this.parentWidget)
+            console.warn("tell parent i'm closing!",this,{parent:this.parentWidget})
         }
+        this?.onClose?.call(this);
     }
 }
 
+const watchHistory = [
+    "AI: Grappling with a New Kind of Intelligence World Science Festival",
+
+]
+const toWatch = [
+    "AI: Grappling with a New Kind of Intelligence World Science Festival",
+]
+
+const bookmarkBin = [
+    "http://localhost:8888/notebooks/HelloWorldStickfigure.ipynb"
+]
+
+// link dump
+let LinkDump = [
+
+    // Hawking radiation
+    // ScienceClic English
+    "https://www.youtube.com/watch?v=isezfMo8kWQ",
+
+    // AESOP ROCK - Integrated Tech Solutions: Vile Groove DLC Pack [FULL EP STREAM]
+    "https://www.youtube.com/watch?v=7odw9RfEPYY",
+
+    // NEW: use titles instead, we'll look up and cache urls in the backend
+    "Aesop Bach | non-a (Full Album)"
+    // actually, use human guesses too like,
+    //"Aesop and Bach", etc... "did you mean?" style
+]
+
+class ClipboardManager extends Widget {
+    constructor(){
+        super(...arguments);
+        system.todo("Copy to clipboard!")
+        //system.registerCallback
+        system.invoke("copyToClipboard_register_callback", ()=>{
+            system.warn("copy to clipboard callback invoked!")
+        })
+    }
+    onDraw(){
+    }
+}
+class BarGraph2D extends Widget {
+
+}
+class BarGraph3D extends Widget {
+
+}
 class CopiedToClipboard extends Widget {
 
 }
@@ -3198,13 +3415,13 @@ class OscilloscopeWidget extends Widget {
     onDraw(){
         super.onDraw(...arguments);
 
-        if(!this.ctx.drawImage){
-            // TODO TODO TODO
-            // console.warn('no drawImage?!?!',this);
-            // debugger;
-            //super.endDraw();
-            return;
-        }
+        // if(!this.ctx.drawImage){
+        //     // TODO TODO TODO
+        //     // console.warn('no drawImage?!?!',this);
+        //     // debugger;
+        //     //super.endDraw();
+        //     return;
+        // }
 
         // draw the gridImage
         this.ctx.drawImage(this.gridImage, 0, 0);
@@ -3579,6 +3796,9 @@ class VideoPlayerWidget extends Widget {
     constructor(src){
         super(...arguments)
         this.src = src ?? "video_731defd5b618ee03304ad345511f0e54.mp4"
+        if(!this.src?.includes?.('://') && !this.src?.includes?.('/res')){
+            this.src = `/res/${this.src}`
+        }
         this.video = createVideo(this.src);
         this.video.parent(document.body);
         this.widgetSize = {width: 640, height: 480}; // Set the size of the video player
@@ -3586,10 +3806,11 @@ class VideoPlayerWidget extends Widget {
         // autoplay, show controls
         this.video.elt.setAttribute("autoplay", true);
         this.video.elt.setAttribute("controls", true);
+        this.video.elt.setAttribute("loop", true);
     }
     onDraw(){
         // try{
-            super.onDraw(...arguments)
+            //super.onDraw(...arguments)
         // }catch(e){
         //     if(e.type === "DoNotDraw"){
         //         // bail the draw call
@@ -3608,13 +3829,14 @@ class VideoPlayerWidget extends Widget {
 
         // this video player position
         // this player.position
-        this.video.position(
-            this.smartPosition.x, 
-            this.smartPosition.y
-        );
+        // this.video.position(
+        //     this.smartPosition.x, 
+        //     this.smartPosition.y
+        // );
         // Apply the size to the video
-        this.video.size(this.widgetSize.width * zoom, this.widgetSize.height * zoom); 
-        this.video.elt.style.transform = `scale(${zoom})`;
+        //this.video.size(this.widgetSize.width * zoom, this.widgetSize.height * zoom); 
+        //this.video.elt.style.transform = `scale(${zoom})`;
+        this.video.elt.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
     }
 }
 
@@ -5084,6 +5306,12 @@ class ImageViewerWidget extends Widget {
         width: 300, 
         height: 300 
     }
+    onUploadComplete(){
+        console.warn("widget.onUploadComplete",arguments)
+    }
+    onUploadError(){
+        console.warn("widget.onUploadError",arguments)
+    }
     src = "alien2.jpeg"
     isGif = false
     static bind(src){
@@ -5147,8 +5375,8 @@ class ImageViewerWidget extends Widget {
             // Calculate new width and height while maintaining aspect ratio
             this.newWidth = this.widgetSize.width;
             this.newHeight = this.newWidth / aspectRatio;
-            this.halfWidth = this.newWidth * .5;
-            this.halfHeight = this.newHeight * .5;
+            // this.halfWidth = this.newWidth * .5;
+            // this.halfHeight = this.newHeight * .5;
             // If new height is greater than widget height, adjust width instead
             if (this.newHeight > this.widgetSize.height) {
                 this.newHeight = this.widgetSize.height;
@@ -5291,7 +5519,7 @@ extends ImageViewerWidget {
     rotationSpeedDegreesPerSecond = .05
     currentRotationDegrees = 0
     onDraw(){
-        super.onDraw(...arguments)
+        //super.onDraw(...arguments)
         this.ctx.push()
         // rotate the drawing context
         this.currentRotationDegrees += this.rotationSpeedDegreesPerSecond * deltaTime;
@@ -5311,7 +5539,7 @@ extends ImageViewerWidget {
             this.widgetSize.height,
             this.widgetSize.width
         );
-        //super.draw(...arguments)
+
         this.ctx.pop()
     }
 }
@@ -5950,6 +6178,14 @@ class iFrameWidget extends Widget {
         }
     }
     createIFrame(){
+        // console.warn remember for youtube, the url is in this.tracks[i]
+        console.warn('createIFrame',{
+            constructorName: this.constructor.name,
+            _this: this,
+            url: this.url,
+            tracks: this?.tracks
+        })
+
         const style = {
             'border-radius': '20px',
             'border': '3px solid red',
@@ -6013,7 +6249,7 @@ class iFrameWidget extends Widget {
         //     opts = pxWidthOrOptsOrNull;
         // }
 
-        console.warn('iframe',{
+        console.warn('iframe constructor',{
             url,
             two: arguments[1],
             three: arguments[2],
@@ -6023,24 +6259,39 @@ class iFrameWidget extends Widget {
 
             if(arguments[0]?.widgetSize){
                 this.widgetSize = arguments[0].widgetSize;
+                this.options = arguments[0];
             }
             else if(arguments[1]?.widgetSize){
                 this.widgetSize = arguments[1].widgetSize;
+                this.options = arguments[1];
             }else if(pxHeightOrNull){
                 this.widgetSize = {
                     width: pxWidthOrOptsOrNull,
                     height: pxHeightOrNull
                 }
             }
-        
-        // if width/height opts were not provided
-        // check the string for ?width=w&height=h or ?w=w&h=h
 
-        /*
-        if(arguments[1]?.fullTag?.length){
-                arguments[1]?.fullTag
+            if(arguments[1]?.tracks){
+                this.options = arguments[1];
+            }else if(arguments[2]?.tracks){
+                this.options = arguments[2];
             }
-            */
+
+            let _url = this?.options?.tracks?.[0] ?? this.url;
+
+            console.warn('checking for w/h in url',{_url})
+
+        try{
+            let urlAsUrl = new URL(_url);
+            if(urlAsUrl.searchParams.has("w") || urlAsUrl.searchParams.has("width")){
+                this.widgetSize.width = urlAsUrl.searchParams.get("w") || urlAsUrl.searchParams.get("width");
+            }
+            if(urlAsUrl.searchParams.has("h") || urlAsUrl.searchParams.has("height")){
+                this.widgetSize.height = urlAsUrl.searchParams.get("h") || urlAsUrl.searchParams.get("height");
+            }
+        }catch(e){
+            console.error(e)
+        }
 
         this.createIFrame()
     }
@@ -6055,11 +6306,11 @@ class iFrameWidget extends Widget {
     // main iframe draw
     // draw iframe main
     onDraw(){
-        super.onDraw(...arguments)
+        //super.onDraw(...arguments)
 
-        this.ctx.push()
-        this.ctx.translate(-this.smartPosition.x, -this.smartPosition.y)
-        this.ctx.scale(zoom)
+        // this.ctx.push()
+        // this.ctx.translate(-this.smartPosition.x, -this.smartPosition.y)
+        // this.ctx.scale(zoom)
         this.ctx.fill("red")
         this.ctx.text(`url:${this.url}`, 0, 0, 100, 100);
         //this.ctx.pop()
@@ -6095,7 +6346,7 @@ class iFrameWidget extends Widget {
         const negYOffset = - buttonSize - 10;
         
         // Draw a white X on a RED BUTTON
-        this.ctx.push(); // Save current drawing style and transformation matrix
+        // this.ctx.push(); // Save current drawing style and transformation matrix
 
         // Save the default state
         this.ctx.drawingContext.save(); 
@@ -6106,102 +6357,121 @@ class iFrameWidget extends Widget {
         let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
         let rollingColor = color(255, 0, 0, 100); // Create a color with alpha
         // shift the hue of the color over time
-        rollingColor.setHue((time * 100) % 255);
+        rollingColor.setRed((Math.sin(time) * 128) + 127);
+        rollingColor.setGreen((Math.cos(time) * 128) + 127);
+        rollingColor.setBlue((Math.sin(time) * 128) + 127);
         this.ctx.fill(rollingColor);
         this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
         // squash scale to account for skew in screen space
         this.ctx.scale(1.5,1)
+        // // Save the default state
+        // this.ctx.drawingContext.save(); 
+        // // Apply a skew transformation
+        // // The parameters are: scale factors (x, y), skew factors (x, y), translate (x, y)
+        // let time = Date.now() * 0.001; // Get current time in seconds
+        // let skewValueX = Math.sin(time); // Calculate sin value of the current time for x-axis skew
+        // let skewValueY = Math.cos(time); // Calculate cos value of the current time for y-axis skew
+        // let rollingColor = color(255, 0, 0, 100); // Create a color with alpha
+        // // shift the hue of the color over time
+        // let hue = (time * 10) % 360; // Slowing down the hue shift even more
+        // rollingColor = color('hsb(' + hue + ', 100%, 50%)'); // Increasing saturation to avoid white flickering
+        // this.ctx.fill(rollingColor);
+        // this.ctx.drawingContext.transform(1, skewValueY, skewValueX, 1, 0, 0); // Skewing on both x and y axes
+        // // squash scale to account for skew in screen space
+        // this.ctx.scale(1.5,1)
 
-        // Draw your objects here
-        this.ctx.rect(50, 50, 100, 100);
+        // // Draw your objects here
+        // this.ctx.rect(50, 50, 100, 100);
 
-        // Restore the context to its original state
-        this.ctx.drawingContext.restore();
+        // // Restore the context to its original state
+        // this.ctx.drawingContext.restore();
 
-            this.ctx.translate(
-                this.smartPosition.x,
-                this.smartPosition.y
-            )
-            this.ctx.noStroke();
-            this.ctx.rectMode(CORNER)
-            this.ctx.fill("red");
-            this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
-            this.ctx.rectMode(CENTER)
-            this.ctx.fill("white");
-            this.ctx.translate(halfButtonSize, halfButtonSize)
-            this.ctx.rotate(radians(45));
-            this.ctx.rect(0, 0, 30, 10, borderRadius);
-            this.ctx.rect(0, 0, 10, 30, borderRadius);
-            this.ctx.rotate(radians(-45));
-            this.ctx.translate(-halfButtonSize, -halfButtonSize)
-        this.ctx.pop(); // Restore drawing style and transformation matrix
+        //     this.ctx.translate(
+        //         this.smartPosition.x,
+        //         this.smartPosition.y
+        //     )
+        //     this.ctx.noStroke();
+        //     this.ctx.rectMode(CORNER)
+        //     this.ctx.fill("red");
+        //     this.ctx.rect(0, negYOffset, buttonSize, buttonSize, borderRadius);
+        //     this.ctx.rectMode(CENTER)
+        //     this.ctx.fill("white");
+        //     this.ctx.translate(halfButtonSize, halfButtonSize)
+        //     this.ctx.rotate(radians(45));
+        //     this.ctx.rect(0, 0, 30, 10, borderRadius);
+        //     this.ctx.rect(0, 0, 10, 30, borderRadius);
+        //     this.ctx.rotate(radians(-45));
+        //     this.ctx.translate(-halfButtonSize, -halfButtonSize)
+        // this.ctx.pop(); // Restore drawing style and transformation matrix
 
-        // Draw a white minus on a yellow button
-        this.ctx.push(); // Save current drawing style and transformation matrix
-        this.ctx.translate(
-            this.smartPosition.x,
-            this.smartPosition.y
-        )
-            this.ctx.rectMode(CORNER)
-            this.ctx.fill("goldenrod");
-            this.ctx.rect(
-                            buttonSize + 10, 
-                            negYOffset, 
-                            buttonSize, 
-                            buttonSize, 
-                            borderRadius);
-            this.ctx.rectMode(CENTER);
-            this.ctx.fill("white");
-            this.ctx.rect(
-                            halfButtonSize + buttonSize + 10, 
-                            negYOffset + halfButtonSize, 
-                            30, 
-                            10, 
-                            borderRadius);
-        this.ctx.pop(); // Restore drawing style and transformation matrix
+        // // Draw a white minus on a yellow button
+        // this.ctx.push(); // Save current drawing style and transformation matrix
+        // this.ctx.translate(
+        //     this.smartPosition.x,
+        //     this.smartPosition.y
+        // )
+        //     this.ctx.rectMode(CORNER)
+        //     this.ctx.fill("goldenrod");
+        //     this.ctx.rect(
+        //                     buttonSize + 10, 
+        //                     negYOffset, 
+        //                     buttonSize, 
+        //                     buttonSize, 
+        //                     borderRadius);
+        //     this.ctx.rectMode(CENTER);
+        //     this.ctx.fill("white");
+        //     this.ctx.rect(
+        //                     halfButtonSize + buttonSize + 10, 
+        //                     negYOffset + halfButtonSize, 
+        //                     30, 
+        //                     10, 
+        //                     borderRadius);
+        // this.ctx.pop(); // Restore drawing style and transformation matrix
 
-        // Draw a white plus on a green button
-        this.ctx.push(); // Save current drawing style and transformation matrix
-            this.ctx.translate(
-                this.smartPosition.x,
-                this.smartPosition.y
-            )
-            this.ctx.translate(0, buttonSize + 10)
-            this.ctx.noStroke();
-            this.ctx.rectMode(CORNER)
-            this.ctx.fill("green");
-            this.ctx.rect(0, 0, buttonSize, buttonSize, borderRadius);
-            this.ctx.rectMode(CENTER)
-            this.ctx.fill("white");
-            this.ctx.rect(
-                halfButtonSize, 
-                halfButtonSize, 
-                30, 
-                10, 
-                borderRadius
-            );
-            this.ctx.rect(
-                halfButtonSize, 
-                halfButtonSize, 
-                10, 
-                30, 
-                borderRadius);
-        this.ctx.pop(); // Restore drawing style and transformation matrix
+        // // Draw a white plus on a green button
+        // this.ctx.push(); // Save current drawing style and transformation matrix
+        //     this.ctx.translate(
+        //         this.smartPosition.x,
+        //         this.smartPosition.y
+        //     )
+        //     this.ctx.translate(0, buttonSize + 10)
+        //     this.ctx.noStroke();
+        //     this.ctx.rectMode(CORNER)
+        //     this.ctx.fill("green");
+        //     this.ctx.rect(0, 0, buttonSize, buttonSize, borderRadius);
+        //     this.ctx.rectMode(CENTER)
+        //     this.ctx.fill("white");
+        //     this.ctx.rect(
+        //         halfButtonSize, 
+        //         halfButtonSize, 
+        //         30, 
+        //         10, 
+        //         borderRadius
+        //     );
+        //     this.ctx.rect(
+        //         halfButtonSize, 
+        //         halfButtonSize, 
+        //         10, 
+        //         30, 
+        //         borderRadius);
+        // this.ctx.pop(); // Restore drawing style and transformation matrix
 
         let iFrameX = ( 
-            (mouseShifted.x + panX)
-            + this.smartPosition.x 
-        ) * zoom;
+            //this.smartPositionNew.x + 
+            (this.basePosition.x * zoom) +
+            (panX * zoom)
+        );
         
         let iFrameY = (
-            (mouseShifted.y + panY)
-            + this.smartPosition.y
-        ) * zoom;
-        
-        this.iframe.position(
-            iFrameX,
-            iFrameY
+            //this.smartPositionNew.y + 
+            (this.basePosition.y * zoom) +
+            (panY * zoom)
         );
+        
+        // this.iframe.position(
+        //     iFrameX,
+        //     iFrameY
+        // );
 
         // set pointerEvents none when deepCanvasManager.focusedIndex < 1
         const panning = Math.abs(panMomentumVector.x ?? panMomentumVector.y)
@@ -6213,13 +6483,7 @@ class iFrameWidget extends Widget {
             ? 'none' 
             : 'auto';
 
-        //debugger;
-        //this.iframe.scale(zoom)
-        // this.iframe.elt.style.width = `${this.widgetSize.width * zoom}px`;
-        // this.iframe.elt.style.height = `${this.widgetSize.height * zoom}px`;
-        // this.iframe.elt.id = this.id;
-        // t
-        this.iframe.elt.style.transform = `scale(${zoom})`;
+        this.iframe.elt.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
     }
 }
 /* 
@@ -6231,8 +6495,7 @@ class iFrameWidget extends Widget {
     extends="iFrame" />
 
 <YoutubePlayerWidget
-    track0="https://www.youtube.com/embed/5qap5aO4i9A"
-    track1="https://www.youtube.com/embed/5qap5aO4i9A"
+    tracks="['https://www.youtube.com/embed/5qap5aO4i9A']"
     />
 
 */
@@ -6253,47 +6516,52 @@ extends iFrameWidget {
         if(this.options.widgetSize){
             this.widgetSize = this.options.widgetSize;
         }
-        this.setTrackList(this.getTrackList());
-        this.updateUrl(this.getFirstTrack());
+        //this.setTrackList(this.getTrackList());
+        this.updateUrl(this.iframeSafeUrl(this.getFirstTrack()));
     }
     get tracks(){
-        // valid cache hit
-        if(this._tracks && !this.tracksChanged){
-            return this._tracks;
-        }
-        // cache miss
-        this.setTrackList(
-            this.getTrackList()
-        );
-        return this._tracks;
+        return this.options?.tracks ?? [];
+        // // valid cache hit
+        // if(this._tracks && !this.tracksChanged){
+        //     return this._tracks;
+        // }
+        // // cache miss
+        // this.setTrackList(
+        //     this.getTrackList()
+        // );
+        // return this._tracks;
     }
-    setTrackList(tracks){
-        // should we override value in options?
-        if(!tracks || !tracks.length){
-            system.panic("we don't support empty tracks here")
-        }
-        this.tracksChanged = true;
-        // get tracks will pull from here and cache
-        this.options.tracks = tracks.map(this.iframeSafeUrl);
-        // unset any track0..trackN on options that may be lingering
-        let i = 0;
-        while(this.options[`track${i}`]){
-            delete this.options[`track${i}`];
-            i++;
-        }
-        // update cache
-        this._tracks = this.options.tracks;
-    }
+    // setTrackList(tracks){
+    //     // should we override value in options?
+    //     if(!tracks || !tracks.length){
+    //         //system.panic("we don't support empty tracks here")
+    //         tracks = [this.iframeSafeUrl(this.url)];
+    //     }
+    //     this.tracksChanged = true;
+
+    //     this.options.tracks = [];
+    //     // get tracks will pull from here and cache
+    //     this.options.tracks = tracks.map(this.iframeSafeUrl);
+    //     // // unset any tracks[0]..tracks[N] on options that may be lingering
+    //     // let i = 0;
+    //     // while(this.options.tracks){
+    //     //     delete this.options.tracks[i];
+    //     //     i++;
+    //     // }
+    //     // update cache
+    //     this._tracks = this.options.tracks;
+    // }
     // pluck from options
-    getTrackList(){
-        let tracks = [];
-        let i = 0;
-        while(this.options[`track${i}`]){
-            tracks.push(this.options[`track${i}`]);
-            i++;
-        }
-        return [...tracks, ...this.options?.tracks ?? []];
-    }
+    // getTrackList(){
+    //     // let tracks = [];
+    //     // let i = 0;
+    //     // while(this.options[`track${i}`]){
+    //     //     tracks.push(this.options[`track${i}`]);
+    //     //     i++;
+    //     // }
+    //     // ...tracks, 
+    //     return [...(this.options?.tracks ?? [])];
+    // }
     getUnplayedTracks(){
         return this.tracks.filter(track => !this.playedTracks.includes(track));
     }
@@ -6924,6 +7192,48 @@ class PrioritizerWidget extends TodoWidget {
     }
 }
 
+class SolarSystemWidget extends Widget {
+    name = "Solar System Widget"
+    widgetSize = { width: 300, height: 150 }
+    constructor(){
+        super(...arguments)
+        this.sun = {
+            x: 0, y: 0, radius: 50, color: "yellow"
+        }
+        this.earth = {
+            x: 10, y: 0, radius: 10, color: "blue"
+        }
+        // Assuming we have a variable to keep track of the earth's angle
+        this.earth.angle = 0;
+    }
+    /* disable Widget's default draw behavior */
+    disableDefaultFrame = true;
+    updateModel(){
+        
+
+        // In the updateModel method
+        this.earth.angle += 0.01; // Adjust this value to change the speed of the earth's orbit
+        this.earth.x = this.sun.x + this.earth.orbitRadius * Math.cos(this.earth.angle);
+        this.earth.y = this.sun.y + this.earth.orbitRadius * Math.sin(this.earth.angle);
+    }
+    onDraw(){
+        this.updateModel();
+        strokeWeight(0)
+        fill(this.sun.color)
+        circle(
+            this.halfWidth,
+            this.halfHeight,
+            this.sun.radius
+        )
+        fill(this.earth.color)
+        circle(
+            this.halfWidth + this.earth.x,
+            this.halfHeight + this.earth.y,
+            this.earth.radius
+        )
+    }
+}
+
 class ClockWidget extends Widget {
     name = "Clock Widget"
     widgetSize = { width: 300, height: 150 }
@@ -6990,7 +7300,7 @@ class TimeToSunSetWidget extends ClockWidget {
         return `${hours}h ${minutes}m ${seconds}s \nto sunset`
     }
     get timeFormatted(){
-        return 'sunset'
+        return '';//'sunset'
     }
     draw(){
         super.draw(...arguments)
@@ -7064,6 +7374,7 @@ class GherkinRunnerWidget extends Widget {
         system.warn('Widget.setResults: results',results)
         this.results = results
         setTimeout(()=>{
+            /** @see Dashboard.reflowLayout */
             system.dashboard.reflowLayout()
         },100)
     }
@@ -7926,7 +8237,7 @@ class Dashboard {
         prevRowHeight = 0,
         currentRowIndex = 0;
 
-        const space = 1; //420;
+        const space = 0; //420;
         
         // Sort widgets by height in descending order
         this.widgetLayoutOrder.sort((a, b) => {
@@ -7946,17 +8257,18 @@ class Dashboard {
             let w = widget.widgetSize.width;
             let h = widget.widgetSize.height;
 
-            let padding = 1; // Define padding
-            w = w - 20 * padding; // Subtract padding from width
-            h = h - 20 * padding; // Subtract padding from height
+            let padding = 10; // Define padding
+            // w = w - 20 * padding; // Subtract padding from width
+            // h = h - 20 * padding; // Subtract padding from height
 
-            // let virtualWidth = windowWidth / zoom;
-            // if (currentRowWidth + w + space > virtualWidth) {
-            //     prevRowHeight = currentRowMaxHeight;
-            //     currentRowIndex++;
-            //     currentRowWidth = 0; // Reset row width
-            //     accumulatedRowOffset += prevRowHeight + space; // Increase space between widgets vertically
-            // }
+            // decide when to start a new row
+            let virtualWidth = windowWidth / zoom;
+            if (currentRowWidth + w + space > virtualWidth) {
+                prevRowHeight = currentRowMaxHeight;
+                currentRowIndex++;
+                currentRowWidth = 0; // Reset row width
+                accumulatedRowOffset += prevRowHeight + space; // Increase space between widgets vertically
+            }
             currentRowMaxHeight = Math.max(currentRowMaxHeight, h);
             let x = currentRowWidth;
             let y = accumulatedRowOffset;
@@ -8221,7 +8533,7 @@ let store = {
     Dashboard: null,
     // maybe we just store these IN dashboard manager?...
     widgets: {},
-    showWidgetPositions: 1, //false,
+    showWidgetPositions: 0, //false,
 
     // viewValue: '',
     // controllerValue: '',
@@ -9692,64 +10004,64 @@ extends Config
 }
 */
 
-class AddGraphNodeWizardConfig
-extends Config
-{
-    name = "Add Graph Node..."
-    altnames = [
-        "New Graph Node...",
-        "New Node...",
-        "New..." // our default NEW
-    ]
-    steps = [
-        // {
-        //     question: "what type of node would you like to add?",
-        //     suggestions: [
-        //         {
-        //             name: "Rect",
-        //             value: "rect"
-        //         }
-        //     ]
-        // },
-        {
-            question: "what is the name of the node?",
-            answerStorageKey: "name",
+// class AddGraphNodeWizardConfig
+// extends Config
+// {
+//     name = "Add Graph Node..."
+//     altnames = [
+//         "New Graph Node...",
+//         "New Node...",
+//         "New..." // our default NEW
+//     ]
+//     steps = [
+//         // {
+//         //     question: "what type of node would you like to add?",
+//         //     suggestions: [
+//         //         {
+//         //             name: "Rect",
+//         //             value: "rect"
+//         //         }
+//         //     ]
+//         // },
+//         {
+//             question: "what is the name of the node?",
+//             answerStorageKey: "name",
 
-            subQuestions: [
-                {
-                    question: "what type of node?",
-                    answerDefaultValue: "rect",
-                    suggestions: [
-                        {
-                            name: "Rect", value: "rect"
-                        }
-                    ]
-                }
-            ]
-        }
-    ]
-    // overload the default finalCallback
-    finalCallback(wizardInstance){
-        console.warn('AddGraphNodeWizardConfig finalCallback')
+//             subQuestions: [
+//                 {
+//                     question: "what type of node?",
+//                     answerDefaultValue: "rect",
+//                     suggestions: [
+//                         {
+//                             name: "Rect", value: "rect"
+//                         }
+//                     ]
+//                 }
+//             ]
+//         }
+//     ]
+//     // overload the default finalCallback
+//     finalCallback(wizardInstance){
+//         console.warn('AddGraphNodeWizardConfig finalCallback')
         
-        cmdprompt.hide();
+//         cmdprompt.hide();
 
-        if(!store.currentGraph){
-            store.currentGraph = new Graph();
-        }
-        const id = store.currentGraph.nodes.length;
-        store.currentGraph.addNode({
-            id,
-            name: wizardInstance?.stepResponses?.[0]?.input,
-            x: (id % Math.floor(windowWidth / 200)) * 200,
-            y: Math.floor(id / Math.floor(windowWidth / 200)) * 100,
-            width: 200,
-            height: 100,
-            shape: 'rect',
-            graph: store.currentGraph // todo: just store ID
-        })
-    }
-}
+//         if(!store.currentGraph){
+//             store.currentGraph = new Graph();
+//         }
+//         const id = store.currentGraph.nodes.length;
+//         store.currentGraph.addNode({
+//             id,
+//             name: wizardInstance?.stepResponses?.[0]?.input,
+//             x: (id % Math.floor(windowWidth / 200)) * 200,
+//             y: Math.floor(id / Math.floor(windowWidth / 200)) * 100,
+//             width: 200,
+//             height: 100,
+//             shape: 'rect',
+//             graph: store.currentGraph // todo: just store ID
+//         })
+//     }
+// }
 
 // should we extend WizardConfig?
 class RunGherkinCommandWizardConfig extends Config {
@@ -10279,8 +10591,8 @@ extends BaseCmds(Command, new NewCommandWizardConfig()){}
 class RunGherkinCommand
 extends BaseCmds(Command, new RunGherkinCommandWizardConfig()){}
 
-class AddGraphNodeCommand
-extends BaseCmds(Command, new AddGraphNodeWizardConfig()){}
+// class AddGraphNodeCommand
+// extends BaseCmds(Command, new AddGraphNodeWizardConfig()){}
 
 /*
 class NewFlashCardGame
@@ -11279,10 +11591,17 @@ class Timer {
         this.options = options ?? {
             durationSec: 60
         }
+        // use ONE timer for the ended callback
+        // this way if the user leaves the tab,
+        // the browser will still execute the callback
+        this.mainTimeout = setTimeout(()=>{
+            this.ended();
+        },this.durationSec * 1000);
+
         this.start()
     }
     get timeElapsed(){
-        return this.elapsedSec
+        return performance.now() - this.startedAt - this.pausedDuration;
     }
     get timeRemaining(){
         return this.remainingSec
@@ -11299,7 +11618,7 @@ class Timer {
         }
         this.elapsedSec = performance.now() - this.startedAt - this.pausedDuration;
         this.elapsedSec = Math.floor(this.elapsedSec / 1000);
-        if(this.elapsedSec >= this.durationSec){
+        if(this.elapsedSec >= this.durationSec && !this.completedAt){
             this.ended();
             return;
         }
@@ -11311,6 +11630,7 @@ class Timer {
         this.completedAt = performance.now();
         this.ticking = false;
         this?.onComplete?.();
+        this?.onTimerEnded?.(); // better, more searchable name
     }
     start(){
         this.pausedAt = null
@@ -11376,7 +11696,241 @@ const bugs = [
 const features = [
 
 ]
+const SO_DO_IT = ()=>{
+    system.todo("🪃 so do it then!")
+}
+// central command definitions
 const InvokableCommands = {
+    "Test Driven Development"(){
+        system.invoke("https://en.wikipedia.org/wiki/List_of_unit_testing_frameworks")
+    },
+    "🧺 LAUNDRYspacetime⏰⌛"(){
+        system.invoke("new timer")
+    },
+    "Test Anything Protocol"(){
+        system.invoke("https://en.wikipedia.org/wiki/Test_Anything_Protocol");
+    },
+    "Extreme Programming"(){
+        system.invoke('Extreme_Programming.svg')
+        system.invoke("https://en.wikiquote.org/wiki/Extreme_programming")
+    },
+    "Extreme_Programming.svg": FILE, // same as RES or RESOURCE
+    
+    ["https://5calls.org/"]: RES,
+    ["5 calls . org"]: "https://5calls.org/",
+    ["five calls"]: "https://5calls.org/",
+    ["5calls"]: "https://5calls.org/",
+    "5calls.org": "https://5calls.org/",
+    ["5 calls"]: "https://5calls.org/",
+    ["Contact My Reps (United States of America)"]: "5 calls",
+
+    ["clear"](){
+        system.dashboard?.recenter?.();
+        system.dashboard?.centerView?.();
+    },
+    ["🚿SHOWER😸"]: INVOKABLE,
+
+    ["Brew a tea! 🍵"](){},
+
+    ["wage an all out war"](){},
+    [
+        "play war, the card game"
+    ](){},
+    ["to read"](){
+        // https://exsto.app/
+        //"Infinity Zoom Art: Find Object by Crazy Labs"
+        // "https://endlesspaper.app/index.html"
+        // "Mental Canvas"
+        // "https://concepts.app/"
+        // "workflowy"
+        // "notion"
+
+        
+    },
+    ["good watches"](){
+        // "Richard Feynman - Ode To A Flower" :"https://www.youtube.com/watch?v=VSG9q_YKZLI"
+    },
+    ["unless"](){},
+    ["contact my representative 🎩"](){},
+    /**
+     * Oh hey, did you look out side?
+     * theres a beautiful sunset that appears to hide
+     * the fact that there's an all out war happening just around the corner
+     * on the other side of the block, our neighbor's been callin to warn us
+     * askin for help, like our neighbor's who never saw a hand lifted by a fema
+     * a female leader might not be so evil
+     * but we'll never know as long as ego-clad, bastards of society
+     * keep running us up the pole like we don't bring variety
+     * like we don't keep the spicy life flaky with cakey tastey treats sold in packages to eat when the food's gone
+     * landfill a palooza, diggin in the junk yard
+     * someone found a welder, now that's gonna be frank's job
+     * the robots ate our homework
+     * kicked our new dog
+     * asimo move over there's a new hog
+     * cash pony on the loan-y baloney loan terms
+     * balooning interest payments until blue moon learns
+     * level up your shit consolidate your debts and move on
+     * they want you curled up like a sucker with no moves, pawn
+     */
+    ["nuclear de-armament"](){},
+
+    ["https://www.shadertoy.com/view/mtyGWy"]: RES,
+    ["An introduction to Shader Art Coding | kishimisu"]: RES,
+
+    ["time-cost-quality.png"]: RES,
+
+    ["https://www.youtube.com/watch?v=2RSsoTJA6cA"]: RES,
+
+    ["VOD102 SPINNING BALLERINA ILLUSION"]:"https://www.youtube.com/watch?v=2RSsoTJA6cA",
+    
+    ["VOD102"]:"https://www.youtube.com/@VOD102",
+    
+    ["new deck of cards"](){
+        system.todo("new deck of cards")
+    },
+    ["new pack of cards"](){
+        system.todo("new pack of cards")
+    },
+    ["new ball and cup game"](){
+        system.todo("new ball and cup game")
+    },
+    ["Katamari"](){
+        //system.registerWidget(new GoogleResults("Katamari"));
+        system.todo("open google results")
+        window.open("https://www.google.com/search?q=katamari")
+        
+        system.newImageViewer("katamari.mp4")
+    },
+
+    ["Bills.png"]:INVOKABLE, // self reference, load the key name as a uri
+
+    ["Bills"](){
+        system.registerWidget(new ImageViewerWidget("Bills.png"))
+        //system.newWindow("private-value", "bills.url");
+
+        window.open('https://docs.google.com', '_newtab');
+
+    },
+
+    ["copyToClipboard_register_callback"](){
+        // todo system.registerCallback
+        // for now, store is separate,
+        // we might integrate it to per-system
+        store.copyToClipboardCallbacks = store.copyToClipboardCallbacks ?? [];
+        store.copyToClipboardCallbacks.push(arguments[0]);
+    },
+    ["new error"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new error type"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new stacktrace"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["wave function collapse"](){
+        return "https://jakedowns.com/oasis/?width=1000&height=1000"
+    },
+    ["new color"]:SO_DO_IT,
+    ["new color picker widget"]:SO_DO_IT,
+    ["new color theme"]:SO_DO_IT,
+    ["new palette"]:SO_DO_IT,
+    ["addition"](){
+        // if no arguments,
+        // show a prompt for 2 numbers
+        if (!arguments.length) {
+            let num1 = Number(prompt("Enter the first number:"));
+            let num2 = Number(prompt("Enter the second number:"));
+            return num1 + num2;
+        }
+        let result = arguments[0] + arguments[1];
+        console.warn('addition result',result)
+        system.info(result);
+        return result;
+    },
+    ["new color paleltte"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new style guide"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new default cube"](){
+
+    },
+    ["new rounded cube"](){
+
+    },
+    ["new sdf 2d"](){
+
+    },
+    ["new sdf 3d"](){
+
+    },
+    ["new style bible"](){
+        system.todo("🪃 so do it then!")
+    },
+    ["new Mandelbrot viewer"](){
+        system.registerWidget(new MandelbrotViewerWidget())
+    },
+    ["new sliding image puzzle"](){
+        system.registerWidget(new SlidingImagePuzzle())
+    },
+    ["new pill tracker"](){
+        // system.registerWidget(new PillTracker())
+        system.todo("🪃 so do it then!")
+    },
+    ["new graph"]:SO_DO_IT,
+    ["play snes > thomas and friends"]:"https://www.retrogames.cc/embed/19601-thomas-the-tank-engine-and-friends-usa.html?width=1920&height=1080",
+    /*
+    `<iframe src="https://www.retrogames.cc/embed/19601-thomas-the-tank-engine-and-friends-usa.html?width=600&height=450" width="600" height="450" frameborder="no" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" scrolling="no"></iframe>`,
+    */
+    ["system > play success tone"](){
+        system.playSuccessTone();
+    },
+    ["system > play error tone"](){
+        system.playErrorTone();
+    },
+    ["search for a youtube video"](){
+        prompt('search...')
+    },
+    ["moon_720p30.mp4"]:RES,
+    ["moon hi res timelapse"]:"moon_720p30.mp4",
+    "moon timelapse": "moon hi res timelapse",
+    ["moon"]: "moon timelapse",
+    ["new register"](){},
+    ["new memory address"](){}, // alloc
+    ["new newton's cradle 2D"](){},
+    ["new netwon's cradle 3D"](){},
+    ["new hypercube"](){},
+    ["new quaternion demonstrator"](){},
+    ["new molecule sandbox"](){},
+    ["search wikipedia"](){
+
+    },
+    ["new cellular automata"](){
+    },
+    ["new game of life (which one?)"](){
+    },
+    ["new disambiguation"](){
+    },
+    ["new connector"](){
+
+    },
+    ["random"](){
+        return "stumble"
+    },
+    ["stumble"](){
+        system.warn("launching random command...")
+        // invoke a random command
+        let keys = Object.keys(InvokableCommands);
+        let randomKey = keys[Math.floor(Math.random() * keys.length)];
+        InvokableCommands[randomKey]();
+    },
+    ["youtube - coding adventures"](){
+        return "https://www.youtube.com/watch?v=rSKMYc1CQHE"
+    },
+    ["https://www.youtube.com/watch?v=QtZT7hcMltg"](){},
+    ["Youtube - aesop rock - klutz"](){return "https://www.youtube.com/watch?v=QtZT7hcMltg"},
     ["Youtube - Art of the Problem - How Neural Networks Learned to Talk | ChatGPT: A 30 Year History"](){
         return "https://www.youtube.com/watch?v=OFS90-FX6pg"
     },
@@ -11429,11 +11983,9 @@ const InvokableCommands = {
 
 
 
-    ["Inspiration: simple generative graph example - Orion Reed"](){
-        system.registerWidget(new iFrameWidget(
-            "https://x.com/OrionReedOne/status/1731965009981301071?s=20"
-        ));
-    },
+    ["Inspiration: simple generative graph example - Orion Reed"]:
+            "https://x.com/OrionReedOne/status/1731965009981301071?s=20",
+
     ["sine wave demo"](){
         system.registerWidget(new SineWaveDemonstrator());
     },
@@ -11538,6 +12090,10 @@ const InvokableCommands = {
     ["new force-directed graph"](){},
     ["handle pasted dotviz input"](){
         system.todo("parse graphviz dotlang to our ast for viewing and modification and enhancement")
+    },
+    ["new solar system demo"](){
+        /* render a solar system with planets and moons and stuff */
+        system.registerWidget(new SolarSystemWidget())
     },
     ["export graph as graphviz dotlang"](){},
     ["set graphviz dotlang export settings"](){},
@@ -11646,6 +12202,9 @@ const InvokableCommands = {
     ["new quiz..."](){
         system.todo("!!! NotYetImplemented !!!")
     },
+    ["todo: refactoring helpers"](){
+        system.todo("💪 do eet!")
+    },
     ["todo: convert and clean up old wizard code"](){
         system.todo("how much space is dead code %-wise?")
         system.todo("TRACK IT OVER TIME!")
@@ -11666,6 +12225,7 @@ const InvokableCommands = {
     ["toggle widget debug info"](){
         InvokableCommands["toggle debug widget info"]();
     },
+    /** adds a key:value pair to Invokable Commands */
     ["new alias..."](){
         let results = prompt("alias a word or phrase to another word or phrase","Key...","Value...")
         if(!results){
@@ -11760,9 +12320,16 @@ const InvokableCommands = {
         // spawn a new flashcard widget
         system.registerWidget(new GreekAlphabetWidget());
     },
+    ["resize"] : "dispatch a window resize event",
+    ["dispatch a window resize event"]: "simulate resize event",
     ["simulate resize event"](){
         window.dispatchEvent(new Event("resize"));
     },
+    ["window > refresh"]: "reload",
+    ["window > reload"]: "reload",
+    ["window.refresh"]: "reload",
+    ["window.reload"]: "reload",
+    ["reload"]: "refresh the page",
     ["refresh the page"](){
         window.location.reload();
     },
@@ -11783,7 +12350,10 @@ const InvokableCommands = {
     //     "Yoshi's Story",
     // ],
 
-    ["todo: add daily progress bar of time"](){},
+    // main todo list:
+    //["todo: "],
+    ["todo: more icons!!!"]:()=>{system.todo(system.currentCommand.name)},
+    ["todo: add daily progress bar of time spent (timeline / history view)"](){},
     ["todo: more themes / time of day stuff"]:"",
 
     // alias
@@ -11840,9 +12410,8 @@ const InvokableCommands = {
     ["Play SNES > Super Mario World"](){
         system.todo("paste iframe url!")
     },
-    ["Play SNES > Pac Attack"](){
-        system.registerWidgetInstance(new iFrameWidget("https://www.retrogames.cc/n64-games/super-mario-64-sky-stories.html"))
-    },
+    ["Play SNES > Pac Attack"]:
+        "https://www.retrogames.cc/embed/20198-pac-attack-usa.html?width=1920&height=1080",
     // ["Play N64 > ..."](){
 
     // },
@@ -11908,6 +12477,8 @@ const InvokableCommands = {
             window.initTHREEMode();
         }
     },
+    // endless clouds
+    //["https://www.youtube.com/watch?v=4Op5Z1MpOTM"]
     ["Play DJ Shadow Nobody Speak ft. Run The Jewels RTJ"](){
         return "https://www.youtube.com/watch?v=NUC2EQvdzmY?width=640&height=480";
     },
@@ -11915,6 +12486,11 @@ const InvokableCommands = {
     ["dehydrated onion dip"](){
         return "https://www.youtube.com/watch?v=T7jH-5YQLcE&width=800&height=600";
     },
+    ["always sunny charlie day conspiracy reaction gif"](){
+        return "always-sunny-charlie-day-conspiracy.webp"
+    },
+    ["huygens optics"]:"https://www.youtube.com/user/huygensoptics",
+    ["https://www.youtube.com/user/huygensoptics"]:RES,
     ["Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]"](){
         // // offer up the lyrics on rap genius
         // // https://genius.com/Aesop-rock-kyanite-toothpick-lyrics => <div id='rg_embed_link_9519850' class='rg_embed_link' data-song-id='9519850'>Read <a href='https://genius.com/Aesop-rock-kyanite-toothpick-lyrics'>“Kyanite Toothpick” by Aesop Rock</a> on Genius</div> <script crossorigin src='//genius.com/songs/9519850/embed.js'></script>
@@ -11922,13 +12498,15 @@ const InvokableCommands = {
         //     "https://genius.com/Aesop-rock-kyanite-toothpick-lyrics"
         // ))
 
-        system.registerWidget(new iFrameWidget("https://en.wikipedia.org/wiki/Kyanite"))
+        // system.invoke("kyanite-definition.png")
+        // system.invoke("kyanite.jpg")
+        // system.invoke("https://en.wikipedia.org/wiki/Kyanite")
 
-        // render the lyrics in a text viewer
-        // TODO: make the song appear when lyrics are recognized?
-        system.registerWidget(new TextViewerWidget(
-            "Hello! I'm a text viewer widget! I can render text, markdown, and html!",
-        ))
+        // // render the lyrics in a text viewer
+        // // TODO: make the song appear when lyrics are recognized?
+        // system.registerWidget(new TextViewerWidget(
+        //     "Hello! I'm a text viewer widget! I can render text, markdown, and html! <h1>Neat!</h1>",
+        // ))
 
         // Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]
         // Rhymesayers Entertainment
@@ -11980,6 +12558,54 @@ const InvokableCommands = {
             console.error("Error reading clipboard contents: ", err);
         });
     },
+    // we can use multi-view to debug our view frustum
+    // otherwise, within the preview, we can't see or visualize the view frustum
+    // which makes debugging the view frustum difficult
+    ["launch secondary viewer"](){
+        return "implement multi-view"
+    },
+    ["new scatter plot"](){},
+    ["new spacetime diagram"](){},
+    ["new black hole"](){},
+    ["new gravity well"](){},
+    ["new star"](){},
+    ["new planet"](){},
+    //["new moon"](){},
+    ["new rythm game"](){},
+    ["fix zoom scaling cmd options"](){
+        // add a regression test to make sure command prompt options don't render at different sizes
+        // they should be consistent and Scale independent
+    },
+    ["todo [✅ done] fix cmdprompt textarea overshadowing other inputs"](){
+        system.todo("✅ done! fixed it (for now!) [no unit test added]")
+        // need to reduce the clickable hit area of the command prompt
+        // input text area html element when the cmdPrompt is in it's
+        // hidden or closed state,
+        // or add a dynamic pointer-events:none toggle
+    },
+    ["implement multi-view"](){
+        // in the future, you can specify which system
+        // for now, let's assume the viewer views rootSystem 
+        // rootSystemManager.systems[0]
+        system.registerWidget(new SecondaryViewer());
+    },
+    ["implement projection matrix"](){},
+    ["implement view frustum"](){},
+    ["implement ray casting"](){},
+    ["pre-req: implement BVH"](){},
+    ["todo implement widget hit tests"](){},
+    ["new counter"](){
+        system.registerWidget(new Counter());
+    },
+    ["new button"](){
+        system.registerWidget(new UIButton());
+    },
+    ["new numeric display"](){
+
+    },
+    ["new flow chart"](){},
+    ["new work flow"](){},
+
     ["Set Command Icon"](){},
     ["New Icon"](){},
     ["open photopea"]:"https://www.photopea.com/",
@@ -12105,11 +12731,14 @@ const InvokableCommands = {
 
     },
     // BG Effects
-    ["disable sprites"](){
-        store.disableSprites = true;
-    },
-    ["enable sprites"](){
-        store.disableSprites = false;
+    // ["disable sprites"](){
+    //     store.disableSprites = true;
+    // },
+    // ["enable sprites"](){
+    //     store.disableSprites = false;
+    // },
+    ["toggle sprites"](){
+        store.disableSprites = !store.disableSprites;
     },
     // ["enable deep renderer"](){
     //     store.disableDeepCanvas = false;
@@ -12164,12 +12793,32 @@ const InvokableCommands = {
         system.registerWidgetInstance(new SketchpadWidget());
     },
     // workflows
-    ["new workflow"](){},
-    ["new flow field"](){},
-    ["new idea"](){},
+    ["new workflow"](){
+        system.todo("graph engine in progres... @try: `Load Graph...` command")
+        system.todo("loading ajax flux graph preview...")
+        system.loadGraph("ajaxFlux")
+    },
+    ["🌀 new flow field"](){
+        system.todo("working on that ... 🌀")
+    },
+    ["new idea"](){
+        system.todo("💡 so do it!")
+    },
     // start a random favorite or similar youtube video
     ["enter chore mode"](){},
-    ["enter vacuuming mode"](){},
+    ["toothpick"]:"kyanite toothpick",
+    ["kyanite toothpick"]:"kyanite",
+    ["kyanite"]:"Aesop Rock - Kyanite Toothpick (feat. Hanni El Khatib) [Official Video]",
+    ["enter vacuuming mode"](){
+        //system.todo("🎯 do it")
+        system.invoke("toothpick")
+    },
+    ["vacuuming mini game"](){
+        system.todo("🎯 do it 🧹")
+    },
+    ["leaf blower"](){
+        system.todo("🎯 do it")
+    },
     new_tab: "new_browser_bubble",
     ["new synthesizer"](){
         // spawn a Synth Widget :D
@@ -12193,6 +12842,40 @@ const InvokableCommands = {
     },
     ["undo"](){
         alert("todo: undo")
+    },
+    ["new brain"](){},
+    ["new graph"](){},
+    ["new network"](){},
+    ["new timeline"](){},
+    ["new research project"](){},
+    ["new topic exploration space"](){},
+    ["new sandbox"](){},
+    ["new a/b test"](){},
+    ["new evolutionary algorithm test"](){},
+    ["new handwriting recognizer"](){},
+    ["new network visualizer 2d"](){},
+    ["new network visualizer 3d"](){},
+    ["new agent"](){},
+    ["new character"](){},
+    ["new personality"](){},
+    ["new workload"](){},
+    ["new review"](){},
+    ["new issue"](){},
+    ["new bug"](){},
+    ["new task"](){},
+    ["new project"](){},
+    ["new callback"](){},
+    ["new lambda"](){},
+    ["new function"](){},
+    ["new equation"](){},
+    ["new field"](){},
+    ["new property"](){},
+    ["new constant"](){},
+    ["Math > Infinity"](){
+        return Math.Infinity;
+    },
+    ["Math > Negative Infinity"](){
+        return Math.NegativeInfinity;
     },
     ["redo"](){
         alert("todo: redo")
@@ -12227,6 +12910,29 @@ const InvokableCommands = {
     ["select next occurance"](){},
     ["select all occurances"](){},
     ["select previous occurance"](){},
+    ["new flow momentum tracker"](){
+        // a fidget toy that tracks how fast you're typing to show others at a glance
+        // how IN THE ZONE you are and to not break your focus!
+        system.registerWidgetInstance(new MomentumTrackerWidget());
+    },
+    ["new new"](){
+
+    },
+    ["new browser notification"](){
+        if (!("Notification" in window)) {
+            console.log("This browser does not support desktop notification");
+        }
+        else if (Notification.permission === "granted") {
+            let notification = new Notification("Hi there!");
+        }
+        else if (Notification.permission !== 'denied' || Notification.permission === "default") {
+            Notification.requestPermission(function (permission) {
+                if (permission === "granted") {
+                    let notification = new Notification("Hi there!");
+                }
+            });
+        }
+    },
     ["new browser bubble"](){
         InvokableCommands["new iframe widget"]()
     },
@@ -12373,28 +13079,31 @@ const InvokableCommands = {
 
     ["Play Bestie"]:"https://www.youtube.com/watch?v=5SH69RyqLA4",
 
-    this_is_fine: "fine.gif",
+    ["this is fine"]: "fine.gif",
     feels_good_man: "feelsgoodman.gif",
 
-    "new hand-written digit recognizer": "",
-    "new hand-drawn shape recognizer": "",
-    "new classifer": "",
+    "new hand-written digit recognizer": SO_DO_IT,
+    "new hand-drawn shape recognizer": SO_DO_IT,
+    "new classifer": SO_DO_IT,
     // textual inversion, style transfer
-    "new AI training run": "",
-    "generate an image of...": "",
-    "convert this image to a video": "",
-    "combine these images!": "",
+    "new AI training run": SO_DO_IT,
+    "generate an image of...": SO_DO_IT,
+    "convert this image to a video": SO_DO_IT,
+    "combine these images!": SO_DO_IT,
 
-    "watch bob ross": "",
-    "watch wheel of fortune": "",
-    "watch powerpuff girls": "",
-    "watch the simpsons": "",
+    "watch bob ross": SO_DO_IT,
+    "watch wheel of fortune": SO_DO_IT,
+    "watch powerpuff girls": SO_DO_IT,
+    "watch the simpsons": SO_DO_IT,
 
-    "play half life": "",
-    "play portal 2": "",
+    "play half life": SO_DO_IT,
+    "play portal 2": SO_DO_IT,
 
-    "remember...": "",
-    "forget...": "",
+    "new flight simulation": SO_DO_IT,
+    "new rocket simulation": SO_DO_IT,
+
+    "remember...": SO_DO_IT,
+    "forget...": SO_DO_IT,
 
     "YouTube - The Coding Train - Coding Challenge 177: Soft Body Physics": "https://www.youtube.com/watch?v=IxdGyqhppis",
 
@@ -12739,13 +13448,44 @@ Object.entries(InvokableCommands).forEach(([key, val]) => {
     if (normalizedKey !== key) {
         // console.warn(`remapping ${key} to ${normalizedKey}`);
         if (normalizedKey in InvokableCommands) {
-            console.error(`collision! ${normalizedKey} already exists!`);
-            throw new Error(`collision! ${normalizedKey} already exists!`);
+            system.warn(`collision! ${normalizedKey} already existed!`);
+            //throw new Error(`collision! ${normalizedKey} already exists!`);
         }
         InvokableCommands[normalizedKey] = val;
         // delete InvokableCommands[key];
     }
 })
+
+
+class SineWavePreview extends Widget {
+        constructor() {
+            super(...arguments);
+            this.angle = 0; // Initialize angle for oscillation
+            this.waveWidth = this.widgetSize.width; // Width of the wave display
+            this.amplitude = this.widgetSize.height / 2; // Height of the wave
+        }
+    
+        onDraw() {
+            //push(); // Start a new drawing state
+            translate(this.x, this.y); // Move to the position of the widget
+    
+            stroke(0);
+            strokeWeight(20);
+            noFill();
+            beginShape();
+            for (let x = 0; x < this.waveWidth; x++) {
+                let y = sin(this.angle + TWO_PI * x / this.waveWidth) * this.amplitude;
+                vertex(x, this.height / 2 + y);
+            }
+            endShape();
+    
+            this.angle += 0.05; // Increment the angle for the next frame
+    
+            //pop(); // Restore original state
+        }
+    
+}
+
 const BasicBools = [
     "DISABLE_PARALLAX"
 ]
@@ -12757,6 +13497,25 @@ class Gizmo extends Widget {
     }
 }
 
+// in the future, you can specify which system
+// for now, let's assume the viewer views rootSystem 
+// rootSystemManager.systems[0]
+class SecondaryViewer extends Widget {
+    // I don't think we need to call this anymore
+    // constructor(){
+    //     super(...arguments)
+    // }
+
+    onDraw(){
+        // I don't think we need to call this anymore
+        //super.onDraw(...arguments)
+
+        stroke("green")
+        fill("purple")
+        rect(0,0, 300, 100, 50)
+    }
+}
+
 class MarchingCubesDemoWidget extends Widget {}
 class AStarPathfindingDemoWidget extends Widget {}
 class BasicPlatformerDemoWidget extends Widget {}
@@ -12764,11 +13523,19 @@ class BasicPlatformerDemoWidget extends Widget {}
 class WidgetForge extends Widget {}
 class WizardForge extends WidgetForge {}
 class GiphyWidget extends Widget {}
-class MandlebrotWidget extends Widget {}
+class MandelbrotWidget extends Widget {}
 class FileBrowserWidget extends Widget {}
 class WebBrowserWidget extends Widget {}
 class IFTTTWidget extends Widget {}
-class ShaderToyWidget extends Widget {}
+class ShaderToyWidget extends iFrameWidget {
+    // render as a iframe for now
+    // <iframe width="640" height="360" frameborder="0" src="https://www.shadertoy.com/embed/DllXzX?gui=true&t=10&paused=true&muted=false" allowfullscreen></iframe>
+    url = "https://www.shadertoy.com/embed/DllXzX?gui=true&t=10&paused=true&muted=false"
+    widgetSize = {
+        width: 640,
+        height: 360
+    }
+}
 class PixelArtWidget extends Widget {}
 class VectorArtWidget extends Widget {}
 class TextEditorWidget extends Widget {}
@@ -13048,13 +13815,53 @@ class VisualClipboard extends Widget {
 // of rendering multiple Timer instances in a single widget
 class TimerWidget extends Widget {
     widgetSize = {
-        width: 200,
-        height: 200
+        width: 400,
+        height: 400
     }
     constructor(){
         super(...arguments)
+
+        // request permission to show notifications
+        if (!("Notification" in window)) {
+            console.log("This browser does not support desktop notification");
+        } else if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+            Notification.requestPermission();
+        }
+
+        // start playing this sound on a loop:
+        //system.playSound("grandfather_clock",true)
+
         // automatically generates a timerManager.timers[0]
         this.timerManager = new TimerManager(); 
+        // bind our timer.onTimerEnded
+        this.timerManager.timers[0].onTimerEnded = function(){
+            //alert('timer ended!')
+            /** @see System.playSuccessTone */
+            system.playSuccessTone();
+
+            system.grandfatherClockAudioPlayer.stop();
+            //system.stopSound("grandfather_clock",true)
+
+            // Trigger a browser notification
+            if (!("Notification" in window)) {
+                console.log("This browser does not support desktop notification");
+            } else if (Notification.permission === "granted") {
+                let notification = new Notification("Timer ended!")
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(function (permission) {
+                    if (permission === "granted") {
+                        let notification = new Notification("Timer ended!");
+                    }else{  
+                        console.warn("Notification permission denied");
+                    }
+                });
+            } else {
+                console.warn("Notification permission denied?");
+            }
+        }
+    }
+    onClose(){
+        system.grandfatherClockAudioPlayer.stop();
     }
     onDraw(){
         super.onDraw(...arguments)
@@ -13068,19 +13875,15 @@ class TimerWidget extends Widget {
             //     this.smartPosition.y + (index * 20)
             // )
             // draw the time elapsed vs. time remaining
-            fill("red")
+            // fill("red")
 
-            text(
-                `Timer ${index+1} \n elapsed: ${timer.timeElapsedFormatted} \n remaining: ${timer.timeRemainingFormatted}`,
-                20,
-                40
-            )
+            // text(
+            //     `Timer ${index+1} \n elapsed: ${timer.timeElapsedFormatted} \n remaining: ${timer.timeRemainingFormatted}`,
+            //     20,
+            //     40
+            // )
 
-            strokeWeight(1)
-            stroke("blue");
-            fill("black")
-            text(timer.timeElapsed, 0,0)
-            text(timer.timeRemaining, 0,20)
+            
 
             // draw a circular progress bar on a white circle
             // draw a white circle
@@ -13095,11 +13898,38 @@ class TimerWidget extends Widget {
             //     a: typeof timer.timeElapsed,
             //     b: typeof timer.duration,
             // })
+
+            // draw a pendulum
+            // draw a pendulum that ticks once a second
+            let angle = map(second(), 0, 60, 0, 360);
+            push();
+            translate(100, 100);
+            rotate(radians(angle));
+            //stroke(255 - parseInt(millis%255),0,0);
+            stroke("limegreen")
+            strokeWeight(1);
+            line(0, 0, 0, 50); // Draw the pendulum arm
+            fill(255,255,0);
+            ellipse(0, 50, 16, 16);
+            pop();
+
+            // draw a pendulum
+            // draw a pendulum that swings back and forth
+            let angle2 = Math.sin(millis() / 1000) * Math.PI / 4; // Swing back and forth between -45 and 45 degrees
+            push();
+            translate(100, 100);
+            rotate(angle2);
+            stroke(parseInt((millis%255).toFixed(0)),0,0);
+            strokeWeight(1);
+            line(0, 255, 0, 50); // Draw the pendulum arm
+            fill(255,255,0);
+            ellipse(0, 50, 16, 16); // Draw the pendulum weight
+            pop();
             
 
             // Ensure timer.timeElapsed and timer.duration are numbers
             if (typeof timer.timeElapsed === 'number' && typeof timer.duration === 'number') {
-                let end = map(timer.timeElapsed, 0, timer.duration, 0, 360);
+                let end = map(timer.timeElapsed/1000, 0, timer.duration, 0, 360);
                 end = 360 - end
                 //console.warn('end',end);
                 // Ensure end is a number that can be converted to radians
@@ -13111,6 +13941,16 @@ class TimerWidget extends Widget {
             } else {
                 //console.error('Invalid timer values:', timer.timeElapsed, timer.duration);
             }
+
+            strokeWeight(1)
+            stroke("blue");
+            fill("black")
+            textAlign(CENTER,CENTER)
+            text((timer.timeElapsed/1000).toFixed(0), this.widgetSize.width/2,this.widgetSize.height/2)
+            textSize(40)
+            textAlign(CENTER,CENTER)
+            textSize(40)
+            text(timer.timeRemaining, this.widgetSize.width/2,this.widgetSize.height/2+20)
         })
     }
 }
@@ -13709,6 +14549,7 @@ class LoadStateFromLocalStorage
 extends BaseCmds(Command, new LoadStateFromLocalStorageWizardConfig()){}
 
 // Mode Switching Commands
+// TODO: bake into a FSM
 class ModeSwitch_SELECT 
 extends BaseCmds(Command, {
     name: "Select Mode",
@@ -13745,28 +14586,30 @@ extends BaseCmds(Command,{
     }
 }){}
 
+class Household {}
+class Appointment {}
+class FamilyMember {}
+class Family {}
+class Chore {}
+class Bill {}
+class Creditor {}
+class Pickup {}
+class Dropoff {}
+class Work {}
+class Meeting {}
+class Task {}
+class Project {}
+class Coworker {}
+class Review {}
+class Invoice {}
+
+
 const TYPENAME_TO_CONSTRUCTOR_MAP = {
     // Graph related
     Graph,
     GraphNode,
     Edge,
-    AddGraphNodeWizardConfig,
-    AddGraphNodeCommand,
-
-    // // Household
-    // Chore,
-    // Bill,
-
-    // // Family
-    // Pickup,
-    // Dropoff,
-    // Appointment,
-
-    // // Work
-    // Meeting,
-    // Task,
-    // Project,
-    // Coworker,
+    // AddGraphNodeCommand,
 
     // Todo related
     TodoNode,
@@ -13898,12 +14741,18 @@ class CmdPrompt extends Widget {
 
     afterSetup(){
         // TODO: draw the command prompt instead of using html el
-        CmdPromptInput = mctx.createInput('');
+        CmdPromptInput = mctx.createElement('textarea');
         CmdPromptInput.parent(document.body);
+        CmdPromptInput.attribute('rows', '10');
+        CmdPromptInput.attribute('cols', '50');
+        CmdPromptInput.style('width', 'auto');
+        CmdPromptInput.style('height', 'auto');
         CmdPromptInput.elt.style.backgroundColor = 'transparent';
         CmdPromptInput.elt.style.color = 'white';
         CmdPromptInput.elt.style.zIndex = 9999;
         CmdPromptInput.elt.id = 'cmdprompt-input';
+        // important no border radius
+        CmdPromptInput.elt.style.borderRadius = '0px';
         //CmdPromptInput.class('z-index-9999');
         //CmdPromptInput.elt.style.filter = 'blur(10px)';
 
@@ -13915,7 +14764,8 @@ class CmdPrompt extends Widget {
         CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}`);
 
         setInterval(()=>{
-            CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}\n What are you working on? undefined`);
+            // \nWhat are you working on? undefined
+            CmdPromptInput.attribute('placeholder', `${this.getTimeStamp()}`);
         },350)
         
         CmdPromptInput.style('font-size', '66px');
@@ -14119,8 +14969,8 @@ class CmdPrompt extends Widget {
             wizardConfig: new TimerWizardConfig("New Timer Wizard")
         }))
         
-        // this.availableCommands.push(new Command("New Error",{}))
-        // this.availableCommands.push(new Command("New Graph",{}))
+
+
         // this.availableCommands.push(new Command("New Node Type",{}))
         this.availableCommands.push(new Command("New Requirement",{}))
         this.availableCommands.push(new Command("New FeatureTest",{}))
@@ -14260,6 +15110,7 @@ class CmdPrompt extends Widget {
         ])
     }
 
+    // aol keywords: drawcmdprompt rendercmdprompt
     renderCommandPrompt(){
         let ctx = deepCanvasManager.uiContext;
         ctx.push();
@@ -14338,6 +15189,7 @@ class CmdPrompt extends Widget {
             name: CmdPromptInput.value()
         }
 
+        // TODO: deprecate these...
         if(this.currentCommand?.constructor?.name === "Config"){
             // turn it into an executable command instance
             this.currentCommand = new Command(this.currentCommand.config.name,this.currentCommand.config);
@@ -14473,6 +15325,7 @@ class CmdPrompt extends Widget {
 
     initCommand(){
         this.currentCommand = new Command();
+        /** @see Command.updateFromBuffer */
         this.currentCommand.updateFromBuffer();
     }
     
@@ -14501,23 +15354,7 @@ class CmdPrompt extends Widget {
 
         // URL-Pasting Check
         // if the input contains :// and no spaces, let's assume it's a url and add a suggestion to paste it as an embedded WebObject
-        if(currentInputBufferText.includes('://') && !currentInputBufferText.includes(' ')){
-            recommended_order.push({
-                command: new Command("Embed URL WebObject",{
-                    name: `Embed URL: "${currentInputBufferText}"`,
-                    execute: function(){
-                        //console.warn("TODO: if it was a tweet, make it a fancy iframe!");
-                        //system.todo("implement url embeds for various well-known iframe friendly sites which provide a consistent url structure for embedding")
-                        console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
-
-                        // if the url has a //twitter.com || //x.com domain,
-                        // embed it as an iframe widget
-                        let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
-                        system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
-                    }
-                })
-            })
-        }
+        recommended_order = this.checkAndEmbedUrl(currentInputBufferText, recommended_order);
 
 
         // todo: pull available commands from system-wide list
@@ -14652,6 +15489,45 @@ class CmdPrompt extends Widget {
 
         //     filteredLengthCurrently: this.filteredCommands.length,
         // } );
+    }
+
+    checkAndEmbedUrl(currentInputBufferText, recommended_order) {
+        if(currentInputBufferText.includes('://') && !currentInputBufferText.includes(' ')){
+            recommended_order.push({
+                command: new Command("Embed URL WebObject",{
+                    name: `Embed URL: "${currentInputBufferText}"`,
+                    execute: () => {
+                        console.warn('pasted a url! argument:currentInputBufferText:',currentInputBufferText)
+
+                        if(currentInputBufferText.includes('//twitter.com')
+                            || currentInputBufferText.includes('//x.com')
+                        ){
+                            let urlSafeUrl = encodeURIComponent(currentInputBufferText.split('/x.com').join('/twitter.com'));
+                            system.registerWidget(new iFrameWidget(`https://twitframe.com/show?url=${urlSafeUrl}`,550,800))
+                        }else if(currentInputBufferText.includes('//youtube.com')
+                            || currentInputBufferText.includes('//youtu.be')
+                        ){
+                            system.registerWidget(new YouTubeWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('.png')
+                            || currentInputBufferText.includes('.jpg')
+                            || currentInputBufferText.includes('.jpeg')
+                            || currentInputBufferText.includes('.gif')
+                            || currentInputBufferText.includes('.bmp')
+                            || currentInputBufferText.includes('.svg')
+                            || currentInputBufferText.includes('.webp')
+                        ){
+                            system.registerWidget(new ImageWidget(currentInputBufferText,550,800))
+                        }else if(currentInputBufferText.includes('://')){
+                            system.registerWidget(new iFrameWidget(currentInputBufferText,550,800))
+                        }else{
+                            //this.system.panic("i dont know what to do with my hands")
+                            throw new Error("i dont know what to do with my hands")
+                        }
+                    }
+                })
+            })
+        }
+        return recommended_order;
     }
 }
 
@@ -15943,14 +16819,78 @@ function setupDefaults(){
         baseCmds.push(new Config({
             name: `${cmdName}`,
             execute(){
+                // how do we see if base cmd needs to call "tryInvokeHandlerForUri" on cmdName?
                 console.log("base cmd execute: ",{
                     cmdName,
                     machineizedCmdName,
+                    val: InvokableCommands[machineizedCmdName],
+                    argz: arguments
                 })
+
+                const val = InvokableCommands?.[machineizedCmdName]
+                if(val === RES || val === RESOURCE){
+                    // if the KEY reflects a .mp4, we should spawn a video player widget
+                    if(machineizedCmdName?.includes?.('.mp4')){
+                        // if(!cmdName.includes('/res/') && !cmdName.includes('://')){
+                        //     cmdName = '/res/'+cmdName;
+                        // }
+                        return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                    }
+                }
+
+                //console.warn('here is where we need to see if were referencing a key of a different invokable, we need a recursive getBaseInvokable() for a given string lookup keyname');
+                // function getBaseInvokable(key, depth = 0) {
+                //     const MAX_DEPTH = 10;
+                //     if (depth > MAX_DEPTH) {
+                //         throw new Error(`Max lookup depth exceeded for key: ${key}`);
+                //     }
+                //     const value = InvokableCommands[key];
+                //     if (typeof value === 'function') {
+                //         return value;
+                //     } else if (value === RES || value === RESOURCE) {
+                //         return getBaseInvokable(value, depth + 1);
+                //     } else {
+                //         throw new Error(`Invalid value encountered for key: ${key}`);
+                //     }
+                // }
+
+                // if(InvokableCommands[machineizedCmdName]?.includes?.('.mp4')){
+                //     return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                // }
+
+                // const baseInvokable = getBaseInvokable(machineizedCmdName);
+                const baseInvokable = InvokableCommands[machineizedCmdName];
+                
+
                 // if(!InvokableCommands[cmdName]){
                 //     throw new Error(`Bad Command Name:\n\n \`${cmdName}\`\n\n No Matching InvokableCommand Map Entry Found. Names must resolve to pre-defined Invokable functions we can call in order for a command to exist in the BasicCommands array. If you need to generate a command at runtime, there are other ways to do it. See: ...`)
                 // }
                 let result;
+
+                if(InvokableCommands[machineizedCmdName] === RES || InvokableCommands[machineizedCmdName] === RESOURCE){
+                    if(machineizedCmdName?.includes?.('.mp4')){
+                        console.warn('we found it')
+                        return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                    }
+                }
+
+                console.warn('baseCmd.execute: executing... cmdNameIncludesMP4? getBaseInvokable', {
+                    baseInvokable,
+                    cmdName, 
+                    isMp4:cmdName?.includes?.('.mp4')
+                })
+                if(cmdName?.includes?.('.mp4')){
+                    // video player widget
+                    return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                };
+
+                if(baseInvokable?.includes?.('youtube.') || baseInvokable?.includes?.('youtu.be')){
+                    return system.registerWidgetInstance(new YoutubePlayerWidget({tracks:[baseInvokable]}));
+                }else if(baseInvokable?.includes?.('://')){
+                    // try an iframe
+                    return system.registerWidgetInstance(new iFrameWidget(baseInvokable));
+                }
+
 
                 // if the cmdName includes https:// or a file extension,
                 // we should return a new instance of an appropriate widget
@@ -15963,11 +16903,29 @@ function setupDefaults(){
                 // if it's an ARRAY of STRINGS, we need to do ths same check and early return
 
                 try{
-                    if(!InvokableCommands[machineizedCmdName] || !InvokableCommands[machineizedCmdName]?.call){
+                    if(
+                        !InvokableCommands[machineizedCmdName]
+                    ){
                         console.warn("command must be one of:",Object.keys(InvokableCommands))
                         system.panic("bad command name: "+machineizedCmdName)
+                    }else if(!InvokableCommands[machineizedCmdName]?.call){
+                        // it's a string, see if it's another aliased command name
+                        //result = system.tryInvokeHandlerForUri(InvokableCommands[machineizedCmdName]);
+                        // if(result === UNINVOKABLE){
+                        //     // TODO: make this a uniquish CONST like 80184
+                        //     // when it's ^ this special value, we should
+                        //     // it means that we should invoke the uri as the keyname
+                        //     // system.info("trying  again with uri as keyname",{
+                        //     //     machineizedCmdName,
+                        //     //     a: InvokableCommands[machineizedCmdName],
+                        //     //     b: InvokableCommands[InvokableCommands[machineizedCmdName]]
+                        //     // })
+                        //     //result = system.tryInvokeHandlerForUri(machineizedCmdName);
+                        //     console.warn('UNINVOKABLE',{machineizedCmdName})
+                        // }
+                    }else{
+                        result = InvokableCommands[machineizedCmdName].call(this);
                     }
-                    result = InvokableCommands[machineizedCmdName].call(this);
                 }catch(e){
                     console.error('failed to execute command!',e)
                     // what to do if call can't be 
@@ -16193,7 +17151,7 @@ const CoreWidgets = [
 
     // GiphyWidget,
 
-    // MandlebrotWidget,
+    // MandelbrotWidget,
     // FileBrowserWidget,
     // WebBrowserWidget, // iframeWidget wrapper
     // IFTTTWidget, // IFTTT Integration
@@ -16356,6 +17314,7 @@ function animateVector(from, to, onUpdate, duration = 1000){
 }
 
 let cursor, MainCanvasContextThing = function(p){
+    let registerKeyBindings; // a fn we define later
     let _onResize = function(){
         mctx.resizeCanvas(windowWidth, windowHeight);
         // document.querySelectorAll('canvas').forEach((canvii)=>{
@@ -16483,7 +17442,50 @@ let cursor, MainCanvasContextThing = function(p){
         // boot routine
         console.info("booting...");
         manager.boot(); 
+        // window.onbeforeunload = async function() {
+        //     return new Promise((resolve, reject) => {
+        //         system.playErrorTone();
+        //         manager.shutdown();
+        //         setTimeout(resolve, 1000);
+        //     })
+        // }
+
+        // init the system clipboard monitor / history
+        system.ClipboardManager = new ClipboardManager();
+
+
+        let isPageUnloading = false;
+
+        // Set up the beforeunload listener
+        window.addEventListener('beforeunload', function() {
+            console.warn('beforeunload');
+            isPageUnloading = true;
+        });
+
+        // Set up the interval to check the condition
+        // setInterval(function() {
+        //     if (isPageUnloading) {
+        //         // Play the sound here
+        //         let audio = new Audio('path_to_your_audio_file.mp3');
+        //         audio.play();
+
+        //         // Clear the interval after playing the sound
+        //         clearInterval(this);
+        //     }
+        // }, 100); // Check every 100ms
+
+
         rootSystem = system = manager.systems[0];
+        // the boot sound
+        //system.playSuccessTone(); 
+
+        // logging 1024+ keys slows things down...
+        // const keysStartingWithT = Object.keys(InvokableCommands)
+        //     //.filter(key => key.toLowerCase().startsWith('t'));
+        // const sortedKeys = keysStartingWithT
+        //     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+        // console.log(sortedKeys);
 
         // note: there's a bug where calling the rootSystemManager.boot doesn't actually boot sub-systems
         // kind of makes sense, wouldn't want docker to auto-start all your containers each time
@@ -16496,6 +17498,9 @@ let cursor, MainCanvasContextThing = function(p){
         // stat.js
         (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
 
+        system.grandfatherClockAudioPlayer = mctx.createAudio('res/onlymp3.to - Household Grandfather Clock Tick Tock Sound Effect-SBSuIA0TxK0-192k-1701988301.mp3');
+
+        // system.widgetOpenAudioPlayer = mctx.createAudio('');
 
         system.plopAudioPlayer = mctx.createAudio('res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3');
         system.plopAudioPlayer.volume(0.1);
@@ -16551,8 +17556,6 @@ void main(void) {
         document.body.appendChild(topCanvas);
         window.iCanvasCompositor = new CanvasCompositor(canvases, fragmentShaderSource, topCanvas);
 
-        //initTHREEMode();
-
         // system.get("Dashboard").registerWidget(new IsometricPreview());
 
         // spawn a bunch of BlurSprite
@@ -16576,6 +17579,7 @@ void main(void) {
         zoom = 0.0001;
 
         // fancy
+        // animatezoom
         // intro animation
         // our nice zoom in effect
         // TODO: camera path recording / playback system (slideshow presentation mode)
@@ -16636,186 +17640,8 @@ void main(void) {
         // // bootstrap our self-test
         // gherkinRunnerWidget = new GherkinRunnerWidget(testSeq);
 
-        document.addEventListener('keydown',(e)=>{
-            // console.warn('keydown',{e})
-            if(store.shiftIsMomentary){
-                store.shiftIsPressed = e.shiftKey;
-            }else{
-                // shiftIsToggle, not shiftIsMomentary
-                if(e.shiftKey){
-                    store.shiftIsPressed = !store.shiftIsPressed;
-                }
-            }
-
-            document.querySelectorAll('iframe').forEach((iframe)=>{
-                // toggle pointerEvents none when shift is pressed
-                if(store.shiftIsPressed){
-                    iframe.style.pointerEvents = 'none';
-                } else {
-                    iframe.style.pointerEvents = 'auto';
-                }
-            });
-
-
-            // if we're not focused on any fields
-            if(store.focusedField === null){
-
-            }
-
-            // if we're focused on the main command prompt input,,
-            //if(store.focusedField === CmdPromptInput.elt){
-                // arrow key down should cycle through the suggestion list
-                // call the input handler
-                cmdprompt = system.cmdprompt;
-                if(!cmdprompt){
-                    system.warn("cmdprompt not ready");
-                }
-                cmdprompt?.onCmdPromptInput(e);
-            //}
-        })
-        // primary key bindinds...
-
-        document.addEventListener('keydown', (e)=>{
-            console.warn('keypress',{e})
-            // command or control
-            // cmdorcontrol
-            // cmdorctrl
-            // ctrlorcmd
-            // controlorcmd
-            // controlOrCommand
-            const ctrlOrCmd = e.ctrlKey || e.metaKey;
-
-            // TODO: make this a static command matrix... !!!
-
-            if(ctrlOrCmd && e.key === 'd'){
-                system.alert("don't bookmark, just come back.")
-                e.preventDefault();
-                InvokableCommands["clear"]();
-                /** @see CmdPrompt.hideCmdPrompt */
-                system.cmdprompt.hideCmdPrompt();
-                system.notify("Cleared! 🧘‍♂️")
-                return;
-            } 
-
-            // Check if Ctrl key is pressed along with P
-            if (ctrlOrCmd && e.key === 'p') {
-                // ctrl + p, cmd + p, cmd&p||ctrl&p
-                // Prevent the default ctrl p ctrl+p print action!
-                e.preventDefault();
-                //alert("Ctrl+P has been disabled!");
-                // toggle the dashboard
-                /** @see CmdPrompt.showCmdPrompt */
-                system.cmdprompt.showCmdPrompt();
-                return;
-            }
-
-            // override default ctrlOrCmd + f behavior
-            if (ctrlOrCmd && e.key === 'f') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
-            }
-
-            // override default ctrlOrCmd + k behavior
-            if (ctrlOrCmd && e.key === 'k') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
-            }
-
-            // override default ctrlOrCmd + l behavior
-            if (ctrlOrCmd && e.key === 'l') {
-                e.preventDefault();
-                system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
-            }
-
-            // if the key is `f` and we don't have any inputs focused,
-            // interpret it as "find" or "fit" and center the pan/zoom back to origin of current space
-            if(e.key === 'f' && !store.focusedField){
-                system.dashboard.centerView();
-                system.alert("focused")   
-            }
-            // toggle 100% zoom
-            // ctrl+0
-            // cmd+0
-            if(ctrlOrCmd && e.key === '0'){
-                /** @see Dashboard.centerView */
-                system.dashboard.centerView(true);
-            }
-
-            // if pasting 
-            if(ctrlOrCmd && e.key === 'v'){
-                /** @see System.onPaste */
-                system.onPaste(...arguments);
-            }
-            // copying
-            if(ctrlOrCmd && e.key === 'c'){
-                /** @see System.onCopy */
-                system.onCopy(...arguments);
-            }
-            
-            let KeyboardPanInfluence = { x: 0, y: 0 };
-            let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
-            let maxInfluence = 100 * (zoom); // 1/zoom?
-            let decayFactor = 0.99;
-            let lerpFactor = 0.001; // control the speed of lerp
-            let ignore = false;
-            let baseStepSize = 100;
-            let stepSize = baseStepSize * (zoom); // 1/zoom?
-            switch(e.key) {
-                case 'w':
-                    zoom += 0.1;
-                    break;
-                case 's':
-                    zoom -= 0.1;
-                    break;
-                case 'a':
-                case 'ArrowLeft':
-                    KeyboardPanInfluenceTarget.x = Math.max(KeyboardPanInfluenceTarget.x - stepSize / zoom, -maxInfluence);
-                    break;
-                case 'd':
-                case 'ArrowRight':
-                    KeyboardPanInfluenceTarget.x = Math.min(KeyboardPanInfluenceTarget.x + stepSize / zoom, maxInfluence);
-                    break;
-                case 'q':
-                case 'ArrowUp':
-                    KeyboardPanInfluenceTarget.y = Math.max(KeyboardPanInfluenceTarget.y - stepSize / zoom, -maxInfluence);
-                    break;
-                case 'e':
-                case 'ArrowDown':
-                    KeyboardPanInfluenceTarget.y = Math.min(KeyboardPanInfluenceTarget.y + stepSize / zoom, maxInfluence);
-                    break;
-                default:
-                    ignore = true;
-                    break;
-            }
-
-            // Lerp the influence values over time
-            KeyboardPanInfluence.x += (KeyboardPanInfluenceTarget.x - KeyboardPanInfluence.x) * lerpFactor;
-            KeyboardPanInfluence.y += (KeyboardPanInfluenceTarget.y - KeyboardPanInfluence.y) * lerpFactor;
-
-            // Decay the influence when the keyboard movement stops
-            KeyboardPanInfluence.x *= decayFactor;
-            KeyboardPanInfluence.y *= decayFactor;
-
-            // Apply the influence to the pan with lerp towards the target
-            //if(!ignore){
-                panX += (KeyboardPanInfluence.x - panX) * lerpFactor;
-                panY += (KeyboardPanInfluence.y - panY) * lerpFactor;
-            //}
-        })
-        document.addEventListener('keyup',(e)=>{
-            if(store.shiftIsMomentary){
-                store.shiftIsPressed = false
-            }
-            // console.warn('keyup',{e})
-            // if the cmdprompt is active, pipe the event
-            if(store.CmdPromptVisible){
-                cmdprompt = system.cmdprompt;
-                if(!cmdprompt){
-                    system.warn("cmdprompt not ready");
-                }
-                cmdprompt?.onCmdPromptInput(e);
-            }
-        })
+        // setup keyboard shortcuts n such
+        registerKeyBindings();
 
         
 
@@ -16829,7 +17655,6 @@ void main(void) {
         //     "video_731defd5b618ee03304ad345511f0e54.mp4",
 
         //     MessengerWidget,
-        //     TimerWidget,
         //     TodoWidget,
         //     UIDemoWidget,
         //     WeatherWidget,
@@ -16848,6 +17673,10 @@ void main(void) {
 
         //system.todo("log time til framerate stable (boot seq time)")
 
+        //system.invoke("new moon phase widget")
+        system.invoke("kyanite");
+        system.invoke("moon");
+
         /*
         // it'll be our debug standard output while we workbench the windowing > tabs > panes subsystems
         const grw = new GherkinRunnerWidget();
@@ -16857,6 +17686,9 @@ void main(void) {
         // demo widgets
         system.dashboard.registerWidget(grw);
         */
+
+        // system.invoke("new timer")
+        //system.registerWidget(new TimerWidget());
 
         // NOT NOW NAUSEA!
 
@@ -17000,7 +17832,7 @@ void main(void) {
 
                 .registerWidget(new AStarPathfindingDemoWidget())
 
-                .registerWidget(new MandlebrotWidget())
+                .registerWidget(new MandelbrotWidget())
 
                     //     .registerWidget(new IsometricPreview())
 
@@ -17100,7 +17932,7 @@ void main(void) {
         const widVals = Object.values(system.get("Dashboard").widgets);
         let count = widVals.length;
         widVals.forEach((widget,index)=>{
-            widget.canvasID = Math.round(mctx.random(-1,1)); //-1;
+            widget.canvasID = 0; //Math.round(mctx.random(-1,1)); //-1;
             // if(index === count -1){
             //     widget.canvasID = 1;
             // }
@@ -17227,7 +18059,34 @@ void main(void) {
         // kickoff loaded animation
         setTimeout(()=>{
             requestAnimationFrame(stepZoomAnimation);
-        },3000)
+        },0)
+
+        // TODO: time-boxing, color changes per hour:
+        // 12am: black
+        // 1am: dark blue
+        // 2am: dark blue
+        // 3am: dark blue
+        // 4am: dark blue
+        // 5am: dark blue
+        // 6am: dark blue
+        // 7am: dark blue
+        // 8am: dark blue
+        // 9am: dark blue
+        // 10am: dark blue
+        // 11am: dark blue
+        // 12pm: dark blue
+        // 1pm: dark blue
+        // 2pm: dark blue
+        // 3pm: dark blue
+        // 4pm: dark blue
+        // 5pm: dark blue
+        // 6pm: dark blue
+        // 7pm: dark blue
+        // 8pm: dark blue
+        // 9pm: dark blue
+        // 10pm: dark blue
+        // 11pm: dark blue
+        
     }
 
     p.onMouseDown = function(){
@@ -17370,6 +18229,187 @@ void main(void) {
             panningBG = false;
             stopDragging(); // ~> stepPanMomentum
         }
+    }
+
+    registerKeyBindings = ()=>{
+        document.addEventListener('keydown',(e)=>{
+            // console.warn('keydown',{e})
+            if(store.shiftIsMomentary){
+                store.shiftIsPressed = e.shiftKey;
+            }else{
+                // shiftIsToggle, not shiftIsMomentary
+                if(e.shiftKey){
+                    store.shiftIsPressed = !store.shiftIsPressed;
+                }
+            }
+
+            document.querySelectorAll('iframe').forEach((iframe)=>{
+                // toggle pointerEvents none when shift is pressed
+                if(store.shiftIsPressed){
+                    iframe.style.pointerEvents = 'none';
+                } else {
+                    iframe.style.pointerEvents = 'auto';
+                }
+            });
+
+
+            // if we're not focused on any fields
+            if(store.focusedField === null){
+
+            }
+
+            // if we're focused on the main command prompt input,,
+            //if(store.focusedField === CmdPromptInput.elt){
+                // arrow key down should cycle through the suggestion list
+                // call the input handler
+                cmdprompt = system.cmdprompt;
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            //}
+        })
+        // primary key bindinds...
+
+        document.addEventListener('keydown', (e)=>{
+            console.warn('keypress',{e})
+            // command or control
+            // cmdorcontrol
+            // cmdorctrl
+            // ctrlorcmd
+            // controlorcmd
+            // controlOrCommand
+            const ctrlOrCmd = e.ctrlKey || e.metaKey;
+
+            // TODO: make this a static command matrix... !!!
+
+            const keyActions = {
+                'd': () => {
+                    if(ctrlOrCmd){
+                        system.alert("don't bookmark, just come back.")
+                        e.preventDefault();
+                        InvokableCommands["clear"]();
+                        system.cmdprompt.hideCmdPrompt();
+                        system.notify("Cleared! 🧘‍♂️")
+                    }
+                },
+                'p': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.cmdprompt.showCmdPrompt();
+                    }
+                },
+                'f': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + F behavior overridden, but not yet implemented.");
+                    } else if(!store.focusedField){
+                        system.dashboard.centerView();
+                        system.alert("focused")   
+                    }
+                },
+                'k': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + K behavior overridden, but not yet implemented.");
+                    }
+                },
+                'l': () => {
+                    if(ctrlOrCmd){
+                        e.preventDefault();
+                        system.todo("Ctrl/Cmd + L behavior overridden, but not yet implemented.");
+                    }
+                },
+                '0': () => {
+                    if(ctrlOrCmd){
+                        system.dashboard.centerView(true);
+                    }
+                },
+                'x':()=>{
+                    if(ctrlOrCmd){
+                        system.onCut(...arguments);
+                    }
+                },
+                'v': () => {
+                    if(ctrlOrCmd){
+                        system.onPaste(...arguments);
+                    }
+                },
+                'c': () => {
+                    if(ctrlOrCmd){
+                        system.onCopy(...arguments);
+                    }
+                }
+            };
+
+            if(keyActions.hasOwnProperty(e.key)){
+                keyActions[e.key]();
+            }
+            
+            let KeyboardPanInfluence = { x: 0, y: 0 };
+            let KeyboardPanInfluenceTarget = { x: 0, y: 0 };
+            let maxInfluence = 100 * (zoom); // 1/zoom?
+            let decayFactor = 0.99;
+            let lerpFactor = 0.001; // control the speed of lerp
+            let ignore = false;
+            let baseStepSize = 100;
+            let stepSize = baseStepSize * (zoom); // 1/zoom?
+            switch(e.key) {
+                case 'w':
+                    zoom += 0.1;
+                    break;
+                case 's':
+                    zoom -= 0.1;
+                    break;
+                case 'a':
+                case 'ArrowLeft':
+                    KeyboardPanInfluenceTarget.x = Math.max(KeyboardPanInfluenceTarget.x - stepSize / zoom, -maxInfluence);
+                    break;
+                case 'd':
+                case 'ArrowRight':
+                    KeyboardPanInfluenceTarget.x = Math.min(KeyboardPanInfluenceTarget.x + stepSize / zoom, maxInfluence);
+                    break;
+                case 'q':
+                case 'ArrowUp':
+                    KeyboardPanInfluenceTarget.y = Math.max(KeyboardPanInfluenceTarget.y - stepSize / zoom, -maxInfluence);
+                    break;
+                case 'e':
+                case 'ArrowDown':
+                    KeyboardPanInfluenceTarget.y = Math.min(KeyboardPanInfluenceTarget.y + stepSize / zoom, maxInfluence);
+                    break;
+                default:
+                    ignore = true;
+                    break;
+            }
+
+            // Lerp the influence values over time
+            KeyboardPanInfluence.x += (KeyboardPanInfluenceTarget.x - KeyboardPanInfluence.x) * lerpFactor;
+            KeyboardPanInfluence.y += (KeyboardPanInfluenceTarget.y - KeyboardPanInfluence.y) * lerpFactor;
+
+            // Decay the influence when the keyboard movement stops
+            KeyboardPanInfluence.x *= decayFactor;
+            KeyboardPanInfluence.y *= decayFactor;
+
+            // Apply the influence to the pan with lerp towards the target
+            //if(!ignore){
+                panX += (KeyboardPanInfluence.x - panX) * lerpFactor;
+                panY += (KeyboardPanInfluence.y - panY) * lerpFactor;
+            //}
+        })
+        document.addEventListener('keyup',(e)=>{
+            if(store.shiftIsMomentary){
+                store.shiftIsPressed = false
+            }
+            // console.warn('keyup',{e})
+            // if the cmdprompt is active, pipe the event
+            if(store.CmdPromptVisible){
+                cmdprompt = system.cmdprompt;
+                if(!cmdprompt){
+                    system.warn("cmdprompt not ready");
+                }
+                cmdprompt?.onCmdPromptInput(e);
+            }
+        })
     }
     
     window.myMainDrawFN = function() {
@@ -17611,6 +18651,8 @@ void main(void) {
             /** @see CmdPrompt.renderCommandPrompt */
             cmdprompt?.renderCommandPrompt?.();
         }
+        // temp hack fix
+        CmdPromptInput.style('pointer-events', store.CmdPromptVisible ? 'auto' : 'none');
 
         /// vvv above the command palette
         if(1 || store.renderNotificationsAboveCommands){
@@ -17638,6 +18680,8 @@ const properties = [
     'alpha', 'BOLD', 'BOTTOM', 'BLUR', 'CENTER', 'CORNER', 'CLOSE', 'LEFT', 'NORMAL', 'RIGHT', 'TOP', 'HALF_PI', 'PI', 'QUARTER_PI', 'TAU',
     'TWO_PI', 'constrain', 'cos', 'deltaTime', 'fill', 'frameCount', 'lerp', 'lerpColor', 
     'loadImage', 'map', 'millis', 'mouseX', 'mouseY', 'noFill', 'noTint', 'pmouseX', 'pmouseY',
+    'second','rotate', 'createVideo',
+    'textWidth',
     'triangle', 
     'pop', 'push', 'radians', 'rectMode', 'sin', 'stroke', 'strokeWeight', 'tint', 'translate', 
     'windowHeight', 'windowWidth', 'arc', 'beginShape', 'circle', 'color', 'createGraphics', 
@@ -17882,35 +18926,51 @@ lines.forEach(line => ctx.text(line.text, windowWidth - 10 - tBoxW + 10, line.y)
 ctx.pop();
 */
 
-function drawStringWordWrapped(string, x, y, lineHeight, fitWidth, ctx) {
-    let words = string.split(' ');
-    let line = '';
-    let yLineOffset = 0;
-    let lines = [];
-
-    for (let i = 0; i < words.length; i++) {
-        let testLine = line + words[i] + ' ';
-        let testWidth = ctx.textWidth(testLine);
-
-        ctx.textAlign(LEFT,TOP)
-        if (testWidth > fitWidth && i > 0) {
-            lines.push({ text: line.trim(), x: x, y: y + (lineHeight / 2) + yLineOffset });
-            line = words[i] + ' ';
-            yLineOffset += ctx.textSize();
-        } else {
-            line = testLine;
-        }
-    }
-
-    // console.warn("drawStringWordWrapped",{
-    //     input: string,
-    //     x, y, lineHeight, fitWidth, ctx,
-    //     line_count: lines.length
+function drawStringWordWrapped(line, x, y, fitWidth, lineHeight) {
+    let lines = processStringIntoLines(line, fitWidth, lineHeight);
+    // console.warn('drawStringWordWrapped',{
+    //     line,lines
     // })
+    mctx.text(line, x, y)
+    drawLines(lines, x, y);
+}
 
-    lines.push({ text: line.trim(), x: x, y: y + yLineOffset });
+function processStringIntoLines(string, fitWidth, lineHeight) {
+    let lines = [];
+    let yLineOffset = 0;
 
-    lines.forEach(line => ctx.text(line.text, line.x, line.y));
+    string = string.replace(/<br\/>/g, '\n');
+    string = string.replace(/<br>/g, '\n');
+    let preSplitLines = string.split('\n');
+
+    preSplitLines.forEach((line) => {
+        let words = line.split(' ');
+        let lineText = '';
+
+        for (let i = 0; i < words.length; i++) {
+            let testLine = lineText + words[i] + ' ';
+            let testWidth = textWidth(testLine);
+
+            if (testWidth > fitWidth) {
+                lines.push({ text: lineText.trim(), y: yLineOffset });
+                lineText = words[i] + ' ';
+                yLineOffset += lineHeight;
+            } else {
+                lineText = testLine;
+            }
+        }
+
+        lines.push({ text: lineText.trim(), y: yLineOffset });
+        yLineOffset += lineHeight;
+    });
+
+    return lines;
+}
+
+function drawLines(lines, x, y) {
+    lines.forEach(line => {
+        text(line.text, x, line.y + y);
+    });
 }
 
 // todo: make a multi-select version
@@ -17965,9 +19025,9 @@ class SuggestionList {
             }
             let suggestionWidth = mctx.windowWidth * .66;
             let x = ( mctx.windowWidth / 2 ) - (suggestionWidth/2);
-            let y = 10 + (i * 50);
+            let y = 10 + (i * 70);
             let w = suggestionWidth;
-            let h = 50;
+            let h = 70;
             let label = suggestion.name;
             let selected = this.selectedOptionIndex === i;
             output.push({
@@ -18008,6 +19068,8 @@ class SuggestionList {
 
     }
     handleInput(event){
+
+
         // console.warn('suggestion list handleInput',{
         //     keyCode: event.keyCode,
         //     event
@@ -18139,6 +19201,7 @@ class SuggestionList {
     draw(ctx){
         this.drawSuggestedOptions(ctx);
     }
+    /** @see SuggestionList.renderSuggestionOption */
     drawSuggestedOptions(ctx){
         store.rendererStarted = true;
         
@@ -18151,7 +19214,7 @@ class SuggestionList {
         }
         store.rendererHasOptionsToRender = true;
         
-        const offsetY = 200;
+        const offsetY = 0;
 
         // render the list of the top maxVisibleOptionsCount suggestions
         this.visibleSuggestions.forEach((suggestion, i) => {
@@ -18200,27 +19263,28 @@ class SuggestionList {
 
 
         ctx.push();
-        // ctx.translate(x,y);
-        // ctx.scale(zoom);
+        ctx.translate(x,y);
+        //ctx.scale(zoom);
         ctx.rectMode(CORNER);
         ctx.stroke(255,255,255,100)
         ctx.strokeWeight(selected ? 3 : 1);
         // draw box
         ctx.fill(selected ? "purple" : ctx.color(25))
-        // ctx.translate(x,y)
+        ctx.translate(x,y)
         ctx.rect(0,0,w,h);
         ctx.fill(255)
         ctx.strokeWeight(3);
-        ctx.textSize(40);
+        ctx.textSize(30);
         // draw label
-        drawStringWordWrapped(
-            label,
-            10,
-            10,
-            20,
-            w - 20,
-            ctx
-        )
+        // drawStringWordWrapped(
+        //     label,
+        //     80,
+        //     10,
+        //     20,
+        //     w - 100,
+        //     ctx
+        // )
+        ctx.text(label, 80, 10);
 
         // NEW: add an image if we have one for this command
         // if not add a placeholder based on "icon_NEW_COMMAND.png"
@@ -18230,16 +19294,25 @@ class SuggestionList {
         /** @see System.image */
         const img = system.image("icon_NEW_COMMAND.png");
         ctx.imageMode(CORNER);
-        ctx.image(img, 10, 10, 50, 50);
-        ctx.beginShape();
-        ctx.vertex(10, 10);
-        ctx.vertex(10 + 50, 10);
-        ctx.quadraticVertex(10 + 50, 10 + 50, 10, 10 + 50);
-        ctx.endShape(CLOSE);
+        let aspectRatio = img.width / img.height;
+        let newWidth, newHeight;
+        if (img.width > img.height) {
+            newWidth = 50;
+            newHeight = newWidth / aspectRatio;
+        } else {
+            newHeight = 50;
+            newWidth = newHeight * aspectRatio;
+        }
+        ctx.image(img, 10, 10, newWidth, newHeight);
+        // ctx.beginShape();
+        // ctx.vertex(10, 10);
+        // ctx.vertex(10 + 50, 10);
+        // ctx.quadraticVertex(10 + 50, 10 + 50, 10, 10 + 50);
+        // ctx.endShape(CLOSE);
 
         
 
-        // ctx.pop()
+        ctx.pop()
 
         
     }
