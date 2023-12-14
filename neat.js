@@ -12,6 +12,11 @@
     ---
 */
 
+const UNINVOKABLE = -8888;
+const INVOKABLE = -9999;
+const RESOURCE = -9999;
+const RES = -9999;
+
 const testOpenAIServer = "http://127.0.0.1:4001/";
 
 const changelog = [
