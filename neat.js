@@ -12482,6 +12482,14 @@ const InvokableCommands = {
     ["Play DJ Shadow Nobody Speak ft. Run The Jewels RTJ"](){
         return "https://www.youtube.com/watch?v=NUC2EQvdzmY?width=640&height=480";
     },
+    ["today is a new day"](){
+        responsiveVoice.speak(`
+            a chance to be, how you want to be
+`, "Australian Female", {})
+    },
+    ["you are getting sleepy"](){
+        responsiveVoice.speak("you are getting sleepy, very sleepy", "Australian Female", {})
+    },
     // TODO: the suggestion should show as "Play Aesop Rock - Mindful Solutionism"
     ["dehydrated onion dip"](){
         return "https://www.youtube.com/watch?v=T7jH-5YQLcE&width=800&height=600";
