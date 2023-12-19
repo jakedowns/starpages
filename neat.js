@@ -14,7 +14,42 @@
 
 const testOpenAIServer = "http://127.0.0.1:4001/";
 
+// WASM support
+Module["onRuntimeInitialized"] = function() {
+    alert('hi');
+    const a1 = 5;
+    const b1 = 10;
+    const result1 = Module._add(a1, b1);
+    console.log("L@@K: " + a1 + " + " + b1 + " = " + result1);
+
+    // Let's try it in the background!
+    const worker = new Worker('worker.js');
+    const worker2 = new Worker('worker.js');
+
+    // setup callbacks
+    // Receive results from the worker
+    worker.onmessage = function(e) {
+        console.warn('L@@K Worker result:', e.data);
+    };
+    worker2.onmessage = function(e) {
+        console.warn('L@@K Worker2 result:', e.data);
+    };
+
+    // Send data to the worker
+    worker.postMessage({ data: [40,2] });
+    worker2.postMessage({ data: [90,1900] });
+
+    
+};
+
+
+
+// END WASM
+
 const changelog = [
+    ["12/19/23",`
+    adding WASM support
+    `],
     [
         "12.7.23",
 `- working on refactoring / cleanup to widget rendering system
@@ -13329,6 +13364,7 @@ const InvokableCommands = {
         system.dashboard.closeAllWidgets();
     },
     ["Fresh Start"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
+    ["animation vs physics - alan becker"]: "https://www.youtube.com/watch?v=ErMSHiQRnc8",
     ["Close All"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
     ["Clear"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
     ["TODO: make options sorted by usage, weighted default rankings"](){
