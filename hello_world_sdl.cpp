@@ -51,49 +51,47 @@ void HSVtoRGB(int &r, int &g, int &b, double h, double s, double v) {
             break;
     }
 }
+void draw() {
+    if (SDL_MUSTLOCK(screen)) SDL_LockSurface(screen);
+    for (int i = 0; i < 256; i++) {
+        for (int j = 0; j < 256; j++) {
+            int dx = i - centerX;
+            int dy = j - centerY;
+            double distance = sqrt(dx*dx + dy*dy);
+            double angle = atan2(dy, dx) + time; // Add time to the angle
+
+            // Convert angle (range -pi to pi) to hue (range 0 to 1)
+            double hue = (angle + M_PI) / (2 * M_PI);
+            int r, g, b;
+            HSVtoRGB(r, g, b, hue * 360, 1, 1); // Convert HSV to RGB
+
+            //*((Uint32*)screen->pixels + i * 256 + j) = SDL_MapRGBA(screen->format, r, g, b, 255);
+            // Print UV coordinate colors
+            r = 128 + 127 * sin(time + i * 0.01);
+            g = 128 + 127 * sin(time + i * 0.01 + 2 * M_PI / 3); // Phase shift by 1/3 cycle
+            b = 128 + 127 * sin(time + i * 0.01 + 4 * M_PI / 3); // Phase shift by 2/3 cycle
+            *((Uint32*)screen->pixels + i * 256 + j) = SDL_MapRGBA(screen->format, r, g, b, 255);
+        }
+    }
+    if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
+    SDL_Flip(screen);
+
+    time += 0.01; // Increment time
+}
 
 int main(int argc, char** argv) {
-  printf("hello, world!\n");
-
-  SDL_Init(SDL_INIT_VIDEO);
-  SDL_Surface *screen = SDL_SetVideoMode(256, 256, 32, SDL_SWSURFACE);
-
-#ifdef TEST_SDL_LOCK_OPTS
-  EM_ASM("SDL.defaults.copyOnLock = false; SDL.defaults.discardOnLock = true; SDL.defaults.opaqueFrontBuffer = false;");
-#endif
-
-  if (SDL_MUSTLOCK(screen)) SDL_LockSurface(screen);
-  for (int i = 0; i < 256; i++) {
-    for (int j = 0; j < 256; j++) {
-#ifdef TEST_SDL_LOCK_OPTS
-      // Alpha behaves like in the browser, so write proper opaque pixels.
-      int alpha = 255;
-#else
-      // To emulate native behavior with blitting to screen, alpha component is ignored. Test that it is so by outputting
-      // data (and testing that it does get discarded)
-      int alpha = (i+j) % 255;
-#endif
-      // Calculate the angle and distance from the center
-      int dx = i - centerX;
-      int dy = j - centerY;
-      double distance = sqrt(dx*dx + dy*dy);
-      double angle = atan2(dy, dx);
-
-      // Convert angle (range -pi to pi) to color (range 0 to 255)
-      int color = (angle + M_PI) / (2 * M_PI) * 255;
-      
-      // Use the color for the red and green channels, and the distance for the blue channel
-      *((Uint32*)screen->pixels + i * 256 + j) = SDL_MapRGBA(screen->format, color, color, 255 - distance, 255);
+    SDL_Init(SDL_INIT_VIDEO);
+    screen = SDL_SetVideoMode(256, 256, 32, SDL_SWSURFACE);
+    if (screen == NULL) {
+        printf("Could not set video mode: %s\n", SDL_GetError());
+        return 1;
     }
-  }
-  
-  if (SDL_MUSTLOCK(screen)) SDL_UnlockSurface(screen);
-  SDL_Flip(screen);
 
-  printf("you should see a smoothly-colored square - no sharp lines but the square borders!\n");
-  printf("and here is some text that should be HTML-friendly: amp: |&| double-quote: |\"| quote: |'| less-than, greater-than, html-like tags: |<cheez></cheez>|\nanother line.\n");
+    puts("Hello World!");
+    
+    emscripten_set_main_loop(draw, 0, 1); // Set the draw function to be called each frame
 
-  SDL_Quit();
+    SDL_Quit();
 
-  return 0;
+    return 0;
 }

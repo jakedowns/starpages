@@ -3437,6 +3437,24 @@ function dbg(text) {
       // backing the page canvas element
     };
 
+  
+  var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
+      assert(typeof maxBytesToWrite == 'number', 'stringToUTF8(str, outPtr, maxBytesToWrite) is missing the third parameter that specifies the length of the output buffer!');
+      return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
+    };
+  
+  var stringToNewUTF8 = (str) => {
+      var size = lengthBytesUTF8(str) + 1;
+      var ret = _malloc(size);
+      if (ret) stringToUTF8(str, ret, size);
+      return ret;
+    };
+  
+  var _SDL_GetError = () => {
+      SDL.errorMessage ||= stringToNewUTF8("unknown SDL-emscripten error");
+      return SDL.errorMessage;
+    };
+
   var zeroMemory = (address, size) => {
       HEAPU8.fill(0, address, address + size);
       return address;
@@ -3881,6 +3899,13 @@ function dbg(text) {
       abortOnCannotGrowMemory(requestedSize);
     };
 
+  
+  
+  var _emscripten_set_main_loop = (func, fps, simulateInfiniteLoop) => {
+      var browserIterationFunc = getWasmTableEntry(func);
+      setMainLoop(browserIterationFunc, fps, simulateInfiniteLoop);
+    };
+
   var printCharBuffers = [null,[],[]];
   
   var printChar = (stream, curr) => {
@@ -3921,10 +3946,6 @@ function dbg(text) {
 
 
   
-  var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
-      assert(typeof maxBytesToWrite == 'number', 'stringToUTF8(str, outPtr, maxBytesToWrite) is missing the third parameter that specifies the length of the output buffer!');
-      return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
-    };
   var stringToUTF8OnStack = (str) => {
       var size = lengthBytesUTF8(str) + 1;
       var ret = stackAlloc(size);
@@ -3951,6 +3972,8 @@ var wasmImports = {
   /** @export */
   SDL_Flip: _SDL_Flip,
   /** @export */
+  SDL_GetError: _SDL_GetError,
+  /** @export */
   SDL_Init: _SDL_Init,
   /** @export */
   SDL_LockSurface: _SDL_LockSurface,
@@ -3966,6 +3989,8 @@ var wasmImports = {
   emscripten_memcpy_js: _emscripten_memcpy_js,
   /** @export */
   emscripten_resize_heap: _emscripten_resize_heap,
+  /** @export */
+  emscripten_set_main_loop: _emscripten_set_main_loop,
   /** @export */
   fd_write: _fd_write
 };
@@ -4068,7 +4093,6 @@ var missingLibrarySymbols = [
   'UTF32ToString',
   'stringToUTF32',
   'lengthBytesUTF32',
-  'stringToNewUTF8',
   'writeArrayToMemory',
   'registerKeyEventCallback',
   'maybeCStringToJsString',
@@ -4233,6 +4257,7 @@ var unexportedSymbols = [
   'lengthBytesUTF8',
   'intArrayFromString',
   'UTF16Decoder',
+  'stringToNewUTF8',
   'stringToUTF8OnStack',
   'JSEvents',
   'specialHTMLTargets',
