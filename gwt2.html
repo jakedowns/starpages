@@ -76,27 +76,46 @@
 </head>
 <body class="bg-gray-100">
 
-<div id="app" class="flex p-4">
-    <feature-selector></feature-selector>
-    <scenario-list 
-        :addScenario="addScenario"
-        :scenarios="scenarios"
-        :newScenarioNameInput="newScenarioNameInput"
-        :selectScenarioIndex="selectScenarioIndex"
-        :endDrag="endDrag"
-    ></scenario-list>
-    <scenario-details v-if="selectedScenario"
-        :selectedScenario="selectedScenario"
-        :searchableGivenNames="searchableGivenNames"
-        :searchableWhenNames="searchableWhenNames"
-        :searchableThenNames="searchableThenNames"
-    ></scenario-details>
+<div id="app" class="flex-row p-4 h-screen overflow-hidden">
+    <feature-selector
+        :selected-feature-index="selectedFeatureIndex"
+        :selected-feature="selectedFeature"
+        :feature-selector-input="featureSelectorInput"
+        :features="features"
+        :on-feature-selector-input-changed="onFeatureSelectorInputChanged"
+        :searchable-feature-names="searchableFeatureNames"
+        :select-feature-index="selectFeatureIndex"
+    ></feature-selector>
+    <div class="flex">
+        <div class="w-1/2">
+            <scenario-list 
+                :add-scenario="addScenario"
+                :scenarios="scenarios"
+                :new-scenario-name-input="newScenarioNameInput"
+                :select-scenario-index="selectScenarioIndex"
+                :selected-scenario-index="selectedScenarioIndex"
+                :end-drag="endDrag"
+            ></scenario-list>
+        </div>
+        <div class="w-1/2 overflow-y-auto overflow-x-hidden">
+            <scenario-details v-if="selectedScenario"
+                :selected-scenario="selectedScenario"
+                :searchable-given-names="searchableGivenNames"
+                :searchable-when-names="searchableWhenNames"
+                :searchable-then-names="searchableThenNames"
+            ></scenario-details>
+        </div>
+    </div>
+    
+    
     <delete-modal v-if="showDeleteModal"></delete-modal>
 </div>
 
 <!-- Feature Selector is a type-head text field that doubles as a H1 header for the selected Feature as well as an input that allows you to fuzzy-search to switch the selected feature, and there's always a default option to "Create New Feature Named... %whatever the user was typing%" -->
+<!-- FeatureSelector -->
 <script type="text/x-template" id="feature-selector-template">
     <div class="w-full p-4">
+        <pre>selectedFeatureIndex:{{ selectedFeatureIndex }}</pre>
         <h1 class="text-2xl font-bold mb-4">{{ featureSelectorInput ?? '' }}</h1>
         <vue-typeahead
             @searching="onSearchingStateChanged"
@@ -106,7 +125,7 @@
             :minChars="1"
             placeholder="Search or create a new feature..."
             :class="{'animate-pulse bg-blue-200': searching}"
-            @input="updateFeature"
+            @input="onFeatureSelectorInputChanged"
         ></vue-typeahead>
     </div>
 </script>
@@ -114,21 +133,28 @@
 
 <!-- ScenarioList -->
 <script type="text/x-template" id="scenario-list-template">
-    <div class="w-1/3 h-screen overflow-y-auto">
-        <div class="fixed-top p-4">
-            <input type="text" placeholder="New Scenario Name..." class="w-full p-2 mb-4 border rounded caret-down" v-model="newScenarioNameInput" />
-             <!-- @keyup.enter="this.addScenario" -->
+    <div class="overflow-y-auto">
+        <div class="p-4">
+            <input type="text" placeholder="New Scenario Name..." class="w-full p-2 mb-4 border rounded caret-down" v-bind:value="newScenarioNameInput" /> 
+            <!-- TODO: figure out why i can't add @keyup.enter="addScenario" -->
         </div>
-        <!-- <div v-if="scenarios?.length">
+        <pre>{{ typeof addScenario }}</pre>
+        <div v-if="scenarios?.length">
+            <!-- Scenarios:
+            <pre>{{ scenarios }}</pre> -->
+            <!-- <pre>#scenarios:{{scenarios?.length}}
+#selectedScenarioIndex:{{selectedScenarioIndex}}
+            </pre> -->
             <draggable class="space-y-2" v-model="scenarios" @end="endDrag">
-                <div v-for="(scenario, index) in scenarios" 
-                    :item-key="index"
-                    :key="index" class="p-2 border rounded bg-gray-50 cursor-pointer" 
-                    @click="selectScenarioIndex(index)">
-                    {{ scenario.title }}
-                </div>
+                <template #item="{element, index}" :itemKey="index">
+                    <div :key="index" :itemKey="index" class="p-2 border rounded bg-gray-50 cursor-pointer" 
+                    :class="{'bg-blue-200': selectedScenarioIndex === index}"
+                        @click="selectScenarioIndex(index)">
+                        {{index}}) {{ element.title }}
+                    </div>
+                </template>
             </draggable>
-        </div> -->
+        </div>
     </div>
 </script>
 
@@ -136,40 +162,45 @@
 <script type="text/x-template" id="scenario-details-template">
     <div class="w-2/3 ml-4 p-4 h-screen overflow-y-auto">
         <h1 class="text-2xl font-bold mb-4">{{ selectedScenario?.title ?? 'No Scenario Selected' }}</h1>
-        <div class="mb-4" v-for="(item, index) in selectedScenario.given" :key="'given-' + index">
-            <label class="block text-gray-700">Given</label>
-            <vue-typeahead
-                v-model="selectedScenario.given[index]"
-                :backingData="searchableGivenNames"
-                :items="givenItems"
-                :minChars="1"
-                placeholder="Search or create a new given..."
-                class="w-full p-2 border rounded caret-down"
-            ></vue-typeahead>
+        <div v-if="!selectedScenario">
+            <p>Select a scenario to view details</p>
         </div>
-        <div class="mb-4" v-for="(item, index) in selectedScenario.when" :key="'when-' + index">
-            <label class="block text-gray-700">When</label>
-            <vue-typeahead
-                v-model="selectedScenario.when[index]"
-                :backingData="searchableWhenNames"
-                :items="whenItems"
-                :minChars="1"
-                placeholder="Search or create a new when..."
-                class="w-full p-2 border rounded caret-down"
-            ></vue-typeahead>
+        <div v-if="selectedScenario">
+            <div class="mb-4" v-for="(item, index) in selectedScenario.given" :key="'given-' + index">
+                <label class="block text-gray-700">Given</label>
+                <vue-typeahead
+                    v-model="selectedScenario.given[index]"
+                    :backingData="searchableGivenNames"
+                    :items="givenItems"
+                    :minChars="1"
+                    placeholder="Search or create a new given..."
+                    class="w-full p-2 border rounded caret-down"
+                ></vue-typeahead>
+            </div>
+            <div class="mb-4" v-for="(item, index) in selectedScenario.when" :key="'when-' + index">
+                <label class="block text-gray-700">When</label>
+                <vue-typeahead
+                    v-model="selectedScenario.when[index]"
+                    :backingData="searchableWhenNames"
+                    :items="whenItems"
+                    :minChars="1"
+                    placeholder="Search or create a new when..."
+                    class="w-full p-2 border rounded caret-down"
+                ></vue-typeahead>
+            </div>
+            <div class="mb-4" v-for="(item, index) in selectedScenario.then" :key="'then-' + index">
+                <label class="block text-gray-700">Then</label>
+                <vue-typeahead
+                    v-model="selectedScenario.then[index]"
+                    :backingData="searchableThenNames"
+                    :items="thenItems"
+                    :minChars="1"
+                    placeholder="Search or create a new then..."
+                    class="w-full p-2 border rounded caret-down"
+                ></vue-typeahead>
+            </div>
+            <button id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" @click="showDeleteModal = true">Delete</button>
         </div>
-        <div class="mb-4" v-for="(item, index) in selectedScenario.then" :key="'then-' + index">
-            <label class="block text-gray-700">Then</label>
-            <vue-typeahead
-                v-model="selectedScenario.then[index]"
-                :backingData="searchableThenNames"
-                :items="thenItems"
-                :minChars="1"
-                placeholder="Search or create a new then..."
-                class="w-full p-2 border rounded caret-down"
-            ></vue-typeahead>
-        </div>
-        <button id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" @click="showDeleteModal = true">Delete</button>
     </div>
 </script>
 
@@ -187,10 +218,14 @@
 <!-- #vue-typeahead-template -->
 <script type="text/x-template" id="vue-typeahead-template">
     <div :class="className">
-        <input type="text" class="w-full p-2 border rounded caret-down" v-model="input" @input="$emit('input', $event.target.value)" />
+        <input type="text" class="w-full p-2 border rounded caret-down" 
+            :placeholder="placeholder"
+            v-model="input" @input="$emit('input', $event.target.value)" />
         <div class="relative">
-            <ul class="absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="items.length > 0">
-                <li class="p-2 hover:bg-blue-100 cursor-pointer" v-for="(item, index) in items" :key="index" @click="$emit('select', item)">
+            <ul class="absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="showDropdown && items.length > 0">
+                <li class="p-2 hover:bg-blue-100 cursor-pointer"
+                    :class="{ 'bg-blue-200': index === highlightedOptionIndex }"
+                    v-for="(item, index) in items" :key="index" @click="$emit('select', item)">
                     {{ item }}
                 </li>
             </ul>
@@ -264,9 +299,10 @@
             return {
                 searching: false,
                 focusing: false,
-                showDropdown: true,
+                showDropdown: false,
                 timeout: '',
-                dataInput: ''
+                dataInput: '',
+                highlightedOptionIndex: 0
             }
         },
         watch: {
@@ -295,7 +331,10 @@
                         let response;
                         if (this.backingData && this.backingData.length > 0) {
                             // Filter the backingData based on the dataInput value
-                            response = this.backingData.filter(item => item.toLowerCase().includes(this.dataInput.toLowerCase()));
+                            response = this.backingData.filter(item => item.name.toLowerCase().includes(this.dataInput.toLowerCase()));
+                            // unwrap the .name field as the value for each entry in the res arr
+                            response = response.map(item => item.name);
+                            console.warn('response')
                         } else {
                             // Fetch data from the apiUrl
                             response = await fetch(this.apiUrl)
@@ -503,7 +542,7 @@
 
 <script>
     function start(){
-        const { ref, computed } = Vue;
+        const { ref, toRefs, computed } = Vue;
         const app = Vue.createApp({
             setup() {
                 const features = ref([{
@@ -601,7 +640,7 @@
 
                 const selectScenarioIndex = (scenarioIndex) => {
                     console.warn('selectScenario: scenario:', scenario);
-                    selectScenarioIndex.value = scenarioIndex;
+                    selectedScenarioIndex.value = scenarioIndex;
                 };
 
                 // Getters (computed) for SelectedFeature and SelectedScenario
@@ -686,11 +725,11 @@
                 });
 
                 const deleteScenario = () => {
-                    if(selectedFeatureIndex === null){
+                    if(selectedFeatureIndex.value === null){
                         console.warn("deleteScenario: selectedFeatureIndex is null");
                         return;
                     }
-                    if(selectedScenarioIndex === null){
+                    if(selectedScenarioIndex.value === null){
                         console.warn("deleteScenario: selectedScenarioIndex is null");
                         return;
                     }
@@ -709,7 +748,8 @@
 
                 const featureSelectorInput = ref('');
 
-                return {
+                const app_stuff = {
+                    features,
                     scenarios: selectedFeature?.value?.scenarios ?? [],
                     featureSelectorInput,
                     searchableFeatureNames,
@@ -718,17 +758,29 @@
                     searchableWhenNames,
                     searchableThenNames,
                     newScenarioNameInput,
-                    selectedFeature,
-                    selectedScenario,
                     selectedFeatureIndex,
+                    selectedFeature,
                     selectedScenarioIndex,
+                    selectedScenario,
                     showDeleteModal,
                     addScenario,
                     selectFeatureIndex,
                     selectScenarioIndex,
                     deleteScenario,
-                    endDrag
+                    endDrag,
+
+                    onFeatureSelectorInputChanged: (value) => {
+                        console.warn('onFeatureSelectorInputChanged', value);
+                        //featureSelectorInput.value = value;
+                    }
                 };
+                Object.defineProperty(window, 'gwtapp', {
+                    get: () => app_stuff,
+                    set: (value) => {
+                        console.error('cannot set gwtapp, it is readonly')
+                    }
+                });
+                return app_stuff;
             }
         });
         app.component('draggable', window.vuedraggable)
@@ -742,7 +794,14 @@
                     searching: false
                 }
             },
-            props: ['featureSelectorInput', 'selectedFeature', 'features', 'updateFeature', 'searchableFeatureNames'],
+            props: [
+                'selectedFeatureIndex',
+                'selectedFeature', 
+                'featureSelectorInput', 
+                'features', 
+                'onFeatureSelectorInputChanged', 
+                'searchableFeatureNames'
+            ],
             methods:{
                 onSearchingStateChanged: function(isSearching){
                     console.warn('onSearchingStateChanged', isSearching);
@@ -750,29 +809,39 @@
                 }
             },
             mounted(){
-                console.warn('FeatureSelector: featureSelectorInput:', {
-                    featureSelectorInput: this.featureSelectorInput,
-                    selectedFeature: this.selectedFeature,
-                    features: this.features,
-                    updateFeature: this.updateFeature,
-                    searchableFeatureNames: this.searchableFeatureNames
-                });
+                console.warn('FeatureSelector',{
+                    $props: this.$props,
+                    props: JSON.parse(JSON.stringify(this.$props)),
+                    _this: this
+                })
+                if(typeof this.selectedFeatureIndex === 'undefined'){
+                    console.warn('FeatureSelector: selectedFeatureIndex is undefined');
+                    debugger;
+                }
             }
         });
         // ScenarioList
         app.component('scenario-list', {
             template: '#scenario-list-template',
-            props: ['scenarios', 'newScenario', 'addScenario', 'selectScenarioIndex', 'endDrag'],
-            data(){
-                console.warn('what props do i have? ', JSON.parse(JSON.stringify(this.$props)))
-                return {}
-            },
+            props: [
+                'scenarios', 
+                'addScenario',
+                'selectedScenarioIndex', 
+                'selectScenarioIndex', 
+                'endDrag', 
+                'newScenarioNameInput'
+            ],
+            // setup(props) {
+            //     return {
+            //         ...toRefs(props)
+            //     };
+            // },
             mounted(){
-                console.warn('ScenarioList: scenarios:', this.scenarios);
-                console.warn('ScenarioList: newScenario:', this.newScenario);
-                console.warn('ScenarioList: addScenario:', this.addScenario);
-                console.warn('ScenarioList: selectScenarioIndex:', this.selectScenarioIndex);
-                console.warn('ScenarioList: endDrag:', this.endDrag);
+                console.warn('ScenarioList',{
+                    $props: this.$props,
+                    props: JSON.parse(JSON.stringify(this.$props)),
+                    _this: this
+                })
             }
         });
         // ScenarioDetails
