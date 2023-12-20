@@ -14128,7 +14128,6 @@ const doAfterWaitReturnTrue = function(check,timeout=1000,interval=100){
 function setupWASM(){
     // WASM support
     Module["onRuntimeInitialized"] = function() {
-        alert('hi');
         const a1 = 5;
         const b1 = 10;
         const result1 = Module._add(a1, b1);

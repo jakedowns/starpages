@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Interactive Form Fields</title>
 <script src="https://unpkg.com/vue@next"></script>
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/vue-next-select@latest"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   body {
@@ -26,141 +26,41 @@
   <div class="max-w-lg mx-auto">
     <div v-for="field in fields" :key="field.id" class="mb-4">
       <label :for="field.id" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-      <type-ahead :id="field.id" :placeholder="field.placeholder" @update:modelValue="updateGiven(field.id, $event)"></type-ahead>
+      <v-select :options="suggestions" v-model="field.value" @input="addNewField(field.id, $event)"></v-select>
     </div>
   </div>
 </div>
 
-<template id="type-ahead-template">
-  <div class="relative">
-    <input :id="id"
-           type="text"
-           :placeholder="placeholder"
-           class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-           @focus="showSuggestions = true"
-           @blur="hideSuggestions"
-           @keydown.down.prevent="highlightNext"
-           @keydown.up.prevent="highlightPrevious"
-           @keydown.enter.prevent="selectHighlighted"
-           v-model="inputValue">
-    <div class="absolute left-0 right-0 bg-white border border-gray-300 rounded-md mt-1 z-10"
-         v-show="showSuggestions">
-      <ul class="max-h-60 overflow-auto">
-        <li v-for="(suggestion, index) in filteredSuggestions"
-            :key="suggestion"
-            :class="['px-4 py-2 hover:bg-gray-100 cursor-pointer', { 'bg-blue-100': index === highlightedIndex }]"
-            @click="selectSuggestion(suggestion)"
-            @mouseenter="highlightedIndex = index">
-          {{ suggestion }}
-        </li>
-        <li class="px-4 py-2 hover:bg-gray-100 cursor-pointer bg-blue-100"
-            @click="addNewGiven">
-          New Given: {{ inputValue }}
-        </li>
-      </ul>
-    </div>
-  </div>
-</template>
-
 <script>
-  const { ref, defineComponent, onMounted, watch, nextTick } = Vue;
+  const { ref, createApp } = Vue;
 
-  const TypeAhead = defineComponent({
-    template: '#type-ahead-template',
-    props: {
-      id: String,
-      modelValue: String,
-      placeholder: String
-    },
-    emits: ['update:modelValue'],
-    setup(props, { emit }) {
-      const inputValue = ref(props.modelValue || '');
-      const showSuggestions = ref(false);
-      const highlightedIndex = ref(-1);
-      const suggestions = ref(['I am logged in', 'I am logged out']);
-      const filteredSuggestions = ref([]);
-
-      watch(inputValue, (newVal) => {
-        filteredSuggestions.value = suggestions.value.filter(s => s.toLowerCase().includes(newVal.toLowerCase()));
-        emit('update:modelValue', newVal);
-      });
-
-      const highlightNext = () => {
-        if (highlightedIndex.value < filteredSuggestions.value.length - 1) {
-          highlightedIndex.value++;
-        }
-      };
-
-      const highlightPrevious = () => {
-        if (highlightedIndex.value > 0) {
-          highlightedIndex.value--;
-        }
-      };
-
-      const selectHighlighted = () => {
-        if (highlightedIndex.value >= 0 && highlightedIndex.value < filteredSuggestions.value.length) {
-          selectSuggestion(filteredSuggestions.value[highlightedIndex.value]);
-        } else {
-          addNewGiven();
-        }
-      };
-
-      const selectSuggestion = (suggestion) => {
-        inputValue.value = suggestion;
-        showSuggestions.value = false;
-      };
-
-      const addNewGiven = () => {
-        if (inputValue.value && !suggestions.value.includes(inputValue.value)) {
-          suggestions.value.push(inputValue.value);
-        }
-        selectSuggestion(inputValue.value);
-      };
-
-      const hideSuggestions = () => {
-        setTimeout(() => {
-          showSuggestions.value = false;
-          highlightedIndex.value = -1;
-        }, 100);
-      };
-
-      return {
-        inputValue,
-        showSuggestions,
-        highlightedIndex,
-        suggestions,
-        filteredSuggestions,
-        highlightNext,
-        highlightPrevious,
-        selectHighlighted,
-        selectSuggestion,
-        addNewGiven,
-        hideSuggestions
-      };
-    }
-  });
-
-  const app = Vue.createApp({
+  const app = createApp({
     components: {
-      TypeAhead
+      'v-select': VueSelect.VueSelect
     },
     setup() {
       const fields = ref([
-        { id: 'given', label: 'Given', placeholder: 'Enter a condition...' },
-        { id: 'when', label: 'When', placeholder: 'Enter an action...' },
-        { id: 'then', label: 'Then', placeholder: 'Enter the outcome...' }
+        { id: 'given', label: 'Given', placeholder: 'Enter a condition...', value: null },
+        { id: 'when', label: 'When', placeholder: 'Enter an action...', value: null },
+        { id: 'then', label: 'Then', placeholder: 'Enter the outcome...', value: null }
       ]);
 
-      const updateGiven = (id, value) => {
+      const suggestions = ref(['I am logged in', 'I am logged out']);
+
+      const addNewField = (id, value) => {
         const field = fields.value.find(f => f.id === id);
         if (field) {
-          field.placeholder = value;
+          field.value = value;
+        }
+        if (value && !suggestions.value.includes(value)) {
+          suggestions.value.push(value);
         }
       };
 
       return {
         fields,
-        updateGiven
+        suggestions,
+        addNewField
       };
     }
   });
