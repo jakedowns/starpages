@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Web Accounts</title>
-    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Vue.Draggable/2.24.3/vuedraggable.umd.min.js"></script>
+    <title>Gherkin Test Manager</title>
+    
+    <script src="https://unpkg.com/vue@3.3.13"></script>
+    <script src="https://unpkg.com/sortablejs@1.10.2"></script>
+    <script src="https://unpkg.com/vuedraggable@4.0.1"></script>
+    <!-- <script src="https://unpkg.com/vue-next-typeahead@0.0.2"></script> -->
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <style>
@@ -73,18 +77,46 @@
 <body class="bg-gray-100">
 
 <div id="app" class="flex p-4">
+    <feature-selector></feature-selector>
+    <scenario-list></scenario-list>
+    <scenario-details v-if="selectedScenario"></scenario-details>
+    <delete-modal v-if="showModal"></delete-modal>
+</div>
+
+<!-- Feature Selector is a type-head text field that doubles as a H1 header for the selected Feature as well as an input that allows you to fuzzy-search to switch the selected feature, and there's always a default option to "Create New Feature Named... %whatever the user was typing%" -->
+<script type="text/x-template" id="feature-selector-template">
+    <div class="w-full p-4">
+        <h1 class="text-2xl font-bold mb-4">{{ featureSelectorInput ?? '' }}</h1>
+        <vue-typeahead
+            v-model="featureSelectorInput"
+            :backingData="searchableFeatureNames"
+            :items="features"
+            :minChars="1"
+            placeholder="Search or create a new feature..."
+            :class="{'animate-pulse bg-blue-200': searching}"
+            @input="updateFeature"
+        ></vue-typeahead>
+    </div>
+</script>
+
+
+<script type="text/x-template" id="scenario-list-template">
     <div class="w-1/3 h-screen overflow-y-auto">
         <div class="fixed-top p-4">
             <input type="text" placeholder="New Scenario Name..." class="w-full p-2 mb-4 border rounded caret-down" v-model="newScenario" @keyup.enter="addScenario" />
         </div>
         <draggable class="space-y-2" v-model="scenarios" @end="endDrag">
-            <div v-for="(scenario, index) in scenarios" :key="index" class="p-2 border rounded bg-gray-50 cursor-pointer" @click="selectScenario(scenario)">
+            <div v-for="(scenario, index) in scenarios" 
+                :item-key="index"
+                :key="index" class="p-2 border rounded bg-gray-50 cursor-pointer" @click="selectScenario(scenario)">
                 {{ scenario.title }}
             </div>
         </draggable>
     </div>
+</script>
 
-    <div class="w-2/3 ml-4 p-4 h-screen overflow-y-auto" v-if="selectedScenario">
+<script type="text/x-template" id="scenario-details-template">
+    <div class="w-2/3 ml-4 p-4 h-screen overflow-y-auto">
         <h1 class="text-2xl font-bold mb-4">{{ selectedScenario.title }}</h1>
         <div class="mb-4" v-for="(item, index) in selectedScenario.given" :key="'given-' + index">
             <label class="block text-gray-700">Given</label>
@@ -93,8 +125,10 @@
         <!-- Repeat for 'when' and 'then' -->
         <button id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" @click="showModal = true">Delete</button>
     </div>
+</script>
 
-    <div id="myModal" class="modal" v-if="showModal">
+<script type="text/x-template" id="delete-modal-template">
+    <div id="myModal" class="modal">
         <div class="modal-content">
             <span class="close" @click="showModal = false">&times;</span>
             <p>Are you sure you want to delete this scenario?</p>
@@ -102,36 +136,500 @@
             <button class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded" @click="showModal = false">No</button>
         </div>
     </div>
-</div>
+</script>
+
+<!-- #vue-typeahead-template -->
+<script type="text/x-template" id="vue-typeahead-template">
+    <div :class="className">
+        <input type="text" class="w-full p-2 border rounded caret-down" v-model="input" @input="$emit('input', $event.target.value)" />
+        <div class="relative">
+            <ul class="absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="items.length > 0">
+                <li class="p-2 hover:bg-blue-100 cursor-pointer" v-for="(item, index) in items" :key="index" @click="$emit('select', item)">
+                    {{ item }}
+                </li>
+            </ul>
+        </div>
+    </div>
+</script>
+
 
 <script>
-    new Vue({
-        el: '#app',
-        data: {
-            scenarios: [],
-            newScenario: '',
-            selectedScenario: null,
-            showModal: false
-        },
-        methods: {
-            addScenario() {
-                if (this.newScenario) {
-                    this.scenarios.push({ title: this.newScenario, given: [], when: [], then: [] });
-                    this.newScenario = '';
+    window.VueNextTypeahead = {
+        name: 'vue-typeahead',
+        template: "#vue-typeahead-template",
+        props: {
+            apiUrl: {
+                type: String,
+                required: false
+            },
+            backingData: {
+                type: Array,
+                required: false
+            },
+            input: {
+                type: String,
+                default: ''
+            },
+            title: {
+                type: String,
+                default: null
+            },
+            className: {
+                type: String,
+                default: ''
+            },
+            items: {
+                type: Array,
+                default: () => []
+            },
+            keyItem: {
+                type: String,
+                default: null
+            },
+            showTitle: {
+                type: Boolean,
+                default: true
+            },
+            placeholder: {
+                type: String,
+                default: 'Qué necesitas...'
+            },
+            noResultsText: {
+                type: String,
+                default: 'No existen resultados para esa búsqueda...'
+            },
+            minChars: {
+                type: Number,
+                default: 2,
+                validator: (value) => {
+                    return value > 0
                 }
             },
-            selectScenario(scenario) {
-                this.selectedScenario = scenario;
+            delay: {
+                type: Number,
+                default: 500
             },
-            deleteScenario() {
-                this.scenarios = this.scenarios.filter(s => s !== this.selectedScenario);
-                this.selectedScenario = null;
-                this.showModal = false;
+            loadingParentComponent: {
+                type: Boolean,
+                default: false
+            }
+        },
+        data() {
+            return {
+                searching: false,
+                focusing: false,
+                showDropdown: true,
+                timeout: '',
+                dataInput: ''
+            }
+        },
+        watch: {
+            'input': {
+                handler(newVal) {
+                    this.dataInput = newVal
+                },
+                immediate: true
+            }
+        },
+        mounted() {
+            document.addEventListener('click', (e) => {
+                if (!this.$el.contains(e.target)) {
+                    this.reset()
+                }
+            })
+        },
+        methods: {
+            search() {
+                this.searching = true
+                clearTimeout(this.timeout)
+                this.timeout = setTimeout(async () => {
+                    try {
+                        let response;
+                        if (this.backingData && this.backingData.length > 0) {
+                            // Filter the backingData based on the dataInput value
+                            response = this.backingData.filter(item => item.toLowerCase().includes(this.dataInput.toLowerCase()));
+                        } else {
+                            // Fetch data from the apiUrl
+                            response = await fetch(this.apiUrl)
+                        }
+                        this.$emit('response', response)
+                    } catch (error) {
+                        console.error('Error occurred during search:', error);
+                        this.$emit('error', error)
+                    } finally {
+                        clearTimeout(this.timeout)
+                        this.showDropdown = true
+                        this.searching = false
+                    }
+                }, this.delay)
             },
-            endDrag() {
-                // Handle drag end event
+            changeInput(event) {
+                if (event.target && event.target.value && event.target.value.length >= this.minChars) {
+                    this.search()
+                }
+                this.$emit('update:input', event.target.value)
+                if (event.target && event.target.value.length === 0) {
+                    this.reset()
+                }
+            },
+            onFocusin() {
+                this.focusing = true
+            },
+            onFocusout() {
+                this.focusing = false
+                this.searching = false
+            },
+            clickItem(item) {
+                this.$emit('hit', item)
+                this.reset()
+            },
+            highlight(text, term) {
+                if (text && term) {
+                    var index = text.toLowerCase().indexOf(term.toLowerCase())
+                    if (index >= 0) {
+                        text = `${text.substring(0, index)}<span style="font-weight: 600;">${text.substring(index, index + term.length)}</span>${text.substring(index + term.length)}`
+                    }
+                }
+                return text
+            },
+            reset() {
+                this.showDropdown = false
+                this.searching = false
+                this.dataInput = ''
+                this.$emit('reset')
+                this.$emit('update:input', '')
             }
         }
-    });
+    }
+
+
+</script>
+
+<style>
+.vue-next-typeahead {
+    width: 460px;
+    display: block;
+    position: relative;
+}
+
+.vue-next-typeahead__title {
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 22px;
+    letter-spacing: 0px;
+    text-align: left;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.vue-next-typeahead__wrapper-input {
+    height: 48px;
+    background: #FFFFFF;
+    border: 1px solid #D2D2D2;
+    box-sizing: border-box;
+    border-radius: 4px;
+    padding: 0 15px 0 16px;
+    position: relative;
+}
+
+.vue-next-typeahead__wrapper-input > input {
+    height: 48px;
+    border-radius: 0;
+    border: 0;
+    outline: none;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 22px;
+    letter-spacing: 0px;
+    text-align: left;
+    margin-right: 8px;
+    width: calc(100% - 32px);
+    padding: 0;
+    max-height: 100%;
+    color: #404040;
+    background: transparent;
+}
+
+.vue-next-typeahead__wrapper-input > input::placeholder {
+    color: #D2D2D2;
+}
+
+.vue-next-typeahead__wrapper-input .ico-search,
+.vue-next-typeahead__wrapper-input .ico-loader {
+    vertical-align: middle;
+    background-size: cover;
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+}
+.vue-next-typeahead__wrapper-input .ico-search {
+    background-image: url('../assets/search.svg');
+}
+.vue-next-typeahead__wrapper-input .ico-loader {
+    background-image: url('../assets/loader-orange.svg');
+    -webkit-animation:spin 4s linear infinite;
+    -moz-animation:spin 4s linear infinite;
+    animation:spin 4s linear infinite;
+}
+@-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
+@-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
+@keyframes spin { 100% { -webkit-transform: rotate(360deg); transform:rotate(360deg); } }
+
+.vue-next-typeahead__wrapper-input:hover:not(.vue-next-typeahead__wrapper-input--focusing) {
+    background: #FAFAFA;
+    border: 1px solid #9B9B9B;
+}
+
+.vue-next-typeahead__wrapper-input:hover:not(.vue-next-typeahead__wrapper-input--focusing) > input::placeholder {
+    color: #9B9B9B;
+}
+
+.vue-next-typeahead__wrapper-input--focusing {
+    box-shadow: 0px 0px 8px 0px #FF7300 20%;
+    border: 1px solid #FF7300;
+    box-sizing: border-box;
+    box-shadow: 0px 0px 8px rgba(255, 115, 0, 0.2);
+}
+.vue-next-typeahead__wrapper-input--focusing .ico-search {
+    background-image: url('../assets/search-orange.svg');
+}
+
+.vue-next-typeahead__dropdown {
+    border: 1px solid #D2D2D2;
+    list-style: none;
+    width: calc(100% - 2px);
+    padding: 16px 0 0;
+    margin: -14px 0 0 0;
+    max-height: 336px;
+    overflow-y: auto;
+}
+
+.vue-next-typeahead__dropdown > li {
+    min-height: 42px;
+    padding: 0 16px;
+    font-size: 16px;
+    font-style: normal;
+    letter-spacing: 0px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.vue-next-typeahead__dropdown > li:hover {
+    background: #FAFAFA;
+}
+
+.vue-next-typeahead__dropdown > li > span {
+    line-height: 42px;
+}
+
+.vue-next-typeahead__dropdown > li.li-no-results {
+    line-height: 42px;
+    cursor: auto;
+}
+
+.vue-next-typeahead__dropdown::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 5px;
+    height: 6px;
+}
+
+.vue-next-typeahead__dropdown::-webkit-scrollbar-thumb {
+    border-radius: 12px;
+    border: 4px solid rgba(255, 255, 255, 0);
+    background-color: #bdbdbd;
+}
+
+.vue-next-typeahead__dropdown::-webkit-scrollbar-corner {
+    background-color: transparent;
+}
+
+@media screen and (max-width: 768px) {
+.vue-next-typeahead {
+    width: 100%;
+}
+}
+</style>
+
+<script>
+    function start(){
+        const { ref, computed } = Vue;
+        const app = Vue.createApp({
+            setup() {
+                const features = ref([{
+                    name: 'User Registration',
+                    description: 'All scenarios around registering and verifying a new web account',
+                    scenarios: [{
+                        title: 'user registers web account',
+                        given: ['user is on the registration page'],
+                        when: ['user enters their details'],
+                        then: ['user is registered']
+                    },{
+                        title: 'user sees validation errors when submitting bad data to registration form',
+                        given: ['user is on the registration page'],
+                        when: ['user enters invalid details'],
+                        then: ['user sees validation errors']
+                    },{
+                        title: 'user gets duplicate email error when registering with an email that already exists',
+                        given: ['user account exists for email'],
+                        when: ['user enters an email that already exists'],
+                        then: ['user sees duplicate email error in email inbox']
+                    },{
+                        title: 'user gets verification email after registering',
+                        given: ['user submitted web account registration form'],
+                        when: ['user checks email'],
+                        then: ['user sees verification email']
+                    },{
+                        title: 'user clicks verification link in email',
+                        given: ['user received verification email'],
+                        when: ['user clicks verification link'],
+                        then: ['user is verified']
+                    }]
+                },{
+                    name: 'User Password Actions',
+                    description: 'All scenarios around changing and resetting a user\'s password',
+                    scenarios: [{
+                        title: 'user forgets password, requests reset',
+                        given: ['user is on the login page'],
+                        when: ['user clicks forgot password link and submits email address'],
+                        then: ['user receives password reset email']
+                    },{
+                        title: 'user clicks password reset link in email',
+                        given: ['user received password reset email'],
+                        when: ['user clicks password reset link'],
+                        then: ['user is taken to password reset page']
+                    },{
+                        title: 'user resets password',
+                        given: ['user is on the password reset page'],
+                        when: ['user enters new password and submits form'],
+                        then: ['user is logged in']
+                    },{
+                        title: 'user changes password',
+                        given: ['user is logged in'],
+                        when: ['user clicks change password link and submits form'],
+                        then: ['user is logged in']
+                    },{
+                        title: 'user visits reset password page with invalid token',
+                        given: ['user is on the password reset page'],
+                        when: ['user enters new password and submits form'],
+                        then: ['user sees invalid token error']
+                    }]
+                }])
+                const newScenario = ref('');
+                const selectedFeatureIndex = ref(0);
+                const selectedScenarioIndex = ref(0);
+                const showModal = ref(false);
+
+                const addScenario = () => {
+                    if(selectedFeature == null){
+                        console.warn("addScenario: selectedFeature is null");
+                        return;
+                    }
+                    if (newScenario.value) {
+                        features.value[selectedFeatureIndex.value].value.scenarios.push({ 
+                            title: newScenario.value, 
+                            given: [], 
+                            when: [], 
+                            then: [] 
+                        });
+                        newScenario.value = '';
+                    }else{
+                        console.warn("addScenario: newScenario is null");
+                    }
+                };
+
+                const selectFeatureIndex = (featureIndex) => {
+                    if(!features.value[featureIndex]){
+                        console.warn("selectFeatureIndex: featureIndex is null");
+                        return;
+                    }
+                    selectedFeatureIndex.value = featureIndex;
+                };
+
+                const selectScenarioIndex = (scenarioIndex) => {
+                    selectScenarioIndex.value = scenarioIndex;
+                };
+
+                // Getters (computed) for SelectedFeature and SelectedScenario
+                const selectedFeature = computed(() => {
+                    return features.value[selectedFeatureIndex.value];
+                });
+
+                const selectedScenario = computed(() => {
+                    return selectedFeature.value.scenarios[selectedScenarioIndex.value];
+                });
+
+                const searchableFeatureNames = computed(() => {
+                    return features.value.map(feature => feature.name);
+                });
+
+                const deleteScenario = () => {
+                    if(selectedFeatureIndex === null){
+                        console.warn("deleteScenario: selectedFeatureIndex is null");
+                        return;
+                    }
+                    if(selectedScenarioIndex === null){
+                        console.warn("deleteScenario: selectedScenarioIndex is null");
+                        return;
+                    }
+                    if(!scenarios.value[selectedScenarioIndex.value]){
+                        console.warn("deleteScenario: scenarios[selectedScenarioIndex] is null");
+                        return;
+                    }
+                    features.value[selectedFeatureIndex.value].value.scenarios.splice(selectedScenarioIndex.value, 1);
+                    showModal.value = false;
+                };
+
+                const endDrag = () => {
+                    // Handle drag end event
+                    console.warn('handle drag end',arguments);
+                };
+
+                const featureSelectorInput = ref('');
+
+                return {
+                    scenarios: selectedFeature?.value?.scenarios ?? [],
+                    featureSelectorInput,
+                    searchableFeatureNames,
+                    newScenario,
+                    selectedFeature,
+                    selectedScenario,
+                    selectedFeatureIndex,
+                    selectedScenarioIndex,
+                    showModal,
+                    addScenario,
+                    selectFeatureIndex,
+                    selectScenarioIndex,
+                    deleteScenario,
+                    endDrag
+                };
+            }
+        });
+        app.component('draggable', window.vuedraggable)
+        //console.warn('registering VueNextTypeahead', window.VueNextTypeahead);
+        app.component('vue-typeahead', window.VueNextTypeahead)
+        // FeatureSelector
+        app.component('feature-selector', {
+            template: '#feature-selector-template',
+            
+            props: ['featureSelectorInput', 'selectedFeature', 'features', 'updateFeature', 'searchableFeatureNames']
+        });
+        app.component('scenario-list', {
+            template: '#scenario-list-template',
+            props: ['scenarios', 'newScenario', 'addScenario', 'selectScenario', 'endDrag']
+        });
+        app.component('scenario-details', {
+            template: '#scenario-details-template',
+            props: ['selectedScenario', 'showModal']
+        });
+        app.component('delete-modal', {
+            template: '#delete-modal-template',
+            props: ['showModal', 'deleteScenario']
+        });
+        
+        app.mount('#app');
+    }
+    document.addEventListener('DOMContentLoaded', start);
 </script>
 </body>

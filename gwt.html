@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Interactive Form Fields</title>
 <script src="https://unpkg.com/vue@next"></script>
-<script src="https://unpkg.com/vue-next-select@latest"></script>
+<script src="https://unpkg.com/vue-next-select"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   body {
@@ -26,7 +26,7 @@
   <div class="max-w-lg mx-auto">
     <div v-for="field in fields" :key="field.id" class="mb-4">
       <label :for="field.id" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-      <v-select :options="suggestions" v-model="field.value" @input="addNewField(field.id, $event)"></v-select>
+      <vue-next-select :options="suggestions" v-model="field.value" @input="addNewField(field.id, $event)"></vue-next-select>
     </div>
   </div>
 </div>
@@ -36,7 +36,7 @@
 
   const app = createApp({
     components: {
-      'v-select': VueSelect.VueSelect
+      'vue-next-select': window['vue-next-select']
     },
     setup() {
       const fields = ref([
