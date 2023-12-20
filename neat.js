@@ -14,33 +14,7 @@
 
 const testOpenAIServer = "http://127.0.0.1:4001/";
 
-// WASM support
-Module["onRuntimeInitialized"] = function() {
-    alert('hi');
-    const a1 = 5;
-    const b1 = 10;
-    const result1 = Module._add(a1, b1);
-    console.log("L@@K: " + a1 + " + " + b1 + " = " + result1);
 
-    // Let's try it in the background!
-    const worker = new Worker('worker.js');
-    const worker2 = new Worker('worker.js');
-
-    // setup callbacks
-    // Receive results from the worker
-    worker.onmessage = function(e) {
-        console.warn('L@@K Worker result:', e.data);
-    };
-    worker2.onmessage = function(e) {
-        console.warn('L@@K Worker2 result:', e.data);
-    };
-
-    // Send data to the worker
-    worker.postMessage({ data: [40,2] });
-    worker2.postMessage({ data: [90,1900] });
-
-    
-};
 
 
 
@@ -14151,10 +14125,42 @@ const doAfterWaitReturnTrue = function(check,timeout=1000,interval=100){
     })
 }
 
+function setupWASM(){
+    // WASM support
+    Module["onRuntimeInitialized"] = function() {
+        alert('hi');
+        const a1 = 5;
+        const b1 = 10;
+        const result1 = Module._add(a1, b1);
+        console.log("L@@K: " + a1 + " + " + b1 + " = " + result1);
+
+        // Let's try it in the background!
+        const worker = new Worker('worker.js');
+        const worker2 = new Worker('worker.js');
+
+        // setup callbacks
+        // Receive results from the worker
+        worker.onmessage = function(e) {
+            console.warn('L@@K Worker result:', e.data);
+        };
+        worker2.onmessage = function(e) {
+            console.warn('L@@K Worker2 result:', e.data);
+        };
+
+        // Send data to the worker
+        worker.postMessage({ data: [40,2] });
+        worker2.postMessage({ data: [90,1900] });
+    };
+
+    // if the Module already initialized, call the callback
+    if (typeof Module !== 'undefined' && Module !== null && Module['onRuntimeInitialized']) {
+        Module['onRuntimeInitialized']();
+    }
+}
+
 // domready
 document.addEventListener('DOMContentLoaded', (event) => {
-    // TODO: await Peer to become available...
-
+    setupWASM();
     doAfterWaitReturnTrue(()=>typeof window?.Peer !== 'undefined').then(()=>{
         // call the server and try to establish a p2p webrtc connection with another client
         const peer = new Peer({key: 'your_api_key_here'});
