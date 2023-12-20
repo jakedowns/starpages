@@ -78,9 +78,20 @@
 
 <div id="app" class="flex p-4">
     <feature-selector></feature-selector>
-    <scenario-list></scenario-list>
-    <scenario-details v-if="selectedScenario"></scenario-details>
-    <delete-modal v-if="showModal"></delete-modal>
+    <scenario-list 
+        :addScenario="addScenario"
+        :scenarios="scenarios"
+        :newScenarioNameInput="newScenarioNameInput"
+        :selectScenarioIndex="selectScenarioIndex"
+        :endDrag="endDrag"
+    ></scenario-list>
+    <scenario-details v-if="selectedScenario"
+        :selectedScenario="selectedScenario"
+        :searchableGivenNames="searchableGivenNames"
+        :searchableWhenNames="searchableWhenNames"
+        :searchableThenNames="searchableThenNames"
+    ></scenario-details>
+    <delete-modal v-if="showDeleteModal"></delete-modal>
 </div>
 
 <!-- Feature Selector is a type-head text field that doubles as a H1 header for the selected Feature as well as an input that allows you to fuzzy-search to switch the selected feature, and there's always a default option to "Create New Feature Named... %whatever the user was typing%" -->
@@ -88,6 +99,7 @@
     <div class="w-full p-4">
         <h1 class="text-2xl font-bold mb-4">{{ featureSelectorInput ?? '' }}</h1>
         <vue-typeahead
+            @searching="onSearchingStateChanged"
             v-model="featureSelectorInput"
             :backingData="searchableFeatureNames"
             :items="features"
@@ -100,40 +112,74 @@
 </script>
 
 
+<!-- ScenarioList -->
 <script type="text/x-template" id="scenario-list-template">
     <div class="w-1/3 h-screen overflow-y-auto">
         <div class="fixed-top p-4">
-            <input type="text" placeholder="New Scenario Name..." class="w-full p-2 mb-4 border rounded caret-down" v-model="newScenario" @keyup.enter="addScenario" />
+            <input type="text" placeholder="New Scenario Name..." class="w-full p-2 mb-4 border rounded caret-down" v-model="newScenarioNameInput" />
+             <!-- @keyup.enter="this.addScenario" -->
         </div>
-        <draggable class="space-y-2" v-model="scenarios" @end="endDrag">
-            <div v-for="(scenario, index) in scenarios" 
-                :item-key="index"
-                :key="index" class="p-2 border rounded bg-gray-50 cursor-pointer" @click="selectScenario(scenario)">
-                {{ scenario.title }}
-            </div>
-        </draggable>
+        <!-- <div v-if="scenarios?.length">
+            <draggable class="space-y-2" v-model="scenarios" @end="endDrag">
+                <div v-for="(scenario, index) in scenarios" 
+                    :item-key="index"
+                    :key="index" class="p-2 border rounded bg-gray-50 cursor-pointer" 
+                    @click="selectScenarioIndex(index)">
+                    {{ scenario.title }}
+                </div>
+            </draggable>
+        </div> -->
     </div>
 </script>
 
+<!-- ScenarioDetails -->
 <script type="text/x-template" id="scenario-details-template">
     <div class="w-2/3 ml-4 p-4 h-screen overflow-y-auto">
-        <h1 class="text-2xl font-bold mb-4">{{ selectedScenario.title }}</h1>
+        <h1 class="text-2xl font-bold mb-4">{{ selectedScenario?.title ?? 'No Scenario Selected' }}</h1>
         <div class="mb-4" v-for="(item, index) in selectedScenario.given" :key="'given-' + index">
             <label class="block text-gray-700">Given</label>
-            <input type="text" v-model="selectedScenario.given[index]" class="w-full p-2 border rounded caret-down" />
+            <vue-typeahead
+                v-model="selectedScenario.given[index]"
+                :backingData="searchableGivenNames"
+                :items="givenItems"
+                :minChars="1"
+                placeholder="Search or create a new given..."
+                class="w-full p-2 border rounded caret-down"
+            ></vue-typeahead>
         </div>
-        <!-- Repeat for 'when' and 'then' -->
-        <button id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" @click="showModal = true">Delete</button>
+        <div class="mb-4" v-for="(item, index) in selectedScenario.when" :key="'when-' + index">
+            <label class="block text-gray-700">When</label>
+            <vue-typeahead
+                v-model="selectedScenario.when[index]"
+                :backingData="searchableWhenNames"
+                :items="whenItems"
+                :minChars="1"
+                placeholder="Search or create a new when..."
+                class="w-full p-2 border rounded caret-down"
+            ></vue-typeahead>
+        </div>
+        <div class="mb-4" v-for="(item, index) in selectedScenario.then" :key="'then-' + index">
+            <label class="block text-gray-700">Then</label>
+            <vue-typeahead
+                v-model="selectedScenario.then[index]"
+                :backingData="searchableThenNames"
+                :items="thenItems"
+                :minChars="1"
+                placeholder="Search or create a new then..."
+                class="w-full p-2 border rounded caret-down"
+            ></vue-typeahead>
+        </div>
+        <button id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" @click="showDeleteModal = true">Delete</button>
     </div>
 </script>
 
 <script type="text/x-template" id="delete-modal-template">
     <div id="myModal" class="modal">
         <div class="modal-content">
-            <span class="close" @click="showModal = false">&times;</span>
+            <span class="close" @click="showDeleteModal = false">&times;</span>
             <p>Are you sure you want to delete this scenario?</p>
             <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" @click="deleteScenario">Yes</button>
-            <button class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded" @click="showModal = false">No</button>
+            <button class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded" @click="showDeleteModal = false">No</button>
         </div>
     </div>
 </script>
@@ -241,6 +287,8 @@
         methods: {
             search() {
                 this.searching = true
+                // emit
+                this.$emit('searching', true)
                 clearTimeout(this.timeout)
                 this.timeout = setTimeout(async () => {
                     try {
@@ -260,6 +308,7 @@
                         clearTimeout(this.timeout)
                         this.showDropdown = true
                         this.searching = false
+                        this.$emit('searching', false)
                     }
                 }, this.delay)
             },
@@ -516,24 +565,27 @@
                         then: ['user sees invalid token error']
                     }]
                 }])
-                const newScenario = ref('');
+                const newScenarioNameInput = ref('');
                 const selectedFeatureIndex = ref(0);
                 const selectedScenarioIndex = ref(0);
-                const showModal = ref(false);
+                const showDeleteModal = ref(false);
 
                 const addScenario = () => {
+                    console.warn('addScenario: newScenarioNameInput.value:', newScenarioNameInput.value);
+                    console.warn('addScenario: selectedFeature:', selectedFeature.value);
+    
                     if(selectedFeature == null){
                         console.warn("addScenario: selectedFeature is null");
                         return;
                     }
-                    if (newScenario.value) {
+                    if (newScenarioNameInput.value) {
                         features.value[selectedFeatureIndex.value].value.scenarios.push({ 
-                            title: newScenario.value, 
+                            title: newScenarioNameInput.value, 
                             given: [], 
                             when: [], 
                             then: [] 
                         });
-                        newScenario.value = '';
+                        newScenarioNameInput.value = '';
                     }else{
                         console.warn("addScenario: newScenario is null");
                     }
@@ -548,20 +600,89 @@
                 };
 
                 const selectScenarioIndex = (scenarioIndex) => {
+                    console.warn('selectScenario: scenario:', scenario);
                     selectScenarioIndex.value = scenarioIndex;
                 };
 
                 // Getters (computed) for SelectedFeature and SelectedScenario
                 const selectedFeature = computed(() => {
-                    return features.value[selectedFeatureIndex.value];
+                    const feature = features.value[selectedFeatureIndex.value];
+                    console.warn('selectedFeature:', feature);
+                    return feature;
                 });
 
                 const selectedScenario = computed(() => {
-                    return selectedFeature.value.scenarios[selectedScenarioIndex.value];
+                    const scenario = selectedFeature.value.scenarios[selectedScenarioIndex.value];
+                    console.warn('selectedScenario:', scenario);
+                    return scenario;
                 });
 
                 const searchableFeatureNames = computed(() => {
                     return features.value.map(feature => feature.name);
+                });
+
+                const searchableScenarioNames = computed(() => {
+                    const values = [];
+                    // loop through ALL features > scenarios and collect into a unique set
+                    features.value.forEach(feature => {
+                        feature.scenarios.forEach(scenario => {
+                            if(!values.some(value => value.name === scenario.title)){
+                                values.push({
+                                    name: scenario.title,
+                                });
+                            }
+                        });
+                    });
+                    return values;
+                });
+
+                const searchableGivenNames = computed(() => {
+                    const values = [];
+                    // loop through ALL features > scenarios > given and collect into a unique set
+                    features.value.forEach(feature => {
+                        feature.scenarios.forEach(scenario => {
+                            scenario.given.forEach(given => {
+                                if(!values.some(value => value.name === given)){
+                                    values.push({
+                                        name: given,
+                                    });
+                                }
+                            });
+                        });
+                    });
+                    return values;
+                });
+                const searchableWhenNames = computed(() => {
+                    const values = [];
+                    // loop through ALL features > scenarios > when and collect into a unique set
+                    features.value.forEach(feature => {
+                        feature.scenarios.forEach(scenario => {
+                            scenario.when.forEach(when => {
+                                if(!values.some(value => value.name === when)){
+                                    values.push({
+                                        name: when,
+                                    });
+                                }
+                            });
+                        });
+                    });
+                    return values;
+                });
+                const searchableThenNames = computed(() => {
+                    const values = [];
+                    // loop through ALL features > scenarios > then and collect into a unique set
+                    features.value.forEach(feature => {
+                        feature.scenarios.forEach(scenario => {
+                            scenario.then.forEach(then => {
+                                if(!values.includes(then)){
+                                    values.push({
+                                        name: then,
+                                    });
+                                }
+                            });
+                        });
+                    });
+                    return values;
                 });
 
                 const deleteScenario = () => {
@@ -578,7 +699,7 @@
                         return;
                     }
                     features.value[selectedFeatureIndex.value].value.scenarios.splice(selectedScenarioIndex.value, 1);
-                    showModal.value = false;
+                    showDeleteModal.value = false;
                 };
 
                 const endDrag = () => {
@@ -592,12 +713,16 @@
                     scenarios: selectedFeature?.value?.scenarios ?? [],
                     featureSelectorInput,
                     searchableFeatureNames,
-                    newScenario,
+                    searchableScenarioNames,
+                    searchableGivenNames,
+                    searchableWhenNames,
+                    searchableThenNames,
+                    newScenarioNameInput,
                     selectedFeature,
                     selectedScenario,
                     selectedFeatureIndex,
                     selectedScenarioIndex,
-                    showModal,
+                    showDeleteModal,
                     addScenario,
                     selectFeatureIndex,
                     selectScenarioIndex,
@@ -612,20 +737,58 @@
         // FeatureSelector
         app.component('feature-selector', {
             template: '#feature-selector-template',
-            
-            props: ['featureSelectorInput', 'selectedFeature', 'features', 'updateFeature', 'searchableFeatureNames']
+            data(){
+                return {
+                    searching: false
+                }
+            },
+            props: ['featureSelectorInput', 'selectedFeature', 'features', 'updateFeature', 'searchableFeatureNames'],
+            methods:{
+                onSearchingStateChanged: function(isSearching){
+                    console.warn('onSearchingStateChanged', isSearching);
+                    this.searching = isSearching;
+                }
+            },
+            mounted(){
+                console.warn('FeatureSelector: featureSelectorInput:', {
+                    featureSelectorInput: this.featureSelectorInput,
+                    selectedFeature: this.selectedFeature,
+                    features: this.features,
+                    updateFeature: this.updateFeature,
+                    searchableFeatureNames: this.searchableFeatureNames
+                });
+            }
         });
+        // ScenarioList
         app.component('scenario-list', {
             template: '#scenario-list-template',
-            props: ['scenarios', 'newScenario', 'addScenario', 'selectScenario', 'endDrag']
+            props: ['scenarios', 'newScenario', 'addScenario', 'selectScenarioIndex', 'endDrag'],
+            data(){
+                console.warn('what props do i have? ', JSON.parse(JSON.stringify(this.$props)))
+                return {}
+            },
+            mounted(){
+                console.warn('ScenarioList: scenarios:', this.scenarios);
+                console.warn('ScenarioList: newScenario:', this.newScenario);
+                console.warn('ScenarioList: addScenario:', this.addScenario);
+                console.warn('ScenarioList: selectScenarioIndex:', this.selectScenarioIndex);
+                console.warn('ScenarioList: endDrag:', this.endDrag);
+            }
         });
+        // ScenarioDetails
         app.component('scenario-details', {
             template: '#scenario-details-template',
-            props: ['selectedScenario', 'showModal']
+            props: [
+                'selectedScenario', 
+                'showDeleteModal', 
+                'searchableGivenNames', 
+                'searchableWhenNames',
+                'searchableThenNames'
+            ]
         });
         app.component('delete-modal', {
             template: '#delete-modal-template',
-            props: ['showModal', 'deleteScenario']
+            props: ['showDeleteModal', 'deleteScenario']
         });
         
         app.mount('#app');
