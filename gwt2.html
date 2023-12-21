@@ -43,7 +43,10 @@
         }
         .caret-down::after {
             content: '▼';
-            padding-left: 8px;
+            position: absolute;
+            right: 20px;
+            top: 17px;
+            z-index: 1;
         }
         .modal {
             display: none;
@@ -141,8 +144,11 @@
             :class="{'text-2xl font-bold mb-4': true}"
             :v-model="featureSelectorInput"
             @searching="onSearchingStateChanged"
+            @filtered-options-updated="onFeatureSelectorResultsUpdated"
             @reset="onFeatureSelectorReset"
             @select="selectFeatureIndex"
+            @focus="onFocusIn"
+            @blur="onFocusOut"
         ></vue-typeahead>
     </div>
 </script>
@@ -152,7 +158,7 @@
 <script type="text/x-template" id="scenario-list-template">
     <div class="overflow-y-auto h-screen">
         <div class="py-4 fixed">
-            <input type="text" placeholder="New Scenario Name..." class="text-white w-full p-2 mb-4 border rounded caret-down" v-model="newScenarioNameInput" @keyup.enter="addScenario" />
+            <input type="text" placeholder="New Scenario Name..." class="text-white w-full p-2 mb-4 border rounded caret-down relative" v-model="newScenarioNameInput" @keyup.enter="addScenario" />
         </div>
         <div v-if="scenarios?.length" class="pt-24 pb-12">
             <!-- Scenarios:
@@ -179,6 +185,7 @@
 <!-- ScenarioDetails -->
 <script type="text/x-template" id="scenario-details-template">
     <div class="w-full ml-4 p-4 h-screen overflow-y-auto">
+        <span>Selected Scenario:</span>
         <h1 class="text-l font-bold mb-4 text-white">{{selectedScenarioIndex + 1}}) {{ selectedScenario?.title ?? 'No Scenario Selected' }}</h1>
         <div v-if="!selectedScenario">
             <p>Select a scenario to view details</p>
@@ -192,7 +199,7 @@
                     :items="filteredGivenOptions"
                     :minChars="1"
                     placeholder="given..."
-                    class="given-input w-full p-2 border rounded caret-down"
+                    class="given-input w-full p-2 border rounded caret-down relative"
                 ></vue-typeahead>
             </div>
             <div class="mb-4" v-for="(item, index) in selectedScenario.when" :key="'when-' + index">
@@ -203,7 +210,7 @@
                     :items="filteredWhenOptions"
                     :minChars="1"
                     placeholder="when..."
-                    class="when-input w-full p-2 border rounded caret-down"
+                    class="when-input w-full p-2 border rounded caret-down relative"
                 ></vue-typeahead>
             </div>
             <div class="mb-4" v-for="(item, index) in selectedScenario.then" :key="'then-' + index">
@@ -214,7 +221,7 @@
                     :items="filteredThenOptions"
                     :minChars="1"
                     placeholder="then..."
-                    class="then-input w-full p-2 border rounded caret-down"
+                    class="then-input w-full p-2 border rounded caret-down relative"
                 ></vue-typeahead>
             </div>
             <button id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" @click="showDeleteModal = true">Delete</button>
@@ -236,14 +243,14 @@
 <!-- #vue-typeahead-template -->
 <script type="text/x-template" id="vue-typeahead-template">
     <div :class="className">
-        <input type="text" class="w-full p-2 border rounded caret-down" 
+        <input type="text" class="w-full p-2 border rounded caret-down relative" 
             :class="{'bg-blue-200': searching}"
             :placeholder="placeholder"
             name="garbage"
             autocomplete="off"
             :value="vModel"
-            @focus="onFocusin"
-            @blur="onFocusout"
+            @focus="onFocusIn"
+            @blur="onFocusOut"
             @input="onTypeaheadValueInput" />
         <div class="relative">
             <ul class="overflow-y-auto h-screen absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="showDropdown && items.length > 0">
@@ -365,16 +372,15 @@
                     try {
                         let response;
                         if (this.backingData && this.backingData.length > 0) {
+                            //console.warn('backingData', this.backingData)
                             // Filter the backingData based on the inputLocalCache value
-                            response = this.backingData.filter(item => item.name.toLowerCase().includes(this.inputLocalCache.toLowerCase()));
-                            // unwrap the .name field as the value for each entry in the res arr
-                            response = response.map(item => item.name);
-                            console.warn('response')
+                            response = this.backingData.filter(item => item.toLowerCase().includes(this.vModel.toLowerCase()));
+                            //console.warn('filtered:', response)
                         } else {
                             // Fetch data from the apiUrl
                             response = await fetch(this.apiUrl)
                         }
-                        this.$emit('response', response)
+                        this.$emit('filteredOptionsUpdated', response)
                     } catch (error) {
                         console.error('Error occurred during search:', error);
                         this.$emit('error', error)
@@ -395,16 +401,17 @@
             //         this.reset()
             //     }
             // },
-            // todo: bind these...
-            onFocusin() {
+            onFocusIn() {
                 this.focused = true
+                this.$emit('focus')
                 if(this.showDropdownOnFocus){
                     this.search()
                 }
             },
-            onFocusout() {
+            onFocusOut() {
+                this.$emit('blur')
                 this.focused = false
-                this.searching = false
+                this.reset()
             },
             clickItem(item) {
                 this.$emit('hit', item)
@@ -887,7 +894,8 @@
             template: '#feature-selector-template',
             data(){
                 return {
-                    searching: false
+                    searching: false,
+                    focused: false
                 }
             },
             props: [
@@ -903,6 +911,12 @@
                 },
                 onFeatureSelectorReset: function(){
                     window.gwt_state.newScenarioNameInput = '';
+                },
+                onFocusIn(){
+                    this.focused = true;
+                },
+                onFocusOut(){
+                    this.focused = false;
                 }
             },
             computed:{
