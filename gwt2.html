@@ -17,6 +17,10 @@
             font-family: 'Open Sans', sans-serif;
             background-color: #111;
         }
+        .clearfix {
+            clear: both;
+            overflow: auto;
+        }
         input {
             color: #fff;
             background-color: #222;
@@ -42,6 +46,7 @@
             /* Other styles */
         }
         .caret-down::after {
+            pointer-events: none;
             content: '▼';
             position: absolute;
             right: 20px;
@@ -134,7 +139,7 @@
 <!-- Feature Selector is a type-head text field that doubles as a H1 header for the selected Feature as well as an input that allows you to fuzzy-search to switch the selected feature, and there's always a default option to "Create New Feature Named... %whatever the user was typing%" -->
 <!-- FeatureSelector -->
 <script type="text/x-template" id="feature-selector-template">
-    <div class="w-full">
+    <div class="w-full feature-selector z-11">
         <vue-typeahead
             placeholder="Feature Name..."
             :backingData="searchableFeatureNames"
@@ -146,7 +151,7 @@
             @searching="onSearchingStateChanged"
             @filtered-options-updated="onFeatureSelectorResultsUpdated"
             @reset="onFeatureSelectorReset"
-            @select="selectFeatureIndex"
+            @select="onFeatureSelectorSelect"
             @focus="onFocusIn"
             @blur="onFocusOut"
         ></vue-typeahead>
@@ -156,11 +161,38 @@
 
 <!-- ScenarioList -->
 <script type="text/x-template" id="scenario-list-template">
-    <div class="overflow-y-auto h-screen">
-        <div class="py-4 fixed">
-            <input type="text" placeholder="New Scenario Name..." class="text-white w-full p-2 mb-4 border rounded caret-down relative" v-model="newScenarioNameInput" @keyup.enter="addScenario" />
+    <div class="overflow-y-auto h-screen relative z-9">
+        <div class="absolute w-full top-12">
+            <input type="text" placeholder="New Scenario Name..." class="text-white w-full p-2 border rounded caret-down relative" v-model="newScenarioNameInput" @keyup.enter="addScenario" />
         </div>
-        <div v-if="scenarios?.length" class="pt-24 pb-12">
+        <!--
+            "Actions" button group 
+            > Run All Scenarios
+            > Stop All Scenarios
+            a tailwind-styled, bootstrap _inspired_ dropdown button where you hover and it gives you more options
+            for mobile accessibility tapping it should show/hide the dropdown 
+        -->
+        
+        <div class="pt-4 block relative">
+            <div class="">
+                <h2>Scenarios</h2>
+            </div>
+            <div class="group absolute left-auto right-0 z-9 w-auto top-0">
+                <button class="bg-blue-500 text-white font-bold py-2 px-4 rounded ">Actions &#9660;</button>
+                <div class="absolute left-0 top-10 overflow-auto rounded-md shadow-lg py-1 bg-white hidden group-hover:flex flex-col shadow w-40 -ml-20" 
+                role="menu" 
+                aria-orientation="vertical" 
+                aria-labelledby="options-menu">
+                    <button class="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-blue-500 hover:text-white" role="menuitem"><span style="color:white;">&#9658;</span> Run All Scenarios</button>
+                    <button class="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-red-500 hover:text-white" role="menuitem">&#x1F6D1; Stop All Scenarios</button>
+                </div>
+            </div>
+        </div>
+        
+
+
+        <div v-if="scenarios?.length" class="pt-20 pb-12">
+            
             <!-- Scenarios:
             <pre>{{ scenarios }}</pre> -->
             <!-- <pre>#scenarios:{{scenarios?.length}}
@@ -185,8 +217,14 @@
 <!-- ScenarioDetails -->
 <script type="text/x-template" id="scenario-details-template">
     <div class="w-full ml-4 p-4 h-screen overflow-y-auto">
-        <span>Selected Scenario:</span>
-        <h1 class="text-l font-bold mb-4 text-white">{{selectedScenarioIndex + 1}}) {{ selectedScenario?.title ?? 'No Scenario Selected' }}</h1>
+        <!-- <span>Selected Scenario:</span>
+        <h1 class="text-l font-bold mb-4 text-white">{{selectedScenarioIndex + 1}}) {{ selectedScenario?.title ?? 'No Scenario Selected' }}</h1> -->
+        <div class="overflow-hidden space-x-2 mb-4">
+            <!-- todo: hide if running? -->
+            <button class="w-auto text-left inline-block px-4 py-2 text-sm bg-blue-500 hover:bg-blue-700 text-white rounded" role="menuitem"><span style="color:white;">&#9658;</span> Run Scenario</button>
+            <!-- todo: show if running -->
+            <button class="w-auto text-left inline-block px-4 py-2 text-sm bg-red-500 hover:bg-red-700 text-white rounded" role="menuitem">&#x1F6D1; Stop Scenario</button>
+        </div>
         <div v-if="!selectedScenario">
             <p>Select a scenario to view details</p>
         </div>
@@ -196,7 +234,6 @@
                 <vue-typeahead
                     :v-model="item"
                     :backingData="searchableGivenNames"
-                    :items="filteredGivenOptions"
                     :minChars="1"
                     placeholder="given..."
                     class="given-input w-full p-2 border rounded caret-down relative"
@@ -207,7 +244,6 @@
                 <vue-typeahead
                     :v-model="item"
                     :backingData="searchableWhenNames"
-                    :items="filteredWhenOptions"
                     :minChars="1"
                     placeholder="when..."
                     class="when-input w-full p-2 border rounded caret-down relative"
@@ -218,13 +254,14 @@
                 <vue-typeahead
                     :v-model="item"
                     :backingData="searchableThenNames"
-                    :items="filteredThenOptions"
                     :minChars="1"
                     placeholder="then..."
                     class="then-input w-full p-2 border rounded caret-down relative"
                 ></vue-typeahead>
             </div>
             <button id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" @click="showDeleteModal = true">Delete</button>
+            <h4>Scenario Run History:</h4>
+            <div>TODO!</div>
         </div>
     </div>
 </script>
@@ -254,13 +291,15 @@
             @input="onTypeaheadValueInput" />
         <div class="relative">
             <ul class="overflow-y-auto h-screen absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="showDropdown && items.length > 0">
-                <li class="p-2 hover:bg-blue-100 cursor-pointer"
+                <li class="clearfix"><div class="float-left">Features:</div><div class="float-right">Status:</div></li>
+                <li class="p-2 hover:bg-blue-100 cursor-pointer clearfix"
                     :class="{ 'bg-blue-200': index === highlightedOptionIndex }"
                     v-for="(item, index) in items" :key="index" @click="$emit('select', index)">
-                    {{index+1}}) {{ item.name }}
+                    <div class="float-left">{{index+1}}) {{ item.name }}</div>
+                    <div class="float-right">✅</div>
                 </li>
                 <li class="p-2 hover:bg-blue-100 cursor-pointer" @click="$emit('select', 'new_feature')">
-                    New Feature `{{ vModel }}`...
+                    New Feature{{ vModel.length ? ' '+vModel : '' }}...
                 </li>
             </ul>
         </div>
@@ -275,7 +314,7 @@
         props: {
             showDropdownOnFocus: {
                 type: Boolean,
-                default: false
+                default: true
             },
             apiUrl: {
                 type: String,
@@ -374,7 +413,13 @@
                         if (this.backingData && this.backingData.length > 0) {
                             //console.warn('backingData', this.backingData)
                             // Filter the backingData based on the inputLocalCache value
-                            response = this.backingData.filter(item => item.toLowerCase().includes(this.vModel.toLowerCase()));
+                            response = this.backingData.filter(item => {
+                                // item might be an object or a string
+                                if(typeof item === 'object'){
+                                    return item.name.toLowerCase().includes(this.vModel.toLowerCase())
+                                }
+                                return item.toLowerCase().includes(this.vModel.toLowerCase())
+                            });
                             //console.warn('filtered:', response)
                         } else {
                             // Fetch data from the apiUrl
@@ -625,7 +670,7 @@
         const app = Vue.createApp({
             setup() {
                 const features = ref([{
-                    name: 'User Registration',
+                    name: '👤 User Registration',
                     description: 'All scenarios around registering and verifying a new web account',
                     scenarios: [{
                         title: '👤 user registers web account',
@@ -638,10 +683,10 @@
                         when: ['user enters invalid details'],
                         then: ['user sees validation errors']
                     },{
-                        title: '🔁 user gets duplicate email error when registering with an email that already exists',
+                        title: '🔁 user gets duplicate email notice when registering with an email that already exists',
                         given: ['user account exists for email'],
                         when: ['user enters an email that already exists'],
-                        then: ['user sees duplicate email error in email inbox']
+                        then: ['user sees duplicate email notice in email inbox']
                     },{
                         title: '📧 user gets verification email after registering',
                         given: ['user submitted web account registration form'],
@@ -654,7 +699,43 @@
                         then: ['user is verified']
                     }]
                 },{
-                    name: 'User Password Actions',
+                    name: '🗝️ User Authentication: Happy Path',
+                    scenarios:[{
+                        title: 'user logs in via login page',
+                        given: ['user is on the login page'],
+                        when: ['user enters their email and password'],
+                        then: ['user is logged in']
+                    },{
+                        title: 'user logs in via main menu',
+                        given: ['user is on the home page'],
+                        when: ['user submits their email and password into the main menu'],
+                        then: ['user is logged in']
+                    },{
+                        title: 'user logs in via modal',
+                        given: ['user sees the login modal'],
+                        when: ['user submits their email and password into the modal'],
+                        then: ['user is logged in']
+                    }]
+                },{
+                    name: '❌ User Authentication: Edge Cases',
+                    scenarios:[{
+                        title: 'user submits invalid email/password via login page',
+                        given: ['user is on the login page'],
+                        when: ['user enters invalid email and password'],
+                        then: ['user sees validation errors on the login form']
+                    },{
+                        title: 'user submits invalid email/password via main menu',
+                        given: ['user is on the home page'],
+                        when: ['user submits invalid email and password into the main menu'],
+                        then: ['user is redirected to login page with validation errors present']
+                    },{
+                        title: 'user submits invalid email/password via modal',
+                        given: ['user sees the login modal'],
+                        when: ['user submits invalid email and password into the modal'],
+                        then: ['user sees validation errors in the modal']
+                    }]
+                },{
+                    name: '🔑 User Password Actions',
                     description: 'All scenarios around changing and resetting a user\'s password',
                     scenarios: [{
                         title: 'user forgets password, requests reset',
@@ -682,6 +763,27 @@
                         when: ['user enters new password and submits form'],
                         then: ['user sees invalid token error']
                     }]
+                },{
+                    name: '🔍 KYC',
+                    scenarios:[],
+                },{
+                    name: '📱 SMS',
+                    scenarios:[],
+                },{
+                    name: '🚫 Banned Users',
+                    scenarios:[],
+                },{
+                    name: '👁️ Watched Lots',
+                    scenarios:[],
+                },{
+                    name: '📝 Sale Registration',
+                    scenarios:[],
+                },{
+                    name: '💰 Pre-sale Bidding',
+                    scenarios:[],
+                },{
+                    name: '📆 Day Of Sale',
+                    scenarios:[],
                 }])
                 const selectedFeatureIndex = ref(0);
                 const selectedScenarioIndex = ref(0);
@@ -713,7 +815,7 @@
                     selectedScenarioIndex.value = features.value[selectedFeatureIndex.value].scenarios.length - 1;
                     setTimeout(()=>{
                         // focus the first input in the scenario details
-                        document.querySelector('.given-input').focus();
+                        document.querySelector('.given-input input').focus();
                     },100)
                 };
 
@@ -773,10 +875,13 @@
                     features.value.forEach(feature => {
                         feature.scenarios.forEach(scenario => {
                             scenario.given.forEach(given => {
-                                if(!values.some(value => value.name === given)){
-                                    values.push({
-                                        name: given,
-                                    });
+                                // if(!values.some(value => value.name === given)){
+                                //     values.push({
+                                //         name: given,
+                                //     });
+                                // }
+                                if(!values.includes(given)){
+                                    values.push(given);
                                 }
                             });
                         });
@@ -789,10 +894,13 @@
                     features.value.forEach(feature => {
                         feature.scenarios.forEach(scenario => {
                             scenario.when.forEach(when => {
-                                if(!values.some(value => value.name === when)){
-                                    values.push({
-                                        name: when,
-                                    });
+                                // if(!values.some(value => value.name === when)){
+                                //     values.push({
+                                //         name: when,
+                                //     });
+                                // }
+                                if(!values.includes(when)){
+                                    values.push(when);
                                 }
                             });
                         });
@@ -805,10 +913,13 @@
                     features.value.forEach(feature => {
                         feature.scenarios.forEach(scenario => {
                             scenario.then.forEach(then => {
+                                // if(!values.some(value => value.name === then)){
+                                //     values.push({
+                                //         name: then,
+                                //     });
+                                // }
                                 if(!values.includes(then)){
-                                    values.push({
-                                        name: then,
-                                    });
+                                    values.push(then);
                                 }
                             });
                         });
@@ -905,6 +1016,13 @@
                 'searchableFeatureNames'
             ],
             methods:{
+                onFeatureSelectorResultsUpdated: function(results){
+                    console.warn('onFeatureSelectorResultsUpdated', results);
+                },
+                onFeatureSelectorSelect: function(index){
+                    console.warn('onFeatureSelectorSelect', index);
+                    //this.$emit('select-feature-index', index);
+                },
                 onSearchingStateChanged: function(isSearching){
                     //console.warn('onSearchingStateChanged', isSearching);
                     this.searching = isSearching;
@@ -941,10 +1059,10 @@
                     props: JSON.parse(JSON.stringify(this.$props)),
                     _this: this
                 })
-                if(typeof this.selectedFeatureIndex === 'undefined'){
-                    console.warn('FeatureSelector: selectedFeatureIndex is undefined');
-                    debugger;
-                }
+                // focus the input
+                setTimeout(()=>{
+                    document.querySelector('.feature-selector input').focus();
+                },100)
             }
         });
         // ScenarioList
@@ -967,6 +1085,11 @@
                     }
                 }
             },
+            data(){
+                return {
+                    showDropdown: false
+                }
+            },
             mounted(){
                 console.warn('ScenarioList',{
                     $props: this.$props,
@@ -986,47 +1109,6 @@
                 'searchableWhenNames',
                 'searchableThenNames'
             ],
-            // data(){
-            //     return {
-            //         localGivenInputCache: '',
-            //         localWhenInputCache: '',
-            //         localThenInputCache: ''
-            //     }
-            // },
-            computed: {
-                filteredGivenOptions(){
-                    return [];
-                    //return this.searchableGivenNames.filter(item => this.localGivenInputCache.toLowerCase().includes(item.name.toLowerCase()));
-                },
-                filteredWhenOptions(){
-                    return [];
-                    // return this.searchableWhenNames.filter(item => this.localWhenInputCache.toLowerCase().includes(item.name.toLowerCase()));
-                },
-                filteredThenOptions(){
-                    return [];
-                    // return this.searchableThenNames.filter(item => this.localThenInputCache.toLowerCase().includes(item.name.toLowerCase()));
-                }
-            }//,
-            // methods:{
-            //     onGivenInputChanged(){
-            //         //console.warn('onGivenInputChanged',arguments);
-            //         if(typeof arguments[0] === "string"){
-            //             this.localGivenInputCache = arguments[0];
-            //         }
-            //     },
-            //     onWhenInputChanged(){
-            //         //console.warn('onWhenInputChanged',arguments);
-            //         if(typeof arguments[0] === "string"){
-            //             this.localWhenInputCache = arguments[0];
-            //         }
-            //     },
-            //     onThenInputChanged(){
-            //         //console.warn('onThenInputChanged',arguments);
-            //         if(typeof arguments[0] === "string"){
-            //             this.localThenInputCache = arguments[0];
-            //         }
-            //     }
-            // }
         });
         app.component('delete-modal', {
             template: '#delete-modal-template',
