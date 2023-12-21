@@ -15,6 +15,10 @@
     <style>
         body {
             font-family: 'Open Sans', sans-serif;
+            background-color: #111;
+        }
+        input {
+            background-color: #222;
         }
         .fixed-top {
             position: fixed;
@@ -74,7 +78,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="">
 
 <div id="app" class="flex-row p-4 h-screen overflow-hidden">
     <feature-selector
@@ -115,11 +119,10 @@
 <!-- FeatureSelector -->
 <script type="text/x-template" id="feature-selector-template">
     <div class="w-full p-4">
-        <pre>selectedFeatureIndex:{{ selectedFeatureIndex }}</pre>
+        <!-- <pre>selectedFeatureIndex:{{ selectedFeatureIndex }}</pre> -->
         <h1 class="text-2xl font-bold mb-4">{{ featureSelectorInput ?? '' }}</h1>
         <vue-typeahead
             @searching="onSearchingStateChanged"
-            v-model="featureSelectorInput"
             :backingData="searchableFeatureNames"
             :items="features"
             :minChars="1"
@@ -138,7 +141,7 @@
             <input type="text" placeholder="New Scenario Name..." class="w-full p-2 mb-4 border rounded caret-down" v-bind:value="newScenarioNameInput" /> 
             <!-- TODO: figure out why i can't add @keyup.enter="addScenario" -->
         </div>
-        <pre>{{ typeof addScenario }}</pre>
+        <!-- <pre>{{ typeof addScenario }}</pre> -->
         <div v-if="scenarios?.length">
             <!-- Scenarios:
             <pre>{{ scenarios }}</pre> -->
@@ -147,8 +150,11 @@
             </pre> -->
             <draggable class="space-y-2" v-model="scenarios" @end="endDrag">
                 <template #item="{element, index}" :itemKey="index">
-                    <div :key="index" :itemKey="index" class="p-2 border rounded bg-gray-50 cursor-pointer" 
-                    :class="{'bg-blue-200': selectedScenarioIndex === index}"
+                    <div :key="index" :itemKey="index" 
+                    class="p-2 border rounded cursor-pointer"
+                    :class="[
+                    selectedScenarioIndex === index ? 'bg-purple-900 text-white' : 'bg-black-10 text-white'
+                    ]"
                         @click="selectScenarioIndex(index)">
                         {{index}}) {{ element.title }}
                     </div>
@@ -169,33 +175,33 @@
             <div class="mb-4" v-for="(item, index) in selectedScenario.given" :key="'given-' + index">
                 <label class="block text-gray-700">Given</label>
                 <vue-typeahead
-                    v-model="selectedScenario.given[index]"
+                    @input="onGivenInputChanged"
                     :backingData="searchableGivenNames"
-                    :items="givenItems"
+                    :items="filteredGivenOptions"
                     :minChars="1"
-                    placeholder="Search or create a new given..."
+                    placeholder="find or define a new given..."
                     class="w-full p-2 border rounded caret-down"
                 ></vue-typeahead>
             </div>
             <div class="mb-4" v-for="(item, index) in selectedScenario.when" :key="'when-' + index">
                 <label class="block text-gray-700">When</label>
                 <vue-typeahead
-                    v-model="selectedScenario.when[index]"
+                    @input="onWhenInputChanged"
                     :backingData="searchableWhenNames"
-                    :items="whenItems"
+                    :items="filteredWhenOptions"
                     :minChars="1"
-                    placeholder="Search or create a new when..."
+                    placeholder="find or define a new when..."
                     class="w-full p-2 border rounded caret-down"
                 ></vue-typeahead>
             </div>
             <div class="mb-4" v-for="(item, index) in selectedScenario.then" :key="'then-' + index">
                 <label class="block text-gray-700">Then</label>
                 <vue-typeahead
-                    v-model="selectedScenario.then[index]"
+                    @input="onThenInputChanged"
                     :backingData="searchableThenNames"
-                    :items="thenItems"
+                    :items="filteredThenOptions"
                     :minChars="1"
-                    placeholder="Search or create a new then..."
+                    placeholder="find or define a new then..."
                     class="w-full p-2 border rounded caret-down"
                 ></vue-typeahead>
             </div>
@@ -220,7 +226,10 @@
     <div :class="className">
         <input type="text" class="w-full p-2 border rounded caret-down" 
             :placeholder="placeholder"
-            v-model="input" @input="$emit('input', $event.target.value)" />
+            name="garbage"
+            autocomplete="off"
+            v-model="inputLocalCache" 
+            @input="$emit('input', $event.target.value)" />
         <div class="relative">
             <ul class="absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="showDropdown && items.length > 0">
                 <li class="p-2 hover:bg-blue-100 cursor-pointer"
@@ -301,7 +310,7 @@
                 focusing: false,
                 showDropdown: false,
                 timeout: '',
-                dataInput: '',
+                inputLocalCache: '',
                 highlightedOptionIndex: 0
             }
         },
@@ -330,8 +339,8 @@
                     try {
                         let response;
                         if (this.backingData && this.backingData.length > 0) {
-                            // Filter the backingData based on the dataInput value
-                            response = this.backingData.filter(item => item.name.toLowerCase().includes(this.dataInput.toLowerCase()));
+                            // Filter the backingData based on the inputLocalCache value
+                            response = this.backingData.filter(item => item.name.toLowerCase().includes(this.inputLocalCache.toLowerCase()));
                             // unwrap the .name field as the value for each entry in the res arr
                             response = response.map(item => item.name);
                             console.warn('response')
@@ -352,7 +361,7 @@
                 }, this.delay)
             },
             changeInput(event) {
-                if (event.target && event.target.value && event.target.value.length >= this.minChars) {
+                if (event?.target?.value?.length >= this.minChars) {
                     this.search()
                 }
                 this.$emit('update:input', event.target.value)
@@ -381,9 +390,10 @@
                 return text
             },
             reset() {
+                console.warn('VueTypeahead: reset');
                 this.showDropdown = false
                 this.searching = false
-                this.dataInput = ''
+                this.inputLocalCache = ''
                 this.$emit('reset')
                 this.$emit('update:input', '')
             }
@@ -639,7 +649,7 @@
                 };
 
                 const selectScenarioIndex = (scenarioIndex) => {
-                    console.warn('selectScenario: scenario:', scenario);
+                    console.warn('selectScenario: scenario:', scenarioIndex);
                     selectedScenarioIndex.value = scenarioIndex;
                 };
 
@@ -853,7 +863,45 @@
                 'searchableGivenNames', 
                 'searchableWhenNames',
                 'searchableThenNames'
-            ]
+            ],
+            data(){
+                return {
+                    localGivenInputCache: '',
+                    localWhenInputCache: '',
+                    localThenInputCache: ''
+                }
+            },
+            computed: {
+                filteredGivenOptions(){
+                    return this.searchableGivenNames.filter(item => this.localGivenInputCache.toLowerCase().includes(item.name.toLowerCase()));
+                },
+                filteredWhenOptions(){
+                    return this.searchableWhenNames.filter(item => this.localWhenInputCache.toLowerCase().includes(item.name.toLowerCase()));
+                },
+                filteredThenOptions(){
+                    return this.searchableThenNames.filter(item => this.localThenInputCache.toLowerCase().includes(item.name.toLowerCase()));
+                }
+            },
+            methods:{
+                onGivenInputChanged(){
+                    //console.warn('onGivenInputChanged',arguments);
+                    if(typeof arguments[0] === "string"){
+                        this.localGivenInputCache = arguments[0];
+                    }
+                },
+                onWhenInputChanged(){
+                    //console.warn('onWhenInputChanged',arguments);
+                    if(typeof arguments[0] === "string"){
+                        this.localWhenInputCache = arguments[0];
+                    }
+                },
+                onThenInputChanged(){
+                    //console.warn('onThenInputChanged',arguments);
+                    if(typeof arguments[0] === "string"){
+                        this.localThenInputCache = arguments[0];
+                    }
+                }
+            }
         });
         app.component('delete-modal', {
             template: '#delete-modal-template',
