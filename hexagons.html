@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagons</title>
+    <script src="https://unpkg.com/p5"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ccapture.js-npmfixed@1.1.0/build/CCapture.all.min.js"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        let drawHexes = true;
+        let drawSplats = true;
+        let useMouseTarget = false;
+        let useInfinityTarget = false;
+        let animateMinMax = false;
+        let hexSize;
+        let effectiveRadiusScale = 1;
+        let slider, delaySlider;
+        let cols, rows;
+        let hexagons = [];
+        let animDelay = 50;
+        let maxRadScale = 0;
+        let minRadScale = 0.9;
+        let recording = false;
+        // Create a capturer that exports a WebM video
+        var capturer = new CCapture( { format: 'webm', verbose: false, fps: 60 } );
+        let _canvas;
+        let capturedFrames = 0;
+        let capturedFramesDisplay;
+        // sometimes we target the mouse, sometimes we target the center of the screen
+        let target = {x: 0, y: 0}
+
+        // Add a new variable to store the color animation mode
+        let myColorMode = 0; // 0: vertical, 1: horizontal, 2: radial
+
+        // Add a button to switch the color animation mode
+        let colorModeButton;
+        
+
+        /* a cached bitmap Image of a blurred circle */
+        let blurSprite;
+        let tintedCache = {};
+        function makeABlurSprite(){
+            // this function makes an ellipse on an offscreen canvas,
+            // bakes it to a bitmap, blurs it, and caches it to a sprite
+            // we can instance this sprite as many times as we want cheaply
+            let blurCanvas = createGraphics(50, 50);
+            blurCanvas.clear();
+            blurCanvas.noStroke();
+            blurCanvas.fill("purple")
+            blurCanvas.ellipse(blurCanvas.width / 2, blurCanvas.height / 2, 10, 10);
+            blurCanvas.filter(BLUR, 5);
+            blurSprite = blurCanvas.get();
+        }
+        let sliders = {}
+        function setup() {
+            makeABlurSprite();
+
+            let buttons = [
+                { label: 'Toggle MinMax Animation', action: () => { animateMinMax = !animateMinMax; } },
+                { label: 'Switch Color Mode', action: () => { myColorMode = (myColorMode + 1) % 3; } },
+                { label: 'Toggle Hexes', action: () => { drawHexes = !drawHexes; } },
+                { label: 'Toggle Splats', action: () => { drawSplats = !drawSplats; } },
+                { label: 'Toggle Mouse Target', action: () => { useMouseTarget = !useMouseTarget; } },
+                { label: 'Toggle Infinity Target', action: () => { useInfinityTarget = !useInfinityTarget; } },
+                { label: 'Start Recording', action: toggleRecording }
+            ];
+
+            let buttonY = 20;
+            for (let button of buttons) {
+                let btn = createButton(button.label);
+                btn.position(10, buttonY);
+                btn.mousePressed(button.action);
+                buttonY += 40;
+            }
+
+            // add a text overlay that shows the number of capturedFrames
+            capturedFramesDisplay = createDiv('0');
+            capturedFramesDisplay.style('font-size', '48px');
+            capturedFramesDisplay.style('color', 'white');
+            capturedFramesDisplay.style('text-align', 'center');
+            capturedFramesDisplay.style('position', 'absolute');
+            capturedFramesDisplay.style('right', '20px');
+            capturedFramesDisplay.style('top', '20px');
+
+            _canvas = createCanvas(windowWidth, windowHeight);
+            colorMode(HSB, 360, 100, 100); // Using HSB color mode for easier color transitions
+            sliders = {
+                'hexSize': { label: 'Hexagon Size', min: 10, max: 100, value: 30, action: (val) => { hexSize = val; } },
+                'effectiveRadiusScale': { label: 'Target Radius Scale', min: 0.1, max: 3, step: 0.01, value: effectiveRadiusScale, action: (val) => { effectiveRadiusScale = val; } },
+                'animDelay': { label: 'Animation Delay', min: 10, max: 100, value: animDelay, action: (val) => { animDelay = val; } },
+                'minRad': { label: 'Min Radius', min: 0, max: 3, step: 0.01, value: minRadScale ?? 0, action: (val) => { minRadScale = val; } },
+                'maxRad': { label: 'Max Radius', min: 0, max: 3, step: 0.01, value: maxRadScale ?? 1, action: (val) => { maxRadScale = val; } }
+            };
+
+            let sliderY = buttonY + 10; // start from the max y value of the buttons
+            for (let key in sliders) {
+                let sld = createSlider(sliders[key].min, sliders[key].max, sliders[key].value, sliders[key].step ?? 1);
+                sld.position(10, sliderY);
+                sld.input(() => sliders[key].action(sld.value()));
+                sliders[key].instance = sld;
+                
+                let label = createDiv(sliders[key].label);
+                label.position(10, sld.y - 20);
+
+                sliderY += 40;
+            }
+            console.warn('sliders',sliders)
+
+            hexSize = sliders['hexSize'].instance.value();
+            createHexGrid();
+        }
+
+        function toggleRecording() {
+            if(recording){
+                capturer.stop();
+                capturer.save();
+                recording = false;
+                // change label to start recording
+                this.html('Start Recording');
+                
+                return;
+            }
+            // change label to stop recording
+            this.html('Stop Recording');
+
+            let countdown = 3;
+            let countdownText = createDiv(countdown);
+            countdownText.style('font-size', '48px');
+            countdownText.style('color', 'white');
+            countdownText.style('text-align', 'center');
+            countdownText.style('position', 'absolute');
+            countdownText.style('top', '50%');
+            countdownText.style('left', '50%');
+            countdownText.style('transform', 'translate(-50%, -50%)');
+            let countdownInterval = setInterval(() => {
+                countdown--;
+                if (countdown > 0) {
+                    countdownText.html(countdown);
+                } else {
+                    countdownText.remove();
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+
+            setTimeout(()=>{
+                startRecording();
+            },3000);
+        }
+
+        
+        function startRecording(){
+            capturer.start();
+            recording = true;
+            frameCount = 0;
+            capturedFrames = 0;
+            draw();
+        }
+
+        // infinity symbol animation progress
+        let t = 0;
+        function draw() {
+            if(useMouseTarget){
+                target.x = mouseX;
+                target.y = mouseY;
+            }else if(useInfinityTarget){
+                // Define the control points for the infinity symbol
+                let leftControlX1 = width / 2 - 50, leftControlY1 = height / 2 - 100;
+                let leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
+                let rightControlX1 = width / 2 + 50, rightControlY1 = height / 2 - 100;
+                let rightControlX2 = width / 2 + 150, rightControlY2 = height / 2 + 100;
+
+                // Update t for motion
+                t += 0.005;
+                if (t > 1) {
+                    t = 0;
+                }
+
+                // Calculate the position of the red dot
+                let dotX, dotY;
+                let u = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
+                let u2 = u * u, u3 = u2 * u;
+
+                // The segments are being normalized for linear motion to ensure that the motion of the dot follows a smooth, continuous path along the infinity symbol.
+                // This is achieved by using a cubic Bezier curve formula, where 'u' is the normalized time (ranging from 0 to 1).
+                // The first half of the infinity symbol is defined by the left control points, and the second half by the right control points.
+                if (t <= 0.5) {
+                    // First half of the infinity symbol
+                    dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlX1 + (3 * u2 - 3 * u3) * leftControlX2 + u3 * width / 2;
+                    dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlY1 + (3 * u2 - 3 * u3) * leftControlY2 + u3 * height / 2;
+                } else {
+                    // Second half of the infinity symbol
+                    dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlX1 + (3 * u2 - 3 * u3) * rightControlX2 + u3 * width / 2;
+                    dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlY1 + (3 * u2 - 3 * u3) * rightControlY2 + u3 * height / 2;
+                }
+                target.x = dotX;
+                target.y = dotY;
+            }else{
+                // set target to center of screen
+                target.x = width / 2;  
+                target.y = height / 2;
+            }
+
+            background(10);
+
+            capturedFramesDisplay.html(capturedFrames);
+
+            if(animateMinMax){
+                // use sin wave to modulate maxRadScale between 0 and 2
+                maxRadScale = map(sin(frameCount * 0.01), -1, 1, 0, 2);
+                // modulate minRadScale between 0.9 and 0
+                minRadScale = map(sin(frameCount * 0.01), -1, 1, 0.9, 0);
+            }else{
+                // use the slider values
+                maxRadScale = sliders['maxRad'].instance.value();
+                minRadScale = sliders['minRad'].instance.value();
+            }
+
+            // Calculate effective radius based on 25% of the shortest window edge length
+            let effectiveRadius = 0.25 * min(windowWidth, windowHeight) * effectiveRadiusScale;
+
+            // Update each hexagon's target size based on mouse distance
+            for (let hex of hexagons) {
+                let d = dist(target.x, target.y, hex.x, hex.y);
+                //if (d < effectiveRadius) {
+                    let sizeFactor = map(d, 0, effectiveRadius, maxRadScale, minRadScale); // Scale factor: 2 at center, 1 at edge
+                    hex.targetSize = hexSize * sizeFactor;
+                // } else {
+                //     hex.targetSize = hexSize;
+                // }
+            }
+
+            // sort hexagons by distance from target (furthest should be drawn first so they're at the bottom)
+            hexagons.sort((a, b) => {
+                let distA = dist(target.x, target.y, a.x, a.y);
+                let distB = dist(target.x, target.y, b.x, b.y);
+                return distA - distB;
+            });
+
+            // Redraw hexagons and animate colors
+            if (hexSize !== sliders['hexSize'].instance.value()) {
+                hexSize = sliders['hexSize'].instance.value();
+                createHexGrid(); // Recreate grid if size changes
+            }
+            //animDelay = delaySlider.value();
+            drawHexGrid();
+            animateColors();
+
+            if(recording){
+                capturedFrames++;
+                try {
+                    capturer.capture( _canvas.elt );
+                } catch (error) {
+                    console.log(error);
+                }
+
+                //requestAnimationFrame(draw);
+            }
+        }
+
+
+        function createHexGrid() {
+            hexagons = [];
+            let hexHeight = sqrt(3) * hexSize;
+            cols = int(width / (1.5 * hexSize));
+            rows = int(height / hexHeight);
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    let x = 1.5 * col * hexSize + hexSize;
+                    let y = hexHeight * row;
+                    if (col % 2 === 1) {
+                        y += hexHeight / 2;
+                    }
+                    hexagons.push(new Hexagon(x, y, hexSize, row, col));
+                }
+            }
+        }
+
+        function drawSplatForHex(hex){
+            // draw a copy of the blur sprite as a shadow
+            push();
+            // change draw mode to center
+            imageMode(CENTER);
+            translate(hex.x, hex.y);
+            scale(hex.size * .2);
+
+            
+            let hue = map(hex.row, 0, rows, 0, 360);
+            hue = Math.round(hue / 32) * 32; // Snap hue to increments of 32 to reduce cache size
+            let colorKey = `${hue}`;
+            if(!tintedCache[colorKey]){
+                let sat = 100; // Keep saturation constant
+                let bri = 100; // Keep brightness constant
+                let tinted = color(hue, sat, bri);
+                // Save a copy of the tinted image to avoid re-tinting
+                tintedImage = createImage(blurSprite.width, blurSprite.height);
+                tintedImage.loadPixels();
+                blurSprite.loadPixels();
+                let d = dist(target.x, target.y, hex.x, hex.y);
+                let alpha = map(d, 0, width, 255, 0); // Alpha based on distance from mouse
+                for (let i = 0; i < blurSprite.pixels.length; i += 4) {
+                    let r = red(tinted);
+                    let g = green(tinted);
+                    let b = blue(tinted);
+                    let originalAlpha = blurSprite.pixels[i + 3]; // Get the original alpha value
+                    tintedImage.pixels[i] = r;
+                    tintedImage.pixels[i + 1] = g;
+                    tintedImage.pixels[i + 2] = b;
+                    tintedImage.pixels[i + 3] = alpha * (originalAlpha / 255); // Use new alpha value considering the original alpha
+                }
+                tintedImage.updatePixels();
+                tintedCache[colorKey] = tintedImage;
+            }
+
+            // apply a random rotation to give some noise
+            rotate(random(0, TWO_PI));
+
+            image(tintedCache[colorKey], 0, 0);
+            pop();
+        }
+
+        function drawHexGrid() {
+            for (let hex of hexagons) {
+                hex.updateSize();
+                if(drawSplats){
+                    drawSplatForHex(hex)
+                }
+                if(drawHexes){
+                    // draw the bestagon
+                    hex.draw();
+                }
+            }
+        }
+
+        function animateColors() {
+            let maxDelay = rows * animDelay;
+            if (myColorMode === 0) { // Vertical hue shift
+                for (let hex of hexagons) {
+                    let delay = hex.row * animDelay;
+                    let colorTime = (frameCount - delay) % maxDelay;
+                    let hue = map(colorTime, 0, maxDelay, 0, 360);
+                    hex.color = color(hue, 80, 100);
+                }
+            } else if (myColorMode === 1) { // Horizontal hue shift
+                maxDelay = cols * animDelay;
+                for (let hex of hexagons) {
+                    let delay = hex.col * animDelay;
+                    let colorTime = (frameCount - delay) % maxDelay;
+                    let hue = map(colorTime, 0, maxDelay, 0, 360);
+                    hex.color = color(hue, 80, 100);
+                }
+            } else if (myColorMode === 2) { // Radial hue shift
+                let maxDist = min(width, height) / 2;
+                maxDelay = maxDist * animDelay;
+                for (let hex of hexagons) {
+                    let d = dist(target.x, target.y, hex.x, hex.y);
+                    let delay = map(d, 0, maxDist, 0, maxDelay);
+                    let colorTime = (frameCount - delay) % maxDelay;
+                    let hue = map(colorTime, 0, maxDelay, 0, 360);
+                    hex.color = color(hue, 80, 100);
+                }
+            }
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+            createHexGrid(); // Recreate grid for new window size
+        }
+
+        class Hexagon {
+            constructor(x, y, size, row, col) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.targetSize = size; // New target size property
+                this.row = row;
+                this.col = col; // Store the column
+
+                this.color = color(0, 0, 100); // Initial color
+            }
+
+            updateSize(){
+                // Lerp the size towards the target size
+                this.size = lerp(this.size, this.targetSize, 0.1);
+            }
+
+            draw() {
+                
+
+                push();
+                translate(this.x, this.y);
+                fill(this.color);
+                //stroke(0);
+                noStroke();
+                beginShape();
+                for (let i = 0; i < TWO_PI; i += TWO_PI / 6) {
+                    let x = this.size * cos(i);
+                    let y = this.size * sin(i);
+                    vertex(x, y);
+                }
+                endShape(CLOSE);
+                pop();
+            }
+        }
+
+    </script>
+</body>
+
+</html>

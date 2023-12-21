@@ -12,7 +12,8 @@
 	"author": "",
 	"license": "ISC",
 	"dependencies": {
-		"@types/p5": "^1.7.4"
+		"@types/p5": "^1.7.4",
+		"concurrently": "^8.2.2"
 	},
 	"devDependencies": {
 		"axios": "^1.6.2",
