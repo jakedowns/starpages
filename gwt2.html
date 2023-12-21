@@ -18,6 +18,7 @@
             background-color: #111;
         }
         input {
+            color: #fff;
             background-color: #222;
         }
         .fixed-top {
@@ -77,6 +78,20 @@
             cursor: pointer;
         }
     </style>
+    <script>
+        window.unwrap = function(obj){
+            const seen = new WeakSet();
+            return JSON.parse(JSON.stringify(obj, (key, value) => {
+                if (typeof value === "object" && value !== null) {
+                    if (seen.has(value)) {
+                        return;
+                    }
+                    seen.add(value);
+                }
+                return value;
+            }));
+        }
+    </script>
 </head>
 <body class="">
 
@@ -84,9 +99,7 @@
     <feature-selector
         :selected-feature-index="selectedFeatureIndex"
         :selected-feature="selectedFeature"
-        :feature-selector-input="featureSelectorInput"
         :features="features"
-        :on-feature-selector-input-changed="onFeatureSelectorInputChanged"
         :searchable-feature-names="searchableFeatureNames"
         :select-feature-index="selectFeatureIndex"
     ></feature-selector>
@@ -95,7 +108,6 @@
             <scenario-list 
                 :add-scenario="addScenario"
                 :scenarios="scenarios"
-                :new-scenario-name-input="newScenarioNameInput"
                 :select-scenario-index="selectScenarioIndex"
                 :selected-scenario-index="selectedScenarioIndex"
                 :end-drag="endDrag"
@@ -104,6 +116,7 @@
         <div class="w-1/2 overflow-y-auto overflow-x-hidden">
             <scenario-details v-if="selectedScenario"
                 :selected-scenario="selectedScenario"
+                :selected-scenario-index="selectedScenarioIndex"
                 :searchable-given-names="searchableGivenNames"
                 :searchable-when-names="searchableWhenNames"
                 :searchable-then-names="searchableThenNames"
@@ -118,7 +131,7 @@
 <!-- Feature Selector is a type-head text field that doubles as a H1 header for the selected Feature as well as an input that allows you to fuzzy-search to switch the selected feature, and there's always a default option to "Create New Feature Named... %whatever the user was typing%" -->
 <!-- FeatureSelector -->
 <script type="text/x-template" id="feature-selector-template">
-    <div class="w-full p-4">
+    <div class="w-full">
         <!-- <pre>selectedFeatureIndex:{{ selectedFeatureIndex }}</pre> -->
         <h1 class="text-2xl font-bold mb-4">{{ featureSelectorInput ?? '' }}</h1>
         <vue-typeahead
@@ -126,9 +139,9 @@
             :backingData="searchableFeatureNames"
             :items="features"
             :minChars="1"
-            placeholder="Search or create a new feature..."
+            placeholder="Find or create a new feature..."
             :class="{'animate-pulse bg-blue-200': searching}"
-            @input="onFeatureSelectorInputChanged"
+            v-model="featureSelectorInput"
         ></vue-typeahead>
     </div>
 </script>
@@ -137,26 +150,24 @@
 <!-- ScenarioList -->
 <script type="text/x-template" id="scenario-list-template">
     <div class="overflow-y-auto">
-        <div class="p-4">
-            <input type="text" placeholder="New Scenario Name..." class="w-full p-2 mb-4 border rounded caret-down" v-bind:value="newScenarioNameInput" /> 
-            <!-- TODO: figure out why i can't add @keyup.enter="addScenario" -->
+        <div class="py-4">
+            <input type="text" placeholder="New Scenario Name..." class="text-white w-full p-2 mb-4 border rounded caret-down" v-model="newScenarioNameInput" @keyup.enter="addScenario" />
         </div>
-        <!-- <pre>{{ typeof addScenario }}</pre> -->
         <div v-if="scenarios?.length">
             <!-- Scenarios:
             <pre>{{ scenarios }}</pre> -->
             <!-- <pre>#scenarios:{{scenarios?.length}}
 #selectedScenarioIndex:{{selectedScenarioIndex}}
             </pre> -->
-            <draggable class="space-y-2" v-model="scenarios" @end="endDrag">
-                <template #item="{element, index}" :itemKey="index">
-                    <div :key="index" :itemKey="index" 
+            <draggable class="space-y-2" :item-key="'blah'" v-model="scenarios" @end="endDrag">
+                <template #item="{element, index}">
+                    <div :key="index" 
                     class="p-2 border rounded cursor-pointer"
                     :class="[
                     selectedScenarioIndex === index ? 'bg-purple-900 text-white' : 'bg-black-10 text-white'
                     ]"
                         @click="selectScenarioIndex(index)">
-                        {{index}}) {{ element.title }}
+                        {{ index + 1 }}) {{ element.title }}
                     </div>
                 </template>
             </draggable>
@@ -166,16 +177,16 @@
 
 <!-- ScenarioDetails -->
 <script type="text/x-template" id="scenario-details-template">
-    <div class="w-2/3 ml-4 p-4 h-screen overflow-y-auto">
-        <h1 class="text-2xl font-bold mb-4">{{ selectedScenario?.title ?? 'No Scenario Selected' }}</h1>
+    <div class="w-full ml-4 p-4 h-screen overflow-y-auto">
+        <h1 class="text-l font-bold mb-4 text-white">{{selectedScenarioIndex + 1}}) {{ selectedScenario?.title ?? 'No Scenario Selected' }}</h1>
         <div v-if="!selectedScenario">
             <p>Select a scenario to view details</p>
         </div>
         <div v-if="selectedScenario">
             <div class="mb-4" v-for="(item, index) in selectedScenario.given" :key="'given-' + index">
-                <label class="block text-gray-700">Given</label>
+                <label class="block text-cyan-700">Given</label>
                 <vue-typeahead
-                    @input="onGivenInputChanged"
+                    v-model="item"
                     :backingData="searchableGivenNames"
                     :items="filteredGivenOptions"
                     :minChars="1"
@@ -184,9 +195,9 @@
                 ></vue-typeahead>
             </div>
             <div class="mb-4" v-for="(item, index) in selectedScenario.when" :key="'when-' + index">
-                <label class="block text-gray-700">When</label>
+                <label class="block text-blue-700">When</label>
                 <vue-typeahead
-                    @input="onWhenInputChanged"
+                    v-model="item"
                     :backingData="searchableWhenNames"
                     :items="filteredWhenOptions"
                     :minChars="1"
@@ -195,9 +206,9 @@
                 ></vue-typeahead>
             </div>
             <div class="mb-4" v-for="(item, index) in selectedScenario.then" :key="'then-' + index">
-                <label class="block text-gray-700">Then</label>
+                <label class="block text-orange-700">Then</label>
                 <vue-typeahead
-                    @input="onThenInputChanged"
+                    v-model="item"
                     :backingData="searchableThenNames"
                     :items="filteredThenOptions"
                     :minChars="1"
@@ -228,8 +239,7 @@
             :placeholder="placeholder"
             name="garbage"
             autocomplete="off"
-            v-model="inputLocalCache" 
-            @input="$emit('input', $event.target.value)" />
+            v-model="vModel" />
         <div class="relative">
             <ul class="absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="showDropdown && items.length > 0">
                 <li class="p-2 hover:bg-blue-100 cursor-pointer"
@@ -302,6 +312,10 @@
             loadingParentComponent: {
                 type: Boolean,
                 default: false
+            },
+            vModel: {
+                type: String,
+                required: true
             }
         },
         data() {
@@ -310,16 +324,7 @@
                 focusing: false,
                 showDropdown: false,
                 timeout: '',
-                inputLocalCache: '',
                 highlightedOptionIndex: 0
-            }
-        },
-        watch: {
-            'input': {
-                handler(newVal) {
-                    this.dataInput = newVal
-                },
-                immediate: true
             }
         },
         mounted() {
@@ -360,15 +365,16 @@
                     }
                 }, this.delay)
             },
-            changeInput(event) {
-                if (event?.target?.value?.length >= this.minChars) {
-                    this.search()
-                }
-                this.$emit('update:input', event.target.value)
-                if (event.target && event.target.value.length === 0) {
-                    this.reset()
-                }
-            },
+            // changeInput(event) {
+            //     if (event?.target?.value?.length >= this.minChars) {
+            //         this.search()
+            //     }
+            //     this.$emit('update:input', event.target.value)
+            //     if (event.target && event.target.value.length === 0) {
+            //         this.reset()
+            //     }
+            // },
+            // todo: bind these...
             onFocusin() {
                 this.focusing = true
             },
@@ -380,22 +386,22 @@
                 this.$emit('hit', item)
                 this.reset()
             },
-            highlight(text, term) {
-                if (text && term) {
-                    var index = text.toLowerCase().indexOf(term.toLowerCase())
-                    if (index >= 0) {
-                        text = `${text.substring(0, index)}<span style="font-weight: 600;">${text.substring(index, index + term.length)}</span>${text.substring(index + term.length)}`
-                    }
-                }
-                return text
-            },
+            // highlight(text, term) {
+            //     if (text && term) {
+            //         var index = text.toLowerCase().indexOf(term.toLowerCase())
+            //         if (index >= 0) {
+            //             text = `${text.substring(0, index)}<span style="font-weight: 600;">${text.substring(index, index + term.length)}</span>${text.substring(index + term.length)}`
+            //         }
+            //     }
+            //     return text
+            // },
             reset() {
                 console.warn('VueTypeahead: reset');
                 this.showDropdown = false
                 this.searching = false
-                this.inputLocalCache = ''
+                gwt_state.newScenarioNameInput = '';
                 this.$emit('reset')
-                this.$emit('update:input', '')
+                //this.$emit('update:input', '')
             }
         }
     }
@@ -552,34 +558,67 @@
 
 <script>
     function start(){
-        const { ref, toRefs, computed } = Vue;
+        const { ref, toRefs, computed, reactive, readonly } = Vue;
+        const state = reactive({
+            events: {},
+            selectedFeatureIndex: 0,
+            newScenarioNameInput: '',
+            featureSearchInput: '',
+        });
+        window.gwt_state = state;
+
+        const EventBus = {
+            emit(event, data) {
+                if (!state.events[event]) {
+                state.events[event] = [];
+                }
+                state.events[event].push(data);
+            },
+            on(event, callback) {
+                if (!state.events[event]) {
+                state.events[event] = [];
+                }
+                state.events[event].push(callback);
+            },
+            off(event, callback) {
+                if (state.events[event]) {
+                const index = state.events[event].indexOf(callback);
+                if (index > -1) {
+                    state.events[event].splice(index, 1);
+                }
+                }
+            }
+        };
+        // freeze the EventBus object so it can't be modified
+        const MainEventBus = readonly(EventBus);
+        window.gwt_eventbus = MainEventBus;
         const app = Vue.createApp({
             setup() {
                 const features = ref([{
                     name: 'User Registration',
                     description: 'All scenarios around registering and verifying a new web account',
                     scenarios: [{
-                        title: 'user registers web account',
+                        title: '👤 user registers web account',
                         given: ['user is on the registration page'],
                         when: ['user enters their details'],
                         then: ['user is registered']
                     },{
-                        title: 'user sees validation errors when submitting bad data to registration form',
+                        title: '⚠️ user sees validation errors when submitting bad data to registration form',
                         given: ['user is on the registration page'],
                         when: ['user enters invalid details'],
                         then: ['user sees validation errors']
                     },{
-                        title: 'user gets duplicate email error when registering with an email that already exists',
+                        title: '🔁 user gets duplicate email error when registering with an email that already exists',
                         given: ['user account exists for email'],
                         when: ['user enters an email that already exists'],
                         then: ['user sees duplicate email error in email inbox']
                     },{
-                        title: 'user gets verification email after registering',
+                        title: '📧 user gets verification email after registering',
                         given: ['user submitted web account registration form'],
                         when: ['user checks email'],
                         then: ['user sees verification email']
                     },{
-                        title: 'user clicks verification link in email',
+                        title: '✅ user clicks verification link in email',
                         given: ['user received verification email'],
                         when: ['user clicks verification link'],
                         then: ['user is verified']
@@ -614,30 +653,32 @@
                         then: ['user sees invalid token error']
                     }]
                 }])
-                const newScenarioNameInput = ref('');
                 const selectedFeatureIndex = ref(0);
                 const selectedScenarioIndex = ref(0);
                 const showDeleteModal = ref(false);
 
                 const addScenario = () => {
-                    console.warn('addScenario: newScenarioNameInput.value:', newScenarioNameInput.value);
-                    console.warn('addScenario: selectedFeature:', selectedFeature.value);
-    
+                    console.warn("Global Action: addScenario", arguments); 
                     if(selectedFeature == null){
                         console.warn("addScenario: selectedFeature is null");
                         return;
                     }
-                    if (newScenarioNameInput.value) {
-                        features.value[selectedFeatureIndex.value].value.scenarios.push({ 
-                            title: newScenarioNameInput.value, 
-                            given: [], 
-                            when: [], 
-                            then: [] 
-                        });
-                        newScenarioNameInput.value = '';
-                    }else{
-                        console.warn("addScenario: newScenario is null");
+                    if (!state.newScenarioNameInput.length) {
+                        console.error('cannot add a scenario with no name');
+                        return;
                     }
+                    if(!features.value[selectedFeatureIndex.value]){
+                        console.warn("addScenario: selectedFeatureIndex is null");
+                        return;
+                    }
+                    features.value[selectedFeatureIndex.value].scenarios.push({ 
+                        title: state.newScenarioNameInput,
+                        given: [], 
+                        when: [], 
+                        then: [] 
+                    });
+                    // reset the input to blank
+                    window.gwt_state.newScenarioNameInput = '';
                 };
 
                 const selectFeatureIndex = (featureIndex) => {
@@ -649,22 +690,27 @@
                 };
 
                 const selectScenarioIndex = (scenarioIndex) => {
-                    console.warn('selectScenario: scenario:', scenarioIndex);
+                    //console.warn('selectScenarioIndex: scenarioIndex:', scenarioIndex);
                     selectedScenarioIndex.value = scenarioIndex;
                 };
 
                 // Getters (computed) for SelectedFeature and SelectedScenario
                 const selectedFeature = computed(() => {
                     const feature = features.value[selectedFeatureIndex.value];
-                    console.warn('selectedFeature:', feature);
+                    //console.warn('selectedFeature:', feature);
                     return feature;
                 });
 
                 const selectedScenario = computed(() => {
                     const scenario = selectedFeature.value.scenarios[selectedScenarioIndex.value];
-                    console.warn('selectedScenario:', scenario);
+                    //console.warn('selectedScenario:', scenario);
                     return scenario;
                 });
+
+                // MainEventBus.on('...', (value) => {
+                //     console.warn('...', value);
+                //     state.... = value;
+                // });
 
                 const searchableFeatureNames = computed(() => {
                     return features.value.map(feature => feature.name);
@@ -751,23 +797,39 @@
                     showDeleteModal.value = false;
                 };
 
-                const endDrag = () => {
+                const endDrag = (thing) => {
                     // Handle drag end event
-                    console.warn('handle drag end',arguments);
-                };
+                    console.warn('handle drag end',{thing:unwrap(thing)});
 
-                const featureSelectorInput = ref('');
+                    // update scenario's position in the array
+                    // thing.oldIndex -> thing.newIndex
+                    console.warn(`from ${thing.oldIndex} to ${thing.newIndex}`);
+
+                    if(!features.value[selectedFeatureIndex.value]){
+                        console.warn("endDrag: selectedFeatureIndex is null");
+                        return;
+                    }
+                    if(!features.value[selectedFeatureIndex.value].scenarios[thing.oldIndex]){
+                        console.warn("endDrag: scenarios[selectedScenarioIndex] is null");
+                        return;
+                    }
+
+                    let tempThing = features.value[selectedFeatureIndex.value].scenarios[thing.oldIndex];
+                    features.value[selectedFeatureIndex.value].scenarios.splice(thing.oldIndex, 1);
+                    features.value[selectedFeatureIndex.value].scenarios.splice(thing.newIndex, 0, tempThing);
+
+                    // update selectedScenarioIndex
+                    selectedScenarioIndex.value = thing.newIndex;
+                };
 
                 const app_stuff = {
                     features,
                     scenarios: selectedFeature?.value?.scenarios ?? [],
-                    featureSelectorInput,
                     searchableFeatureNames,
                     searchableScenarioNames,
                     searchableGivenNames,
                     searchableWhenNames,
                     searchableThenNames,
-                    newScenarioNameInput,
                     selectedFeatureIndex,
                     selectedFeature,
                     selectedScenarioIndex,
@@ -778,11 +840,6 @@
                     selectScenarioIndex,
                     deleteScenario,
                     endDrag,
-
-                    onFeatureSelectorInputChanged: (value) => {
-                        console.warn('onFeatureSelectorInputChanged', value);
-                        //featureSelectorInput.value = value;
-                    }
                 };
                 Object.defineProperty(window, 'gwtapp', {
                     get: () => app_stuff,
@@ -807,15 +864,23 @@
             props: [
                 'selectedFeatureIndex',
                 'selectedFeature', 
-                'featureSelectorInput', 
-                'features', 
-                'onFeatureSelectorInputChanged', 
+                'features',
                 'searchableFeatureNames'
             ],
             methods:{
                 onSearchingStateChanged: function(isSearching){
                     console.warn('onSearchingStateChanged', isSearching);
                     this.searching = isSearching;
+                }
+            },
+            computed:{
+                featureSelectorInput: {
+                    get(){
+                        return window.gwt_state.featureSearchInput;
+                    },
+                    set(value){
+                        window.gwt_state.featureSearchInput = value;
+                    }
                 }
             },
             mounted(){
@@ -838,14 +903,18 @@
                 'addScenario',
                 'selectedScenarioIndex', 
                 'selectScenarioIndex', 
-                'endDrag', 
-                'newScenarioNameInput'
+                'endDrag',
             ],
-            // setup(props) {
-            //     return {
-            //         ...toRefs(props)
-            //     };
-            // },
+            computed:{
+                newScenarioNameInput: {
+                    get(){
+                        return window.gwt_state.newScenarioNameInput;
+                    },
+                    set(value){
+                        window.gwt_state.newScenarioNameInput = value;
+                    }
+                }
+            },
             mounted(){
                 console.warn('ScenarioList',{
                     $props: this.$props,
@@ -858,50 +927,54 @@
         app.component('scenario-details', {
             template: '#scenario-details-template',
             props: [
+                'selectedScenarioIndex',
                 'selectedScenario', 
                 'showDeleteModal', 
                 'searchableGivenNames', 
                 'searchableWhenNames',
                 'searchableThenNames'
             ],
-            data(){
-                return {
-                    localGivenInputCache: '',
-                    localWhenInputCache: '',
-                    localThenInputCache: ''
-                }
-            },
+            // data(){
+            //     return {
+            //         localGivenInputCache: '',
+            //         localWhenInputCache: '',
+            //         localThenInputCache: ''
+            //     }
+            // },
             computed: {
                 filteredGivenOptions(){
-                    return this.searchableGivenNames.filter(item => this.localGivenInputCache.toLowerCase().includes(item.name.toLowerCase()));
+                    return [];
+                    //return this.searchableGivenNames.filter(item => this.localGivenInputCache.toLowerCase().includes(item.name.toLowerCase()));
                 },
                 filteredWhenOptions(){
-                    return this.searchableWhenNames.filter(item => this.localWhenInputCache.toLowerCase().includes(item.name.toLowerCase()));
+                    return [];
+                    // return this.searchableWhenNames.filter(item => this.localWhenInputCache.toLowerCase().includes(item.name.toLowerCase()));
                 },
                 filteredThenOptions(){
-                    return this.searchableThenNames.filter(item => this.localThenInputCache.toLowerCase().includes(item.name.toLowerCase()));
+                    return [];
+                    // return this.searchableThenNames.filter(item => this.localThenInputCache.toLowerCase().includes(item.name.toLowerCase()));
                 }
-            },
-            methods:{
-                onGivenInputChanged(){
-                    //console.warn('onGivenInputChanged',arguments);
-                    if(typeof arguments[0] === "string"){
-                        this.localGivenInputCache = arguments[0];
-                    }
-                },
-                onWhenInputChanged(){
-                    //console.warn('onWhenInputChanged',arguments);
-                    if(typeof arguments[0] === "string"){
-                        this.localWhenInputCache = arguments[0];
-                    }
-                },
-                onThenInputChanged(){
-                    //console.warn('onThenInputChanged',arguments);
-                    if(typeof arguments[0] === "string"){
-                        this.localThenInputCache = arguments[0];
-                    }
-                }
-            }
+            }//,
+            // methods:{
+            //     onGivenInputChanged(){
+            //         //console.warn('onGivenInputChanged',arguments);
+            //         if(typeof arguments[0] === "string"){
+            //             this.localGivenInputCache = arguments[0];
+            //         }
+            //     },
+            //     onWhenInputChanged(){
+            //         //console.warn('onWhenInputChanged',arguments);
+            //         if(typeof arguments[0] === "string"){
+            //             this.localWhenInputCache = arguments[0];
+            //         }
+            //     },
+            //     onThenInputChanged(){
+            //         //console.warn('onThenInputChanged',arguments);
+            //         if(typeof arguments[0] === "string"){
+            //             this.localThenInputCache = arguments[0];
+            //         }
+            //     }
+            // }
         });
         app.component('delete-modal', {
             template: '#delete-modal-template',
