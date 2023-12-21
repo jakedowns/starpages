@@ -21,6 +21,12 @@
 
 <body>
     <script>
+
+        let uiContainer; // UI container
+        let isUiVisible = true; // UI visibility state
+        let isFullscreen = false; // Fullscreen state
+
+
         let drawHexes = true;
         let drawSplats = true;
         let useMouseTarget = false;
@@ -66,8 +72,34 @@
             blurSprite = blurCanvas.get();
         }
         let sliders = {}
+
+        function keyPressed() {
+            if (key === '/') {
+                // Toggle UI visibility
+                isUiVisible = !isUiVisible;
+                if (isUiVisible) {
+                    uiContainer.style('display', 'block');
+                    cursor();
+                } else {
+                    uiContainer.style('display', 'none');
+                    noCursor();
+                }
+
+                // Toggle fullscreen mode
+                isFullscreen = !isFullscreen;
+                fullscreen(isFullscreen);
+            }
+        }
+
         function setup() {
             makeABlurSprite();
+
+            // Create UI container
+            uiContainer = createDiv();
+            uiContainer.id('ui-container');
+            uiContainer.style('position', 'absolute');
+            uiContainer.style('top', '0');
+            uiContainer.style('left', '0');
 
             let buttons = [
                 { label: 'Toggle MinMax Animation', action: () => { animateMinMax = !animateMinMax; } },
@@ -84,11 +116,13 @@
                 let btn = createButton(button.label);
                 btn.position(10, buttonY);
                 btn.mousePressed(button.action);
+                btn.parent(uiContainer);
                 buttonY += 40;
             }
 
             // add a text overlay that shows the number of capturedFrames
             capturedFramesDisplay = createDiv('0');
+            capturedFramesDisplay.parent(uiContainer);
             capturedFramesDisplay.style('font-size', '48px');
             capturedFramesDisplay.style('color', 'white');
             capturedFramesDisplay.style('text-align', 'center');
@@ -112,6 +146,7 @@
                 sld.position(10, sliderY);
                 sld.input(() => sliders[key].action(sld.value()));
                 sliders[key].instance = sld;
+                sld.parent(uiContainer);
                 
                 let label = createDiv(sliders[key].label);
                 label.position(10, sld.y - 20);
