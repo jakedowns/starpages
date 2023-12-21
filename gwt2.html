@@ -132,16 +132,17 @@
 <!-- FeatureSelector -->
 <script type="text/x-template" id="feature-selector-template">
     <div class="w-full">
-        <!-- <pre>selectedFeatureIndex:{{ selectedFeatureIndex }}</pre> -->
-        <h1 class="text-2xl font-bold mb-4">{{ featureSelectorInput ?? '' }}</h1>
         <vue-typeahead
-            @searching="onSearchingStateChanged"
+            placeholder="Feature Name..."
             :backingData="searchableFeatureNames"
             :items="features"
             :minChars="1"
-            placeholder="Find or create a new feature..."
-            :class="{'animate-pulse bg-blue-200': searching}"
-            v-model="featureSelectorInput"
+            :show-dropdown-on-focus="true"
+            :class="{'text-2xl font-bold mb-4': true}"
+            :v-model="featureSelectorInput"
+            @searching="onSearchingStateChanged"
+            @reset="onFeatureSelectorReset"
+            @select="selectFeatureIndex"
         ></vue-typeahead>
     </div>
 </script>
@@ -149,11 +150,11 @@
 
 <!-- ScenarioList -->
 <script type="text/x-template" id="scenario-list-template">
-    <div class="overflow-y-auto">
-        <div class="py-4">
+    <div class="overflow-y-auto h-screen">
+        <div class="py-4 fixed">
             <input type="text" placeholder="New Scenario Name..." class="text-white w-full p-2 mb-4 border rounded caret-down" v-model="newScenarioNameInput" @keyup.enter="addScenario" />
         </div>
-        <div v-if="scenarios?.length">
+        <div v-if="scenarios?.length" class="pt-24 pb-12">
             <!-- Scenarios:
             <pre>{{ scenarios }}</pre> -->
             <!-- <pre>#scenarios:{{scenarios?.length}}
@@ -186,34 +187,34 @@
             <div class="mb-4" v-for="(item, index) in selectedScenario.given" :key="'given-' + index">
                 <label class="block text-cyan-700">Given</label>
                 <vue-typeahead
-                    v-model="item"
+                    :v-model="item"
                     :backingData="searchableGivenNames"
                     :items="filteredGivenOptions"
                     :minChars="1"
-                    placeholder="find or define a new given..."
-                    class="w-full p-2 border rounded caret-down"
+                    placeholder="given..."
+                    class="given-input w-full p-2 border rounded caret-down"
                 ></vue-typeahead>
             </div>
             <div class="mb-4" v-for="(item, index) in selectedScenario.when" :key="'when-' + index">
                 <label class="block text-blue-700">When</label>
                 <vue-typeahead
-                    v-model="item"
+                    :v-model="item"
                     :backingData="searchableWhenNames"
                     :items="filteredWhenOptions"
                     :minChars="1"
-                    placeholder="find or define a new when..."
-                    class="w-full p-2 border rounded caret-down"
+                    placeholder="when..."
+                    class="when-input w-full p-2 border rounded caret-down"
                 ></vue-typeahead>
             </div>
             <div class="mb-4" v-for="(item, index) in selectedScenario.then" :key="'then-' + index">
                 <label class="block text-orange-700">Then</label>
                 <vue-typeahead
-                    v-model="item"
+                    :v-model="item"
                     :backingData="searchableThenNames"
                     :items="filteredThenOptions"
                     :minChars="1"
-                    placeholder="find or define a new then..."
-                    class="w-full p-2 border rounded caret-down"
+                    placeholder="then..."
+                    class="then-input w-full p-2 border rounded caret-down"
                 ></vue-typeahead>
             </div>
             <button id="deleteBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" @click="showDeleteModal = true">Delete</button>
@@ -236,16 +237,23 @@
 <script type="text/x-template" id="vue-typeahead-template">
     <div :class="className">
         <input type="text" class="w-full p-2 border rounded caret-down" 
+            :class="{'bg-blue-200': searching}"
             :placeholder="placeholder"
             name="garbage"
             autocomplete="off"
-            v-model="vModel" />
+            :value="vModel"
+            @focus="onFocusin"
+            @blur="onFocusout"
+            @input="onTypeaheadValueInput" />
         <div class="relative">
-            <ul class="absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="showDropdown && items.length > 0">
+            <ul class="overflow-y-auto h-screen absolute left-0 z-10 w-full bg-white border rounded shadow-lg" v-if="showDropdown && items.length > 0">
                 <li class="p-2 hover:bg-blue-100 cursor-pointer"
                     :class="{ 'bg-blue-200': index === highlightedOptionIndex }"
-                    v-for="(item, index) in items" :key="index" @click="$emit('select', item)">
-                    {{ item }}
+                    v-for="(item, index) in items" :key="index" @click="$emit('select', index)">
+                    {{index+1}}) {{ item.name }}
+                </li>
+                <li class="p-2 hover:bg-blue-100 cursor-pointer" @click="$emit('select', 'new_feature')">
+                    New Feature `{{ vModel }}`...
                 </li>
             </ul>
         </div>
@@ -258,6 +266,10 @@
         name: 'vue-typeahead',
         template: "#vue-typeahead-template",
         props: {
+            showDropdownOnFocus: {
+                type: Boolean,
+                default: false
+            },
             apiUrl: {
                 type: String,
                 required: false
@@ -335,6 +347,15 @@
             })
         },
         methods: {
+            onTypeaheadValueInput(event) {
+                //this.$emit('update:vModel', event.target.value)
+                if (event.target.value.length >= this.minChars) {
+                    this.search()
+                }
+                if (event.target && event.target.value.length === 0) {
+                    this.reset()
+                }
+            },
             search() {
                 this.searching = true
                 // emit
@@ -363,7 +384,7 @@
                         this.searching = false
                         this.$emit('searching', false)
                     }
-                }, this.delay)
+                }, 0)//this.delay)
             },
             // changeInput(event) {
             //     if (event?.target?.value?.length >= this.minChars) {
@@ -376,10 +397,13 @@
             // },
             // todo: bind these...
             onFocusin() {
-                this.focusing = true
+                this.focused = true
+                if(this.showDropdownOnFocus){
+                    this.search()
+                }
             },
             onFocusout() {
-                this.focusing = false
+                this.focused = false
                 this.searching = false
             },
             clickItem(item) {
@@ -399,7 +423,6 @@
                 console.warn('VueTypeahead: reset');
                 this.showDropdown = false
                 this.searching = false
-                gwt_state.newScenarioNameInput = '';
                 this.$emit('reset')
                 //this.$emit('update:input', '')
             }
@@ -673,12 +696,18 @@
                     }
                     features.value[selectedFeatureIndex.value].scenarios.push({ 
                         title: state.newScenarioNameInput,
-                        given: [], 
-                        when: [], 
-                        then: [] 
+                        given: [''], 
+                        when: [''], 
+                        then: [''] 
                     });
                     // reset the input to blank
                     window.gwt_state.newScenarioNameInput = '';
+                    // set it as the selected scenario
+                    selectedScenarioIndex.value = features.value[selectedFeatureIndex.value].scenarios.length - 1;
+                    setTimeout(()=>{
+                        // focus the first input in the scenario details
+                        document.querySelector('.given-input').focus();
+                    },100)
                 };
 
                 const selectFeatureIndex = (featureIndex) => {
@@ -869,14 +898,23 @@
             ],
             methods:{
                 onSearchingStateChanged: function(isSearching){
-                    console.warn('onSearchingStateChanged', isSearching);
+                    //console.warn('onSearchingStateChanged', isSearching);
                     this.searching = isSearching;
+                },
+                onFeatureSelectorReset: function(){
+                    window.gwt_state.newScenarioNameInput = '';
                 }
             },
             computed:{
                 featureSelectorInput: {
                     get(){
-                        return window.gwt_state.featureSearchInput;
+                        // if we're focused, it's a text input, not a header
+                        if(this.focused){
+                            return window.gwt_state.featureSearchInput;
+                        }
+                        // show the currently selected feature (if any)
+                        return 'Feature ' + (this.selectedFeatureIndex + 1) + ') ' + this.selectedFeature?.name ?? '';
+                        
                     },
                     set(value){
                         window.gwt_state.featureSearchInput = value;
