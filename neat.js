@@ -12655,7 +12655,9 @@ const InvokableCommands = {
     ["new work flow"](){},
 
     ["Set Command Icon"](){},
-    ["New Icon"](){},
+    ["New Icon"](){
+        system.invoke("https://www.piskelapp.com/p/create/sprite");
+    },
     ["open photopea"]:"https://www.photopea.com/",
     ["open piskel"]:"new_pixel_art",
     // you don't have to invent something if someone has iframes and import/export already
@@ -13190,8 +13192,10 @@ const InvokableCommands = {
 
     "what do i have going on today?":"check my calendar",
     
-    "new shader graph"(){},
-    "new shadertoy shader"(){},
+    "new shader": "https://shaderfrog.com/2/editor/create/three",
+    "https://shaderfrog.com/2/editor/create/three": RES,
+    //"new shader graph"(){},
+    //"new shadertoy shader"(){},
     "browse shadertoy"(){},
     "favorite shaders"(){},
     "new sim city"(){},
