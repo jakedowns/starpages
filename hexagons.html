@@ -98,9 +98,14 @@
         });
 
 
-        // Create a capturer that exports a WebM video
-        var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
-        var capturer = isWebMSupported ? new CCapture( { format: 'webm', verbose: false, fps: 60 } ) : new CCapture( { format: 'png', verbose: false, framerate: 60 } );
+        var capturer;
+        try{
+            // Create a capturer that exports a WebM video
+            var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
+            capturer = isWebMSupported ? new CCapture( { format: 'webm', verbose: false, fps: 60 } ) : new CCapture( { format: 'png', verbose: false, framerate: 60 } );
+        }catch(e){
+            console.warn('failed to create capturer',e);
+        }
         let _canvas;
         let capturedFramesDisplay;
 
