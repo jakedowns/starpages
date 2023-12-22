@@ -14,24 +14,34 @@
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
+            background-color: #000;
+            margin: 0;
+            padding: 0;
         }
     </style>
 </head>
 
 <body>
     <script>
+        let LERP_FACTOR = 0.05; // Lerp factor for size
 
+        let jitterSplatRotation = false;
         let uiContainer; // UI container
         let isUiVisible = true; // UI visibility state
         let isFullscreen = false; // Fullscreen state
 
+        let doAnimateColors = 0;
+        // need to run animateColors once to compute the colors
+        let computedColorsOnce = 0; 
+        // Slider Values
+        let splatScale = 0.01;
 
-        let drawHexes = true;
-        let drawSplats = true;
-        let useMouseTarget = false;
-        let useInfinityTarget = false;
-        let animateMinMax = false;
+        let drawHexes = 1;
+        let reverseDrawOrder = 0;
+        let drawSplats = 1;
+        let useMouseTarget = 1;
+        let useInfinityTarget = 0;
+        let animateMinMax = 0;
         let hexSize;
         let effectiveRadiusScale = 1;
         let slider, delaySlider;
@@ -40,7 +50,7 @@
         let animDelay = 50;
         let maxRadScale = 0;
         let minRadScale = 0.9;
-        let recording = false;
+        let recording = 0;
         // Create a capturer that exports a WebM video
         var capturer = new CCapture( { format: 'webm', verbose: false, fps: 60 } );
         let _canvas;
@@ -49,8 +59,19 @@
         // sometimes we target the mouse, sometimes we target the center of the screen
         let target = {x: 0, y: 0}
 
+        // define a gradient made up of 5 color stops 
+        // based on the magma color scheme from python matplotlib
+        // https://matplotlib.org/stable/tutorials/colors/colormaps.html
+        let magmaGradient;
+
         // Add a new variable to store the color animation mode
-        let myColorMode = 0; // 0: vertical, 1: horizontal, 2: radial
+        const COLOR_MODE_VERTICAL = 0;
+        const COLOR_MODE_HORIZONTAL = 1;
+        const COLOR_MODE_RADIAL = 2;
+        const COLOR_MODE_GREYSCALE = 3;
+        const COLOR_MODE_MAGMA = 4;
+        const MAX_COLOR_MODES_AVAILABLE = 5;
+        let myColorMode = COLOR_MODE_MAGMA;
 
         // Add a button to switch the color animation mode
         let colorModeButton;
@@ -63,11 +84,12 @@
             // this function makes an ellipse on an offscreen canvas,
             // bakes it to a bitmap, blurs it, and caches it to a sprite
             // we can instance this sprite as many times as we want cheaply
-            let blurCanvas = createGraphics(50, 50);
+            let blurCanvas = createGraphics(32, 32);
             blurCanvas.clear();
+            //blurCanvas.background(255);
             blurCanvas.noStroke();
-            blurCanvas.fill("purple")
-            blurCanvas.ellipse(blurCanvas.width / 2, blurCanvas.height / 2, 10, 10);
+            blurCanvas.fill(255, 255, 255, 255)
+            blurCanvas.circle(blurCanvas.width / 2, blurCanvas.height / 2, blurCanvas.width / 4);
             blurCanvas.filter(BLUR, 5);
             blurSprite = blurCanvas.get();
         }
@@ -94,18 +116,39 @@
         function setup() {
             makeABlurSprite();
 
+            // derrived from matplotlib magma color scheme
+            magmaGradient = [
+                { color: color(251, 252, 191) },
+                { color: color(254, 201, 141) },
+                { color: color(253, 149, 103) },
+                { color: color(240, 96, 93) },
+                { color: color(205, 63, 112) },
+                { color: color(158, 46, 126) },
+                { color: color(113, 31, 129) },
+                { color: color(67, 15, 117) },
+                { color: color(23, 15, 60) },
+                { color: color(0, 0, 3) }
+            ]
+
             // Create UI container
             uiContainer = createDiv();
             uiContainer.id('ui-container');
             uiContainer.style('position', 'absolute');
+            uiContainer.style('width', '300px');
+            uiContainer.style('height', '100vh');
+            uiContainer.style('display', 'block');
             uiContainer.style('top', '0');
             uiContainer.style('left', '0');
+            uiContainer.style('background-color', 'rgba(0,0,0,0.5)');
+            uiContainer.style('backdrop-filter', 'blur(10px)');
 
             let buttons = [
                 { label: 'Toggle MinMax Animation', action: () => { animateMinMax = !animateMinMax; } },
-                { label: 'Switch Color Mode', action: () => { myColorMode = (myColorMode + 1) % 3; } },
+                { label: 'Switch Color Mode', action: () => { myColorMode = (myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE; computedColorsOnce = 0; } },
                 { label: 'Toggle Hexes', action: () => { drawHexes = !drawHexes; } },
                 { label: 'Toggle Splats', action: () => { drawSplats = !drawSplats; } },
+                //{ label: 'Toggle UI', action: () => { isUiVisible = !isUiVisible; } },
+                { label: 'Toggle Draw Order', action: () => { reverseDrawOrder = !reverseDrawOrder; } },
                 { label: 'Toggle Mouse Target', action: () => { useMouseTarget = !useMouseTarget; } },
                 { label: 'Toggle Infinity Target', action: () => { useInfinityTarget = !useInfinityTarget; } },
                 { label: 'Start Recording', action: toggleRecording }
@@ -129,12 +172,14 @@
             capturedFramesDisplay.style('position', 'absolute');
             capturedFramesDisplay.style('right', '20px');
             capturedFramesDisplay.style('top', '20px');
+            capturedFramesDisplay.style('text-shadow', '0px 0px 10px black');
 
             _canvas = createCanvas(windowWidth, windowHeight);
             colorMode(HSB, 360, 100, 100); // Using HSB color mode for easier color transitions
             sliders = {
+                'splatScale': { label: 'Splat Scale', min: 0.01, max: .1, step: 0.001, value: splatScale, action: (val) => { splatScale = val; } },
                 'hexSize': { label: 'Hexagon Size', min: 10, max: 100, value: 30, action: (val) => { hexSize = val; } },
-                'effectiveRadiusScale': { label: 'Target Radius Scale', min: 0.1, max: 3, step: 0.01, value: effectiveRadiusScale, action: (val) => { effectiveRadiusScale = val; } },
+                'effectiveRadiusScale': { label: 'Target Radius Scale', min: 0.01, max: 3, step: 0.01, value: effectiveRadiusScale, action: (val) => { effectiveRadiusScale = val; } },
                 'animDelay': { label: 'Animation Delay', min: 10, max: 100, value: animDelay, action: (val) => { animDelay = val; } },
                 'minRad': { label: 'Min Radius', min: 0, max: 3, step: 0.01, value: minRadScale ?? 0, action: (val) => { minRadScale = val; } },
                 'maxRad': { label: 'Max Radius', min: 0, max: 3, step: 0.01, value: maxRadScale ?? 1, action: (val) => { maxRadScale = val; } }
@@ -142,7 +187,7 @@
 
             let sliderY = buttonY + 10; // start from the max y value of the buttons
             for (let key in sliders) {
-                let sld = createSlider(sliders[key].min, sliders[key].max, sliders[key].value, sliders[key].step ?? 1);
+                let sld = createSlider(sliders[key].min, sliders[key].max, sliders[key].value, sliders[key].step ?? 0.01);
                 sld.position(10, sliderY);
                 sld.input(() => sliders[key].action(sld.value()));
                 sliders[key].instance = sld;
@@ -150,6 +195,8 @@
                 
                 let label = createDiv(sliders[key].label);
                 label.position(10, sld.y - 20);
+                label.parent(uiContainer);
+                label.style('color','white');
 
                 sliderY += 40;
             }
@@ -282,7 +329,7 @@
             hexagons.sort((a, b) => {
                 let distA = dist(target.x, target.y, a.x, a.y);
                 let distB = dist(target.x, target.y, b.x, b.y);
-                return distA - distB;
+                return reverseDrawOrder ? distA - distB : distB - distA;
             });
 
             // Redraw hexagons and animate colors
@@ -330,38 +377,43 @@
             // change draw mode to center
             imageMode(CENTER);
             translate(hex.x, hex.y);
-            scale(hex.size * .2);
+            scale(hex.size * splatScale);
 
             
+            let TINT_HUE_QUANTIZATION = 64;
             let hue = map(hex.row, 0, rows, 0, 360);
-            hue = Math.round(hue / 32) * 32; // Snap hue to increments of 32 to reduce cache size
+            hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
             let colorKey = `${hue}`;
             if(!tintedCache[colorKey]){
-                let sat = 100; // Keep saturation constant
-                let bri = 100; // Keep brightness constant
-                let tinted = color(hue, sat, bri);
+                // let sat = 100; // Keep saturation constant
+                // let bri = 100; // Keep brightness constant
+                // let tinted = color(hue, sat, bri);
                 // Save a copy of the tinted image to avoid re-tinting
                 tintedImage = createImage(blurSprite.width, blurSprite.height);
-                tintedImage.loadPixels();
-                blurSprite.loadPixels();
-                let d = dist(target.x, target.y, hex.x, hex.y);
-                let alpha = map(d, 0, width, 255, 0); // Alpha based on distance from mouse
-                for (let i = 0; i < blurSprite.pixels.length; i += 4) {
-                    let r = red(tinted);
-                    let g = green(tinted);
-                    let b = blue(tinted);
-                    let originalAlpha = blurSprite.pixels[i + 3]; // Get the original alpha value
-                    tintedImage.pixels[i] = r;
-                    tintedImage.pixels[i + 1] = g;
-                    tintedImage.pixels[i + 2] = b;
-                    tintedImage.pixels[i + 3] = alpha * (originalAlpha / 255); // Use new alpha value considering the original alpha
-                }
-                tintedImage.updatePixels();
+
+                // clone the blurSprite pixels
+                tintedImage.copy(blurSprite, 0, 0, blurSprite.width, blurSprite.height, 0, 0, blurSprite.width, blurSprite.height);
+
+                
+                // let d = dist(target.x, target.y, hex.x, hex.y);
+                // let alpha = map(d, 0, width, 255, 0); // Alpha based on distance from mouse
+                // tintedImage.loadPixels();
+                // tintedImage.pixels = blurSprite.pixels.map((p, i) => {
+                //     if (i % 4 === 3) {
+                //         return alpha * (p / 255);
+                //     } else {
+                //         return tinted[i % 4];
+                //     }
+                // });
+                // tintedImage.updatePixels();
+
                 tintedCache[colorKey] = tintedImage;
             }
 
             // apply a random rotation to give some noise
-            rotate(random(0, TWO_PI));
+            if(jitterSplatRotation){
+                rotate(random(0, TWO_PI));
+            }
 
             image(tintedCache[colorKey], 0, 0);
             pop();
@@ -381,6 +433,13 @@
         }
 
         function animateColors() {
+            // if(!doAnimateColors){
+            //     if(!computedColorsOnce){
+            //         computedColorsOnce = 1;
+            //     }else{
+            //         return;
+            //     }
+            // };
             let maxDelay = rows * animDelay;
             if (myColorMode === 0) { // Vertical hue shift
                 for (let hex of hexagons) {
@@ -407,6 +466,28 @@
                     let hue = map(colorTime, 0, maxDelay, 0, 360);
                     hex.color = color(hue, 80, 100);
                 }
+            } else if(myColorMode === COLOR_MODE_GREYSCALE){
+                let maxDist = min(width, height) / 2;
+                for (let hex of hexagons) {
+                    let d = dist(target.x, target.y, hex.x, hex.y);
+                    let lightness = map(d, 0, maxDist, 100, 0);
+                    hex.color = color(0, 0, lightness);
+                }
+            } else if(myColorMode === COLOR_MODE_MAGMA){
+                let maxDist = min(width, height) / 2;
+                for (let hex of hexagons) {
+                    let d = dist(target.x, target.y, hex.x, hex.y);
+
+                    // NOTE: this generates a color by interpolating between the color stops in the magmaGradient array
+                    let stopPos = map(d, 0, maxDist, 0, 1);
+                    let colorIndex = floor(stopPos * (magmaGradient.length - 1));
+                    let nextColorIndex = min(colorIndex + 1, magmaGradient.length - 1);
+                    let lerpFactor = stopPos * (magmaGradient.length - 1) - colorIndex;
+                    let color1 = magmaGradient[colorIndex]?.color ?? color(0,0,0);
+                    let color2 = magmaGradient[nextColorIndex]?.color ?? color(255,0,255);
+                    let _color = lerpColor(color1, color2, lerpFactor);
+                    hex.color = _color;
+                }
             }
         }
 
@@ -429,7 +510,7 @@
 
             updateSize(){
                 // Lerp the size towards the target size
-                this.size = lerp(this.size, this.targetSize, 0.1);
+                this.size = lerp(this.size, this.targetSize, LERP_FACTOR);
             }
 
             draw() {
