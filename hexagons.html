@@ -8,77 +8,15 @@
     <script src="https://unpkg.com/p5"></script>
     <script src="https://cdn.jsdelivr.net/npm/ccapture.js-npmfixed@1.1.0/build/CCapture.all.min.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #000;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-        }
-        /* custom tailwind.css code: for
-        
-        transition-all
-        l-0
-        -l-100%
-        duration-500
-        ease-in-out
-        transform
-        translate-x-full
-        */
-        .transition-all {
-            transition-property: all;
-            transition-timing-function: ease;
-            transition-duration: 150ms;
-        }
-        .l-0 {
-            left: 0;
-        }
-        .-l-100\% {
-            margin-left: -100%;
-        }
-        .duration-500 {
-            transition-duration: 500ms;
-        }
-        .ease-in-out {
-            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .transform {
-            transform: translateX(0);
-            will-change: transform;
-        }
-        .translate-x-full {
-            transform: translateX(100%);
-        }
-        .\-translate\-x\-full {
-            transform: translateX(-100%);
-        }
-
-    </style>
+    
 </head>
 
 <body>
     <script>
         let LERP_FACTOR = 0.05; // Lerp factor for size
 
-        let jitterSplatRotation = false;
         let uiContainer, uiInner; // UI container
-        let isUiVisible = true; // UI visibility state
-        let isFullscreen = false; // Fullscreen state
-
-        let uiDrawerTab;
-
-        let doAnimateColors = 0;
-        // need to run animateColors once to compute the colors
-        let computedColorsOnce = 0; 
-        // Slider Values
-        let splatScale = 0.1;
-
-        let cursorIsHidden = 0;
+        let uiDrawerTab; // uitab tabui
 
         // Add a new variable to store the color animation mode
         const COLOR_MODE_VERTICAL = 0;
@@ -89,77 +27,66 @@
         const COLOR_MODE_MAGMA = 5;
         const COLOR_MODE_CUSTOM = 6;
         const MAX_COLOR_MODES_AVAILABLE = Math.max(COLOR_MODE_VERTICAL, COLOR_MODE_HORIZONTAL, COLOR_MODE_RADIAL, COLOR_MODE_GREYSCALE, COLOR_MODE_BLACK, COLOR_MODE_MAGMA, COLOR_MODE_CUSTOM);
-        //let myColorMode = COLOR_MODE_BLACK;
+
+        const TARGET_MODE_MOUSE = 0;
+        const TARGET_MODE_INFINITY = 1;
+        const TARGET_MODE_CENTER = 2;
 
         window.appstate = {
-            isFullscreen: false,
-            uiDrawerTab: undefined,
+            // public params
             doAnimateColors: 0,
-            computedColorsOnce: 0,
             splatScale: 0.1,
-            cursorIsHidden: 0,
             sortDrawOrder: 0,
             drawHexes: 1,
             reverseDrawOrder: 0,
             drawSplats: 1,
-            useMouseTarget: 1,
-            useInfinityTarget: 0,
+            currentTargetMode: 0,
             animateMinMax: 0,
             hexSize: 100,
             effectiveRadiusScale: 1,
-            slider: undefined,
-            delaySlider: undefined,
-            cols: undefined,
-            rows: undefined,
-            hexagons: [],
+            innerRadiusScale: 0.866,
+            
             animDelay: 50,
             maxRadScale: 0,
             minRadScale: 0.9,
+            
+            // CCapture state
             recording: 0,
-            //capturer: new CCapture({ format: 'webm', verbose: false, fps: 60 }),
-            _canvas: undefined,
             capturedFrames: 0,
-            capturedFramesDisplay: undefined,
-            target: { x: 0, y: 0 },
+
             //magmaGradient: undefined,
             myColorMode: COLOR_MODE_BLACK,
             colorModeButton: undefined,
             blurSprite: undefined,
             tintedCache: {},
+            
+            // ui state
             buttons: {},
-            sliders: {}
+            sliders: {},
+            
+            // internal state
+            computedColorsOnce: 0,
+            cursorIsHidden: 0,
+            target: { x: 0, y: 0 },
+            cols: undefined,
+            rows: undefined,
+            hexagons: [],
+            discardedHexes: [],
+            isFullscreen: false,
         }
 
-        // let drawHexes = 1;
-        // let reverseDrawOrder = 0;
-        // let hexSize = 100;
-        // let effectiveRadiusScale = 1;
-        let slider, delaySlider;
-        let cols, rows;
-        let hexagons = [];
-        let discardedHexes = [];
-        //window.animDelay = 50;
-        // let maxRadScale = 0;
-        // let minRadScale = 0.9;
-        let recording = 0;
         // Create a capturer that exports a WebM video
         var capturer = new CCapture( { format: 'webm', verbose: false, fps: 60 } );
         let _canvas;
-        let capturedFrames = 0;
         let capturedFramesDisplay;
-        // sometimes we target the mouse, sometimes we target the center of the screen
-        let target = {x: 0, y: 0}
 
         // define a gradient made up of 5 color stops 
         // based on the magma color scheme from python matplotlib
         // https://matplotlib.org/stable/tutorials/colors/colormaps.html
         let magmaGradient;
 
-        
-
         // Add a button to switch the color animation mode
         let colorModeButton;
-        
 
         /* a cached bitmap Image of a blurred circle */
         let blurSprite;
@@ -196,37 +123,37 @@
 
         function keyPressed() {
             if (key === 'Escape') {
-                if (isFullscreen) {
+                if (appstate.isFullscreen) {
                     fullscreen(false);
-                    isFullscreen = false;
+                    appstate.isFullscreen = false;
                 }
             }
             if (key === '.'){
                 // Toggle UI visibility
-                isUiVisible = !isUiVisible;
+                appstate.isUiVisible = !appstate.isUiVisible;
                 updateUI();
             }
             if (key === '/') {
                 // Toggle fullscreen mode
-                isFullscreen = !isFullscreen;
-                fullscreen(isFullscreen);
+                appstate.isFullscreen = !appstate.isFullscreen;
+                fullscreen(appstate.isFullscreen);
 
-                cursorIsHidden = isFullscreen
+                appstate.cursorIsHidden = appstate.isFullscreen
             }
         }
 
         function updateUI(){
             let classConfig = {
-                '-translate-x-full': !isUiVisible
+                '-translate-x-full': !appstate.isUiVisible
             };
 
             for (let className in classConfig) {
                 uiContainer.elt.classList.toggle(className, classConfig[className]);
             }
 
-            uiDrawerTab.style('left', isUiVisible ? '-20px' : '0px');
+            uiDrawerTab.style('left', appstate.isUiVisible ? '-20px' : '0px');
 
-            if(!cursorIsHidden){
+            if(!appstate.cursorIsHidden){
                 cursor();
             }else{
                 noCursor();
@@ -266,7 +193,7 @@
                             continue;
                         }
                         if (buttons.hasOwnProperty(key)) {
-                            buttons[key].instance.html(buttons[key].label + ` (${window[key]})`);
+                            buttons[key].instance.html(buttons[key].label + ` (${appstate[key]})`);
                             // could call onButton()
                         }
                     }
@@ -289,11 +216,10 @@
                 splatScale,
                 drawHexes,
                 sortDrawOrder,
-                useMouseTarget,
+                currentTargetMode,
                 animateMinMax,
                 reverseDrawOrder,
                 drawSplats,
-                useInfinityTarget,
                 hexSize,
                 effectiveRadiusScale,
                 animDelay,
@@ -332,7 +258,8 @@
 
             makeABlurSprite();
             createUI();
-            //loadFromLocalStorage(); // internally calls updateUI()
+            loadFromLocalStorage(); 
+            // ^ internally calls updateUI()
             createHexGrid();
         }
 
@@ -386,14 +313,14 @@
             //tab.style('border-radius', '10px');
             // on mouseEnter, show the UI
             uiDrawerTab.mouseOver(() => {
-                if(!isUiVisible){
-                    isUiVisible = true;
+                if(!appstate.isUiVisible){
+                    appstate.isUiVisible = true;
                     
                     updateUI();
                 }
             });
             uiDrawerTab.mousePressed(() => {
-                isUiVisible = !isUiVisible;
+                appstate.isUiVisible = !appstate.isUiVisible;
                 updateUI();
             });
 
@@ -404,9 +331,13 @@
             function reset(){
                 // loop through all the editor defaults and set them
                 for (let key in editor_defaults) {
-                    if (editor_defaults.hasOwnProperty(key) && appstate.hasOwnProperty(key) && typeof appstate[key] !== 'undefined') {
+                    if (
+                        editor_defaults.hasOwnProperty(key) 
+                        && appstate.hasOwnProperty(key) 
+                        && typeof editor_defaults[key] !== 'undefined'
+                    ) {
                         appstate[key] = editor_defaults[key];
-                        console.warn('reset ',key,'to',editor_defaults[key]);
+                        console.warn('reset to ',key,'to',editor_defaults[key]);
                     }else{
                         console.warn('failed to reset',key);
                     }
@@ -467,7 +398,7 @@
                     label: 'Switch Color Mode',
                     key: 'myColorMode',
                     action: function () {
-                        myColorMode = (myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE; computedColorsOnce = 0;
+                        appstate.myColorMode = (appstate.myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE; computedColorsOnce = 0;
                     }
                 },
                 'drawHexes': {
@@ -490,15 +421,12 @@
                     label: 'Toggle Draw Order', 
                     action: function () { appstate.reverseDrawOrder = !appstate.reverseDrawOrder; }
                 },
-                'useMouseTarget': {
-                    key: 'useMouseTarget',
-                    label: 'Mouse Target', 
-                    action: function () { appstate.useMouseTarget = !appstate.useMouseTarget; }
-                },
-                'useInfinityTarget': {
-                    key: 'useInfinityTarget',
-                    label: 'Infinity Target', 
-                    action: function () { appstate.useInfinityTarget = !appstate.useInfinityTarget; }
+                'currentTargetMode': {
+                    key: 'currentTargetMode',
+                    label: 'Follow Mode', 
+                    action: function () { 
+                        appstate.currentTargetMode = (appstate.currentTargetMode + 1) % 3; 
+                    }
                 },
                 'toggleRecording': {
                     key: 'recording',
@@ -562,7 +490,7 @@
             sliders = {
                 'splatScale': { 
                     label: 'Splat Scale', min: 0.01, max: .2, step: 0.001, 
-                    value: splatScale, 
+                    value: appstate.splatScale, 
                     action: function(val) { 
                         appstate.splatScale = val; sdb(); onSlide.call(this) } },
 
@@ -672,13 +600,42 @@
             },3000);
         }
 
+        const infinity_spline_point_cache = [];
+
+        function precompute_infinity_spline(){
+            // Define the control points for the infinity symbol
+            let leftControlX1 = width / 2 - 50, leftControlY1 = height / 2 - 100;
+            let leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
+            let rightControlX1 = width / 2 + 50, rightControlY1 = height / 2 - 100;
+            let rightControlX2 = width / 2 + 150, rightControlY2 = height / 2 + 100;
+
+            
+
+            // Calculate the position of the red dot
+            let dotX, dotY;
+            let u = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
+            let u2 = u * u, u3 = u2 * u;
+
+            // The segments are being normalized for linear motion to ensure that the motion of the dot follows a smooth, continuous path along the infinity symbol.
+            // This is achieved by using a cubic Bezier curve formula, where 'u' is the normalized time (ranging from 0 to 1).
+            // The first half of the infinity symbol is defined by the left control points, and the second half by the right control points.
+            if (t <= 0.5) {
+                // First half of the infinity symbol
+                dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlX1 + (3 * u2 - 3 * u3) * leftControlX2 + u3 * width / 2;
+                dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlY1 + (3 * u2 - 3 * u3) * leftControlY2 + u3 * height / 2;
+            } else {
+                // Second half of the infinity symbol
+                dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlX1 + (3 * u2 - 3 * u3) * rightControlX2 + u3 * width / 2;
+                dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlY1 + (3 * u2 - 3 * u3) * rightControlY2 + u3 * height / 2;
+            }
+        }
         
         function startRecording(){
             capturedFramesDisplay.style('display', 'block');
             capturer.start();
-            recording = true;
+            appstate.recording = true;
             frameCount = 0;
-            capturedFrames = 0;
+            appstate.capturedFrames = 0;
             draw();
         }
 
@@ -689,45 +646,18 @@
 
             appstate.hexSize = constrain(appstate.hexSize, 10, 500);
 
-            if(appstate.useMouseTarget){
-                target.x = mouseX;
-                target.y = mouseY;
-            }else if(appstate.useInfinityTarget){
-                // Define the control points for the infinity symbol
-                let leftControlX1 = width / 2 - 50, leftControlY1 = height / 2 - 100;
-                let leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
-                let rightControlX1 = width / 2 + 50, rightControlY1 = height / 2 - 100;
-                let rightControlX2 = width / 2 + 150, rightControlY2 = height / 2 + 100;
-
-                // Update t for motion
-                t += 0.005;
-                if (t > 1) {
-                    t = 0;
-                }
-
-                // Calculate the position of the red dot
-                let dotX, dotY;
-                let u = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
-                let u2 = u * u, u3 = u2 * u;
-
-                // The segments are being normalized for linear motion to ensure that the motion of the dot follows a smooth, continuous path along the infinity symbol.
-                // This is achieved by using a cubic Bezier curve formula, where 'u' is the normalized time (ranging from 0 to 1).
-                // The first half of the infinity symbol is defined by the left control points, and the second half by the right control points.
-                if (t <= 0.5) {
-                    // First half of the infinity symbol
-                    dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlX1 + (3 * u2 - 3 * u3) * leftControlX2 + u3 * width / 2;
-                    dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlY1 + (3 * u2 - 3 * u3) * leftControlY2 + u3 * height / 2;
-                } else {
-                    // Second half of the infinity symbol
-                    dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlX1 + (3 * u2 - 3 * u3) * rightControlX2 + u3 * width / 2;
-                    dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlY1 + (3 * u2 - 3 * u3) * rightControlY2 + u3 * height / 2;
-                }
-                target.x = dotX;
-                target.y = dotY;
+            if(appstate.currentTargetMode === TARGET_MODE_MOUSE){
+                appstate.target.x = mouseX;
+                appstate.target.y = mouseY;
+            }else if(appstate.currentTargetMode === TARGET_MODE_INFINITY){
+                
+                appstate.target.x = dotX;
+                appstate.target.y = dotY;
             }else{
+                // DEFAULT: TARGET_MODE_CENTER
                 // set target to center of screen
-                target.x = width / 2;  
-                target.y = height / 2;
+                appstate.target.x = width / 2;  
+                appstate.target.y = height / 2;
             }
 
             background(0);
@@ -740,7 +670,7 @@
                 // modulate minRadScale between 0.9 and 0
                 appstate.minRadScale = map(sin(frameCount * 0.01), -1, 1, 0.9, 0);
             }else{
-                // use the slider values
+                // use the slider values (re-read from dom)
                 appstate.maxRadScale = sliders['maxRadScale'].instance.value();
                 appstate.minRadScale = sliders['minRadScale'].instance.value();
             }
@@ -750,7 +680,7 @@
 
             // Update each hexagon's target size based on mouse distance
             for (let hex of hexagons) {
-                let d = dist(target.x, target.y, hex.x, hex.y);
+                let d = dist(appstate.target.x, appstate.target.y, hex.x, hex.y);
                 //if (d < effectiveRadius) {
                     let sizeFactor = map(d, 0, effectiveRadius, appstate.maxRadScale, appstate.minRadScale); // Scale factor: 2 at center, 1 at edge
                     hex.targetSize = appstate.hexSize * appstate.sizeFactor;
@@ -761,7 +691,7 @@
 
             // sort hexagons by distance from target (furthest should be drawn first so they're at the bottom)
             if(appstate.sortDrawOrder){
-                hexagons.sort((a, b) => {
+                appstate.hexagons.sort((a, b) => {
                     let distA = dist(target.x, target.y, a.x, a.y);
                     let distB = dist(target.x, target.y, b.x, b.y);
                     return appstate.reverseDrawOrder ? distA - distB : distB - distA;
@@ -793,7 +723,7 @@
 
         function createHexGrid() {
             let newHexagons = [];
-            let hexSize = appstate.hexSize;
+            const {hexSize,rows,cols} = appstate;
             let hexHeight = sqrt(3) * hexSize;
             let newCols = int(width / (1.5 * hexSize));
             let newRows = int(height / hexHeight);
@@ -806,7 +736,7 @@
                     if ((col + offsetCol) % 2 === 1) {
                         y += hexHeight / 2;
                     }
-                    let existingHex = hexagons.find(h => h.row === row + offsetRow && h.col === col + offsetCol);
+                    let existingHex = appstate.hexagons.find(h => h.row === row + offsetRow && h.col === col + offsetCol);
                     if (existingHex) {
                         // If a hexagon already exists at this position, reuse it
                         existingHex.selfTargetX = x;
@@ -820,8 +750,8 @@
                 }
             }
             // If we're increasing hexSize, average the colors/sizes of the old hexagons
-            if (newHexagons.length < hexagons.length) {
-                let oldHexagons = hexagons.filter(h => !newHexagons.includes(h));
+            if (newHexagons.length < appstate.hexagons.length) {
+                let oldHexagons = appstate.hexagons.filter(h => !newHexagons.includes(h));
                 for (let oldHex of oldHexagons) {
                     let nearbyNewHexes = newHexagons.filter(h => dist(h.x, h.y, oldHex.x, oldHex.y) < hexSize);
                     if (nearbyNewHexes.length > 0) {
@@ -835,14 +765,14 @@
                     }
                 }
                 // we should keep a copy of the "discarded" cells so we can animate them out (let them scale to zero before removing them)
-                discardedHexes = discardedHexes.concat(hexagons.filter(h => !newHexagons.includes(h)));
+                appstate.discardedHexes = appstate.discardedHexes.concat(appstate.hexagons.filter(h => !newHexagons.includes(h)));
                 for (let hex of discardedHexes) {
                     hex.targetSize = 0;
                 }
             }
-            hexagons = newHexagons;
-            cols = newCols;
-            rows = newRows;
+            appstate.hexagons = appstate.newHexagons;
+            appstate.cols = newCols;
+            appstate.rows = newRows;
         }
 
         function drawSplatForHex(hex){
@@ -1055,6 +985,57 @@
         }
 
     </script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #000;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        /* custom tailwind.css code: for
+        
+        transition-all
+        l-0
+        -l-100%
+        duration-500
+        ease-in-out
+        transform
+        translate-x-full
+        */
+        .transition-all {
+            transition-property: all;
+            transition-timing-function: ease;
+            transition-duration: 150ms;
+        }
+        .l-0 {
+            left: 0;
+        }
+        .-l-100\% {
+            margin-left: -100%;
+        }
+        .duration-500 {
+            transition-duration: 500ms;
+        }
+        .ease-in-out {
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .transform {
+            transform: translateX(0);
+            will-change: transform;
+        }
+        .translate-x-full {
+            transform: translateX(100%);
+        }
+        .\-translate\-x\-full {
+            transform: translateX(-100%);
+        }
+
+    </style>
 </body>
 
 </html>
