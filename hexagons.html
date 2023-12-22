@@ -47,10 +47,13 @@
             currentTargetMode: 0,
             animateMinMax: 0,
             hexSize: 100,
+            hexRotationSpeed: 0.01,
+            hexRotationRandomness: 0,
             effectiveRadiusScale: 1,
             innerRadiusScale: 0.866,
             
-            animDelay: 50,
+            splatColorAnimSpeed: 50,
+            hexColorAnimSpeed: 50,
             maxRadScale: 0,
             minRadScale: 0.9,
             
@@ -236,7 +239,26 @@
         }
 
         function saveToLocalStorage(){
-            let keys = ['splatScale', 'drawHexes', 'sortDrawOrder', 'currentTargetMode', 'animateMinMax', 'reverseDrawOrder', 'drawSplats', 'hexSize', 'effectiveRadiusScale', 'animDelay', 'maxRadScale', 'minRadScale', 'myColorMode', 'jitterSplatRotation', 'isUiVisible'];
+            let keys = [
+                'animateMinMax',
+                'currentTargetMode',
+                'drawHexes',
+                'drawSplats',
+                'effectiveRadiusScale',
+                'hexColorAnimSpeed',
+                'hexSize',
+                'hexRotationSpeed',
+                'hexRotationRandomness',
+                'isUiVisible',
+                'jitterSplatRotation',
+                'maxRadScale',
+                'minRadScale',
+                'myColorMode',
+                'reverseDrawOrder',
+                'sortDrawOrder',
+                'splatColorAnimSpeed',
+                'splatScale'
+            ];
             let data = {};
             keys.forEach(key => {
                 data[key] = appstate[key];
@@ -252,7 +274,10 @@
             }
         }
         const sdb = debounce(saveToLocalStorage, 2000);
-
+        const hide_ui_debounced = debounce(() => {
+            appstate.isUiVisible = false;
+            updateUI();
+        }, 2000);
         function setup() {
             // derrived from matplotlib magma color scheme
             magmaGradient = [
@@ -306,11 +331,22 @@
             uiContainer = createDiv();
             uiContainer.id('ui-container');
 
+            
+
             // add an inner
             uiInner = createDiv();
             uiInner.id('ui-inner');
             uiInner.parent(uiContainer);
             uiInner.style('padding-bottom', '100px');
+
+            uiInner.mouseOut((e) => {
+                if (!e.relatedTarget || e.relatedTarget.id !== 'ui-inner') {
+                    hide_ui_debounced();
+                }
+                
+                // check if the mouse is actually outside the uiInner
+                //hide_ui_debounced();
+            });
 
             // add classnames
             uiContainer.class('transition-all duration-500 ease-in-out transform');
@@ -403,11 +439,6 @@
             }
 
             buttons = {
-                'isUiVisible': {
-                    key: 'isUiVisible',
-                    label: 'Hide UI', 
-                    action: function () { appstate.isUiVisible = !appstate.isUiVisible; updateUI(); }
-                },
                 'clearBg': {
                     key: 'clearBg',
                     label: 'Clear Background', 
@@ -418,14 +449,6 @@
                     key: 'animateMinMax',
                     action: function () {
                         appstate.animateMinMax = !appstate.animateMinMax;
-                    }
-                },
-                'sortDrawOrder': {
-                    label: 'Toggle Sort Draw Order',
-                    key: 'sortDrawOrder',
-                    action: function () {
-                        console.warn('action: sortDrawOrder', appstate.sortDrawOrder)
-                        appstate.sortDrawOrder = !appstate.sortDrawOrder;
                     }
                 },
                 'myColorMode': {
@@ -453,6 +476,14 @@
                     action: function () { appstate.drawSplats = !appstate.drawSplats; }
                 },
                 
+                'sortDrawOrder': {
+                    label: 'Toggle Sort Draw Order',
+                    key: 'sortDrawOrder',
+                    action: function () {
+                        console.warn('action: sortDrawOrder', appstate.sortDrawOrder)
+                        appstate.sortDrawOrder = !appstate.sortDrawOrder;
+                    }
+                },
                 'reverseDrawOrder': {
                     key: 'reverseDrawOrder',
                     label: 'Reverse Draw Order', 
@@ -470,11 +501,18 @@
                     label: 'Start Recording', 
                     action: toggleRecording
                 },
+                'isUiVisible': {
+                    key: 'isUiVisible',
+                    label: 'Hide UI', 
+                    action: function () { appstate.isUiVisible = !appstate.isUiVisible; updateUI(); }
+                },
+                
                 'reset': {
                     key: 'reset',
                     label: 'Reset', 
                     action: reset
                 },
+                
             };
 
             // before we load from localStorage, for each thing (key) in buttons,
@@ -550,6 +588,31 @@
                         }
                         appstate.hexSize = val; 
                     } },
+                
+                // hexRotationSpeed
+                'hexRotationSpeed': { 
+                    label: 'Hexagon Rotation Speed', min: -0.1, max: 0.1, step: 0.001, 
+                    value: appstate.hexRotationSpeed, 
+                    action: function(val) { 
+                        appstate.hexRotationSpeed = val; 
+                    } 
+                },
+
+                
+                'hexColorAnimSpeed': {
+                    label: 'Color Animation Speed', min: 0, max: 1, step: 0.01, 
+                    value: appstate.hexColorAnimSpeed, 
+                    action: function(val) { 
+                        appstate.hexColorAnimSpeed = val; 
+                    }
+                },
+                'splatColorAnimSpeed': { 
+                    label: 'Splat Color Animation Speed', min: 0, max: 1, step: 0.01, 
+                    value: appstate.splatColorAnimSpeed, 
+                    action: function(val) { 
+                        appstate.splatColorAnimSpeed = val; 
+                    } 
+                },
 
                 'effectiveRadiusScale': { 
                     label: 'Target Radius Scale', min: -3, max: 3, step: 0.01, 
@@ -557,21 +620,16 @@
                     value: appstate.effectiveRadiusScale, 
                     action: function(val) { 
                         appstate.effectiveRadiusScale = val; 
-                    } },
-
-                'animDelay': { 
-                    label: 'Animation Delay', min: 10, max: 100, 
-                    value: appstate.animDelay, 
-                    action: function(val) { 
-                        appstate.animDelay = val; 
-                    } },
+                    } 
+                },
 
                 'minRadScale': { 
                     label: 'Min Radius', min: -1, max: 1, step: 0.01, 
                     value: appstate.minRadScale ?? 0, 
                     action: function(val) { 
                         appstate.minRadScale = val; 
-                    } },
+                    } 
+                },
 
                 'maxRadScale': { 
                     label: 'Max Radius', min: -1, max: 1, step: 0.01, 
@@ -760,7 +818,6 @@
                 prevHexSize = appstate.hexSize;
                 createHexGrid(); // Recreate grid if size changes
             }
-            //animDelay = delaySlider.value();
             drawHexGrid();
             animateColors();
 
@@ -869,7 +926,7 @@
             let TINT_HUE_QUANTIZATION = 2;
             let hue = map(hex.row, 0, appstate.rows, 0, 360);
             // push the hue foward constantly and make sure it wraps around
-            hue = (hue + (frameCount * (appstate.animDelay*.1))) % 360;
+            hue = (hue + (frameCount * (appstate.splatColorAnimSpeed*.1))) % 360;
             hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
             let colorKey = `${hue}`;
             if(!tintedCache[colorKey]){
@@ -955,22 +1012,23 @@
             //         return;
             //     }
             // };
-            const {myColorMode,animDelay,rows,cols,target,hexagons} = appstate;
-            let maxDelay = rows * animDelay;
+            const {myColorMode,hexColorAnimSpeed,rows,cols,target,hexagons} = appstate;
+            const baseDelay = 1/hexColorAnimSpeed; 
+            let maxDelay = rows * baseDelay;
             let maxDist;
             switch (myColorMode) {
                 case COLOR_MODE_VERTICAL:
                     for (let hex of appstate.hexagons) {
-                        let delay = hex.row * animDelay;
+                        let delay = hex.row * baseDelay;
                         let colorTime = (frameCount - delay) % maxDelay;
                         let hue = map(colorTime, 0, maxDelay, 0, 360);
                         hex.color = color(hue, 80, 100);
                     }
                     break;
                 case COLOR_MODE_HORIZONTAL:
-                    maxDelay = cols * animDelay;
+                    maxDelay = cols * delay;
                     for (let hex of hexagons) {
-                        let delay = hex.col * animDelay;
+                        let delay = hex.col * baseDelay;
                         let colorTime = (frameCount - delay) % maxDelay;
                         let hue = map(colorTime, 0, maxDelay, 0, 360);
                         hex.color = color(hue, 80, 100);
@@ -978,7 +1036,7 @@
                     break;
                 case COLOR_MODE_RADIAL:
                     maxDist = min(width, height) / 2;
-                    maxDelay = maxDist * animDelay;
+                    maxDelay = maxDist * baseDelay;
                     for (let hex of hexagons) {
                         let d = dist(target.x, target.y, hex.x, hex.y);
                         let delay = map(d, 0, maxDist, 0, maxDelay);
@@ -1042,6 +1100,9 @@
             constructor(x, y, size, row, col) {
                 this.x = windowWidth / 2;
                 this.y = windowHeight / 2;
+                this.rotationAngle = 0; // Initial rotation angle
+                this.rotationDirection = 1; // clockwise
+                this.targetRotationAngle = 0; // New target rotation angle
                 this.selfTargetX = x;
                 this.selfTargetY = y; // Store the target position
                 this.size = 0;
@@ -1057,6 +1118,14 @@
                 this.size = lerp(this.size, this.targetSize, LERP_FACTOR);
                 this.x = lerp(this.x, this.selfTargetX, LERP_FACTOR);
                 this.y = lerp(this.y, this.selfTargetY, LERP_FACTOR);
+                this.targetRotationAngle = atan2(this.y - this.selfTargetY, this.x - this.selfTargetX) * appstate.hexRotationSpeed;
+                // use hexRotationRandomness to drive a probability that the angle will be randomized
+                // TODO: we should probably only set this once, when the hex is created
+                // or very infrequently
+                // if(random() < appstate.hexRotationRandomness){
+                //     this.targetRotationAngle = random(-PI, PI);
+                // }
+                this.rotationAngle = lerp(this.rotationAngle, this.targetRotationAngle, LERP_FACTOR);
             }
 
             draw() {
@@ -1064,6 +1133,7 @@
 
                 push();
                 translate(this.x, this.y);
+                rotate(this.rotationAngle);
                 fill(this.color);
                 stroke(255);
                 //noStroke(); 
