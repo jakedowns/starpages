@@ -66,9 +66,11 @@
         let LERP_FACTOR = 0.05; // Lerp factor for size
 
         let jitterSplatRotation = false;
-        let uiContainer; // UI container
+        let uiContainer, uiInner; // UI container
         let isUiVisible = true; // UI visibility state
         let isFullscreen = false; // Fullscreen state
+
+        let uiDrawerTab;
 
         let doAnimateColors = 0;
         // need to run animateColors once to compute the colors
@@ -76,21 +78,69 @@
         // Slider Values
         let splatScale = 0.1;
 
-        let drawHexes = 1;
-        let sortDrawOrder = 0;
-        let reverseDrawOrder = 0;
-        let drawSplats = 1;
-        let useMouseTarget = 1;
-        let useInfinityTarget = 0;
-        let animateMinMax = 0;
-        let hexSize;
-        let effectiveRadiusScale = 1;
+        let cursorIsHidden = 0;
+
+        // Add a new variable to store the color animation mode
+        const COLOR_MODE_VERTICAL = 0;
+        const COLOR_MODE_HORIZONTAL = 1;
+        const COLOR_MODE_RADIAL = 2;
+        const COLOR_MODE_GREYSCALE = 3;
+        const COLOR_MODE_BLACK = 4
+        const COLOR_MODE_MAGMA = 5;
+        const COLOR_MODE_CUSTOM = 6;
+        const MAX_COLOR_MODES_AVAILABLE = Math.max(COLOR_MODE_VERTICAL, COLOR_MODE_HORIZONTAL, COLOR_MODE_RADIAL, COLOR_MODE_GREYSCALE, COLOR_MODE_BLACK, COLOR_MODE_MAGMA, COLOR_MODE_CUSTOM);
+        //let myColorMode = COLOR_MODE_BLACK;
+
+        window.appstate = {
+            isFullscreen: false,
+            uiDrawerTab: undefined,
+            doAnimateColors: 0,
+            computedColorsOnce: 0,
+            splatScale: 0.1,
+            cursorIsHidden: 0,
+            sortDrawOrder: 0,
+            drawHexes: 1,
+            reverseDrawOrder: 0,
+            drawSplats: 1,
+            useMouseTarget: 1,
+            useInfinityTarget: 0,
+            animateMinMax: 0,
+            hexSize: 100,
+            effectiveRadiusScale: 1,
+            slider: undefined,
+            delaySlider: undefined,
+            cols: undefined,
+            rows: undefined,
+            hexagons: [],
+            animDelay: 50,
+            maxRadScale: 0,
+            minRadScale: 0.9,
+            recording: 0,
+            //capturer: new CCapture({ format: 'webm', verbose: false, fps: 60 }),
+            _canvas: undefined,
+            capturedFrames: 0,
+            capturedFramesDisplay: undefined,
+            target: { x: 0, y: 0 },
+            //magmaGradient: undefined,
+            myColorMode: COLOR_MODE_BLACK,
+            colorModeButton: undefined,
+            blurSprite: undefined,
+            tintedCache: {},
+            buttons: {},
+            sliders: {}
+        }
+
+        // let drawHexes = 1;
+        // let reverseDrawOrder = 0;
+        // let hexSize = 100;
+        // let effectiveRadiusScale = 1;
         let slider, delaySlider;
         let cols, rows;
         let hexagons = [];
-        let animDelay = 50;
-        let maxRadScale = 0;
-        let minRadScale = 0.9;
+        let discardedHexes = [];
+        //window.animDelay = 50;
+        // let maxRadScale = 0;
+        // let minRadScale = 0.9;
         let recording = 0;
         // Create a capturer that exports a WebM video
         var capturer = new CCapture( { format: 'webm', verbose: false, fps: 60 } );
@@ -105,16 +155,7 @@
         // https://matplotlib.org/stable/tutorials/colors/colormaps.html
         let magmaGradient;
 
-        // Add a new variable to store the color animation mode
-        const COLOR_MODE_VERTICAL = 0;
-        const COLOR_MODE_HORIZONTAL = 1;
-        const COLOR_MODE_RADIAL = 2;
-        const COLOR_MODE_GREYSCALE = 3;
-        const COLOR_MODE_BLACK = 4
-        const COLOR_MODE_MAGMA = 5;
-        const COLOR_MODE_CUSTOM = 6;
-        const MAX_COLOR_MODES_AVAILABLE = Math.max(COLOR_MODE_VERTICAL, COLOR_MODE_HORIZONTAL, COLOR_MODE_RADIAL, COLOR_MODE_GREYSCALE, COLOR_MODE_BLACK, COLOR_MODE_MAGMA, COLOR_MODE_CUSTOM);
-        let myColorMode = COLOR_MODE_BLACK;
+        
 
         // Add a button to switch the color animation mode
         let colorModeButton;
@@ -124,18 +165,33 @@
         let blurSprite;
         let tintedCache = {};
         function makeABlurSprite(){
-            // this function makes an ellipse on an offscreen canvas,
-            // bakes it to a bitmap, blurs it, and caches it to a sprite
-            // we can instance this sprite as many times as we want cheaply
-            let blurCanvas = createGraphics(32, 32);
-            blurCanvas.clear();
-            //blurCanvas.background(255);
-            blurCanvas.noStroke();
-            blurCanvas.fill(255, 255, 255, 255)
-            blurCanvas.circle(blurCanvas.width / 2, blurCanvas.height / 2, blurCanvas.width / 4);
-            blurCanvas.filter(BLUR, 5);
-            blurSprite = blurCanvas.get();
+            
+            // Check if we cached to local filesystem, if so, read it from there
+            // Note: localStorage can't be used to store image data directly. 
+            // We need to convert the image to a data URL first.
+            if (localStorage.getItem('blurSprite')) {
+                let dataURL = localStorage.getItem('blurSprite');
+                blurSprite = loadImage(dataURL);
+            } else {
+                // This function makes an ellipse on an offscreen canvas,
+                // bakes it to a bitmap, blurs it, and caches it to a sprite
+                // We can instance this sprite as many times as we want cheaply
+                let blurCanvas = createGraphics(32, 32);
+                blurCanvas.clear();
+                blurCanvas.noStroke();
+                blurCanvas.fill(255, 255, 255, 255)
+                blurCanvas.circle(blurCanvas.width / 2, blurCanvas.height / 2, blurCanvas.width / 4);
+                blurCanvas.filter(BLUR, 5);
+                blurSprite = blurCanvas.get();
+                // when the browser has a second,
+                // Convert the sprite to a data URL and save it to local storage for future use
+                requestIdleCallback(() => {
+                    let dataURL = blurSprite.canvas.toDataURL();
+                    localStorage.setItem('blurSprite', dataURL);
+                });
+            }
         }
+        let buttons = {}
         let sliders = {}
 
         function keyPressed() {
@@ -145,31 +201,38 @@
                     isFullscreen = false;
                 }
             }
-            if (key === '/') {
+            if (key === '.'){
                 // Toggle UI visibility
                 isUiVisible = !isUiVisible;
                 updateUI();
-
+            }
+            if (key === '/') {
                 // Toggle fullscreen mode
                 isFullscreen = !isFullscreen;
                 fullscreen(isFullscreen);
+
+                cursorIsHidden = isFullscreen
             }
         }
 
         function updateUI(){
             let classConfig = {
-                '-translate-x-full': isUiVisible
+                '-translate-x-full': !isUiVisible
             };
 
             for (let className in classConfig) {
                 uiContainer.elt.classList.toggle(className, classConfig[className]);
             }
 
-            if (isUiVisible) {
+            uiDrawerTab.style('left', isUiVisible ? '-20px' : '0px');
+
+            if(!cursorIsHidden){
                 cursor();
-            } else {
+            }else{
                 noCursor();
             }
+
+            sdb();
         }
 
         function loadFromLocalStorage(){
@@ -177,52 +240,82 @@
             try {
                 if(data){
                     data = JSON.parse(data);
-                    splatScale = data.splatScale;
-                    drawHexes = data.drawHexes;
-                    sortDrawOrder = data.sortDrawOrder;
-                    reverseDrawOrder = data.reverseDrawOrder;
-                    drawSplats = data.drawSplats;
-                    useMouseTarget = data.useMouseTarget;
-                    useInfinityTarget = data.useInfinityTarget;
-                    animateMinMax = data.animateMinMax;
-                    hexSize = data.hexSize;
-                    effectiveRadiusScale = data.effectiveRadiusScale;
-                    animDelay = data.animDelay;
-                    maxRadScale = data.maxRadScale;
-                    minRadScale = data.minRadScale;
-                    myColorMode = data.myColorMode;
-                    jitterSplatRotation = data.jitterSplatRotation;
+                    for (let key in data) {
+                        if (data.hasOwnProperty(key) && appstate.hasOwnProperty(key)) {
+                            appstate[key] = data[key];
+                        }else{
+                            console.warn('no data || appstate property for ', key);
+                        }
+                        // update our buttons and sliders
+                        if(sliders[key]){
+                            sliders[key].instance.value(data[key]);
+                        }
+                        else if(buttons[key]){
+                            buttons[key].instance.html(buttons[key].label + ` (${data[key]})`);
+                        }else{
+                            console.warn('no button or slider for ', key);
+                        }
+                        if(key === 'hexSize'){
+                            console.warn("what was provided for hexSize?",data[key], 'and window value is', window[key], 'key', key)
+                        }
+                    }
+                    // same for buttons
+                    for (let key in buttons) {
+                        if(key === 'toggleRecording'
+                        || key === 'reset'){
+                            continue;
+                        }
+                        if (buttons.hasOwnProperty(key)) {
+                            buttons[key].instance.html(buttons[key].label + ` (${window[key]})`);
+                            // could call onButton()
+                        }
+                    }
+                    // update all slider values by invoking their pre-.bind()ed onSlide function
+                    for (let key in sliders) {
+                        if (sliders.hasOwnProperty(key)) {
+                            sliders[key].onSlide();
+                        }
+                    }
                 }
+                updateUI();
             } catch (error) {
                 console.error('Error parsing data from local storage:', error);
             }
+            console.warn("hexSize?",appstate.hexSize)
         }
 
         function saveToLocalStorage(){
             let data = {
-                splatScale: splatScale,
-                drawHexes: drawHexes,
-                sortDrawOrder: sortDrawOrder,
-                reverseDrawOrder: reverseDrawOrder,
-                drawSplats: drawSplats,
-                useMouseTarget: useMouseTarget,
-                useInfinityTarget: useInfinityTarget,
-                animateMinMax: animateMinMax,
-                hexSize: hexSize,
-                effectiveRadiusScale: effectiveRadiusScale,
-                animDelay: animDelay,
-                maxRadScale: maxRadScale,
-                minRadScale: minRadScale,
-                myColorMode: myColorMode,
-                jitterSplatRotation: jitterSplatRotation
-            };
+                splatScale,
+                drawHexes,
+                sortDrawOrder,
+                useMouseTarget,
+                animateMinMax,
+                reverseDrawOrder,
+                drawSplats,
+                useInfinityTarget,
+                hexSize,
+                effectiveRadiusScale,
+                animDelay,
+                maxRadScale,
+                minRadScale,
+                myColorMode,
+                jitterSplatRotation,
+                isUiVisible
+            } = appstate;
             localStorage.setItem('hexagons', JSON.stringify(data));
         }
+        // sdb === save debounced (Calls saveToLocalStorage every 2 seconds)
+        function debounce(func, delay) {
+            let debounceTimer;
+            return function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(func, delay);
+            }
+        }
+        const sdb = debounce(saveToLocalStorage, 2000);
 
         function setup() {
-            loadFromLocalStorage();
-            makeABlurSprite();
-
             // derrived from matplotlib magma color scheme
             magmaGradient = [
                 { color: color(251, 252, 191) },
@@ -237,9 +330,22 @@
                 { color: color(0, 0, 3) }
             ]
 
+            makeABlurSprite();
+            createUI();
+            //loadFromLocalStorage(); // internally calls updateUI()
+            createHexGrid();
+        }
+
+        function createUI(){
             // Create UI container
             uiContainer = createDiv();
             uiContainer.id('ui-container');
+
+            // add an inner
+            uiInner = createDiv();
+            uiInner.id('ui-inner');
+            uiInner.parent(uiContainer);
+            uiInner.style('padding-bottom', '100px');
 
             // add classnames
             uiContainer.class('transition-all duration-500 ease-in-out transform');
@@ -247,6 +353,14 @@
             uiContainer.style('position', 'absolute');
             uiContainer.style('width', '300px');
             uiContainer.style('height', '100vh');
+            // overflow-y auto
+            uiContainer.style('overflow-y', 'auto');
+            // overflow-x hidden
+            uiContainer.style('overflow-x', 'hidden');
+            // padding-bottom 20
+            uiContainer.style('padding-bottom', '40px');
+            // box-sizing border-box
+            uiContainer.style('box-sizing', 'border-box');
             uiContainer.style('display', 'block');
             uiContainer.style('top', '0');
             uiContainer.style('left', '0');
@@ -255,59 +369,179 @@
 
             // add a little TAB to the left side of the screen
             // that you can click when the UI is hidden
-            let tab = createDiv();
-            tab.id('ui-tab');
-            tab.class('transition-all duration-500 ease-in-out transform');
-            tab.style('position', 'absolute');
-            tab.style('width', '20px');
-            tab.style('height', '100px');
-            tab.style('display', 'block');
-            tab.style('top', 'calc(50vh - 50px)');
-            tab.style('left', '0');
-            tab.style('background-color', 'rgba(0,0,0,0.5)');
-            tab.style('backdrop-filter', 'blur(10px)');
-            tab.style('cursor', 'pointer');
-            tab.style('z-index', '1000');
-            tab.style('border-radius', '10px');
-            tab.mousePressed(() => {
+            uiDrawerTab = createDiv();
+            uiDrawerTab.id('ui-drawer-tab');
+            uiDrawerTab.class('transition-all duration-500 ease-in-out transform');
+            uiDrawerTab.style('position', 'absolute');
+            uiDrawerTab.style('border', '1px solid white');
+            uiDrawerTab.style('width', '20px');
+            uiDrawerTab.style('height', '100vh');
+            uiDrawerTab.style('display', 'block');
+            uiDrawerTab.style('top', '0');
+            uiDrawerTab.style('left', '-20px');
+            uiDrawerTab.style('background-color', 'rgba(0,0,0,0.5)');
+            uiDrawerTab.style('backdrop-filter', 'blur(10px)');
+            uiDrawerTab.style('cursor', 'pointer');
+            uiDrawerTab.style('z-index', '1000');
+            //tab.style('border-radius', '10px');
+            // on mouseEnter, show the UI
+            uiDrawerTab.mouseOver(() => {
+                if(!isUiVisible){
+                    isUiVisible = true;
+                    
+                    updateUI();
+                }
+            });
+            uiDrawerTab.mousePressed(() => {
                 isUiVisible = !isUiVisible;
                 updateUI();
             });
 
-            function act(cb){
-                return function(){
-                    cb();
-                    saveToLocalStorage();
+            const editor_defaults = {
+
+            }
+
+            function reset(){
+                // loop through all the editor defaults and set them
+                for (let key in editor_defaults) {
+                    if (editor_defaults.hasOwnProperty(key) && appstate.hasOwnProperty(key) && typeof appstate[key] !== 'undefined') {
+                        appstate[key] = editor_defaults[key];
+                        console.warn('reset ',key,'to',editor_defaults[key]);
+                    }else{
+                        console.warn('failed to reset',key);
+                    }
                 }
             }
-            let buttons = {
-                'ToggleMinMaxAnimation': { label: 'Toggle MinMax Animation', action: act(() => { animateMinMax = !animateMinMax; }) },
-                'SwitchColorMode': { label: 'Switch Color Mode', action: act(() => { 
-                    myColorMode = (myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE; computedColorsOnce = 0; 
-                    buttons['SwitchColorMode'].instance.html(`Switch Color Mode (${myColorMode})`);
-                }) },
-                'ToggleHexes': { label: 'Toggle Hexes', action: act(() => { drawHexes = !drawHexes; }) },
-                'ToggleSplats': { label: 'Toggle Splats', action: act(() => { drawSplats = !drawSplats; }) },
-                'ToggleUI': { label: 'Toggle UI', action: act(() => { isUiVisible = !isUiVisible; updateUI(); }) },
-                'ToggleDrawOrder': { label: 'Toggle Draw Order', action: act(() => { reverseDrawOrder = !reverseDrawOrder; }) },
-                'ToggleMouseTarget': { label: 'Toggle Mouse Target', action: act(() => { useMouseTarget = !useMouseTarget; }) },
-                'ToggleInfinityTarget': { label: 'Toggle Infinity Target', action: act(() => { useInfinityTarget = !useInfinityTarget; }) },
-                'StartRecording': { label: 'Start Recording', action: toggleRecording }
+
+            // function act(cb){
+            //     console.warn('act called as ', this, 'with', cb);
+            //     const bound = () => {
+            //         console.warn('bound called as ', this);
+            //         cb.call(this, window[this.key]);
+                    
+            //         saveToLocalStorage();
+            //     }
+            //     return bound.bind(this)
+            // }
+
+            // const onButton = function(val){
+            //     console.warn('onButton',this);
+            //     this.instance.html(`${this.label} (${val})`);
+            // }
+            function handleButtonPress(button,key){
+                console.warn('handleButtonPress',button,key)
+                button.action();
+                if(button.key === 'toggleRecording'){
+                    return;
+                }
+                saveToLocalStorage();
+                if(button.key === 'reset'){
+                    return;
+                }
+                console.warn('handle button press',{
+                    label: button.label,
+                    key: button.key,
+                    val: window[button.key],
+                    appstate_val: appstate[button.key]
+                })
+                button.instance.elt.innerText = (`${button.label} (${appstate[button.key]})`)
+            }
+
+            buttons = {
+                'sortDrawOrder': {
+                    label: 'Toggle Sort Draw Order',
+                    key: 'sortDrawOrder',
+                    action: function () {
+                        console.warn('action: sortDrawOrder', appstate.sortDrawOrder)
+                        appstate.sortDrawOrder = !appstate.sortDrawOrder;
+                    }
+                },
+                'animateMinMax': {
+                    label: 'Toggle MinMax Animation',
+                    key: 'animateMinMax',
+                    action: function () {
+                        appstate.animateMinMax = !appstate.animateMinMax;
+                    }
+                },
+                'myColorMode': {
+                    label: 'Switch Color Mode',
+                    key: 'myColorMode',
+                    action: function () {
+                        myColorMode = (myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE; computedColorsOnce = 0;
+                    }
+                },
+                'drawHexes': {
+                    key: 'drawHexes',
+                    label: 'Toggle Hexes', 
+                    action: function () { appstate.drawHexes = !appstate.drawHexes; }
+                },
+                'drawSplats': {
+                    key: 'drawSplats',
+                    label: 'Toggle Splats', 
+                    action: function () { appstate.drawSplats = !appstate.drawSplats; }
+                },
+                'isUiVisible': {
+                    key: 'isUiVisible',
+                    label: 'Toggle UI', 
+                    action: function () { appstate.isUiVisible = !appstate.isUiVisible; updateUI(); }
+                },
+                'reverseDrawOrder': {
+                    key: 'reverseDrawOrder',
+                    label: 'Toggle Draw Order', 
+                    action: function () { appstate.reverseDrawOrder = !appstate.reverseDrawOrder; }
+                },
+                'useMouseTarget': {
+                    key: 'useMouseTarget',
+                    label: 'Mouse Target', 
+                    action: function () { appstate.useMouseTarget = !appstate.useMouseTarget; }
+                },
+                'useInfinityTarget': {
+                    key: 'useInfinityTarget',
+                    label: 'Infinity Target', 
+                    action: function () { appstate.useInfinityTarget = !appstate.useInfinityTarget; }
+                },
+                'toggleRecording': {
+                    key: 'recording',
+                    label: 'Start Recording', 
+                    action: toggleRecording
+                },
+                'reset': {
+                    key: 'reset',
+                    label: 'Reset', 
+                    action: reset
+                },
             };
 
-            let buttonY = 20;
+            // before we load from localStorage, for each thing (key) in buttons,
+            // check window[thing_key] and save the value to editor_defaults[thing_key]
+            for (let key in buttons) {
+                if (buttons.hasOwnProperty(key)) {
+                    if(key === 'toggleRecording' || key === 'reset'){
+                        continue;
+                    }
+                    editor_defaults[key] = window[key];
+                }
+            }
+
+            //let buttonY = 20;
             for (let key in buttons) {
                 let btn = createButton(buttons[key].label);
-                btn.position(10, buttonY);
-                btn.mousePressed(buttons[key].action);
-                btn.parent(uiContainer);
+                btn.style('position', 'relative');
+                // display block
+                btn.style('display', 'block');
+                // btn.style('top', `${buttonY}px`);
+                // btn.style('left', '10px');
+                btn.parent(uiInner);
                 buttons[key].instance = btn;
-                buttonY += 40;
+                btn.mousePressed(()=>{
+                    handleButtonPress(buttons[key],key)
+                });
+                //buttonY += 40;
             }
 
             // add a text overlay that shows the number of capturedFrames
             capturedFramesDisplay = createDiv('0');
-            capturedFramesDisplay.parent(uiContainer);
+            capturedFramesDisplay.parent(uiInner);
             capturedFramesDisplay.style('font-size', '48px');
             capturedFramesDisplay.style('color', 'white');
             capturedFramesDisplay.style('text-align', 'center');
@@ -320,44 +554,84 @@
             _canvas = createCanvas(windowWidth, windowHeight);
             colorMode(HSB, 360, 100, 100); // Using HSB color mode for easier color transitions
 
-            // sdb === save debounced (Calls saveToLocalStorage every 2 seconds)
-            function debounce(func, delay) {
-                let debounceTimer;
-                return function() {
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(func, delay);
-                }
+            const onSlide = function(){
+                //console.log('onSlide', this.label, this.instance.value());
+                this.labelP5E.html(this.label + ` (${this.instance.value()})`);
             }
-            const sdb = debounce(saveToLocalStorage, 2000);
 
             sliders = {
-                'splatScale': { label: 'Splat Scale', min: 0.01, max: .2, step: 0.001, value: splatScale, action: (val) => { splatScale = val; sdb(); } },
-                'hexSize': { label: 'Hexagon Size', min: 10, max: 100, step:2, value: 30, action: (val) => { hexSize = val; sdb(); } },
-                'effectiveRadiusScale': { label: 'Target Radius Scale', min: -3, max: 3, step: 0.01, value: effectiveRadiusScale, action: (val) => { effectiveRadiusScale = val; sdb(); } },
-                'animDelay': { label: 'Animation Delay', min: 10, max: 100, value: animDelay, action: (val) => { animDelay = val; sdb(); } },
-                'minRad': { label: 'Min Radius', min: -1, max: 1, step: 0.01, value: minRadScale ?? 0, action: (val) => { minRadScale = val; sdb(); } },
-                'maxRad': { label: 'Max Radius', min: -1, max: 1, step: 0.01, value: maxRadScale ?? 1, action: (val) => { maxRadScale = val; sdb(); } }
+                'splatScale': { 
+                    label: 'Splat Scale', min: 0.01, max: .2, step: 0.001, 
+                    value: splatScale, 
+                    action: function(val) { 
+                        appstate.splatScale = val; sdb(); onSlide.call(this) } },
+
+                'hexSize': { 
+                    label: 'Hexagon Size', min: 10, max: 100, step:2, 
+                    value: 30, 
+                    action: function(val) { 
+                        appstate.hexSize = val; sdb(); onSlide.call(this) } },
+
+                'effectiveRadiusScale': { 
+                    label: 'Target Radius Scale', min: -3, max: 3, step: 0.01, 
+                    
+                    value: appstate.effectiveRadiusScale, 
+                    action: function(val) { 
+                        appstate.effectiveRadiusScale = val; sdb(); onSlide.call(this) } },
+
+                'animDelay': { 
+                    label: 'Animation Delay', min: 10, max: 100, 
+                    value: appstate.animDelay, 
+                    action: function(val) { 
+                        appstate.animDelay = val; sdb(); onSlide.call(this) } },
+
+                'minRadScale': { 
+                    label: 'Min Radius', min: -1, max: 1, step: 0.01, 
+                    value: appstate.minRadScale ?? 0, 
+                    action: function(val) { 
+                        appstate.minRadScale = val; sdb(); onSlide.call(this) } },
+
+                'maxRadScale': { 
+                    label: 'Max Radius', min: -1, max: 1, step: 0.01, 
+                    value: appstate.maxRadScale ?? 1, 
+                    action: function(val) { 
+                        appstate.maxRadScale = val; sdb(); onSlide.call(this) } }
             };
 
-            let sliderY = buttonY + 10; // start from the max y value of the buttons
+            // before we load from localStorage, for each thing (key) in sliders,
+            // check window[thing_key] and save the value to editor_defaults[thing_key]
             for (let key in sliders) {
+                if (sliders.hasOwnProperty(key)) {
+                    editor_defaults[key] = window[key];
+                }
+            }
+
+            console.warn({editor_defaults})
+
+            //let sliderY = buttonY + 10; // start from the max y value of the buttons
+            for (let key in sliders) {
+                let label = createDiv(sliders[key].label);
+                //label.position(10, sld.y - 20);
+                label.style('position', 'relative');
+                label.style('display', 'block');
+                
+                label.parent(uiInner);
+                label.style('color','white');
+                sliders[key].labelP5E = label;
+
                 let sld = createSlider(sliders[key].min, sliders[key].max, sliders[key].value, sliders[key].step ?? 0.01);
-                sld.position(10, sliderY);
+                //sld.position(10, sliderY);
+                sld.style('position', 'relative');
+                sld.style('display', 'block');
                 sld.input(() => sliders[key].action(sld.value()));
                 sliders[key].instance = sld;
-                sld.parent(uiContainer);
-                
-                let label = createDiv(sliders[key].label);
-                label.position(10, sld.y - 20);
-                label.parent(uiContainer);
-                label.style('color','white');
+                sld.parent(uiInner);
+            
+                sliders[key].onSlide = onSlide.bind(sliders[key]);
 
-                sliderY += 40;
+                //sliderY += 40;
             }
             console.warn('sliders',sliders)
-
-            hexSize = sliders['hexSize'].instance.value();
-            createHexGrid();
         }
 
         function toggleRecording() {
@@ -412,10 +686,13 @@
         // infinity symbol animation progress
         let t = 0;
         function draw() {
-            if(useMouseTarget){
+
+            appstate.hexSize = constrain(appstate.hexSize, 10, 500);
+
+            if(appstate.useMouseTarget){
                 target.x = mouseX;
                 target.y = mouseY;
-            }else if(useInfinityTarget){
+            }else if(appstate.useInfinityTarget){
                 // Define the control points for the infinity symbol
                 let leftControlX1 = width / 2 - 50, leftControlY1 = height / 2 - 100;
                 let leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
@@ -455,45 +732,45 @@
 
             background(0);
 
-            capturedFramesDisplay.html(capturedFrames);
+            capturedFramesDisplay.html(appstate.capturedFrames);
 
-            if(animateMinMax){
+            if(appstate.animateMinMax){
                 // use sin wave to modulate maxRadScale between 0 and 2
-                maxRadScale = map(sin(frameCount * 0.01), -1, 1, 0, 2);
+                appstate.maxRadScale = map(sin(frameCount * 0.01), -1, 1, 0, 2);
                 // modulate minRadScale between 0.9 and 0
-                minRadScale = map(sin(frameCount * 0.01), -1, 1, 0.9, 0);
+                appstate.minRadScale = map(sin(frameCount * 0.01), -1, 1, 0.9, 0);
             }else{
                 // use the slider values
-                maxRadScale = sliders['maxRad'].instance.value();
-                minRadScale = sliders['minRad'].instance.value();
+                appstate.maxRadScale = sliders['maxRadScale'].instance.value();
+                appstate.minRadScale = sliders['minRadScale'].instance.value();
             }
 
             // Calculate effective radius based on 25% of the shortest window edge length
-            let effectiveRadius = 0.25 * min(windowWidth, windowHeight) * effectiveRadiusScale;
+            let effectiveRadius = 0.25 * min(windowWidth, windowHeight) * appstate.effectiveRadiusScale;
 
             // Update each hexagon's target size based on mouse distance
             for (let hex of hexagons) {
                 let d = dist(target.x, target.y, hex.x, hex.y);
                 //if (d < effectiveRadius) {
-                    let sizeFactor = map(d, 0, effectiveRadius, maxRadScale, minRadScale); // Scale factor: 2 at center, 1 at edge
-                    hex.targetSize = hexSize * sizeFactor;
+                    let sizeFactor = map(d, 0, effectiveRadius, appstate.maxRadScale, appstate.minRadScale); // Scale factor: 2 at center, 1 at edge
+                    hex.targetSize = appstate.hexSize * appstate.sizeFactor;
                 // } else {
                 //     hex.targetSize = hexSize;
                 // }
             }
 
             // sort hexagons by distance from target (furthest should be drawn first so they're at the bottom)
-            if(sortDrawOrder){
+            if(appstate.sortDrawOrder){
                 hexagons.sort((a, b) => {
                     let distA = dist(target.x, target.y, a.x, a.y);
                     let distB = dist(target.x, target.y, b.x, b.y);
-                    return reverseDrawOrder ? distA - distB : distB - distA;
+                    return appstate.reverseDrawOrder ? distA - distB : distB - distA;
                 });
             }
 
             // Redraw hexagons and animate colors
-            if (hexSize !== prevHexSize) {
-                prevHexSize = hexSize;
+            if (appstate.hexSize !== prevHexSize) {
+                prevHexSize = appstate.hexSize;
                 createHexGrid(); // Recreate grid if size changes
             }
             //animDelay = delaySlider.value();
@@ -501,7 +778,7 @@
             animateColors();
 
             if(recording){
-                capturedFrames++;
+                appstate.capturedFrames++;
                 try {
                     capturer.capture( _canvas.elt );
                 } catch (error) {
@@ -512,11 +789,11 @@
             }
         }
 
-        let discardedHexes = [];
-
+        
 
         function createHexGrid() {
             let newHexagons = [];
+            let hexSize = appstate.hexSize;
             let hexHeight = sqrt(3) * hexSize;
             let newCols = int(width / (1.5 * hexSize));
             let newRows = int(height / hexHeight);
@@ -574,13 +851,13 @@
             // change draw mode to center
             imageMode(CENTER);
             translate(hex.x, hex.y);
-            scale(hex.size * splatScale);
+            scale(hex.size * appstate.splatScale);
 
             
             let TINT_HUE_QUANTIZATION = 2;
             let hue = map(hex.row, 0, rows, 0, 360);
             // push the hue foward constantly and make sure it wraps around
-            hue = (hue + (frameCount * (animDelay*.1))) % 360;
+            hue = (hue + (frameCount * (appstate.animDelay*.1))) % 360;
             hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
             let colorKey = `${hue}`;
             if(!tintedCache[colorKey]){
@@ -616,7 +893,7 @@
             }
 
             // apply a random rotation to give some noise
-            if(jitterSplatRotation){
+            if(appstate.jitterSplatRotation){
                 rotate(random(0, TWO_PI));
             }
 
@@ -627,10 +904,10 @@
         function drawHexGrid() {
             for (let hex of hexagons) {
                 hex.updateSize();
-                if(drawSplats){
+                if(appstate.drawSplats){
                     drawSplatForHex(hex)
                 }
-                if(drawHexes){
+                if(appstate.drawHexes){
                     // draw the bestagon
                     hex.draw();
                 }
@@ -643,10 +920,10 @@
                 if(hex.size < 0.001){
                     toRemove.push(hex);
                 }
-                if(drawSplats){
+                if(appstate.drawSplats){
                     drawSplatForHex(hex)
                 }
-                if(drawHexes){
+                if(appstate.drawHexes){
                     // draw the bestagon
                     hex.draw();
                 }
@@ -663,6 +940,7 @@
             //         return;
             //     }
             // };
+            const {myColorMode,animDelay} = appstate;
             let maxDelay = rows * animDelay;
             if (myColorMode === COLOR_MODE_VERTICAL) { // Vertical hue shift
                 for (let hex of hexagons) {
