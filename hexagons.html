@@ -17,6 +17,7 @@
 
         let uiContainer, uiInner; // UI container
         let uiDrawerTab; // uitab tabui
+        let countdownText,countdownInterval,countdown_i; const COUNTDOWN_START = 3;
 
         // Add a new variable to store the color animation mode
         const COLOR_MODE_VERTICAL = 0;
@@ -34,6 +35,7 @@
 
         window.appstate = {
             // public params
+            isUiVisible: true,
             doAnimateColors: 0,
             splatScale: 0.1,
             sortDrawOrder: 0,
@@ -143,6 +145,7 @@
         }
 
         function updateUI(){
+            precompute_infinity_spline();
             let classConfig = {
                 '-translate-x-full': !appstate.isUiVisible
             };
@@ -168,7 +171,11 @@
                 if(data){
                     data = JSON.parse(data);
                     for (let key in data) {
-                        if (data.hasOwnProperty(key) && appstate.hasOwnProperty(key)) {
+                        if(key === 'hexagons'){
+                            continue;
+                        }
+                        if (data.hasOwnProperty(key) && appstate.hasOwnProperty(key)
+                        && typeof data[key] !== 'undefined') {
                             appstate[key] = data[key];
                         }else{
                             console.warn('no data || appstate property for ', key);
@@ -180,10 +187,10 @@
                         else if(buttons[key]){
                             buttons[key].instance.html(buttons[key].label + ` (${data[key]})`);
                         }else{
-                            console.warn('no button or slider for ', key);
+                            //console.warn('no button or slider for ', key);
                         }
                         if(key === 'hexSize'){
-                            console.warn("what was provided for hexSize?",data[key], 'and window value is', window[key], 'key', key)
+                            //console.warn("what was provided for hexSize?",data[key], 'and window value is', window[key], 'key', key)
                         }
                     }
                     // same for buttons
@@ -212,23 +219,11 @@
         }
 
         function saveToLocalStorage(){
-            let data = {
-                splatScale,
-                drawHexes,
-                sortDrawOrder,
-                currentTargetMode,
-                animateMinMax,
-                reverseDrawOrder,
-                drawSplats,
-                hexSize,
-                effectiveRadiusScale,
-                animDelay,
-                maxRadScale,
-                minRadScale,
-                myColorMode,
-                jitterSplatRotation,
-                isUiVisible
-            } = appstate;
+            let keys = ['splatScale', 'drawHexes', 'sortDrawOrder', 'currentTargetMode', 'animateMinMax', 'reverseDrawOrder', 'drawSplats', 'hexSize', 'effectiveRadiusScale', 'animDelay', 'maxRadScale', 'minRadScale', 'myColorMode', 'jitterSplatRotation', 'isUiVisible'];
+            let data = {};
+            keys.forEach(key => {
+                data[key] = appstate[key];
+            });
             localStorage.setItem('hexagons', JSON.stringify(data));
         }
         // sdb === save debounced (Calls saveToLocalStorage every 2 seconds)
@@ -263,7 +258,19 @@
             createHexGrid();
         }
 
+        function createCountdownElement(){
+            countdownText = createDiv('');
+            countdownText.style('font-size', '48px');
+            countdownText.style('color', 'white');
+            countdownText.style('text-align', 'center');
+            countdownText.style('position', 'absolute');
+            countdownText.style('top', '50%');
+            countdownText.style('left', '50%');
+            countdownText.style('transform', 'translate(-50%, -50%)');
+        }
+
         function createUI(){
+            createCountdownElement();
             // Create UI container
             uiContainer = createDiv();
             uiContainer.id('ui-container');
@@ -343,25 +350,9 @@
                     }
                 }
             }
-
-            // function act(cb){
-            //     console.warn('act called as ', this, 'with', cb);
-            //     const bound = () => {
-            //         console.warn('bound called as ', this);
-            //         cb.call(this, window[this.key]);
-                    
-            //         saveToLocalStorage();
-            //     }
-            //     return bound.bind(this)
-            // }
-
-            // const onButton = function(val){
-            //     console.warn('onButton',this);
-            //     this.instance.html(`${this.label} (${val})`);
-            // }
             function handleButtonPress(button,key){
                 console.warn('handleButtonPress',button,key)
-                button.action();
+                button.action(appstate[key]);
                 if(button.key === 'toggleRecording'){
                     return;
                 }
@@ -372,7 +363,6 @@
                 console.warn('handle button press',{
                     label: button.label,
                     key: button.key,
-                    val: window[button.key],
                     appstate_val: appstate[button.key]
                 })
                 button.instance.elt.innerText = (`${button.label} (${appstate[button.key]})`)
@@ -441,13 +431,13 @@
             };
 
             // before we load from localStorage, for each thing (key) in buttons,
-            // check window[thing_key] and save the value to editor_defaults[thing_key]
+            // check appstate[thing_key] and save the value to editor_defaults[thing_key]
             for (let key in buttons) {
                 if (buttons.hasOwnProperty(key)) {
                     if(key === 'toggleRecording' || key === 'reset'){
                         continue;
                     }
-                    editor_defaults[key] = window[key];
+                    editor_defaults[key] = appstate[key];
                 }
             }
 
@@ -492,7 +482,8 @@
                     label: 'Splat Scale', min: 0.01, max: .2, step: 0.001, 
                     value: appstate.splatScale, 
                     action: function(val) { 
-                        appstate.splatScale = val; sdb(); onSlide.call(this) } },
+                        appstate.splatScale = val; sdb(); onSlide.call(this) 
+                    } },
 
                 'hexSize': { 
                     label: 'Hexagon Size', min: 10, max: 100, step:2, 
@@ -530,7 +521,7 @@
             // check window[thing_key] and save the value to editor_defaults[thing_key]
             for (let key in sliders) {
                 if (sliders.hasOwnProperty(key)) {
-                    editor_defaults[key] = window[key];
+                    editor_defaults[key] = appstate[key];
                 }
             }
 
@@ -563,34 +554,28 @@
         }
 
         function toggleRecording() {
-            if(recording){
+            if(appstate.recording){
                 capturer.stop();
                 capturer.save();
-                recording = false;
+                appstate.recording = false;
                 // change label to start recording
                 this.html('Start Recording');
+
+                clearInterval(countdownInterval);
+                countdownText.hide();
                 
                 return;
             }
             capturedFramesDisplay.style('display', 'none');
             // change label to stop recording
             this.html('Stop Recording');
-
-            let countdown = 3;
-            let countdownText = createDiv(countdown);
-            countdownText.style('font-size', '48px');
-            countdownText.style('color', 'white');
-            countdownText.style('text-align', 'center');
-            countdownText.style('position', 'absolute');
-            countdownText.style('top', '50%');
-            countdownText.style('left', '50%');
-            countdownText.style('transform', 'translate(-50%, -50%)');
+            countdown_i = COUNTDOWN_START;
             let countdownInterval = setInterval(() => {
-                countdown--;
-                if (countdown > 0) {
-                    countdownText.html(countdown);
+                countdown_i--;
+                if (countdown_i > 0) {
+                    countdownText.html(countdown_i);
                 } else {
-                    countdownText.remove();
+                    countdownText.hide();
                     clearInterval(countdownInterval);
                 }
             }, 1000);
@@ -603,30 +588,41 @@
         const infinity_spline_point_cache = [];
 
         function precompute_infinity_spline(){
+            infinity_spline_point_cache.length = 0;
+
             // Define the control points for the infinity symbol
             let leftControlX1 = width / 2 - 50, leftControlY1 = height / 2 - 100;
             let leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
             let rightControlX1 = width / 2 + 50, rightControlY1 = height / 2 - 100;
             let rightControlX2 = width / 2 + 150, rightControlY2 = height / 2 + 100;
+            const STEPS = 64;
 
-            
+            for(let i = 0; i<STEPS; i++){
+                // Update t for motion
+                t += 0.005; // todo: paramaterize this
+                // loop;
+                if (t > 1) {
+                    t = 0;
+                }
+                // Calculate the position of the red dot
+                let dotX, dotY;
+                let u = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
+                let u2 = u * u, u3 = u2 * u;
+    
+                // The segments are being normalized for linear motion to ensure that the motion of the dot follows a smooth, continuous path along the infinity symbol.
+                // This is achieved by using a cubic Bezier curve formula, where 'u' is the normalized time (ranging from 0 to 1).
+                // The first half of the infinity symbol is defined by the left control points, and the second half by the right control points.
+                if (t <= 0.5) {
+                    // First half of the infinity symbol
+                    dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlX1 + (3 * u2 - 3 * u3) * leftControlX2 + u3 * width / 2;
+                    dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlY1 + (3 * u2 - 3 * u3) * leftControlY2 + u3 * height / 2;
+                } else {
+                    // Second half of the infinity symbol
+                    dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlX1 + (3 * u2 - 3 * u3) * rightControlX2 + u3 * width / 2;
+                    dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlY1 + (3 * u2 - 3 * u3) * rightControlY2 + u3 * height / 2;
+                }
 
-            // Calculate the position of the red dot
-            let dotX, dotY;
-            let u = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
-            let u2 = u * u, u3 = u2 * u;
-
-            // The segments are being normalized for linear motion to ensure that the motion of the dot follows a smooth, continuous path along the infinity symbol.
-            // This is achieved by using a cubic Bezier curve formula, where 'u' is the normalized time (ranging from 0 to 1).
-            // The first half of the infinity symbol is defined by the left control points, and the second half by the right control points.
-            if (t <= 0.5) {
-                // First half of the infinity symbol
-                dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlX1 + (3 * u2 - 3 * u3) * leftControlX2 + u3 * width / 2;
-                dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlY1 + (3 * u2 - 3 * u3) * leftControlY2 + u3 * height / 2;
-            } else {
-                // Second half of the infinity symbol
-                dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlX1 + (3 * u2 - 3 * u3) * rightControlX2 + u3 * width / 2;
-                dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlY1 + (3 * u2 - 3 * u3) * rightControlY2 + u3 * height / 2;
+                infinity_spline_point_cache.push({x:dotX,y:dotY});
             }
         }
         
@@ -643,6 +639,7 @@
         // infinity symbol animation progress
         let t = 0;
         function draw() {
+            let target = appstate.target;
 
             appstate.hexSize = constrain(appstate.hexSize, 10, 500);
 
@@ -650,9 +647,9 @@
                 appstate.target.x = mouseX;
                 appstate.target.y = mouseY;
             }else if(appstate.currentTargetMode === TARGET_MODE_INFINITY){
-                
-                appstate.target.x = dotX;
-                appstate.target.y = dotY;
+                let infinityPoint = infinity_spline_point_cache[frameCount % infinity_spline_point_cache.length];
+                appstate.target.x = infinityPoint.x;
+                appstate.target.y = infinityPoint.y;
             }else{
                 // DEFAULT: TARGET_MODE_CENTER
                 // set target to center of screen
@@ -679,7 +676,7 @@
             let effectiveRadius = 0.25 * min(windowWidth, windowHeight) * appstate.effectiveRadiusScale;
 
             // Update each hexagon's target size based on mouse distance
-            for (let hex of hexagons) {
+            for (let hex of appstate.hexagons) {
                 let d = dist(appstate.target.x, appstate.target.y, hex.x, hex.y);
                 //if (d < effectiveRadius) {
                     let sizeFactor = map(d, 0, effectiveRadius, appstate.maxRadScale, appstate.minRadScale); // Scale factor: 2 at center, 1 at edge
@@ -707,7 +704,7 @@
             drawHexGrid();
             animateColors();
 
-            if(recording){
+            if(appstate.recording){
                 appstate.capturedFrames++;
                 try {
                     capturer.capture( _canvas.elt );
@@ -766,16 +763,17 @@
                 }
                 // we should keep a copy of the "discarded" cells so we can animate them out (let them scale to zero before removing them)
                 appstate.discardedHexes = appstate.discardedHexes.concat(appstate.hexagons.filter(h => !newHexagons.includes(h)));
-                for (let hex of discardedHexes) {
+                for (let hex of appstate.discardedHexes) {
                     hex.targetSize = 0;
                 }
             }
-            appstate.hexagons = appstate.newHexagons;
+            appstate.hexagons = newHexagons;
             appstate.cols = newCols;
             appstate.rows = newRows;
         }
 
         function drawSplatForHex(hex){
+            let {target} = appstate;
             // draw a copy of the blur sprite as a shadow
             push();
             // change draw mode to center
@@ -785,7 +783,7 @@
 
             
             let TINT_HUE_QUANTIZATION = 2;
-            let hue = map(hex.row, 0, rows, 0, 360);
+            let hue = map(hex.row, 0, appstate.rows, 0, 360);
             // push the hue foward constantly and make sure it wraps around
             hue = (hue + (frameCount * (appstate.animDelay*.1))) % 360;
             hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
@@ -832,7 +830,10 @@
         }
 
         function drawHexGrid() {
-            for (let hex of hexagons) {
+            for (let hex of appstate.hexagons) {
+                if(!hex?.updateSize?.call){
+                    console.warn('hex',hex,'does not have updateSize method?!');
+                }
                 hex.updateSize();
                 if(appstate.drawSplats){
                     drawSplatForHex(hex)
@@ -844,7 +845,7 @@
             }
             // do the same for discardedHexes
             let toRemove = [];
-            for (let hex of discardedHexes) {
+            for (let hex of appstate.discardedHexes) {
                 hex.updateSize();
                 // if it's scaled to zero, flag for removal
                 if(hex.size < 0.001){
@@ -859,7 +860,7 @@
                 }
             }
             // remove the flagged hexes
-            discardedHexes = discardedHexes.filter(h => !toRemove.includes(h));
+            appstate.discardedHexes = appstate.discardedHexes.filter(h => !toRemove.includes(h));
         }
 
         function animateColors() {
@@ -870,77 +871,86 @@
             //         return;
             //     }
             // };
-            const {myColorMode,animDelay} = appstate;
+            const {myColorMode,animDelay,rows,cols,target,hexagons} = appstate;
             let maxDelay = rows * animDelay;
-            if (myColorMode === COLOR_MODE_VERTICAL) { // Vertical hue shift
-                for (let hex of hexagons) {
-                    let delay = hex.row * animDelay;
-                    let colorTime = (frameCount - delay) % maxDelay;
-                    let hue = map(colorTime, 0, maxDelay, 0, 360);
-                    hex.color = color(hue, 80, 100);
-                }
-            } else if (myColorMode === COLOR_MODE_HORIZONTAL) { // Horizontal hue shift
-                maxDelay = cols * animDelay;
-                for (let hex of hexagons) {
-                    let delay = hex.col * animDelay;
-                    let colorTime = (frameCount - delay) % maxDelay;
-                    let hue = map(colorTime, 0, maxDelay, 0, 360);
-                    hex.color = color(hue, 80, 100);
-                }
-            } else if (myColorMode === COLOR_MODE_RADIAL) { // Radial hue shift
-                let maxDist = min(width, height) / 2;
-                maxDelay = maxDist * animDelay;
-                for (let hex of hexagons) {
-                    let d = dist(target.x, target.y, hex.x, hex.y);
-                    let delay = map(d, 0, maxDist, 0, maxDelay);
-                    let colorTime = (frameCount - delay) % maxDelay;
-                    let hue = map(colorTime, 0, maxDelay, 0, 360);
-                    hex.color = color(hue, 80, 100);
-                }
-            } else if(myColorMode === COLOR_MODE_GREYSCALE){
-                let maxDist = min(width, height) / 2;
-                for (let hex of hexagons) {
-                    let d = dist(target.x, target.y, hex.x, hex.y);
-                    let lightness = map(d, 0, maxDist, 100, 0);
-                    hex.color = color(0, 0, lightness);
-                }
-            } else if(myColorMode === COLOR_MODE_BLACK){
-                for (let hex of hexagons) {
-                    hex.color = color(0, 0, 0);
-                }
-            } else if(myColorMode === COLOR_MODE_MAGMA){
-                let maxDist = min(width, height) / 2;
-                for (let hex of hexagons) {
-                    let d = dist(target.x, target.y, hex.x, hex.y);
-                    if(d < 0.0001){
-                        d = 0.0001;
+            let maxDist;
+            switch (myColorMode) {
+                case COLOR_MODE_VERTICAL:
+                    for (let hex of appstate.hexagons) {
+                        let delay = hex.row * animDelay;
+                        let colorTime = (frameCount - delay) % maxDelay;
+                        let hue = map(colorTime, 0, maxDelay, 0, 360);
+                        hex.color = color(hue, 80, 100);
                     }
-                    // NOTE: this generates a color by interpolating between the color stops in the magmaGradient array
-                    let stopPos = map(d, 0, maxDist, 0, 1);
-                    let colorIndex = floor(stopPos * (magmaGradient.length - 1));
-                    let nextColorIndex = min(colorIndex + 1, magmaGradient.length - 2);
-                    let lerpFactor = stopPos * (magmaGradient.length - 1) - colorIndex;
-                    lerpFactor = constrain(lerpFactor, 0, 1);
-                    if(colorIndex < 0 || colorIndex >= magmaGradient.length || nextColorIndex < 0 || nextColorIndex >= magmaGradient.length){
-                        // set to sensible defaults
-                        colorIndex = magmaGradient.length - 1;
-                        nextColorIndex = magmaGradient.length - 2;
+                    break;
+                case COLOR_MODE_HORIZONTAL:
+                    maxDelay = cols * animDelay;
+                    for (let hex of hexagons) {
+                        let delay = hex.col * animDelay;
+                        let colorTime = (frameCount - delay) % maxDelay;
+                        let hue = map(colorTime, 0, maxDelay, 0, 360);
+                        hex.color = color(hue, 80, 100);
                     }
-                    let color1 = magmaGradient[colorIndex].color;// ?? color(0,0,0);
-                    let color2 = magmaGradient[nextColorIndex].color;// ?? color(255,0,255);
-                    let _color = lerpColor(color1, color2, lerpFactor);
-                    // grab one of the two colors at random
-                    //let _color = random() > 0.5 ? color1 : color2;
+                    break;
+                case COLOR_MODE_RADIAL:
+                    maxDist = min(width, height) / 2;
+                    maxDelay = maxDist * animDelay;
+                    for (let hex of hexagons) {
+                        let d = dist(target.x, target.y, hex.x, hex.y);
+                        let delay = map(d, 0, maxDist, 0, maxDelay);
+                        let colorTime = (frameCount - delay) % maxDelay;
+                        let hue = map(colorTime, 0, maxDelay, 0, 360);
+                        hex.color = color(hue, 80, 100);
+                    }
+                    break;
+                case COLOR_MODE_GREYSCALE:
+                    maxDist = min(width, height) / 2;
+                    for (let hex of hexagons) {
+                        let d = dist(target.x, target.y, hex.x, hex.y);
+                        let lightness = map(d, 0, maxDist, 100, 0);
+                        hex.color = color(0, 0, lightness);
+                    }
+                    break;
+                case COLOR_MODE_BLACK:
+                    for (let hex of hexagons) {
+                        hex.color = color(0, 0, 0);
+                    }
+                    break;
+                case COLOR_MODE_MAGMA:
+                    maxDist = min(width, height) / 2;
+                    for (let hex of hexagons) {
+                        let d = dist(target.x, target.y, hex.x, hex.y);
+                        if(d < 0.0001){
+                            d = 0.0001;
+                        }
+                        // NOTE: this generates a color by interpolating between the color stops in the magmaGradient array
+                        let stopPos = map(d, 0, maxDist, 0, 1);
+                        let colorIndex = floor(stopPos * (magmaGradient.length - 1));
+                        let nextColorIndex = min(colorIndex + 1, magmaGradient.length - 2);
+                        let lerpFactor = stopPos * (magmaGradient.length - 1) - colorIndex;
+                        lerpFactor = constrain(lerpFactor, 0, 1);
+                        if(colorIndex < 0 || colorIndex >= magmaGradient.length || nextColorIndex < 0 || nextColorIndex >= magmaGradient.length){
+                            // set to sensible defaults
+                            colorIndex = magmaGradient.length - 1;
+                            nextColorIndex = magmaGradient.length - 2;
+                        }
+                        let color1 = magmaGradient[colorIndex].color;// ?? color(0,0,0);
+                        let color2 = magmaGradient[nextColorIndex].color;// ?? color(255,0,255);
+                        let _color = lerpColor(color1, color2, lerpFactor);
+                        // grab one of the two colors at random
+                        //let _color = random() > 0.5 ? color1 : color2;
 
-                    // Ensure we're getting integer values for our colors, no floats
-                    _color.levels = _color.levels.map(Math.floor);
-                    hex.color = _color;
-                }
+                        // Ensure we're getting integer values for our colors, no floats
+                        _color.levels = _color.levels.map(Math.floor);
+                        hex.color = _color;
+                    }
+                    break;
             }
         }
 
         function windowResized() {
             resizeCanvas(windowWidth, windowHeight);
+            updateUI();
             createHexGrid(); // Recreate grid for new window size
         }
 
@@ -971,8 +981,9 @@
                 push();
                 translate(this.x, this.y);
                 fill(this.color);
-                //stroke(0);
-                noStroke();
+                stroke(255);
+                //noStroke(); 
+                strokeWeight(1);
                 beginShape();
                 for (let i = 0; i < TWO_PI; i += TWO_PI / 6) {
                     let x = this.size * cos(i);
