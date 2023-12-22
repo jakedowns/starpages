@@ -252,6 +252,7 @@
             draw();
         }
 
+        let prevHexSize = null;
         // infinity symbol animation progress
         let t = 0;
         function draw() {
@@ -333,8 +334,8 @@
             });
 
             // Redraw hexagons and animate colors
-            if (hexSize !== sliders['hexSize'].instance.value()) {
-                hexSize = sliders['hexSize'].instance.value();
+            if (hexSize !== prevHexSize) {
+                prevHexSize = hexSize;
                 createHexGrid(); // Recreate grid if size changes
             }
             //animDelay = delaySlider.value();
