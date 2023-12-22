@@ -33,11 +33,13 @@
         const TARGET_MODE_INFINITY = 1;
         const TARGET_MODE_CENTER = 2;
 
-        window.appstate = {
+        window._appstate = {
+            clearBg: true,
             // public params
             isUiVisible: true,
             doAnimateColors: 0,
             splatScale: 0.1,
+            jitterSplatRotation: 0,
             sortDrawOrder: 0,
             drawHexes: 1,
             reverseDrawOrder: 0,
@@ -76,6 +78,22 @@
             discardedHexes: [],
             isFullscreen: false,
         }
+
+        window.appstate = new Proxy(window._appstate, {
+            get: function(target, property) {
+                if (property in target) {
+                    return target[property];
+                } else {
+                    console.warn(`Attempted to access undefined property: ${property}`);
+                    return undefined;
+                }
+            },
+            set: function(target, property, value) {
+                target[property] = value;
+                return true;
+            }
+        });
+
 
         // Create a capturer that exports a WebM video
         var capturer = new CCapture( { format: 'webm', verbose: false, fps: 60 } );
@@ -154,7 +172,7 @@
                 uiContainer.elt.classList.toggle(className, classConfig[className]);
             }
 
-            uiDrawerTab.style('left', appstate.isUiVisible ? '-20px' : '0px');
+            uiDrawerTab.style('left', appstate.isUiVisible ? '-50px' : '0px');
 
             if(!appstate.cursorIsHidden){
                 cursor();
@@ -204,10 +222,9 @@
                             // could call onButton()
                         }
                     }
-                    // update all slider values by invoking their pre-.bind()ed onSlide function
                     for (let key in sliders) {
                         if (sliders.hasOwnProperty(key)) {
-                            sliders[key].onSlide();
+                            handleSliderInput(sliders[key], key, appstate[key]);
                         }
                     }
                 }
@@ -269,6 +286,20 @@
             countdownText.style('transform', 'translate(-50%, -50%)');
         }
 
+        const handleSliderInput = function(slider, key, value){
+            slider.action(value)
+            if(value != slider.instance.value()){
+                //slider.instance.value(value);
+                console.warn('bi-directional failure',{
+                    actual: slider.instance.value(),
+                    expected: value
+                });
+            }
+            slider.labelP5E.html(slider.label + ` (${value})`);
+            
+            sdb();
+        }
+
         function createUI(){
             createCountdownElement();
             // Create UI container
@@ -308,11 +339,11 @@
             uiDrawerTab.class('transition-all duration-500 ease-in-out transform');
             uiDrawerTab.style('position', 'absolute');
             uiDrawerTab.style('border', '1px solid white');
-            uiDrawerTab.style('width', '20px');
+            uiDrawerTab.style('width', '50px');
             uiDrawerTab.style('height', '100vh');
             uiDrawerTab.style('display', 'block');
             uiDrawerTab.style('top', '0');
-            uiDrawerTab.style('left', '-20px');
+            uiDrawerTab.style('left', '-50px');
             uiDrawerTab.style('background-color', 'rgba(0,0,0,0.5)');
             uiDrawerTab.style('backdrop-filter', 'blur(10px)');
             uiDrawerTab.style('cursor', 'pointer');
@@ -356,32 +387,45 @@
                 if(button.key === 'toggleRecording'){
                     return;
                 }
-                saveToLocalStorage();
+                
                 if(button.key === 'reset'){
                     return;
                 }
-                console.warn('handle button press',{
-                    label: button.label,
-                    key: button.key,
-                    appstate_val: appstate[button.key]
-                })
+                // console.warn('handle button press',{
+                //     label: button.label,
+                //     key: button.key,
+                //     appstate_val: appstate[button.key]
+                // })
                 button.instance.elt.innerText = (`${button.label} (${appstate[button.key]})`)
+                requestIdleCallback(()=>{
+                    saveToLocalStorage();
+                })
             }
 
             buttons = {
-                'sortDrawOrder': {
-                    label: 'Toggle Sort Draw Order',
-                    key: 'sortDrawOrder',
-                    action: function () {
-                        console.warn('action: sortDrawOrder', appstate.sortDrawOrder)
-                        appstate.sortDrawOrder = !appstate.sortDrawOrder;
-                    }
+                'isUiVisible': {
+                    key: 'isUiVisible',
+                    label: 'Hide UI', 
+                    action: function () { appstate.isUiVisible = !appstate.isUiVisible; updateUI(); }
+                },
+                'clearBg': {
+                    key: 'clearBg',
+                    label: 'Clear Background', 
+                    action: function () { appstate.clearBg = !appstate.clearBg; }
                 },
                 'animateMinMax': {
                     label: 'Toggle MinMax Animation',
                     key: 'animateMinMax',
                     action: function () {
                         appstate.animateMinMax = !appstate.animateMinMax;
+                    }
+                },
+                'sortDrawOrder': {
+                    label: 'Toggle Sort Draw Order',
+                    key: 'sortDrawOrder',
+                    action: function () {
+                        console.warn('action: sortDrawOrder', appstate.sortDrawOrder)
+                        appstate.sortDrawOrder = !appstate.sortDrawOrder;
                     }
                 },
                 'myColorMode': {
@@ -391,24 +435,27 @@
                         appstate.myColorMode = (appstate.myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE; computedColorsOnce = 0;
                     }
                 },
+                'jitterSplatRotation': {
+                    label: 'Toggle Jitter Splat Rotation',
+                    key: 'jitterSplatRotation',
+                    action: function () {
+                        appstate.jitterSplatRotation = !appstate.jitterSplatRotation;
+                    }
+                },
                 'drawHexes': {
                     key: 'drawHexes',
-                    label: 'Toggle Hexes', 
+                    label: 'Polys?', 
                     action: function () { appstate.drawHexes = !appstate.drawHexes; }
                 },
                 'drawSplats': {
                     key: 'drawSplats',
-                    label: 'Toggle Splats', 
+                    label: 'Splats?', 
                     action: function () { appstate.drawSplats = !appstate.drawSplats; }
                 },
-                'isUiVisible': {
-                    key: 'isUiVisible',
-                    label: 'Toggle UI', 
-                    action: function () { appstate.isUiVisible = !appstate.isUiVisible; updateUI(); }
-                },
+                
                 'reverseDrawOrder': {
                     key: 'reverseDrawOrder',
-                    label: 'Toggle Draw Order', 
+                    label: 'Reverse Draw Order', 
                     action: function () { appstate.reverseDrawOrder = !appstate.reverseDrawOrder; }
                 },
                 'currentTargetMode': {
@@ -472,49 +519,65 @@
             _canvas = createCanvas(windowWidth, windowHeight);
             colorMode(HSB, 360, 100, 100); // Using HSB color mode for easier color transitions
 
-            const onSlide = function(){
-                //console.log('onSlide', this.label, this.instance.value());
-                this.labelP5E.html(this.label + ` (${this.instance.value()})`);
-            }
+            /*
+            ********************
+            *                  *
+            *     SLIDERS      *
+            *                  *
+            ********************
+            */
+
+            
 
             sliders = {
                 'splatScale': { 
-                    label: 'Splat Scale', min: 0.01, max: .2, step: 0.001, 
+                    label: 'Splat Scale', min: 0.01, max: 1, step: 0.001, 
                     value: appstate.splatScale, 
                     action: function(val) { 
-                        appstate.splatScale = val; sdb(); onSlide.call(this) 
+                        //console.warn('splatScale',val);
+                        appstate.splatScale = parseFloat(val); 
+                         
+                        
+                    
                     } },
 
                 'hexSize': { 
                     label: 'Hexagon Size', min: 10, max: 100, step:2, 
                     value: 30, 
                     action: function(val) { 
-                        appstate.hexSize = val; sdb(); onSlide.call(this) } },
+                        if(typeof val === 'undefined'){
+                            val = appstate?.hexSize ?? 30;
+                        }
+                        appstate.hexSize = val; 
+                    } },
 
                 'effectiveRadiusScale': { 
                     label: 'Target Radius Scale', min: -3, max: 3, step: 0.01, 
                     
                     value: appstate.effectiveRadiusScale, 
                     action: function(val) { 
-                        appstate.effectiveRadiusScale = val; sdb(); onSlide.call(this) } },
+                        appstate.effectiveRadiusScale = val; 
+                    } },
 
                 'animDelay': { 
                     label: 'Animation Delay', min: 10, max: 100, 
                     value: appstate.animDelay, 
                     action: function(val) { 
-                        appstate.animDelay = val; sdb(); onSlide.call(this) } },
+                        appstate.animDelay = val; 
+                    } },
 
                 'minRadScale': { 
                     label: 'Min Radius', min: -1, max: 1, step: 0.01, 
                     value: appstate.minRadScale ?? 0, 
                     action: function(val) { 
-                        appstate.minRadScale = val; sdb(); onSlide.call(this) } },
+                        appstate.minRadScale = val; 
+                    } },
 
                 'maxRadScale': { 
                     label: 'Max Radius', min: -1, max: 1, step: 0.01, 
                     value: appstate.maxRadScale ?? 1, 
                     action: function(val) { 
-                        appstate.maxRadScale = val; sdb(); onSlide.call(this) } }
+                        appstate.maxRadScale = val; } }
             };
 
             // before we load from localStorage, for each thing (key) in sliders,
@@ -527,10 +590,8 @@
 
             console.warn({editor_defaults})
 
-            //let sliderY = buttonY + 10; // start from the max y value of the buttons
             for (let key in sliders) {
                 let label = createDiv(sliders[key].label);
-                //label.position(10, sld.y - 20);
                 label.style('position', 'relative');
                 label.style('display', 'block');
                 
@@ -539,16 +600,13 @@
                 sliders[key].labelP5E = label;
 
                 let sld = createSlider(sliders[key].min, sliders[key].max, sliders[key].value, sliders[key].step ?? 0.01);
-                //sld.position(10, sliderY);
                 sld.style('position', 'relative');
                 sld.style('display', 'block');
-                sld.input(() => sliders[key].action(sld.value()));
+                sld.input((e) => {
+                    handleSliderInput(sliders[key],key,e.target.value)
+                });
                 sliders[key].instance = sld;
                 sld.parent(uiInner);
-            
-                sliders[key].onSlide = onSlide.bind(sliders[key]);
-
-                //sliderY += 40;
             }
             console.warn('sliders',sliders)
         }
@@ -559,7 +617,7 @@
                 capturer.save();
                 appstate.recording = false;
                 // change label to start recording
-                this.html('Start Recording');
+                buttons['toggleRecording'].instance.html('Start Recording');
 
                 clearInterval(countdownInterval);
                 countdownText.hide();
@@ -568,7 +626,7 @@
             }
             capturedFramesDisplay.style('display', 'none');
             // change label to stop recording
-            this.html('Stop Recording');
+            buttons['toggleRecording'].instance.html('Stop Recording');
             countdown_i = COUNTDOWN_START;
             let countdownInterval = setInterval(() => {
                 countdown_i--;
@@ -657,7 +715,9 @@
                 appstate.target.y = height / 2;
             }
 
-            background(0);
+            if(appstate.clearBg){
+                background(0);
+            }
 
             capturedFramesDisplay.html(appstate.capturedFrames);
 
@@ -680,7 +740,7 @@
                 let d = dist(appstate.target.x, appstate.target.y, hex.x, hex.y);
                 //if (d < effectiveRadius) {
                     let sizeFactor = map(d, 0, effectiveRadius, appstate.maxRadScale, appstate.minRadScale); // Scale factor: 2 at center, 1 at edge
-                    hex.targetSize = appstate.hexSize * appstate.sizeFactor;
+                    hex.targetSize = appstate.hexSize * sizeFactor;
                 // } else {
                 //     hex.targetSize = hexSize;
                 // }
@@ -720,12 +780,36 @@
 
         function createHexGrid() {
             let newHexagons = [];
-            const {hexSize,rows,cols} = appstate;
+            let {hexSize,rows,cols} = appstate;
+            // if(!hexSize || !rows || !cols){
+            //     console.warn('missing hexSize, rows, or cols',{hexSize,rows,cols});
+            //     return;
+            // }
             let hexHeight = sqrt(3) * hexSize;
             let newCols = int(width / (1.5 * hexSize));
+            if(typeof cols === 'undefined'){
+                cols = newCols;
+                appstate.cols = cols;
+            }
             let newRows = int(height / hexHeight);
+            if(typeof rows === 'undefined'){
+                rows = newRows;
+                appstate.rows = rows;
+            }
             let offsetRow = floor((rows - newRows) / 2);
             let offsetCol = floor((cols - newCols) / 2);
+
+            // console.warn({
+            //     hexSize,
+            //     rows,
+            //     cols,
+            //     newCols,
+            //     newRows,
+            //     offsetRow,
+            //     offsetCol
+            // })
+            // debugger;
+
             for (let row = 0; row < newRows; row++) {
                 for (let col = 0; col < newCols; col++) {
                     let x = 1.5 * (col + offsetCol) * hexSize + hexSize;
@@ -762,10 +846,10 @@
                     }
                 }
                 // we should keep a copy of the "discarded" cells so we can animate them out (let them scale to zero before removing them)
-                appstate.discardedHexes = appstate.discardedHexes.concat(appstate.hexagons.filter(h => !newHexagons.includes(h)));
-                for (let hex of appstate.discardedHexes) {
-                    hex.targetSize = 0;
-                }
+                // appstate.discardedHexes = appstate.discardedHexes.concat(appstate.hexagons.filter(h => !newHexagons.includes(h)));
+                // for (let hex of appstate.discardedHexes) {
+                //     hex.targetSize = 0;
+                // }
             }
             appstate.hexagons = newHexagons;
             appstate.cols = newCols;
@@ -950,7 +1034,7 @@
 
         function windowResized() {
             resizeCanvas(windowWidth, windowHeight);
-            updateUI();
+            //updateUI();
             createHexGrid(); // Recreate grid for new window size
         }
 
