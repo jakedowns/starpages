@@ -20,6 +20,44 @@
             padding: 0;
             overflow: hidden;
         }
+        /* custom tailwind.css code: for
+        
+        transition-all
+        l-0
+        -l-100%
+        duration-500
+        ease-in-out
+        transform
+        translate-x-full
+        */
+        .transition-all {
+            transition-property: all;
+            transition-timing-function: ease;
+            transition-duration: 150ms;
+        }
+        .l-0 {
+            left: 0;
+        }
+        .-l-100\% {
+            margin-left: -100%;
+        }
+        .duration-500 {
+            transition-duration: 500ms;
+        }
+        .ease-in-out {
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .transform {
+            transform: translateX(0);
+            will-change: transform;
+        }
+        .translate-x-full {
+            transform: translateX(100%);
+        }
+        .\-translate\-x\-full {
+            transform: translateX(-100%);
+        }
+
     </style>
 </head>
 
@@ -36,9 +74,10 @@
         // need to run animateColors once to compute the colors
         let computedColorsOnce = 0; 
         // Slider Values
-        let splatScale = 0.01;
+        let splatScale = 0.1;
 
         let drawHexes = 1;
+        let sortDrawOrder = 0;
         let reverseDrawOrder = 0;
         let drawSplats = 1;
         let useMouseTarget = 1;
@@ -71,9 +110,11 @@
         const COLOR_MODE_HORIZONTAL = 1;
         const COLOR_MODE_RADIAL = 2;
         const COLOR_MODE_GREYSCALE = 3;
-        const COLOR_MODE_MAGMA = 4;
-        const MAX_COLOR_MODES_AVAILABLE = 5;
-        let myColorMode = COLOR_MODE_MAGMA;
+        const COLOR_MODE_BLACK = 4
+        const COLOR_MODE_MAGMA = 5;
+        const COLOR_MODE_CUSTOM = 6;
+        const MAX_COLOR_MODES_AVAILABLE = Math.max(COLOR_MODE_VERTICAL, COLOR_MODE_HORIZONTAL, COLOR_MODE_RADIAL, COLOR_MODE_GREYSCALE, COLOR_MODE_BLACK, COLOR_MODE_MAGMA, COLOR_MODE_CUSTOM);
+        let myColorMode = COLOR_MODE_BLACK;
 
         // Add a button to switch the color animation mode
         let colorModeButton;
@@ -98,16 +139,16 @@
         let sliders = {}
 
         function keyPressed() {
+            if (key === 'Escape') {
+                if (isFullscreen) {
+                    fullscreen(false);
+                    isFullscreen = false;
+                }
+            }
             if (key === '/') {
                 // Toggle UI visibility
                 isUiVisible = !isUiVisible;
-                if (isUiVisible) {
-                    uiContainer.style('display', 'block');
-                    cursor();
-                } else {
-                    uiContainer.style('display', 'none');
-                    noCursor();
-                }
+                updateUI();
 
                 // Toggle fullscreen mode
                 isFullscreen = !isFullscreen;
@@ -115,7 +156,71 @@
             }
         }
 
+        function updateUI(){
+            let classConfig = {
+                '-translate-x-full': isUiVisible
+            };
+
+            for (let className in classConfig) {
+                uiContainer.elt.classList.toggle(className, classConfig[className]);
+            }
+
+            if (isUiVisible) {
+                cursor();
+            } else {
+                noCursor();
+            }
+        }
+
+        function loadFromLocalStorage(){
+            let data = localStorage.getItem('hexagons');
+            try {
+                if(data){
+                    data = JSON.parse(data);
+                    splatScale = data.splatScale;
+                    drawHexes = data.drawHexes;
+                    sortDrawOrder = data.sortDrawOrder;
+                    reverseDrawOrder = data.reverseDrawOrder;
+                    drawSplats = data.drawSplats;
+                    useMouseTarget = data.useMouseTarget;
+                    useInfinityTarget = data.useInfinityTarget;
+                    animateMinMax = data.animateMinMax;
+                    hexSize = data.hexSize;
+                    effectiveRadiusScale = data.effectiveRadiusScale;
+                    animDelay = data.animDelay;
+                    maxRadScale = data.maxRadScale;
+                    minRadScale = data.minRadScale;
+                    myColorMode = data.myColorMode;
+                    jitterSplatRotation = data.jitterSplatRotation;
+                }
+            } catch (error) {
+                console.error('Error parsing data from local storage:', error);
+            }
+        }
+
+        function saveToLocalStorage(){
+            let data = {
+                splatScale: splatScale,
+                drawHexes: drawHexes,
+                sortDrawOrder: sortDrawOrder,
+                reverseDrawOrder: reverseDrawOrder,
+                drawSplats: drawSplats,
+                useMouseTarget: useMouseTarget,
+                useInfinityTarget: useInfinityTarget,
+                animateMinMax: animateMinMax,
+                hexSize: hexSize,
+                effectiveRadiusScale: effectiveRadiusScale,
+                animDelay: animDelay,
+                maxRadScale: maxRadScale,
+                minRadScale: minRadScale,
+                myColorMode: myColorMode,
+                jitterSplatRotation: jitterSplatRotation
+            };
+            localStorage.setItem('hexagons', JSON.stringify(data));
+        }
+
         function setup() {
+            loadFromLocalStorage();
             makeABlurSprite();
 
             // derrived from matplotlib magma color scheme
@@ -135,6 +240,10 @@
             // Create UI container
             uiContainer = createDiv();
             uiContainer.id('ui-container');
+
+            // add classnames
+            uiContainer.class('transition-all duration-500 ease-in-out transform');
+
             uiContainer.style('position', 'absolute');
             uiContainer.style('width', '300px');
             uiContainer.style('height', '100vh');
@@ -144,24 +253,55 @@
             uiContainer.style('background-color', 'rgba(0,0,0,0.5)');
             uiContainer.style('backdrop-filter', 'blur(10px)');
 
-            let buttons = [
-                { label: 'Toggle MinMax Animation', action: () => { animateMinMax = !animateMinMax; } },
-                { label: 'Switch Color Mode', action: () => { myColorMode = (myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE; computedColorsOnce = 0; } },
-                { label: 'Toggle Hexes', action: () => { drawHexes = !drawHexes; } },
-                { label: 'Toggle Splats', action: () => { drawSplats = !drawSplats; } },
-                //{ label: 'Toggle UI', action: () => { isUiVisible = !isUiVisible; } },
-                { label: 'Toggle Draw Order', action: () => { reverseDrawOrder = !reverseDrawOrder; } },
-                { label: 'Toggle Mouse Target', action: () => { useMouseTarget = !useMouseTarget; } },
-                { label: 'Toggle Infinity Target', action: () => { useInfinityTarget = !useInfinityTarget; } },
-                { label: 'Start Recording', action: toggleRecording }
-            ];
+            // add a little TAB to the left side of the screen
+            // that you can click when the UI is hidden
+            let tab = createDiv();
+            tab.id('ui-tab');
+            tab.class('transition-all duration-500 ease-in-out transform');
+            tab.style('position', 'absolute');
+            tab.style('width', '20px');
+            tab.style('height', '100px');
+            tab.style('display', 'block');
+            tab.style('top', 'calc(50vh - 50px)');
+            tab.style('left', '0');
+            tab.style('background-color', 'rgba(0,0,0,0.5)');
+            tab.style('backdrop-filter', 'blur(10px)');
+            tab.style('cursor', 'pointer');
+            tab.style('z-index', '1000');
+            tab.style('border-radius', '10px');
+            tab.mousePressed(() => {
+                isUiVisible = !isUiVisible;
+                updateUI();
+            });
+
+            function act(cb){
+                return function(){
+                    cb();
+                    saveToLocalStorage();
+                }
+            }
+            let buttons = {
+                'ToggleMinMaxAnimation': { label: 'Toggle MinMax Animation', action: act(() => { animateMinMax = !animateMinMax; }) },
+                'SwitchColorMode': { label: 'Switch Color Mode', action: act(() => { 
+                    myColorMode = (myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE; computedColorsOnce = 0; 
+                    buttons['SwitchColorMode'].instance.html(`Switch Color Mode (${myColorMode})`);
+                }) },
+                'ToggleHexes': { label: 'Toggle Hexes', action: act(() => { drawHexes = !drawHexes; }) },
+                'ToggleSplats': { label: 'Toggle Splats', action: act(() => { drawSplats = !drawSplats; }) },
+                'ToggleUI': { label: 'Toggle UI', action: act(() => { isUiVisible = !isUiVisible; updateUI(); }) },
+                'ToggleDrawOrder': { label: 'Toggle Draw Order', action: act(() => { reverseDrawOrder = !reverseDrawOrder; }) },
+                'ToggleMouseTarget': { label: 'Toggle Mouse Target', action: act(() => { useMouseTarget = !useMouseTarget; }) },
+                'ToggleInfinityTarget': { label: 'Toggle Infinity Target', action: act(() => { useInfinityTarget = !useInfinityTarget; }) },
+                'StartRecording': { label: 'Start Recording', action: toggleRecording }
+            };
 
             let buttonY = 20;
-            for (let button of buttons) {
-                let btn = createButton(button.label);
+            for (let key in buttons) {
+                let btn = createButton(buttons[key].label);
                 btn.position(10, buttonY);
-                btn.mousePressed(button.action);
+                btn.mousePressed(buttons[key].action);
                 btn.parent(uiContainer);
+                buttons[key].instance = btn;
                 buttonY += 40;
             }
 
@@ -175,16 +315,28 @@
             capturedFramesDisplay.style('right', '20px');
             capturedFramesDisplay.style('top', '20px');
             capturedFramesDisplay.style('text-shadow', '0px 0px 10px black');
+            capturedFramesDisplay.style('display', 'none');
 
             _canvas = createCanvas(windowWidth, windowHeight);
             colorMode(HSB, 360, 100, 100); // Using HSB color mode for easier color transitions
+
+            // sdb === save debounced (Calls saveToLocalStorage every 2 seconds)
+            function debounce(func, delay) {
+                let debounceTimer;
+                return function() {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(func, delay);
+                }
+            }
+            const sdb = debounce(saveToLocalStorage, 2000);
+
             sliders = {
-                'splatScale': { label: 'Splat Scale', min: 0.01, max: .2, step: 0.001, value: splatScale, action: (val) => { splatScale = val; } },
-                'hexSize': { label: 'Hexagon Size', min: 10, max: 100, value: 30, action: (val) => { hexSize = val; } },
-                'effectiveRadiusScale': { label: 'Target Radius Scale', min: 0.01, max: 3, step: 0.01, value: effectiveRadiusScale, action: (val) => { effectiveRadiusScale = val; } },
-                'animDelay': { label: 'Animation Delay', min: 10, max: 100, value: animDelay, action: (val) => { animDelay = val; } },
-                'minRad': { label: 'Min Radius', min: -1, max: 1, step: 0.01, value: minRadScale ?? 0, action: (val) => { minRadScale = val; } },
-                'maxRad': { label: 'Max Radius', min: -1, max: 1, step: 0.01, value: maxRadScale ?? 1, action: (val) => { maxRadScale = val; } }
+                'splatScale': { label: 'Splat Scale', min: 0.01, max: .2, step: 0.001, value: splatScale, action: (val) => { splatScale = val; sdb(); } },
+                'hexSize': { label: 'Hexagon Size', min: 10, max: 100, step:2, value: 30, action: (val) => { hexSize = val; sdb(); } },
+                'effectiveRadiusScale': { label: 'Target Radius Scale', min: -3, max: 3, step: 0.01, value: effectiveRadiusScale, action: (val) => { effectiveRadiusScale = val; sdb(); } },
+                'animDelay': { label: 'Animation Delay', min: 10, max: 100, value: animDelay, action: (val) => { animDelay = val; sdb(); } },
+                'minRad': { label: 'Min Radius', min: -1, max: 1, step: 0.01, value: minRadScale ?? 0, action: (val) => { minRadScale = val; sdb(); } },
+                'maxRad': { label: 'Max Radius', min: -1, max: 1, step: 0.01, value: maxRadScale ?? 1, action: (val) => { maxRadScale = val; sdb(); } }
             };
 
             let sliderY = buttonY + 10; // start from the max y value of the buttons
@@ -218,6 +370,7 @@
                 
                 return;
             }
+            capturedFramesDisplay.style('display', 'none');
             // change label to stop recording
             this.html('Stop Recording');
 
@@ -247,6 +400,7 @@
 
         
         function startRecording(){
+            capturedFramesDisplay.style('display', 'block');
             capturer.start();
             recording = true;
             frameCount = 0;
@@ -299,7 +453,7 @@
                 target.y = height / 2;
             }
 
-            background(10);
+            background(0);
 
             capturedFramesDisplay.html(capturedFrames);
 
@@ -329,11 +483,13 @@
             }
 
             // sort hexagons by distance from target (furthest should be drawn first so they're at the bottom)
-            hexagons.sort((a, b) => {
-                let distA = dist(target.x, target.y, a.x, a.y);
-                let distB = dist(target.x, target.y, b.x, b.y);
-                return reverseDrawOrder ? distA - distB : distB - distA;
-            });
+            if(sortDrawOrder){
+                hexagons.sort((a, b) => {
+                    let distA = dist(target.x, target.y, a.x, a.y);
+                    let distB = dist(target.x, target.y, b.x, b.y);
+                    return reverseDrawOrder ? distA - distB : distB - distA;
+                });
+            }
 
             // Redraw hexagons and animate colors
             if (hexSize !== prevHexSize) {
@@ -356,22 +512,60 @@
             }
         }
 
+        let discardedHexes = [];
+
 
         function createHexGrid() {
-            hexagons = [];
+            let newHexagons = [];
             let hexHeight = sqrt(3) * hexSize;
-            cols = int(width / (1.5 * hexSize));
-            rows = int(height / hexHeight);
-            for (let row = 0; row < rows; row++) {
-                for (let col = 0; col < cols; col++) {
-                    let x = 1.5 * col * hexSize + hexSize;
-                    let y = hexHeight * row;
-                    if (col % 2 === 1) {
+            let newCols = int(width / (1.5 * hexSize));
+            let newRows = int(height / hexHeight);
+            let offsetRow = floor((rows - newRows) / 2);
+            let offsetCol = floor((cols - newCols) / 2);
+            for (let row = 0; row < newRows; row++) {
+                for (let col = 0; col < newCols; col++) {
+                    let x = 1.5 * (col + offsetCol) * hexSize + hexSize;
+                    let y = hexHeight * (row + offsetRow);
+                    if ((col + offsetCol) % 2 === 1) {
                         y += hexHeight / 2;
                     }
-                    hexagons.push(new Hexagon(x, y, hexSize, row, col));
+                    let existingHex = hexagons.find(h => h.row === row + offsetRow && h.col === col + offsetCol);
+                    if (existingHex) {
+                        // If a hexagon already exists at this position, reuse it
+                        existingHex.selfTargetX = x;
+                        existingHex.selfTargetY = y;
+                        existingHex.targetSize = hexSize;
+                        newHexagons.push(existingHex);
+                    } else {
+                        // Otherwise, create a new hexagon
+                        newHexagons.push(new Hexagon(x, y, hexSize, row + offsetRow, col + offsetCol));
+                    }
                 }
             }
+            // If we're increasing hexSize, average the colors/sizes of the old hexagons
+            if (newHexagons.length < hexagons.length) {
+                let oldHexagons = hexagons.filter(h => !newHexagons.includes(h));
+                for (let oldHex of oldHexagons) {
+                    let nearbyNewHexes = newHexagons.filter(h => dist(h.x, h.y, oldHex.x, oldHex.y) < hexSize);
+                    if (nearbyNewHexes.length > 0) {
+                        let avgColor = nearbyNewHexes.reduce((acc, h) => p5.Vector.add(acc, color(h.color)), createVector(0, 0, 0)).div(nearbyNewHexes.length);
+                        let avgSize = nearbyNewHexes.reduce((acc, h) => acc + h.size, 0) / nearbyNewHexes.length;
+                        for (let newHex of nearbyNewHexes) {
+                            newHex.color = color(avgColor.x, avgColor.y, avgColor.z);
+                            newHex.size = 0;
+                            newHex.targetSize = avgSize;
+                        }
+                    }
+                }
+                // we should keep a copy of the "discarded" cells so we can animate them out (let them scale to zero before removing them)
+                discardedHexes = discardedHexes.concat(hexagons.filter(h => !newHexagons.includes(h)));
+                for (let hex of discardedHexes) {
+                    hex.targetSize = 0;
+                }
+            }
+            hexagons = newHexagons;
+            cols = newCols;
+            rows = newRows;
         }
 
         function drawSplatForHex(hex){
@@ -386,7 +580,7 @@
             let TINT_HUE_QUANTIZATION = 2;
             let hue = map(hex.row, 0, rows, 0, 360);
             // push the hue foward constantly and make sure it wraps around
-            hue = (hue + (frameCount * 2)) % 360;
+            hue = (hue + (frameCount * (animDelay*.1))) % 360;
             hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
             let colorKey = `${hue}`;
             if(!tintedCache[colorKey]){
@@ -441,6 +635,24 @@
                     hex.draw();
                 }
             }
+            // do the same for discardedHexes
+            let toRemove = [];
+            for (let hex of discardedHexes) {
+                hex.updateSize();
+                // if it's scaled to zero, flag for removal
+                if(hex.size < 0.001){
+                    toRemove.push(hex);
+                }
+                if(drawSplats){
+                    drawSplatForHex(hex)
+                }
+                if(drawHexes){
+                    // draw the bestagon
+                    hex.draw();
+                }
+            }
+            // remove the flagged hexes
+            discardedHexes = discardedHexes.filter(h => !toRemove.includes(h));
         }
 
         function animateColors() {
@@ -484,6 +696,10 @@
                     let lightness = map(d, 0, maxDist, 100, 0);
                     hex.color = color(0, 0, lightness);
                 }
+            } else if(myColorMode === COLOR_MODE_BLACK){
+                for (let hex of hexagons) {
+                    hex.color = color(0, 0, 0);
+                }
             } else if(myColorMode === COLOR_MODE_MAGMA){
                 let maxDist = min(width, height) / 2;
                 for (let hex of hexagons) {
@@ -522,9 +738,11 @@
 
         class Hexagon {
             constructor(x, y, size, row, col) {
-                this.x = x;
-                this.y = y;
-                this.size = size;
+                this.x = windowWidth / 2;
+                this.y = windowHeight / 2;
+                this.selfTargetX = x;
+                this.selfTargetY = y; // Store the target position
+                this.size = 0;
                 this.targetSize = size; // New target size property
                 this.row = row;
                 this.col = col; // Store the column
@@ -535,6 +753,8 @@
             updateSize(){
                 // Lerp the size towards the target size
                 this.size = lerp(this.size, this.targetSize, LERP_FACTOR);
+                this.x = lerp(this.x, this.selfTargetX, LERP_FACTOR);
+                this.y = lerp(this.y, this.selfTargetY, LERP_FACTOR);
             }
 
             draw() {
