@@ -14,7 +14,16 @@
 
 const testOpenAIServer = "http://127.0.0.1:4001/";
 
+
+
+
+
+// END WASM
+
 const changelog = [
+    ["12/19/23",`
+    adding WASM support
+    `],
     [
         "12.7.23",
 `- working on refactoring / cleanup to widget rendering system
@@ -1011,6 +1020,14 @@ class System {
         return new theClass(...Array.from(arguments).slice(1))
     }
     invoke(name){
+        if(name?.includes?.(".mp4")){
+            return system.registerWidgetInstance(new VideoPlayerWidget(name));
+        }
+        if(name?.includes?.("://")){
+            return system.registerWidgetInstance(new iFrameWidget(name));
+        }
+
+
         let launched = -2;
         if(typeof InvokableCommands[name] === 'string'){
             launched = this.tryInvokeHandlerForUri(name);
@@ -3988,6 +4005,29 @@ class StickyNoteWidget extends Widget {
         text(this.text, tpx,tpy,tsx,tsy)
     }
 }
+
+class ClientInfoWidget extends Widget {
+    results = {}
+    created(){
+        //console.warn("client info widget create!");
+        fetch("https://api.ipify.org?format=json")
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                this.results = data;
+            })
+            .catch(error => console.error('Error:', error));
+    }
+    onDraw(){
+        strokeWeight(10);
+        stroke("limegreen");
+        fill("brown");
+        rect(0,0,100,100);
+        fill("black")
+        text("Client Info Widget!"+this?.results?.ip, 0, 0);
+    }
+}
+
 class WeatherWidget extends Widget {
     // TODO: move this stuff to a backing WeatherDataView class
     // for now inline the props
@@ -12482,6 +12522,14 @@ const InvokableCommands = {
     ["Play DJ Shadow Nobody Speak ft. Run The Jewels RTJ"](){
         return "https://www.youtube.com/watch?v=NUC2EQvdzmY?width=640&height=480";
     },
+    ["today is a new day"](){
+        responsiveVoice.speak(`
+            a chance to be, how you want to be
+`, "Australian Female", {})
+    },
+    ["you are getting sleepy"](){
+        responsiveVoice.speak("you are getting sleepy, very sleepy", "Australian Female", {})
+    },
     // TODO: the suggestion should show as "Play Aesop Rock - Mindful Solutionism"
     ["dehydrated onion dip"](){
         return "https://www.youtube.com/watch?v=T7jH-5YQLcE&width=800&height=600";
@@ -12607,7 +12655,9 @@ const InvokableCommands = {
     ["new work flow"](){},
 
     ["Set Command Icon"](){},
-    ["New Icon"](){},
+    ["New Icon"](){
+        system.invoke("https://www.piskelapp.com/p/create/sprite");
+    },
     ["open photopea"]:"https://www.photopea.com/",
     ["open piskel"]:"new_pixel_art",
     // you don't have to invent something if someone has iframes and import/export already
@@ -13128,16 +13178,24 @@ const InvokableCommands = {
 
     },
 
+    "client info"(){
+        // system.newWidget(ClientInfoWidget)
+
+        system.registerWidget(new ClientInfoWidget());
+    },
+
     "check the weather":"check the forecast",
     "whats it like outside":"check the forecast",
     "check the forecast"(){
-
+        system.registerWidget(new WeatherWidget());
     },
 
     "what do i have going on today?":"check my calendar",
     
-    "new shader graph"(){},
-    "new shadertoy shader"(){},
+    "new shader": "https://shaderfrog.com/2/editor/create/three",
+    "https://shaderfrog.com/2/editor/create/three": RES,
+    //"new shader graph"(){},
+    //"new shadertoy shader"(){},
     "browse shadertoy"(){},
     "favorite shaders"(){},
     "new sim city"(){},
@@ -13292,6 +13350,7 @@ const InvokableCommands = {
         system.dashboard.closeAllWidgets();
     },
     ["Fresh Start"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
+    ["animation vs physics - alan becker"]: "https://www.youtube.com/watch?v=ErMSHiQRnc8",
     ["Close All"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
     ["Clear"](){ InvokableCommands["CLOSE_ALL_WIDGETS"](); },
     ["TODO: make options sorted by usage, weighted default rankings"](){
@@ -13304,8 +13363,19 @@ const InvokableCommands = {
     ["stumbleupon"](){
         system.todo("show some random content!")
     },
+    "<3":"i love you",
+    ["i love you"](){
+        const res = "i love you too, user session placeholder name zero zero one"
+        responsiveVoice.speak(res);
+        system.notify(res);
+        setTimeout(()=>{
+            system.playSuccessTone
+        },333)
+    },
     ["Say..."](){
-        system.todo(prompt("What would you like to say?"))
+        let value = prompt("What would you like to say?");
+        responsiveVoice.speak(value)
+        system.todo(value)
     },
     // TODO: make aliases and weighting/ranking easier
     ["Clear Dashboard"](){ InvokableCommands["Close All Widgets"]() },
@@ -14059,10 +14129,41 @@ const doAfterWaitReturnTrue = function(check,timeout=1000,interval=100){
     })
 }
 
+function setupWASM(){
+    // WASM support
+    Module["onRuntimeInitialized"] = function() {
+        const a1 = 5;
+        const b1 = 10;
+        const result1 = Module._add(a1, b1);
+        console.log("L@@K: " + a1 + " + " + b1 + " = " + result1);
+
+        // Let's try it in the background!
+        const worker = new Worker('worker.js');
+        const worker2 = new Worker('worker.js');
+
+        // setup callbacks
+        // Receive results from the worker
+        worker.onmessage = function(e) {
+            console.warn('L@@K Worker result:', e.data);
+        };
+        worker2.onmessage = function(e) {
+            console.warn('L@@K Worker2 result:', e.data);
+        };
+
+        // Send data to the worker
+        worker.postMessage({ data: [40,2] });
+        worker2.postMessage({ data: [90,1900] });
+    };
+
+    // if the Module already initialized, call the callback
+    if (typeof Module !== 'undefined' && Module !== null && Module['onRuntimeInitialized']) {
+        Module['onRuntimeInitialized']();
+    }
+}
+
 // domready
 document.addEventListener('DOMContentLoaded', (event) => {
-    // TODO: await Peer to become available...
-
+    setupWASM();
     doAfterWaitReturnTrue(()=>typeof window?.Peer !== 'undefined').then(()=>{
         // call the server and try to establish a p2p webrtc connection with another client
         const peer = new Peer({key: 'your_api_key_here'});
@@ -14735,7 +14836,13 @@ class CmdPrompt extends Widget {
     getTimeStamp(){
         const currentDateTime = new Date();
         const formattedDate = `${currentDateTime.getMonth() + 1}/${currentDateTime.getDate()}/${currentDateTime.getFullYear()}`;
-        const formattedTime = `${currentDateTime.getHours().toString().padStart(2, '0')}:${currentDateTime.getMinutes().toString().padStart(2, '0')}:${currentDateTime.getSeconds().toString().padStart(2, '0')}`;
+        let hours = currentDateTime.getHours();
+        const minutes = currentDateTime.getMinutes().toString().padStart(2, '0');
+        const seconds = currentDateTime.getSeconds().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'pm' : 'am';
+        hours = hours % 12;
+        hours = hours ? hours : 12; // the hour '0' should be '12'
+        const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes}:${seconds} ${ampm}`;
         return `${formattedDate} ${formattedTime}`;
     }
 
@@ -16867,10 +16974,17 @@ function setupDefaults(){
                 // }
                 let result;
 
-                if(InvokableCommands[machineizedCmdName] === RES || InvokableCommands[machineizedCmdName] === RESOURCE){
+                if(baseInvokable?.includes?.(".mp4")){
+                    // video player widget
+                    return system.invoke(baseInvokable);
+                }
+
+                if(
+                    InvokableCommands[machineizedCmdName] === RES 
+                    || InvokableCommands[machineizedCmdName] === RESOURCE
+                ){
                     if(machineizedCmdName?.includes?.('.mp4')){
-                        console.warn('we found it')
-                        return system.registerWidgetInstance(new VideoPlayerWidget(cmdName));
+                        return system.invoke(machineizedCmdName);
                     }
                 }
 
