@@ -7,6 +7,7 @@
     <title>Hexagons</title>
     <script src="https://unpkg.com/p5"></script>
     <script src="https://cdn.jsdelivr.net/npm/ccapture.js-npmfixed@1.1.0/build/CCapture.all.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body {
             display: flex;
@@ -17,6 +18,7 @@
             background-color: #000;
             margin: 0;
             padding: 0;
+            overflow: hidden;
         }
     </style>
 </head>
@@ -177,12 +179,12 @@
             _canvas = createCanvas(windowWidth, windowHeight);
             colorMode(HSB, 360, 100, 100); // Using HSB color mode for easier color transitions
             sliders = {
-                'splatScale': { label: 'Splat Scale', min: 0.01, max: .1, step: 0.001, value: splatScale, action: (val) => { splatScale = val; } },
+                'splatScale': { label: 'Splat Scale', min: 0.01, max: .2, step: 0.001, value: splatScale, action: (val) => { splatScale = val; } },
                 'hexSize': { label: 'Hexagon Size', min: 10, max: 100, value: 30, action: (val) => { hexSize = val; } },
                 'effectiveRadiusScale': { label: 'Target Radius Scale', min: 0.01, max: 3, step: 0.01, value: effectiveRadiusScale, action: (val) => { effectiveRadiusScale = val; } },
                 'animDelay': { label: 'Animation Delay', min: 10, max: 100, value: animDelay, action: (val) => { animDelay = val; } },
-                'minRad': { label: 'Min Radius', min: 0, max: 3, step: 0.01, value: minRadScale ?? 0, action: (val) => { minRadScale = val; } },
-                'maxRad': { label: 'Max Radius', min: 0, max: 3, step: 0.01, value: maxRadScale ?? 1, action: (val) => { maxRadScale = val; } }
+                'minRad': { label: 'Min Radius', min: -1, max: 1, step: 0.01, value: minRadScale ?? 0, action: (val) => { minRadScale = val; } },
+                'maxRad': { label: 'Max Radius', min: -1, max: 1, step: 0.01, value: maxRadScale ?? 1, action: (val) => { maxRadScale = val; } }
             };
 
             let sliderY = buttonY + 10; // start from the max y value of the buttons
@@ -381,14 +383,16 @@
             scale(hex.size * splatScale);
 
             
-            let TINT_HUE_QUANTIZATION = 64;
+            let TINT_HUE_QUANTIZATION = 2;
             let hue = map(hex.row, 0, rows, 0, 360);
+            // push the hue foward constantly and make sure it wraps around
+            hue = (hue + (frameCount * 2)) % 360;
             hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
             let colorKey = `${hue}`;
             if(!tintedCache[colorKey]){
-                // let sat = 100; // Keep saturation constant
-                // let bri = 100; // Keep brightness constant
-                // let tinted = color(hue, sat, bri);
+                let sat = 100; // Keep saturation constant
+                let bri = 100; // Keep brightness constant
+                let tinted = color(hue, sat, bri);
                 // Save a copy of the tinted image to avoid re-tinting
                 tintedImage = createImage(blurSprite.width, blurSprite.height);
 
@@ -396,17 +400,23 @@
                 tintedImage.copy(blurSprite, 0, 0, blurSprite.width, blurSprite.height, 0, 0, blurSprite.width, blurSprite.height);
 
                 
-                // let d = dist(target.x, target.y, hex.x, hex.y);
-                // let alpha = map(d, 0, width, 255, 0); // Alpha based on distance from mouse
-                // tintedImage.loadPixels();
-                // tintedImage.pixels = blurSprite.pixels.map((p, i) => {
-                //     if (i % 4 === 3) {
-                //         return alpha * (p / 255);
-                //     } else {
-                //         return tinted[i % 4];
-                //     }
-                // });
-                // tintedImage.updatePixels();
+                let d = dist(target.x, target.y, hex.x, hex.y);
+                let alpha = map(d, 0, width, 255, 0); // Alpha based on distance from mouse
+
+                tintedImage.loadPixels();
+                for (let i = 0; i < tintedImage.pixels.length; i += 4) {
+                    let r = tintedImage.pixels[i];
+                    let g = tintedImage.pixels[i + 1];
+                    let b = tintedImage.pixels[i + 2];
+                    let a = tintedImage.pixels[i + 3];
+
+                    // Blend with existing pixel value
+                    tintedImage.pixels[i] = red(tinted); // R value
+                    tintedImage.pixels[i + 1] = green(tinted); // G value
+                    tintedImage.pixels[i + 2] = blue(tinted); // B value
+                    tintedImage.pixels[i + 3] = a; // A value based on the existing A value
+                }
+                tintedImage.updatePixels();
 
                 tintedCache[colorKey] = tintedImage;
             }
@@ -442,14 +452,14 @@
             //     }
             // };
             let maxDelay = rows * animDelay;
-            if (myColorMode === 0) { // Vertical hue shift
+            if (myColorMode === COLOR_MODE_VERTICAL) { // Vertical hue shift
                 for (let hex of hexagons) {
                     let delay = hex.row * animDelay;
                     let colorTime = (frameCount - delay) % maxDelay;
                     let hue = map(colorTime, 0, maxDelay, 0, 360);
                     hex.color = color(hue, 80, 100);
                 }
-            } else if (myColorMode === 1) { // Horizontal hue shift
+            } else if (myColorMode === COLOR_MODE_HORIZONTAL) { // Horizontal hue shift
                 maxDelay = cols * animDelay;
                 for (let hex of hexagons) {
                     let delay = hex.col * animDelay;
@@ -457,7 +467,7 @@
                     let hue = map(colorTime, 0, maxDelay, 0, 360);
                     hex.color = color(hue, 80, 100);
                 }
-            } else if (myColorMode === 2) { // Radial hue shift
+            } else if (myColorMode === COLOR_MODE_RADIAL) { // Radial hue shift
                 let maxDist = min(width, height) / 2;
                 maxDelay = maxDist * animDelay;
                 for (let hex of hexagons) {
@@ -478,15 +488,28 @@
                 let maxDist = min(width, height) / 2;
                 for (let hex of hexagons) {
                     let d = dist(target.x, target.y, hex.x, hex.y);
-
+                    if(d < 0.0001){
+                        d = 0.0001;
+                    }
                     // NOTE: this generates a color by interpolating between the color stops in the magmaGradient array
                     let stopPos = map(d, 0, maxDist, 0, 1);
                     let colorIndex = floor(stopPos * (magmaGradient.length - 1));
-                    let nextColorIndex = min(colorIndex + 1, magmaGradient.length - 1);
+                    let nextColorIndex = min(colorIndex + 1, magmaGradient.length - 2);
                     let lerpFactor = stopPos * (magmaGradient.length - 1) - colorIndex;
-                    let color1 = magmaGradient[colorIndex]?.color ?? color(0,0,0);
-                    let color2 = magmaGradient[nextColorIndex]?.color ?? color(255,0,255);
+                    lerpFactor = constrain(lerpFactor, 0, 1);
+                    if(colorIndex < 0 || colorIndex >= magmaGradient.length || nextColorIndex < 0 || nextColorIndex >= magmaGradient.length){
+                        // set to sensible defaults
+                        colorIndex = magmaGradient.length - 1;
+                        nextColorIndex = magmaGradient.length - 2;
+                    }
+                    let color1 = magmaGradient[colorIndex].color;// ?? color(0,0,0);
+                    let color2 = magmaGradient[nextColorIndex].color;// ?? color(255,0,255);
                     let _color = lerpColor(color1, color2, lerpFactor);
+                    // grab one of the two colors at random
+                    //let _color = random() > 0.5 ? color1 : color2;
+
+                    // Ensure we're getting integer values for our colors, no floats
+                    _color.levels = _color.levels.map(Math.floor);
                     hex.color = _color;
                 }
             }
@@ -506,7 +529,7 @@
                 this.row = row;
                 this.col = col; // Store the column
 
-                this.color = color(0, 0, 100); // Initial color
+                this.color = color(0); // Initial color
             }
 
             updateSize(){
