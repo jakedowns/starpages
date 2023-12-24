@@ -53,8 +53,8 @@
             effectiveRadiusScale: 1,
             innerRadiusScale: 0.866,
             
-            splatColorAnimSpeed: 50,
-            hexColorAnimSpeed: 50,
+            splatColorAnimSpeed: .1,
+            hexColorAnimSpeed: .1,
             maxRadScale: 0,
             minRadScale: 0.9,
             
@@ -1163,7 +1163,7 @@
                     }
                     break;
                 case COLOR_MODE_HORIZONTAL:
-                    maxDelay = cols * delay;
+                    maxDelay = cols * baseDelay;
                     for (let hex of hexagons) {
                         let delay = hex.col * baseDelay;
                         let colorTime = (frameCount - delay) % maxDelay;
