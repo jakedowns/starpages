@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hexagons</title>
     <script src="https://unpkg.com/p5"></script>
+    <script src="https://unpkg.com/p5/lib/addons/p5.sound.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ccapture.js-npmfixed@1.1.0/build/CCapture.all.min.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
@@ -284,7 +285,28 @@
             appstate.isUiVisible = false;
             updateUI();
         }, 2000);
+
+        let synth, snareSynth;
+        let synthTargetFreq = 440;
+        let bassSynth, bassSynthTargetAmp = 0;
+        
         function setup() {
+            synth = new p5.Oscillator();
+            synth.setType('sine');
+            synth.freq(440);
+            synth.amp(0);
+            synth.start();
+
+            bassSynth = new p5.Oscillator();
+            bassSynth.setType('sawtooth');
+            bassSynth.freq(340);
+            bassSynth.amp(0);
+            bassSynth.start();
+
+            snareSynth = new p5.Noise('brown');
+            snareSynth.amp(0);
+            snareSynth.start();
+
             // derrived from matplotlib magma color scheme
             magmaGradient = [
                 { color: color(251, 252, 191) },
@@ -551,14 +573,16 @@
             // add a text overlay that shows the number of capturedFrames
             capturedFramesDisplay = createDiv('0');
             capturedFramesDisplay.parent(uiInner);
-            capturedFramesDisplay.style('font-size', '48px');
-            capturedFramesDisplay.style('color', 'white');
-            capturedFramesDisplay.style('text-align', 'center');
-            capturedFramesDisplay.style('position', 'absolute');
-            capturedFramesDisplay.style('right', '20px');
-            capturedFramesDisplay.style('top', '20px');
-            capturedFramesDisplay.style('text-shadow', '0px 0px 10px black');
-            capturedFramesDisplay.style('display', 'none');
+            Object.assign(capturedFramesDisplay.elt.style, {
+                fontSize: '48px',
+                color: 'white',
+                textAlign: 'center',
+                position: 'absolute',
+                right: '20px',
+                top: '20px',
+                textShadow: '0px 0px 10px black',
+                display: 'none'
+            });
 
             _canvas = createCanvas(windowWidth, windowHeight);
             colorMode(HSB, 360, 100, 100); // Using HSB color mode for easier color transitions
@@ -760,8 +784,115 @@
         let prevHexSize = null;
         // infinity symbol animation progress
         let t = 0;
+        let avgMouseVelocity = { x: 0, y: 0 };
+        let mousePositionHistory = [];
+        let avgTargetVelocity = { x: 0, y: 0 };
+        let targetPositionHistory = [];
+        let directionChangeDectedThisFrame = false;
+        let velocitySpikedThisFrame = false;
+        function updateVelocityMeasurements(){
+            let {target} = appstate;
+            mousePositionHistory.push({ x: mouseX, y: mouseY });
+            targetPositionHistory.push({ x: target.x, y: target.y });
+            
+            avgMouseVelocity = mousePositionHistory.slice(-2).reduce((acc, p, i, arr) => {
+                if (i !== 0) {
+                    let delta = p5.Vector.sub(createVector(p.x, p.y), createVector(arr[i - 1].x, arr[i - 1].y));
+                    return p5.Vector.add(acc, delta);
+                } else {
+                    return acc;
+                }
+            }, createVector(0, 0));
+            
+            avgTargetVelocity = targetPositionHistory.slice(-2).reduce((acc, p, i, arr) => {
+                if (i !== 0) {
+                    let delta = p5.Vector.sub(createVector(p.x, p.y), createVector(arr[i - 1].x, arr[i - 1].y));
+                    return p5.Vector.add(acc, delta);
+                } else {
+                    return acc;
+                }
+            }, createVector(0, 0));
+
+            // if the direction of the target velocity changed dramatically this frame (near 180 degrees), then set a flag to play a strike sound
+            let targetVelocityDirection = avgTargetVelocity.heading();
+            let previousPosition = targetPositionHistory.slice(-3)[0];
+            let previousPositionVector = createVector(previousPosition.x, previousPosition.y);
+            directionChangeDectedThisFrame = targetPositionHistory.length >= 3 && previousPosition && abs(targetVelocityDirection - previousPositionVector.heading()) > PI * 0.75;
+
+            // velocitySpikedThisFrame
+            let targetVelocityMagnitude = avgTargetVelocity.mag();
+            velocitySpikedThisFrame = targetVelocityMagnitude > 50;
+        }
+        function updateSynths(){
+
+            let {target} = appstate;
+            //if the mouse button is pressed, the amplitude is based on the mapped value of target between 0 and width
+            if (mouseIsPressed || keyIsDown(32)) {
+                bassSynthTargetAmp = 0.5;
+                //synth.amp(map(target.x, 0, width, 1, 0), 0.1);
+                // and we switch to square wave
+                //synth.setType('square');
+            }else{
+                bassSynthTargetAmp = 0;
+                // otherwise, we use a sine wave
+                //synth.setType('sine');
+            }
+            // lerp bass synth amp towards target
+            let currentAmp = bassSynth.getAmp();
+            bassSynth.amp(lerp(currentAmp, bassSynthTargetAmp, 0.5), 0.1);
+
+            let currFreq = bassSynth.getFreq();
+            bassSynth.freq(lerp(currFreq, map(target.y - height/2, 0, height, 20, 1000), 0.1), 0.1);
+
+            // split the window width into 16 segments
+            // then, based on the 16th of the window the mouse is in,
+            // change the target frequency of the synth
+            let freq = map(mouseX, 0, width, 20, 2000);
+            synthTargetFreq = freq;
+
+            // lerp synth freq towards target
+            let currentFreq = synth.getFreq();
+            synth.freq(lerp(currentFreq, synthTargetFreq, 0.1), 0.1);
+
+            // Adjust the amplitude based on the avg target velocity. High velocity results in high amplitude and vice versa.
+            let constrainedMax = .2;
+            let constrainedMaxReading = 50;
+            let constrainedVelocity = constrain(avgTargetVelocity.mag(), 0, constrainedMaxReading);
+            // Set the amplitude of the synth. The map function is used to map the constrained velocity to a range between 1 and 0.
+            // The parameters of the map function are as follows:
+            // - constrainedVelocity: The current velocity of the target.
+            // - constrainedMax: The maximum allowed velocity.
+            // - 0: The lower limit of the range to map to.
+            // - 1: The upper limit of the range to map to.
+            // - 0.1: The ramp time in seconds for the amplitude to reach the target level.
+            synth.amp(map(constrainedVelocity, constrainedMaxReading, 0, constrainedMax, 0), 0.1);
+
+            synth.freq(map(target.y, 0, height, 20, 500), 0.1);
+
+            if(
+                directionChangeDectedThisFrame 
+                || velocitySpikedThisFrame 
+                || keyIsDown(SHIFT)
+            ){
+                // play a one-shot on the snare synth
+                // by doing a quick attack envelope
+                snareSynth.amp(0.5, 0);
+            } else {
+                // followed by a lerped-out decay
+                snareSynth.amp(0, 1);
+            }
+            // console.warn(snareSynth.getAmp(),{
+            //     a: directionChangeDectedThisFrame,
+            //     b: velocitySpikedThisFrame,
+            //     c: keyIsDown(SHIFT)
+            // })
+        }
         function draw() {
             let target = appstate.target;
+
+            updateVelocityMeasurements();
+            updateSynths();
+            
 
             appstate.hexSize = constrain(appstate.hexSize, 10, 500);
 
