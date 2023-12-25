@@ -890,27 +890,29 @@
         }
         function deleteAllHexagons(){
             let delay = 0;
-            let max_duration = 1000;
+            let max_duration = 10000;
+            console.warn("delete all hexagons -- BEFORE", {
+                discardedCount: appstate.discardedHexes.length,
+                hexagonCount: appstate.hexagons.length
+            })
             for(let i = 0; i<appstate.hexagons.length; i++){
+            //for(let i = appstate.hexagons.length-1; i>-1; i--){
                 /** 
                  * @variable Hexagon hex
                  * @var hex Hexagon
                  * @see Hexagon
                  */
                 let hex = appstate.hexagons[i];
-                delay += 20;
+                delay += 4;
                 hex.color = color(0,0,0,200);
                 appstate.discardedHexes.push(hex);
-                let newIndex = appstate.discardedHexes.length - 1;
-                //hex.targetSize = 100;
-                hex.targetSize = hex.size; // freeze
-                //hex.size = 100;
                 if(delay > max_duration){
                     delay = max_duration;
                 }
+                hex.size = Math.max(hex.size, 1);
+                hex.targetSize = hex.size;
                 setTimeout(()=>{
-                    let hex = appstate.discardedHexes[newIndex];
-                    hex.targetSize = 0;
+                    //hex.targetSize = 0;
                     // return to source...
                     hex.selfTargetX = width/2;
                     hex.selfTargetY = height/2;
@@ -920,6 +922,10 @@
                 },delay);
             }
             appstate.hexagons.length = 0;
+            console.warn("delete all hexagons -- AFTER", {
+                discardedCount: appstate.discardedHexes.length,
+                hexagonCount: appstate.hexagons.length
+            })
         }
         function updateSynths(){
 
@@ -951,7 +957,9 @@
             // split the window width into 16 segments
             // then, based on the 16th of the window the mouse is in,
             // change the target frequency of the synth
-            let freq = map(mouseX, 0, width, 20, 2000);
+            let freq = map(mouseY, 0, width, 20, 2000);
+            // snap into 16ths
+            freq = round(freq / 16) * 16;
             synthTargetFreq = freq;
 
             // lerp synth freq towards target
