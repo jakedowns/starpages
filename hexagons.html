@@ -15,6 +15,7 @@
 <body>
     <script>
         let LERP_FACTOR = 0.05; // Lerp factor for size
+        let oldCenter; // Previous center of the screen for resize event
 
         let uiContainer, uiInner; // UI container
         let uiDrawerTab; // uitab tabui
@@ -35,6 +36,7 @@
         const TARGET_MODE_CENTER = 2;
 
         window._appstate = {
+            infinityScale: 1,
             clearBg: true,
             // public params
             isUiVisible: true,
@@ -281,7 +283,8 @@
                 'reverseDrawOrder',
                 'sortDrawOrder',
                 'splatColorAnimSpeed',
-                'splatScale'
+                'splatScale',
+                'infinityScale'
             ];
             let data = {};
             keys.forEach(key => {
@@ -310,9 +313,25 @@
         let snareEnv;
         let deleteSynth, deleteEnv, createEnv, createSynth;
         let createSynthAmpscillator;
+
+        // on mouse-wheel update "appstate.infinityScale"
+        function mouseWheel(event) {
+            //console.warn('mouseWheel', event);
+            let {delta} = event;
+            if(delta > 0){
+                appstate.infinityScale += 0.1;
+            }else{
+                appstate.infinityScale -= 0.1;
+            }
+            appstate.infinityScale = Math.max(0.1, appstate.infinityScale);
+            appstate.infinityScale = Math.min(10, appstate.infinityScale);
+            //console.warn('appstate.infinityScale',appstate.infinityScale);
+            sdb();
+        }
         
         
         function setup() {
+            oldCenter = createVector(width / 2, height / 2); // og center reading
             bassEnv = new p5.Env();
             bassEnv.setADSR(0.001, 0.1, 0, 0); // Attack, Decay, Sustain, Release
             //bassEnv.setRange(1, 0); // Max amplitude, min amplitude
@@ -384,6 +403,10 @@
             loadFromLocalStorage(); 
             // ^ internally calls updateUI()
             createHexGrid();
+
+            // setup second infinity plotter
+            plotter = new InfinityPlotter();
+            plotter.setup();
         }
 
         function createCountdownElement(){
@@ -796,45 +819,111 @@
             },3000);
         }
 
-        const infinity_spline_point_cache = [];
+        // ---
+
+        class InfinityPlotter {
+            color = "white"
+            constructor(steps = 100, size = 100) {
+                this.steps = steps;
+                this.size = size;
+                this.points = [];
+            }
+
+            setup() {
+                for (let i = 0; i < this.steps; i++) {
+                let t = map(i, 0, this.steps, 0, TWO_PI);
+                let x = this.size * sin(t) / (1 + cos(t) * cos(t));
+                let y = this.size * sin(t) * cos(t) / (1 + cos(t) * cos(t));
+                this.points.push(createVector(x, y));
+                }
+            }
+
+            draw() {
+                beginShape();
+                fill(this.color);
+                for (let v of this.points) {
+                vertex(v.x + width / 2, v.y + height / 2); // Adjust to center
+                }
+                endShape(CLOSE);
+            }
+        }
+        let plotter;
+        // ---
+
+        let infinity_spline_point_cache = [];
+
+        // Define the control points for the infinity symbol
+        let leftControlX1, leftControlY1;
+        let leftControlX2 , leftControlY2;
+        let rightControlX1 , rightControlY1;
+        let rightControlX2 , rightControlY2;
 
         function precompute_infinity_spline(){
             infinity_spline_point_cache.length = 0;
 
             // Define the control points for the infinity symbol
-            let leftControlX1 = width / 2 - 50, leftControlY1 = height / 2 - 100;
-            let leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
-            let rightControlX1 = width / 2 + 50, rightControlY1 = height / 2 - 100;
-            let rightControlX2 = width / 2 + 150, rightControlY2 = height / 2 + 100;
-            const STEPS = 200;
+            leftControlX1 = width / 2 - 50, leftControlY1 = height / 2 - 100;
+            leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
+            rightControlX1 = width / 2 + 50, rightControlY1 = height / 2 - 100;
+            rightControlX2 = width / 2 + 150, rightControlY2 = height / 2 + 100;
+            const STEPS = 400;
 
-            for(let i = 0; i<STEPS; i++){
-                // Update t for motion
-                t += 0.005; // todo: paramaterize this
-                // loop;
-                if (t > 1) {
-                    t = 0;
-                }
-                // Calculate the position of the red dot
-                let dotX, dotY;
-                let u = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
-                let u2 = u * u, u3 = u2 * u;
-    
-                // The segments are being normalized for linear motion to ensure that the motion of the dot follows a smooth, continuous path along the infinity symbol.
-                // This is achieved by using a cubic Bezier curve formula, where 'u' is the normalized time (ranging from 0 to 1).
-                // The first half of the infinity symbol is defined by the left control points, and the second half by the right control points.
-                if (t <= 0.5) {
-                    // First half of the infinity symbol
-                    dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlX1 + (3 * u2 - 3 * u3) * leftControlX2 + u3 * width / 2;
-                    dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * leftControlY1 + (3 * u2 - 3 * u3) * leftControlY2 + u3 * height / 2;
-                } else {
-                    // Second half of the infinity symbol
-                    dotX = (1 - 3 * u + 3 * u2 - u3) * width / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlX1 + (3 * u2 - 3 * u3) * rightControlX2 + u3 * width / 2;
-                    dotY = (1 - 3 * u + 3 * u2 - u3) * height / 2 + (3 * u - 6 * u2 + 3 * u3) * rightControlY1 + (3 * u2 - 3 * u3) * rightControlY2 + u3 * height / 2;
-                }
-
-                infinity_spline_point_cache.push({x:dotX,y:dotY});
+            let totalLength = 0;
+            let lengths = [];
+            for (let i = 0; i < STEPS; i++) {
+                let t1 = i / STEPS;
+                let t2 = (i + 1) / STEPS;
+                let p1 = getPointOnCurve(t1);
+                let p2 = getPointOnCurve(t2);
+                let length = dist(p1.x, p1.y, p2.x, p2.y);
+                lengths.push(length);
+                totalLength += length;
             }
+
+            let avgLength = totalLength / STEPS;
+            let normalizedPoints = [];
+            let accumulatedLength = 0;
+            for (let i = 0; i < STEPS; i++) {
+                while (accumulatedLength < i * avgLength) {
+                    accumulatedLength += lengths.shift();
+                }
+                let t = accumulatedLength / totalLength;
+                let point = getPointOnCurve(t);
+                normalizedPoints.push(point);
+            }
+            infinity_spline_point_cache = normalizedPoints;
+            
+        }
+        function getPointOnCurveForFrame(frame_count){
+            let STEPS = infinity_spline_point_cache.length;
+            let t = frame_count % STEPS;
+            return infinity_spline_point_cache[t];
+        }
+        function getPointOnCurve(t) {
+            t = t % 1; // Ensure t is always between 0 and 1 to make the curve a closed loop
+            let x, y;
+            switch (true) {
+                case (t <= 0.25):
+                    // First quadrant
+                    x = (1 - t) * (1 - t) * (1 - t) * leftControlX1 + 3 * (1 - t) * (1 - t) * t * leftControlX2 + 3 * (1 - t) * t * t * rightControlX1 + t * t * t * rightControlX2;
+                    y = (1 - t) * (1 - t) * (1 - t) * leftControlY1 + 3 * (1 - t) * (1 - t) * t * leftControlY2 + 3 * (1 - t) * t * t * rightControlY1 + t * t * t * rightControlY2;
+                    break;
+                case (t <= 0.5):
+                    // Second quadrant
+                    x = (1 - t) * (1 - t) * (1 - t) * rightControlX1 + 3 * (1 - t) * (1 - t) * t * rightControlX2 + 3 * (1 - t) * t * t * leftControlX1 + t * t * t * leftControlX2;
+                    y = (1 - t) * (1 - t) * (1 - t) * rightControlY1 + 3 * (1 - t) * (1 - t) * t * rightControlY2 + 3 * (1 - t) * t * t * leftControlY1 + t * t * t * leftControlY2;
+                    break;
+                case (t <= 0.75):
+                    // Third quadrant
+                    x = (1 - t) * (1 - t) * (1 - t) * leftControlX1 + 3 * (1 - t) * (1 - t) * t * leftControlX2 + 3 * (1 - t) * t * t * rightControlX1 + t * t * t * rightControlX2;
+                    y = (1 - t) * (1 - t) * (1 - t) * leftControlY1 + 3 * (1 - t) * (1 - t) * t * leftControlY2 + 3 * (1 - t) * t * t * rightControlY1 + t * t * t * rightControlY2;
+                    break;
+                default:
+                    // Fourth quadrant
+                    x = (1 - t) * (1 - t) * (1 - t) * rightControlX1 + 3 * (1 - t) * (1 - t) * t * rightControlX2 + 3 * (1 - t) * t * t * leftControlX1 + t * t * t * leftControlX2;
+                    y = (1 - t) * (1 - t) * (1 - t) * rightControlY1 + 3 * (1 - t) * (1 - t) * t * rightControlY2 + 3 * (1 - t) * t * t * leftControlY1 + t * t * t * leftControlY2;
+            }
+            return {x: x, y: y};
         }
         
         function startRecording(){
@@ -1037,6 +1126,8 @@
 
                 createEnv.play(createSynth);
             }
+
+            
             
 
             appstate.hexSize = constrain(appstate.hexSize, 10, 500);
@@ -1045,7 +1136,7 @@
                 appstate.target.x = mouseX;
                 appstate.target.y = mouseY;
             }else if(appstate.currentTargetMode === TARGET_MODE_INFINITY){
-                let infinityPoint = infinity_spline_point_cache[frameCount % infinity_spline_point_cache.length];
+                let infinityPoint = getPointOnCurveForFrame(frameCount);
                 appstate.target.x = infinityPoint.x;
                 appstate.target.y = infinityPoint.y;
             }else{
@@ -1103,13 +1194,16 @@
             drawHexGrid();
             animateColors();
 
-            // draw a red dot at the current infinity spline point
-            let infinityPoint = infinity_spline_point_cache[frameCount % infinity_spline_point_cache.length];
-            push();
-            fill(255,255,100,255);
-            noStroke();
-            circle(infinityPoint.x, infinityPoint.y, 33);
-            pop();
+            drawInfiniteLoader();
+
+
+            
+
+            // TOP LAYER (ANYTHING DRAWN LAST IS SHOWN VISUALLY ON TOP)
+
+
+
+            // --- END FRAME ---
 
 
             if(appstate.recording){
@@ -1124,6 +1218,69 @@
             }
         }
 
+        function drawInfiniteLoader(){
+            push();
+            translate(-width/2, -height/2);
+            scale(appstate.infinityScale);
+            drawInfiniteLoader_inner();
+            pop();
+        }
+        function drawInfiniteLoader_inner(){
+            // Render our infinity symbol
+            /** @type {InfinityPlotter} **/
+            plotter.draw();
+
+            // draw a red dot at the current infinity spline point
+            let infinityPoint = getPointOnCurveForFrame(frameCount);
+            if(!infinityPoint){
+                return;
+            }
+            push();
+            fill(255,255,100,255);
+            noStroke();
+            circle(infinityPoint.x, infinityPoint.y, 33);
+            pop();
+            for(let i = 0; i < 12; i++){
+                // draw a trail of previous points at a diminishing opacity and size
+                // let prevPointIndex = (frameCount - i) % infinity_spline_point_cache.length;
+                // // Ensure the index is within the bounds of the array
+                // if (prevPointIndex < 0) {
+                //     prevPointIndex += infinity_spline_point_cache.length;
+                // }
+                let prevPoint = getPointOnCurveForFrame(frameCount - i);
+                if(!prevPoint){
+                    continue;
+                }
+                push();
+                fill(255,255,100,255 - (i * 20));
+                noStroke();
+
+                // draw a scaled sprite first
+                drawSplatAtPositionWithTint(prevPoint.x, prevPoint.y, 33 - (i * 2), color(255,255,100,255 - (i * 20)));
+
+                circle(prevPoint.x, prevPoint.y, 33 - (i * 2));
+                pop();
+            }
+
+            // draw the full path for debugging
+            if(true){
+                beginShape();
+                for(let point of infinity_spline_point_cache){
+                    vertex(point.x, point.y);
+                    push();
+                    pop();
+                    push()
+                    stroke("red")
+                    strokeWeight(3);
+                    //fill(255,255,100,255);
+                    fill("red");
+                    circle(point.x, point.y, 3);
+                    pop();
+                }
+                noFill();
+                endShape();
+            }
+        }
         
 
         function createHexGrid() {
@@ -1201,6 +1358,19 @@
                     hex.selfTargetY = height/2;
                 }
             }
+
+            // NOTE: we took a measurement of what the _old_ grid thought the center of the screen was
+            // now that the screen has been resized, we need to nudge ALL existing points to new proportionally relative positions
+            // so that the center of the screen is still the center of the screen
+            
+            let newCenter = createVector(width/2, height/2);
+            let centerDelta = p5.Vector.sub(newCenter, oldCenter);
+            for(let hex of newHexagons){
+                hex.selfTargetX += centerDelta.x;
+                hex.selfTargetY += centerDelta.y;
+            }
+            oldCenter = newCenter;
+
             appstate.hexagons = newHexagons;
             appstate.cols = newCols;
             appstate.rows = newRows;
@@ -1208,12 +1378,7 @@
 
         function drawSplatForHex(hex){
             let {target} = appstate;
-            // draw a copy of the blur sprite as a shadow
-            push();
-            // change draw mode to center
-            imageMode(CENTER);
-            translate(hex.x, hex.y);
-            scale(hex.size * appstate.splatScale);
+            
 
             
             let TINT_HUE_QUANTIZATION = 2;
@@ -1222,6 +1387,19 @@
             hue = (hue + (frameCount * (appstate.splatColorAnimSpeed*.1))) % 360;
             hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
             let colorKey = `${hue}`;
+            drawSplatAtPositionWithTint(hex.x, hex.y, hex.size, colorKey)
+            
+        }
+
+        function drawSplatAtPositionWithTint(x,y,size,colorKey){
+            // draw a copy of the blur sprite as a shadow
+            push();
+            // change draw mode to center
+            imageMode(CENTER);
+            translate(x, y);
+            scale(size * appstate.splatScale);
+            let {target} = appstate;
+            
             if(!tintedCache[colorKey]){
                 let sat = 100; // Keep saturation constant
                 let bri = 100; // Keep brightness constant
@@ -1233,7 +1411,7 @@
                 tintedImage.copy(blurSprite, 0, 0, blurSprite.width, blurSprite.height, 0, 0, blurSprite.width, blurSprite.height);
 
                 
-                let d = dist(target.x, target.y, hex.x, hex.y);
+                let d = dist(target.x, target.y, x, y);
                 let alpha = map(d, 0, width, 255, 0); // Alpha based on distance from mouse
 
                 tintedImage.loadPixels();
