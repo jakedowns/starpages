@@ -152,6 +152,23 @@
         let sliders = {}
 
         function keyPressed() {
+
+            if(key === 'r'){
+                reset();
+            }
+
+            if(key === 'c'){
+                appstate.myColorMode = (appstate.myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE;
+            }
+
+            if(key === 'f'){
+                appstate.currentTargetMode = (appstate.currentTargetMode + 1) % 3;
+            }
+
+            if(key === 'd'){
+                deleteAllHexagons();
+            }
+
             if (key === 'Escape') {
                 if (appstate.isFullscreen) {
                     fullscreen(false);
@@ -289,8 +306,48 @@
         let synth, snareSynth;
         let synthTargetFreq = 440;
         let bassSynth, bassSynthTargetAmp = 0;
+        let bassEnv;
+        let snareEnv;
+        let deleteSynth, deleteEnv, createEnv, createSynth;
+        let createSynthAmpscillator;
+        
         
         function setup() {
+            bassEnv = new p5.Env();
+            bassEnv.setADSR(0.001, 0.1, 0, 0); // Attack, Decay, Sustain, Release
+            //bassEnv.setRange(1, 0); // Max amplitude, min amplitude
+
+            createSynthAmpscillator = new p5.Oscillator();
+            createSynthAmpscillator.setType('sine'); // sine, triangle, sawtooth, square
+            createSynthAmpscillator.freq(666);
+            //createSynthAmpscillator.amp(1);
+            createSynthAmpscillator.start();
+            // how can i make this oscillator silent but still use it's amplitude envelope?
+            createSynthAmpscillator.amp(0);
+
+            createSynth = new p5.Oscillator();
+            createSynth.setType('square'); // sine, triangle, sawtooth, square
+            createSynth.freq(lerp(mouseX, 0, width, 66, 666));
+            createSynth.amp(0);
+            createSynth.start();
+
+            createEnv = new p5.Env(0.001, 0.1, 0, 2);
+            createEnv.setRange(1,0);
+
+            deleteSynth = new p5.Oscillator();
+            deleteSynth.setType('triangle'); // sine, triangle, sawtooth, square
+            deleteSynth.freq(333);
+            deleteSynth.amp(0);
+            deleteSynth.start();
+
+            deleteEnv = new p5.Env(0.001, 0.0001, 0, 0);
+            deleteEnv.setRange(1,0);
+
+            // Create an envelope with quick attack and 1s decay
+            snareEnv = new p5.Env();
+            snareEnv.setADSR(0.001, 0.1, 0, 0); // Attack, Decay, Sustain, Release
+            snareEnv.setRange(1, 0); // Max amplitude, min amplitude
+
             synth = new p5.Oscillator();
             synth.setType('sine');
             synth.freq(440);
@@ -303,7 +360,8 @@
             bassSynth.amp(0);
             bassSynth.start();
 
-            snareSynth = new p5.Noise('brown');
+            //snareSynth = new p5.Noise('white')
+            snareSynth = new p5.Noise('brown')
             snareSynth.amp(0);
             snareSynth.start();
 
@@ -540,6 +598,13 @@
                     label: 'Reset', 
                     action: reset
                 },
+
+                'deleteAllHexagons': {
+                    ignore: true,
+                    key: 'deleteAllHexagons',
+                    label: 'Delete All Hexagons',
+                    action: deleteAllHexagons
+                }
                 
             };
 
@@ -823,6 +888,39 @@
             let targetVelocityMagnitude = avgTargetVelocity.mag();
             velocitySpikedThisFrame = targetVelocityMagnitude > 50;
         }
+        function deleteAllHexagons(){
+            let delay = 0;
+            let max_duration = 1000;
+            for(let i = 0; i<appstate.hexagons.length; i++){
+                /** 
+                 * @variable Hexagon hex
+                 * @var hex Hexagon
+                 * @see Hexagon
+                 */
+                let hex = appstate.hexagons[i];
+                delay += 20;
+                hex.color = color(0,0,0,200);
+                appstate.discardedHexes.push(hex);
+                let newIndex = appstate.discardedHexes.length - 1;
+                //hex.targetSize = 100;
+                hex.targetSize = hex.size; // freeze
+                //hex.size = 100;
+                if(delay > max_duration){
+                    delay = max_duration;
+                }
+                setTimeout(()=>{
+                    let hex = appstate.discardedHexes[newIndex];
+                    hex.targetSize = 0;
+                    // return to source...
+                    hex.selfTargetX = width/2;
+                    hex.selfTargetY = height/2;
+                    hex.targetColor = color(0,0,0,0);
+                    deleteEnv.play(deleteSynth);
+                    deleteEnv.play(snareSynth);
+                },delay);
+            }
+            appstate.hexagons.length = 0;
+        }
         function updateSynths(){
 
             let {target} = appstate;
@@ -837,12 +935,18 @@
                 // otherwise, we use a sine wave
                 //synth.setType('sine');
             }
+            let lerpDuration = 0.1;
+            // instead of a static lerp duration, make it shorter if the target is moving faster
+            lerpDuration = map(avgTargetVelocity.mag(), 0, 50, 0.1, 0.01);
+            lerpDuration = constrain(lerpDuration, 0.01, 0.1)
+
             // lerp bass synth amp towards target
             let currentAmp = bassSynth.getAmp();
-            bassSynth.amp(lerp(currentAmp, bassSynthTargetAmp, 0.5), 0.1);
+            bassSynth.amp(lerp(currentAmp, bassSynthTargetAmp, 0.5), lerpDuration);
 
             let currFreq = bassSynth.getFreq();
-            bassSynth.freq(lerp(currFreq, map(target.y - height/2, 0, height, 20, 1000), 0.1), 0.1);
+            bassSynth.freq(
+                lerp(currFreq, map(target.y - height/2, 0, height, 20, 1000), lerpDuration), lerpDuration);
 
             // split the window width into 16 segments
             // then, based on the 16th of the window the mouse is in,
@@ -855,7 +959,7 @@
             synth.freq(lerp(currentFreq, synthTargetFreq, 0.1), 0.1);
 
             // Adjust the amplitude based on the avg target velocity. High velocity results in high amplitude and vice versa.
-            let constrainedMax = .2;
+            let constrainedMax = 1;
             let constrainedMaxReading = 50;
             let constrainedVelocity = constrain(avgTargetVelocity.mag(), 0, constrainedMaxReading);
             // Set the amplitude of the synth. The map function is used to map the constrained velocity to a range between 1 and 0.
@@ -869,18 +973,37 @@
 
             synth.freq(map(target.y, 0, height, 20, 500), 0.1);
 
+            // if the lowercase B key is pressed,
+            // play the bassEnv
+            if(keyIsDown(66)){
+                bassEnv.play(bassSynth);
+            }
+
             if(
-                directionChangeDectedThisFrame 
-                || velocitySpikedThisFrame 
-                || keyIsDown(SHIFT)
+                //directionChangeDectedThisFrame 
+                //|| velocitySpikedThisFrame 
+                keyIsDown(SHIFT)
             ){
                 // play a one-shot on the snare synth
                 // by doing a quick attack envelope
-                snareSynth.amp(0.5, 0);
+                //snareSynth.amp(0.5, 0);
+
+                snareEnv.play(snareSynth);
             } else {
                 // followed by a lerped-out decay
-                snareSynth.amp(0, 1);
+                //snareSynth.amp(0, 1);
             }
+
+            createSynth.freq(map(mouseX, 0, width, 66, 666));
+
+            // using another oscillator, drive the amp of the createSynth such that
+            // it's ALLOWED to reach it's current amp via getAmp OR the other sine wave forces it to 0
+            // refer to it as createSynthAmpscillator (assumed it's already defined)
+            createSynth.amp(constrain(createSynth.getAmp() * createSynthAmpscillator.getAmp(), 0, 0.7));
+
+            // same for deleteSynth
+            deleteSynth.amp(constrain(deleteSynth.getAmp() * createSynthAmpscillator.getAmp(), 0, 0.7));
+
             // console.warn(snareSynth.getAmp(),{
             //     a: directionChangeDectedThisFrame,
             //     b: velocitySpikedThisFrame,
@@ -892,6 +1015,20 @@
 
             updateVelocityMeasurements();
             updateSynths();
+
+            // if the `t` key is down,
+            // spawn a hexagon at the mouse position
+            if(keyIsDown(84)){
+                // find the row/col closest to the mouseXy
+                let {hexSize} = appstate;
+                let hexHeight = sqrt(3) * hexSize;
+                let col = floor(mouseX / (1.5 * hexSize));
+                let row = floor(mouseY / hexHeight);
+                let hex = new Hexagon(mouseX, mouseY, appstate.hexSize, row, col);
+                appstate.hexagons.push(hex);
+
+                createEnv.play(createSynth);
+            }
             
 
             appstate.hexSize = constrain(appstate.hexSize, 10, 500);
@@ -1040,10 +1177,12 @@
                     }
                 }
                 // we should keep a copy of the "discarded" cells so we can animate them out (let them scale to zero before removing them)
-                // appstate.discardedHexes = appstate.discardedHexes.concat(appstate.hexagons.filter(h => !newHexagons.includes(h)));
-                // for (let hex of appstate.discardedHexes) {
-                //     hex.targetSize = 0;
-                // }
+                appstate.discardedHexes = appstate.discardedHexes.concat(appstate.hexagons.filter(h => !newHexagons.includes(h)));
+                for (let hex of appstate.discardedHexes) {
+                    hex.targetSize = 0;
+                    hex.selfTargetX = width/2;
+                    hex.selfTargetY = height/2;
+                }
             }
             appstate.hexagons = newHexagons;
             appstate.cols = newCols;
@@ -1125,8 +1264,15 @@
             let toRemove = [];
             for (let hex of appstate.discardedHexes) {
                 hex.updateSize();
+
+                if(hex.targetColor){
+                    // lerp color towards black
+                    hex.color = lerpColor(hex.color, hex.targetColor, 0.1);
+                }
+
+
                 // if it's scaled to zero, flag for removal
-                if(hex.size < 0.001){
+                if(hex.size < 0.01){
                     toRemove.push(hex);
                 }
                 if(appstate.drawSplats){
@@ -1265,6 +1411,7 @@
                 this.rotationAngle = lerp(this.rotationAngle, this.targetRotationAngle, LERP_FACTOR);
             }
 
+            // hex.draw
             draw() {
                 
 
