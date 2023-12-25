@@ -806,7 +806,7 @@
             let leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
             let rightControlX1 = width / 2 + 50, rightControlY1 = height / 2 - 100;
             let rightControlX2 = width / 2 + 150, rightControlY2 = height / 2 + 100;
-            const STEPS = 64;
+            const STEPS = 200;
 
             for(let i = 0; i<STEPS; i++){
                 // Update t for motion
@@ -959,7 +959,7 @@
             // change the target frequency of the synth
             let freq = map(mouseY, 0, width, 20, 2000);
             // snap into 16ths
-            freq = round(freq / 16) * 16;
+            freq = round(freq / 24) * 24;
             synthTargetFreq = freq;
 
             // lerp synth freq towards target
@@ -1102,6 +1102,15 @@
             }
             drawHexGrid();
             animateColors();
+
+            // draw a red dot at the current infinity spline point
+            let infinityPoint = infinity_spline_point_cache[frameCount % infinity_spline_point_cache.length];
+            push();
+            fill(255,255,100,255);
+            noStroke();
+            circle(infinityPoint.x, infinityPoint.y, 33);
+            pop();
+
 
             if(appstate.recording){
                 appstate.capturedFrames++;
