@@ -839,12 +839,14 @@
             }
 
             draw() {
+                push();
                 beginShape();
                 fill(this.color);
                 for (let v of this.points) {
-                vertex(v.x + width / 2, v.y + height / 2); // Adjust to center
+                    vertex(v.x + width / 2, v.y + height / 2); // Adjust to center
                 }
                 endShape(CLOSE);
+                pop();
             }
         }
         let plotter;
@@ -1220,26 +1222,32 @@
 
         function drawInfiniteLoader(){
             push();
-            translate(-width/2, -height/2);
-            scale(appstate.infinityScale);
+            
+            // in p5.js, i'm having a hard time scaling the canvas while keeping the object centered
+            //scale(appstate.infinityScale);
+
             drawInfiniteLoader_inner();
             pop();
         }
         function drawInfiniteLoader_inner(){
             // Render our infinity symbol
             /** @type {InfinityPlotter} **/
+            push()
             plotter.draw();
+            pop()
 
             // draw a red dot at the current infinity spline point
             let infinityPoint = getPointOnCurveForFrame(frameCount);
             if(!infinityPoint){
                 return;
             }
+
             push();
-            fill(255,255,100,255);
-            noStroke();
-            circle(infinityPoint.x, infinityPoint.y, 33);
+                fill(255,255,100,255);
+                noStroke();
+                circle(infinityPoint.x, infinityPoint.y, 33);
             pop();
+            
             for(let i = 0; i < 12; i++){
                 // draw a trail of previous points at a diminishing opacity and size
                 // let prevPointIndex = (frameCount - i) % infinity_spline_point_cache.length;
@@ -1248,15 +1256,24 @@
                 //     prevPointIndex += infinity_spline_point_cache.length;
                 // }
                 let prevPoint = getPointOnCurveForFrame(frameCount - i);
+                push();
                 if(!prevPoint){
+                    pop();
                     continue;
                 }
-                push();
                 fill(255,255,100,255 - (i * 20));
                 noStroke();
 
+                let hue = map(i, 0, 12, 0, 360);
+                let colorKey = getQuantizedColorKey(color(hue,255,100,255));
+
                 // draw a scaled sprite first
-                drawSplatAtPositionWithTint(prevPoint.x, prevPoint.y, 33 - (i * 2), color(255,255,100,255 - (i * 20)));
+                drawSplatAtPositionWithTint(
+                    prevPoint.x, 
+                    prevPoint.y, 
+                    33 - (i * 2), 
+                    colorKey
+                );
 
                 circle(prevPoint.x, prevPoint.y, 33 - (i * 2));
                 pop();
@@ -1264,6 +1281,7 @@
 
             // draw the full path for debugging
             if(true){
+                push();
                 beginShape();
                 for(let point of infinity_spline_point_cache){
                     vertex(point.x, point.y);
@@ -1279,6 +1297,7 @@
                 }
                 noFill();
                 endShape();
+                pop();
             }
         }
         
@@ -1376,17 +1395,32 @@
             appstate.rows = newRows;
         }
 
-        function drawSplatForHex(hex){
-            let {target} = appstate;
-            
+        function getQuantizedColorKey(color){
+            let TINT_HUE_QUANTIZATION = 2;
+            let hue = color._getHue();
+            // push the hue foward constantly and make sure it wraps around
+            hue = (hue + (frameCount * (appstate.splatColorAnimSpeed*.1))) % 360;
+            hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
+            let colorKey = `${hue}`;
+            return colorKey;
+        }
 
-            
+        function getQuantizedColorKeyForHex(hex){
             let TINT_HUE_QUANTIZATION = 2;
             let hue = map(hex.row, 0, appstate.rows, 0, 360);
             // push the hue foward constantly and make sure it wraps around
             hue = (hue + (frameCount * (appstate.splatColorAnimSpeed*.1))) % 360;
             hue = Math.round(hue / TINT_HUE_QUANTIZATION) * TINT_HUE_QUANTIZATION;
             let colorKey = `${hue}`;
+            return colorKey;
+        }
+
+        function drawSplatForHex(hex){
+            let colorKey = getQuantizedColorKeyForHex(hex);
+            if(colorKey === '' || !colorKey || !colorKey?.trim()?.length){
+                console.warn('colorKey is empty',{colorKey,hex});
+                return;
+            }
             drawSplatAtPositionWithTint(hex.x, hex.y, hex.size, colorKey)
             
         }
@@ -1399,8 +1433,10 @@
             translate(x, y);
             scale(size * appstate.splatScale);
             let {target} = appstate;
+            let hue = parseInt(colorKey);
             
             if(!tintedCache[colorKey]){
+                // console.warn('CACHING',{x,y,size,colorKey})
                 let sat = 100; // Keep saturation constant
                 let bri = 100; // Keep brightness constant
                 let tinted = color(hue, sat, bri);
