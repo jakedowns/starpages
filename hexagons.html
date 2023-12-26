@@ -13,6 +13,64 @@
 </head>
 
 <body>
+    <div id="one-time" class="one-time">
+        <style>
+            #safety-block{
+                z-index: 999;
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background-color: black;
+            }
+            h1 {
+                padding: 0;
+                margin: 0;
+                margin-bottom: 10px;
+            }
+            #one-time {
+                padding: 20px;
+                max-height: calc(100vh - 100px);
+                border: 3px solid palegoldenrod;
+                border-radius: 10px;
+                overflow-y: hidden;
+                background: midnightblue;
+                color: palegoldenrod;
+                z-index:1000; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            }
+            #one-time button {
+                background: skyblue;
+                color: orangered;
+                float: right;
+                border-radius: 15px;
+                padding: 10px 20px;
+                font-size: 30px;
+                cursor: pointer;
+            }
+            #one-time .inner {
+                max-height: calc(100vh - 100px - 40px - 100px);
+                overflow-y: auto;
+            }
+            p{
+                color: palegoldenrod;
+            }
+        </style>
+        <h1>welcome to the 'hexagons' demo</h1>
+        <p>⚠️Photosensitivy warning; do not use this app if you are prone to photo-sensitivity side-effects.⚠️</p>
+        <div class="inner">
+        <p>press '/' to go fullscreen</p>
+        <p>press '.' to hide the ui</p>
+        <p>not working on mobile yet, sadly</p>
+        <p>press 'd' to delete all (clear)</p>
+        <p>hold "T" to "draw"</p>
+        <p>scroll mouse wheel to "zoom"</p>
+        <p></p>
+        <p>press 'r' to randomize settings</p>
+        </div>
+        <button onclick="document.getElementsByClassName('one-time').forEach(t=>t.style.display='none')">ok</button>
+    </div>
+    <div id="safety-block" class="one-time"></div>
     <script>
         let LERP_FACTOR = 0.05; // Lerp factor for size
         let oldCenter; // Previous center of the screen for resize event
