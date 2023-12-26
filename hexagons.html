@@ -99,6 +99,8 @@
         let uiDrawerTab; // uitab tabui
         let countdownText,countdownInterval,countdown_i; const COUNTDOWN_START = 3;
 
+        let invertedBlackSprite;
+
         // Add a new variable to store the color animation mode
         const COLOR_MODE_VERTICAL = 0;
         const COLOR_MODE_HORIZONTAL = 1;
@@ -114,6 +116,7 @@
         const TARGET_MODE_CENTER = 2;
 
         window._appstate = {
+            roundCapAlpha: 50,
             snapCreateToGrid: 0,
             infinityScale: 1,
             clearBg: true,
@@ -203,6 +206,26 @@
         let blurSprite;
         let tintedCache = {};
         function makeABlurSprite(){
+
+
+            // also make our invertedBlackSprite
+            // it's transparent in the middle and black on the outside
+            // we can use it to "erase" the background
+            invertedBlackSprite = createGraphics(32, 32);
+            invertedBlackSprite.clear();
+            invertedBlackSprite.noStroke();
+            invertedBlackSprite.fill(0, 0, 0, 255)
+            invertedBlackSprite.circle(invertedBlackSprite.width / 2, invertedBlackSprite.height / 2, invertedBlackSprite.width / 4);
+            invertedBlackSprite.filter(BLUR, 5);
+            invertedBlackSprite.loadPixels();
+            for(let i = 0; i < invertedBlackSprite.pixels.length; i+=4){
+                invertedBlackSprite.pixels[i] = 255 - invertedBlackSprite.pixels[i];
+                invertedBlackSprite.pixels[i+1] = 255 - invertedBlackSprite.pixels[i+1];
+                invertedBlackSprite.pixels[i+2] = 255 - invertedBlackSprite.pixels[i+2];
+            }
+            invertedBlackSprite.updatePixels();
+            //console.warn('invertedBlackSprite',invertedBlackSprite);
+
             
             // Check if we cached to local filesystem, if so, read it from there
             // Note: localStorage can't be used to store image data directly. 
@@ -234,6 +257,9 @@
         let dirtySinceReset = false;
 
         function keyReleased(){
+            if(key == 'g'){
+                appstate.clearBg = !appstate.clearBg;
+            }
             if(key == 'p'){ 
                 appstate.drawHexes = !appstate.drawHexes;
             }
@@ -914,6 +940,15 @@
             
 
             sliders = {
+                'roundCapAlpha':{
+                    label: 'Round Cap Alpha',
+                    min: 0,
+                    max: 100,
+                    value: appstate.roundCapAlpha,
+                    action: function(val){
+                        appstate.roundCapAlpha = val;
+                    }
+                },
                 'splatScale': { 
                     label: 'Splat Scale', min: 0.01, max: 1, step: 0.001, 
                     value: appstate.splatScale, 
@@ -1162,7 +1197,8 @@
                             prevPoint.x, 
                             prevPoint.y, 
                             33 - (i * 2), 
-                            colorKey
+                            colorKey,
+                            'BS'
                         );
 
                         circle(prevPoint.x, prevPoint.y, 33 - (i * 2));
@@ -1327,38 +1363,29 @@
             velocitySpikedThisFrame = targetVelocityMagnitude > 50;
         }
         function deleteAllHexagons(){
-            let delay = 0;
-            let max_duration = 10000;
             console.warn("delete all hexagons -- BEFORE", {
                 discardedCount: appstate.discardedHexes.length,
                 hexagonCount: appstate.hexagons.length
             })
-            for(let i = 0; i<appstate.hexagons.length; i++){
-            //for(let i = appstate.hexagons.length-1; i>-1; i--){
-                /** 
-                 * @variable Hexagon hex
-                 * @var hex Hexagon
-                 * @see Hexagon
-                 */
-                let hex = appstate.hexagons[i];
-                delay += 4;
+            let delay = 1000;
+            let max_duration = 100;
+            appstate.hexagons.forEach((hex, i) => {
+                delay -= max_duration * Math.pow(1.1, appstate.hexagons.length - i);
                 hex.color = color(0,0,0,200);
                 appstate.discardedHexes.push(hex);
-                if(delay > max_duration){
-                    delay = max_duration;
-                }
+                delay = Math.max(delay, max_duration);
                 hex.size = Math.max(hex.size, 1);
                 hex.targetSize = hex.size;
-                setTimeout(()=>{
+                setTimeout(() => {
                     hex.targetSize = 0;
-                    // return to source...
                     hex.selfTargetX = width/2;
                     hex.selfTargetY = height/2;
                     hex.targetColor = color(0,0,0,0);
                     deleteEnv.play(deleteSynth);
                     deleteEnv.play(snareSynth);
-                },delay);
-            }
+                }, delay);
+                delay = delay * 0.9 + 200;
+            });
             appstate.hexagons.length = 0;
             console.warn("delete all hexagons -- AFTER", {
                 discardedCount: appstate.discardedHexes.length,
@@ -1602,7 +1629,7 @@
             drawHexGrid();
             animateColors();
 
-            drawInfiniteLoader();
+            //drawInfiniteLoader();
 
 
             
@@ -1805,12 +1832,14 @@
                 console.warn('colorKey is empty',{colorKey,hex});
                 return;
             }
-            drawSplatAtPositionWithTint(hex.x, hex.y, hex.size, colorKey)
+            drawSplatAtPositionWithTint(hex.x, hex.y, hex.size, colorKey, 'BS')
+            
             
         }
 
-        function drawSplatAtPositionWithTint(x,y,size,colorKey){
-            // draw a copy of the blur sprite as a shadow
+        function drawSplatAtPositionWithTint(x, y, size, colorKey, spriteType) {
+            return;
+            // draw a copy of the sprite as a shadow
             push();
             // change draw mode to center
             imageMode(CENTER);
@@ -1819,20 +1848,28 @@
             let {target} = appstate;
             let hue = parseInt(colorKey);
             
+            let sprite;
+            if (spriteType === 'IBS') {
+                sprite = invertedBlackSprite;
+            } else if (spriteType === 'BS') {
+                sprite = blurSprite;
+            } else {
+                console.error('Invalid spriteType');
+                return;
+            }
+
             if(!tintedCache[colorKey]){
-                // console.warn('CACHING',{x,y,size,colorKey})
                 let sat = 100; // Keep saturation constant
                 let bri = 100; // Keep brightness constant
                 let tinted = color(hue, sat, bri);
                 // Save a copy of the tinted image to avoid re-tinting
-                tintedImage = createImage(blurSprite.width, blurSprite.height);
+                tintedImage = createImage(sprite.width, sprite.height);
 
-                // clone the blurSprite pixels
-                tintedImage.copy(blurSprite, 0, 0, blurSprite.width, blurSprite.height, 0, 0, blurSprite.width, blurSprite.height);
+                // clone the sprite pixels
+                tintedImage.copy(sprite, 0, 0, sprite.width, sprite.height, 0, 0, sprite.width, sprite.height);
 
-                
                 let d = dist(target.x, target.y, x, y);
-                let alpha = map(d, 0, width, 255, 0); // Alpha based on distance from mouse
+                let alpha = map(d, 0, width, appstate.roundCapAlpha, 0); // Alpha based on distance from mouse
 
                 tintedImage.loadPixels();
                 for (let i = 0; i < tintedImage.pixels.length; i += 4) {
@@ -1845,20 +1882,56 @@
                     tintedImage.pixels[i] = red(tinted); // R value
                     tintedImage.pixels[i + 1] = green(tinted); // G value
                     tintedImage.pixels[i + 2] = blue(tinted); // B value
-                    tintedImage.pixels[i + 3] = a; // A value based on the existing A value
+                    tintedImage.pixels[i + 3] = a * alpha; // A value based on the existing A value
                 }
                 tintedImage.updatePixels();
 
                 tintedCache[colorKey] = tintedImage;
-            }
 
-            // apply a random rotation to give some noise
-            if(appstate.jitterSplatRotation){
-                rotate(random(0, TWO_PI));
-            }
+                // Save to localStorage
+                saveImageToLocalStorage(colorKey, tintedImage);
+            } else {
+                // Load from localStorage
+                loadImageFromLocalStorage(colorKey).then(tintedImage => {
+                    // apply a random rotation to give some noise
+                    if(appstate.jitterSplatRotation){
+                        rotate(random(0, TWO_PI));
+                    }
 
-            image(tintedCache[colorKey], 0, 0);
-            pop();
+                    image(tintedImage, 0, 0);
+                    pop();
+                }).catch(error => {
+                    console.error(error);
+                });
+            }
+        }
+
+        function saveImageToLocalStorage(key, image) {
+            localStorage.setItem(key, image.canvas.toDataURL());
+        }
+
+        function loadImageFromLocalStorage(key) {
+            return new Promise((resolve, reject) => {
+                let dataUrl = localStorage.getItem(key);
+                if (dataUrl) {
+                    let img = new Image();
+                    img.onload = function() {
+                        let p5Image = createImage(img.width, img.height);
+                        if (img.width > 0 && img.height > 0) {
+                            p5Image.drawingContext.drawImage(img, 0, 0);
+                            resolve(p5Image);
+                        } else {
+                            reject(`Image loaded from localStorage with key: ${key} has zero width or height.`);
+                        }
+                    }
+                    img.onerror = function() {
+                        reject(`Failed to load image from localStorage with key: ${key}`);
+                    }
+                    img.src = dataUrl;
+                } else {
+                    reject(`No image found in localStorage with key: ${key}`);
+                }
+            });
         }
 
         function drawHexGrid() {
@@ -1874,6 +1947,43 @@
                     // draw the bestagon
                     hex.draw();
                 }
+                // draw the invertedBlackSprite
+                // push();
+                // // change draw mode to center
+                // imageMode(CENTER);
+                // translate(hex.x, hex.y);
+                // scale(hex.size * appstate.splatScale);
+
+                // // match the hex rotation angle, and mix in a tiny randomness if appstate.jitterSplatRotation is true
+                // if(appstate.jitterSplatRotation){
+                //     rotate(hex.rotation + random(-0.1, 0.1));
+                // }else{
+                //     rotate(hex.rotation);
+                // }
+
+                // // appstate.roundCapAlpha controls the 0-100 alpha value this should be drawn at
+                // let alpha = map(hex.size, 0, width, 255, 0); // Alpha based on distance from mouse
+                // alpha = constrain(alpha, 0, appstate.roundCapAlpha); // Constrain alpha to the roundCapAlpha value
+                                
+                // // Check if the image with the current alpha value is in the cache
+                // let imageKey = `image_${alpha}`;
+                // if (!tintedCache[imageKey]) {
+                //     // If not, create a new tinted image and save it in the cache
+                //     let tintedImage = createImage(invertedBlackSprite.width, invertedBlackSprite.height);
+                //     tintedImage.copy(invertedBlackSprite, 0, 0, invertedBlackSprite.width, invertedBlackSprite.height, 0, 0, invertedBlackSprite.width, invertedBlackSprite.height);
+                //     tintedImage.loadPixels();
+                //     for (let i = 0; i < tintedImage.pixels.length; i += 4) {
+                //         tintedImage.pixels[i + 3] = alpha; // Set the alpha value
+                //     }
+                //     tintedImage.updatePixels();
+                //     tintedCache[imageKey] = tintedImage;
+                // }
+                // // Draw the tinted image from the cache
+                // image(tintedCache[imageKey], 0, 0);
+
+                // drawSplatAtPositionWithTint(hex.x, hex.y, hex.size, getQuantizedColorKeyForHex(hex), 'IBS')
+
+                // pop();
             }
             // do the same for discardedHexes
             let toRemove = [];
@@ -1887,16 +1997,18 @@
 
 
                 // if it's scaled to zero, flag for removal
-                if(hex.size < 10){
+                if(hex.size < 1){
                     toRemove.push(hex);
                 }
-                if(appstate.drawSplats){
+
+                // a/b test: don't draw discarded hexes, splats only
+                //if(appstate.drawSplats){
                     drawSplatForHex(hex)
-                }
-                if(appstate.drawHexes){
-                    // draw the bestagon
-                    hex.draw();
-                }
+                //}
+                // if(appstate.drawHexes){
+                //     // draw the bestagon
+                //     hex.draw();
+                // }
             }
             // remove the flagged hexes
             appstate.discardedHexes = appstate.discardedHexes.filter(h => !toRemove.includes(h));
