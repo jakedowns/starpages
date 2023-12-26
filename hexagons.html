@@ -15,14 +15,31 @@
 <body>
     <div id="one-time" class="one-time">
         <style>
-            #safety-block{
+            #safety-block-blur-over {
                 z-index: 999;
                 position: absolute;
                 top: 0;
                 left: 0;
                 width: 100vw;
                 height: 100vh;
+                transition: all 3s ease-in-out;
+                backdrop-filter: blur(10px);
+            }
+            /* #safety-block-blur-over.blur {
+                backdrop-filter: blur(100px);
+            } */
+            #safety-block{
+                z-index: 998;
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
                 background-color: black;
+                background-image: url('/res/hexagons-background.png');
+                background-position: center center;
+                background-repeat: no-repeat;
+                background-size: cover;
             }
             h1 {
                 padding: 0;
@@ -57,19 +74,19 @@
             }
         </style>
         <h1>welcome to the 'hexagons' demo</h1>
-        <p>⚠️Photosensitivy warning; do not use this app if you are prone to photo-sensitivity side-effects.⚠️</p>
+        <p>⚠️Flashing light warning.⚠️ <br/>(🔊Audio-only Version coming soon!)</p>
         <div class="inner">
-        <p>press '/' to go fullscreen</p>
-        <p>press '.' to hide the ui</p>
-        <p>not working on mobile yet, sadly</p>
-        <p>press 'd' to delete all (clear)</p>
-        <p>hold "T" to "draw"</p>
-        <p>scroll mouse wheel to "zoom"</p>
-        <p></p>
-        <p>press 'r' to randomize settings</p>
+            <p>📺 press '/' to go fullscreen</p>
+            <p>🫧 press '.' to hide the ui</p>
+            <p>🤳 not working on mobile yet, sadly</p>
+            <p>🧹 press 'd' to delete all (clear)</p>
+            <p>👕 hold "T" to "draw"</p>
+            <p>🐹 scroll mouse wheel to "zoom"</p>
+            <p>🔀 press 'r' to randomize settings</p>
         </div>
         <button onclick="document.getElementsByClassName('one-time').forEach(t=>t.style.display='none')">ok</button>
     </div>
+    <div id="safety-block-blur-over" class="one-time"></div>
     <div id="safety-block" class="one-time"></div>
     <script>
         let LERP_FACTOR = 0.05; // Lerp factor for size
@@ -213,7 +230,20 @@
         let sliders = {}
         let dirtySinceReset = false;
 
+        function keyUp(){
+            if(key == 'p'){ 
+                appstate.drawHexes = !appstate.drawHexes;
+            }
+        }
+
         function keyPressed() {
+
+            if(key === 'q'){
+                plinkTriangleEnv.play()
+                appstate.quantize();
+            }
+
+            
 
             if(key === 'r'){
                 appstate.cursorIsHidden;
@@ -413,6 +443,9 @@
         
         /** main setup fn **/
         function setup() {
+            // setTimeout(()=>{
+            //     document.getElementById('safety-block-blur-over').classList.add('blur');
+            // },10)
             window.actionMap = new ActionMapComponent();
             console.warn('window.actionMap instance created:', window.actionMap);
 
@@ -1031,6 +1064,39 @@
                 return this.points[_t];
             }
 
+            /*
+            This function calculates the current point on the infinity plotter's path, 
+            using a sinusoidal easing function for smoother transitions. The easing function 
+            creates a pendulum-like movement, giving a feeling of rhythmic and continuous motion. 
+            This function also handles the transition between the two lobes of the infinity symbol, 
+            ensuring a smooth and continuous movement.
+            */
+            getCurrentPointEased(fcount){
+                let t = (fcount % (this.steps * 2)) / (this.steps * 2); // Adjusted to cover both lobes of the infinity symbol
+                let easedCount = t; // Use linear interpolation
+
+                let _t = easedCount * this.steps;
+
+                // Calculate the indices of the two points to interpolate between
+                let index1 = Math.floor(_t);
+                let index2 = Math.ceil(_t);
+
+                // Calculate the weight of the second point in the interpolation
+                let weight2 = _t - index1;
+
+                // Ensure the indices are within the bounds of the array
+                index1 = (index1 + this.steps) % this.steps;
+                index2 = (index2 + this.steps) % this.steps;
+
+                // Interpolate between the two points
+                let point1 = this.points[index1];
+                let point2 = this.points[index2];
+                let x = point1.x * (1 - weight2) + point2.x * weight2;
+                let y = point1.y * (1 - weight2) + point2.y * weight2;
+
+                return createVector(x, y);
+            }
+
             draw() {
                 // step t
                 this.t += 0.1;
@@ -1040,7 +1106,10 @@
 
                 push();
                 beginShape();
-                fill(this.color);
+                stroke(this.color);
+                strokeWeight(2);
+                //fill(this.color);
+                noFill();
                 for (let v of this.points) {
                     let x = v.x;// - width / 2;
                     //x = x * appstate.infinityScale;
@@ -1051,21 +1120,22 @@
                 endShape(CLOSE);
                 noFill();
 
-                    push();
-                    fill(255,255,100,255);
-                    noStroke();
-                    let curPoint = this.getCurrentPoint(frameCount);
-                    circle(curPoint.x, curPoint.y, 33);
-                    pop();
+                    // draw a bar that represents the current avgTargetVelocity.mag() value
+                    fill(255,255,255,100);
+                    rect(0,-height/2+25,avgTargetVelocity.mag()*10,50);
+                    noFill();
 
-                    for(let i = 0; i < 12; i++){
+                    // one for rollingAvgTargetVelocity
+                    fill(0,255,255,100);
+                    rect(0,-height/2+25,-rollingAvgTargetVelocity.mag()*10,50);
+                    noFill();
+
+                    for(let i = 12; i > 0; i--){
                         // draw a trail of previous points at a diminishing opacity and size
-                        // let prevPointIndex = (frameCount - i) % infinity_spline_point_cache.length;
-                        // // Ensure the index is within the bounds of the array
-                        // if (prevPointIndex < 0) {
-                        //     prevPointIndex += infinity_spline_point_cache.length;
-                        // }
-                        let prevPoint = this.getCurrentPoint(frameCount - i);
+                        let lookbackIndex = Math.floor(i*i);
+                        //lookbackIndex = Math.floor(lookbackIndex * avgTargetVelocity.mag() * 0.001)
+
+                        let prevPoint = this.getCurrentPointEased(frameCount - lookbackIndex);
                         push();
                         if(!prevPoint){
                             pop();
@@ -1088,6 +1158,13 @@
                         circle(prevPoint.x, prevPoint.y, 33 - (i * 2));
                         pop();
                     }
+                    // final point
+                    push();
+                    fill(255,255,100,255);
+                    noStroke();
+                    let curPoint = this.getCurrentPointEased(frameCount);
+                    circle(curPoint.x, curPoint.y, 33);
+                    pop();
 
                 pop();
             }
@@ -1111,7 +1188,7 @@
             leftControlX2 = width / 2 - 150, leftControlY2 = height / 2 + 100;
             rightControlX1 = width / 2 + 50, rightControlY1 = height / 2 - 100;
             rightControlX2 = width / 2 + 150, rightControlY2 = height / 2 + 100;
-            const STEPS = 400;
+            const STEPS = 2048;
 
             let totalLength = 0;
             let lengths = [];
@@ -1186,9 +1263,11 @@
         let avgMouseVelocity = { x: 0, y: 0 };
         let mousePositionHistory = [];
         let avgTargetVelocity;
+        let rollingAvgTargetVelocity;
         let targetPositionHistory = [];
         let directionChangeDectedThisFrame = false;
         let velocitySpikedThisFrame = false;
+        let prevAvgTargetVelocities = [];
         function updateVelocityMeasurements(){
             let {target} = appstate;
             mousePositionHistory.push({ x: mouseX, y: mouseY });
@@ -1202,6 +1281,9 @@
                     return acc;
                 }
             }, createVector(0, 0));
+
+            // remember previous avgTargetVelocity for rolling average
+            let prev_avgTargetVelocity = avgTargetVelocity.copy();
             
             avgTargetVelocity = targetPositionHistory.slice(-2).reduce((acc, p, i, arr) => {
                 if (i !== 0) {
@@ -1211,6 +1293,18 @@
                     return acc;
                 }
             }, createVector(0, 0));
+
+            // update rolling average
+            // To calculate a rolling average, we need to keep track of a certain number of previous values.
+            // Here we create an array to store the last 50 values of avgTargetVelocity to slow down the decay.
+            if (!prevAvgTargetVelocities.length) {
+                prevAvgTargetVelocities = new Array(50).fill(createVector(0, 0));
+            }
+            // We remove the oldest value and add the new one.
+            prevAvgTargetVelocities.shift();
+            prevAvgTargetVelocities.push(avgTargetVelocity.copy());
+            // We calculate the rolling average as the average of the values in the array.
+            rollingAvgTargetVelocity = prevAvgTargetVelocities.reduce((acc, val) => p5.Vector.add(acc, val), createVector(0, 0)).div(prevAvgTargetVelocities.length);
 
             // if the direction of the target velocity changed dramatically this frame (near 180 degrees), then set a flag to play a strike sound
             let targetVelocityDirection = avgTargetVelocity.heading();
@@ -1371,35 +1465,38 @@
                 //snareSynth.amp(0, 1);
             }
 
-            // Define the frequencies for the C Major scale
-            // Define the frequencies for the C Major scale
-            const cMajorScale = [
-                // 1st octave (one full step down)
-                130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63,
-                // 2nd octave (middle C octave)
-                261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25,
-                // 3rd octave (one full step up)
-                523.25*2, 587.33*2, 659.26*2, 698.46*2, 783.99*2, 880.00*2, 987.77*2, 1046.50*2
+            // Define the 8 root note frequencies
+            const rootNotes = [
+                130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63
             ];
-            // Map the mouseX position to a note in the cMajorScale array
-            let noteIndex = round(map(mouseX, 0, width, 0, 7)); // Each octave has 8 notes, so we map to 0-7
-            // Map the mouseY position to an octave jump
-            let octaveJump = round(map(mouseY, 0, height, 0, 2)); // We allow for 2 octave jumps
-            // Calculate the final index in the cMajorScale array
-            let index = noteIndex + octaveJump * 8; // Jump to the correct octave
 
-            // Use the index to set the frequency from the cMajorScale array
-            createSynth.freq(cMajorScale[index]);
+            // Map the mouseX position to a note in the rootNotes array
+            // Snap mouseX into increments of 8
+            let noteIndex = round(map(mouseX, 0, width, 0, rootNotes.length - 1) / 8) * 8;
 
-            // using another oscillator, drive the amp of the createSynth such that
-            // it's ALLOWED to reach it's current amp via getAmp OR the other sine wave forces it to 0
-            // refer to it as createSynthAmpscillator (assumed it's already defined)
+            // Map the mouseY position to a pitch bend factor
+            // Center of y (height / 2) = no pitch bend
+            let pitchBend = map(mouseY, 0, height, 0.5, 2); // Adjust these values as needed
+
+            // Calculate the final frequency
+            let frequency = rootNotes[noteIndex] * pitchBend;
+
+            // Set the frequency of the createSynth
+            createSynth.freq(frequency);
+
+            // Map the mouseY position to a volume level
+            let volumeLevel = map(mouseY, 0, height, 0, 1); // We map the volume level from 0 to 1
+
+            // Set the volume level of the createSynth
+            createSynth.amp(volumeLevel);
+
+            // Using another oscillator, drive the amp of the createSynth such that
+            // it's ALLOWED to reach its current amp via getAmp OR the other sine wave forces it to 0
+            // Refer to it as createSynthAmpscillator (assumed it's already defined)
             createSynth.amp(constrain(createSynth.getAmp() * createSynthAmpscillator.getAmp(), 0, 0.7));
 
-            // same for deleteSynth
+            // Same for deleteSynth
             deleteSynth.amp(constrain(deleteSynth.getAmp() * createSynthAmpscillator.getAmp(), 0, 0.7));
-
-            // console.warn(snareSynth.getAmp(),{
             //     a: directionChangeDectedThisFrame,
             //     b: velocitySpikedThisFrame,
             //     c: keyIsDown(SHIFT)
@@ -1435,7 +1532,8 @@
                 appstate.target.x = mouseX;
                 appstate.target.y = mouseY;
             }else if(appstate.currentTargetMode === TARGET_MODE_INFINITY){
-                let infinityPoint = getPointOnCurveForFrame(frameCount);
+                /** @see InfinityPlotter.getCurrentPointEased **/
+                let infinityPoint = plotter.getCurrentPointEased(frameCount);
                 appstate.target.x = infinityPoint.x;
                 appstate.target.y = infinityPoint.y;
             }else{

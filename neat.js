@@ -11986,6 +11986,15 @@ const InvokableCommands = {
     ["YouTube - Joe Pera Talks you back to sleep"](){
         return "https://www.youtube.com/watch?v=DSUilYKcRMA";
     },
+    ["new factory simulation"](){
+        // google:"shapez2 trailer" play:"first result"
+        system.invoke("https://www.youtube.com/watch?v=0VO_52LJ268") 
+
+        // google: "factorio", "satisfactory", "gary's mod"
+    },
+    ["new family tree"](){
+        system.todo("🪃 so do it then!")
+    },
     ["New Fact"](){},
     ["New Thing"](){},
     ["New Type"](){},
@@ -13191,6 +13200,26 @@ const InvokableCommands = {
     },
 
     "what do i have going on today?":"check my calendar",
+
+    "hexagons": "https://jakedowns.github.io/starpages/hexagons.html",
+    "hexagons (new window)"(){
+        let handle = window.open("https://jakedowns.github.io/starpages/hexagons.html", "_blank", "width=800,height=600");
+        // do something fun with the window like move it in a circle
+        const startedAt = Date.now();
+        let angle = 0;
+        let radius = 100;
+        let centerX = window.innerWidth / 2;
+        let centerY = window.innerHeight / 2;
+        let interval = setInterval(() => {
+            let x = centerX + radius * Math.cos(angle);
+            let y = centerY + radius * Math.sin(angle);
+            handle.moveTo(x, y);
+            angle += 0.01;
+            if(Date.now() - startedAt > 10000){
+                clearInterval(interval);
+            }
+        }, 10);
+    },
     
     "new shader": "https://shaderfrog.com/2/editor/create/three",
     "https://shaderfrog.com/2/editor/create/three": RES,
