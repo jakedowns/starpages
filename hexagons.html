@@ -16,7 +16,7 @@
     <script>
         let LERP_FACTOR = 0.05; // Lerp factor for size
         let oldCenter; // Previous center of the screen for resize event
-
+        const editor_defaults = {}
         let uiContainer, uiInner; // UI container
         let uiDrawerTab; // uitab tabui
         let countdownText,countdownInterval,countdown_i; const COUNTDOWN_START = 3;
@@ -36,6 +36,7 @@
         const TARGET_MODE_CENTER = 2;
 
         window._appstate = {
+            snapCreateToGrid: 0,
             infinityScale: 1,
             clearBg: true,
             // public params
@@ -152,37 +153,52 @@
         }
         let buttons = {}
         let sliders = {}
+        let dirtySinceReset = false;
 
         function keyPressed() {
 
             if(key === 'r'){
-                reset();
+                appstate.cursorIsHidden;
+                if(dirtySinceReset){
+                    reset();
+                    dirtySinceReset = false;
+                }else{
+                    dirtySinceReset = true;
+                    randomize();
+                }
             }
 
             if(key === 'c'){
+                plinkTriangleEnv.play()
                 appstate.myColorMode = (appstate.myColorMode + 1) % MAX_COLOR_MODES_AVAILABLE;
             }
 
             if(key === 'f'){
+                plinkTriangleEnv.play()
                 appstate.currentTargetMode = (appstate.currentTargetMode + 1) % 3;
             }
 
             if(key === 'd'){
+                plinkTriangleEnv.play()
                 deleteAllHexagons();
             }
 
             if (key === 'Escape') {
                 if (appstate.isFullscreen) {
+                    plinkTriangleEnv.play()
                     fullscreen(false);
                     appstate.isFullscreen = false;
+                    appstate.cursorIsHidden = false;
                 }
             }
             if (key === '.'){
+                plinkTriangleEnv.play()
                 // Toggle UI visibility
                 appstate.isUiVisible = !appstate.isUiVisible;
                 updateUI();
             }
             if (key === '/') {
+                plinkTriangleEnv.play()
                 // Toggle fullscreen mode
                 appstate.isFullscreen = !appstate.isFullscreen;
                 fullscreen(appstate.isFullscreen);
@@ -315,6 +331,8 @@
         let deleteSynth, deleteEnv, createEnv, createSynth;
         let createSynthAmpscillator;
 
+        let plinkTriangleSynth, plinkTriangleEnv, plinkReverb;
+
         // on mouse-wheel update "appstate.infinityScale"
         function mouseWheel(event) {
             //console.warn('mouseWheel', event);
@@ -329,9 +347,32 @@
             //console.warn('appstate.infinityScale',appstate.infinityScale);
             sdb();
         }
+
+        function setupActionMap(){
+
+        }
         
         
+        /** main setup fn **/
         function setup() {
+            window.actionMap = new ActionMapComponent();
+            console.warn('window.actionMap instance created:', window.actionMap);
+
+
+            plinkTriangleEnv = new p5.Env(0.001, 0.1, 0, 0);
+            plinkTriangleEnv.setRange(1,0);
+
+            plinkTriangleSynth = new p5.Oscillator();
+            plinkTriangleSynth.setType('triangle'); // sine, triangle, sawtooth, square
+            plinkTriangleSynth.freq(440);
+            plinkTriangleSynth.amp(plinkTriangleEnv);
+            plinkTriangleSynth.start();
+
+            // Set the reverb parameters: reverbTime, decayRate
+            plinkReverb = new p5.Reverb();
+            plinkReverb.process(plinkTriangleSynth, 3, 2);
+
+
             oldCenter = createVector(width / 2, height / 2); // og center reading
             bassEnv = new p5.Env();
             bassEnv.setADSR(0.001, 0.1, 0, 0); // Attack, Decay, Sustain, Release
@@ -347,7 +388,7 @@
 
             createSynth = new p5.Oscillator();
             createSynth.setType('square'); // sine, triangle, sawtooth, square
-            createSynth.freq(lerp(mouseX, 0, width, 66, 666));
+            createSynth.freq(lerp(mouseY, 0, height, 66, 666));
             createSynth.amp(0);
             createSynth.start();
 
@@ -437,6 +478,84 @@
             sdb();
         }
 
+        function randomize(){
+                // pick random values based on the slider ranges
+                for (let key in sliders) {
+                    if (sliders.hasOwnProperty(key)) {
+                        let slider = sliders[key];
+                        let {min,max} = slider;
+                        let randomVal = random(min,max);
+                        slider.action(randomVal);
+                        slider.instance.value(randomVal);
+                    }
+                }
+                // pick random values for the buttons
+                for (let key in buttons) {
+                    if (buttons.hasOwnProperty(key)) {
+                        let button = buttons[key];
+                        if(key === 'toggleRecording' || key === 'reset' || key === 'isUiVisible' || key === 'random' || button.ignore){
+                            continue;
+                        }
+                        let {min,max} = button;
+                        let randomVal = random(min,max);
+                        button.action(randomVal);
+                        button.instance.html(button.label + ` (${randomVal})`);
+                    }
+                }
+            }
+
+            function reset(){
+                // loop through all the editor defaults and set them
+                for (let key in editor_defaults) {
+                    if (
+                        editor_defaults.hasOwnProperty(key) 
+                        && appstate.hasOwnProperty(key) 
+                        && typeof editor_defaults[key] !== 'undefined'
+                    ) {
+                        appstate[key] = editor_defaults[key];
+                        console.warn('reset to ',key,'to',editor_defaults[key]);
+
+                        if(sliders.hasOwnProperty(key)){
+                            sliders[key].instance.value(editor_defaults[key]);
+                        }
+                        else if(buttons.hasOwnProperty(key)){
+                            buttons[key].instance.html(buttons[key].label + ` (${editor_defaults[key]})`);
+                        }
+
+                    }else{
+                        console.warn('failed to reset',key);
+                    }
+                }
+            }
+
+        function snapToGrid(x,y){
+            let {hexSize} = appstate;
+            let gridX = Math.round(x / hexSize) * hexSize;
+            let gridY = Math.round(y / hexSize) * hexSize;
+            return {x: gridX, y: gridY};
+        }
+
+        /**
+         * 
+         * TOOD: keep a history so we can offer UNDO and time-travelling debugging
+         * 
+         **/
+        function snapAllHexesToGrid(){
+            // for all hexes (and discarded hexes)
+            // snap their selfTargetX, selfTargetY to the nearest grid point
+            for(let hex of appstate.hexagons){
+                let {selfTargetX,selfTargetY} = hex;
+                let {x,y} = snapToGrid(selfTargetX,selfTargetY);
+                hex.selfTargetX = x;
+                hex.selfTargetY = y;
+            }
+            for(let hex of appstate.discardedHexes){
+                let {selfTargetX,selfTargetY} = hex;
+                let {x,y} = snapToGrid(selfTargetX,selfTargetY);
+                hex.selfTargetX = x;
+                hex.selfTargetY = y;
+            }
+        }
         function createUI(){
             createCountdownElement();
             // Create UI container
@@ -510,59 +629,9 @@
                 updateUI();
             });
 
-            const editor_defaults = {
+            
 
-            }
-
-            function randomize(){
-                // pick random values based on the slider ranges
-                for (let key in sliders) {
-                    if (sliders.hasOwnProperty(key)) {
-                        let slider = sliders[key];
-                        let {min,max} = slider;
-                        let randomVal = random(min,max);
-                        slider.action(randomVal);
-                        slider.instance.value(randomVal);
-                    }
-                }
-                // pick random values for the buttons
-                for (let key in buttons) {
-                    if (buttons.hasOwnProperty(key)) {
-                        let button = buttons[key];
-                        if(key === 'toggleRecording' || key === 'reset' || key === 'isUiVisible' || key === 'random' || button.ignore){
-                            continue;
-                        }
-                        let {min,max} = button;
-                        let randomVal = random(min,max);
-                        button.action(randomVal);
-                        button.instance.html(button.label + ` (${randomVal})`);
-                    }
-                }
-            }
-
-            function reset(){
-                // loop through all the editor defaults and set them
-                for (let key in editor_defaults) {
-                    if (
-                        editor_defaults.hasOwnProperty(key) 
-                        && appstate.hasOwnProperty(key) 
-                        && typeof editor_defaults[key] !== 'undefined'
-                    ) {
-                        appstate[key] = editor_defaults[key];
-                        console.warn('reset to ',key,'to',editor_defaults[key]);
-
-                        if(sliders.hasOwnProperty(key)){
-                            sliders[key].instance.value(editor_defaults[key]);
-                        }
-                        else if(buttons.hasOwnProperty(key)){
-                            buttons[key].instance.html(buttons[key].label + ` (${editor_defaults[key]})`);
-                        }
-
-                    }else{
-                        console.warn('failed to reset',key);
-                    }
-                }
-            }
+            
             function handleButtonPress(button,key){
                 console.warn('handleButtonPress',button,key)
                 button.action(appstate[key]);
@@ -590,6 +659,16 @@
             }
 
             buttons = {
+                'quantize': {
+                    label: 'Quantize', 
+                    key: 'quantize',
+                    action: snapAllHexesToGrid
+                },
+                'snapCreateToGrid': {
+                    label: 'Snap Create To Grid',
+                    key: 'snapCreateToGrid',
+                    action: function () { appstate.snapCreateToGrid = !appstate.snapCreateToGrid; }
+                },
                 'clearBg': {
                     key: 'clearBg',
                     label: 'Clear Background', 
@@ -1109,7 +1188,7 @@
                 hex.size = Math.max(hex.size, 1);
                 hex.targetSize = hex.size;
                 setTimeout(()=>{
-                    //hex.targetSize = 0;
+                    hex.targetSize = 0;
                     // return to source...
                     hex.selfTargetX = width/2;
                     hex.selfTargetY = height/2;
@@ -1124,12 +1203,46 @@
                 hexagonCount: appstate.hexagons.length
             })
         }
+
+        /* define a vue-like plain component */
+        class ActionMapComponent {
+            template = `
+<div class="actionmap">
+    <div class="actionmap_action" v-for="action in actions" >
+        <div class="actionmap_action_key">{{action.key}}</div>
+        <div class="actionmap_action_label">{{action.label}}</div>
+    </div>
+    <div class="actionmap_action_actions">
+        <div>Clear All Bindings</div>
+        <div>Add Binding...</div>
+    </div>
+</div>
+`
+            mounted(){
+                console.warn('ActionMapComponent mounted');
+            }
+            data(){
+                return {
+                    actions: [{key:"TODO_BUILD_ACTIONS_LIST",label:"TODO: Build Actions List!"}]
+                }
+            }
+            computed = {
+                
+            }
+        }
+
         function updateSynths(){
 
             let {target} = appstate;
             //if the mouse button is pressed, the amplitude is based on the mapped value of target between 0 and width
-            if (mouseIsPressed || keyIsDown(32)) {
-                bassSynthTargetAmp = 0.5;
+            // or if the spacebar is pressed
+            // or if B is pressed (upper or lowercase)
+            if (mouseIsPressed 
+            || keyIsDown(32) // spacebar 
+            || keyIsDown(66) // B 
+            //|| keyIsDown(16) // SHIFT
+            ) {
+                bassSynthTargetAmp = 1;
                 //synth.amp(map(target.x, 0, width, 1, 0), 0.1);
                 // and we switch to square wave
                 //synth.setType('square');
@@ -1200,7 +1313,25 @@
                 //snareSynth.amp(0, 1);
             }
 
-            createSynth.freq(map(mouseX, 0, width, 66, 666));
+            // Define the frequencies for the C Major scale
+            // Define the frequencies for the C Major scale
+            const cMajorScale = [
+                // 1st octave (one full step down)
+                130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63,
+                // 2nd octave (middle C octave)
+                261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25,
+                // 3rd octave (one full step up)
+                523.25*2, 587.33*2, 659.26*2, 698.46*2, 783.99*2, 880.00*2, 987.77*2, 1046.50*2
+            ];
+            // Map the mouseX position to a note in the cMajorScale array
+            let noteIndex = round(map(mouseX, 0, width, 0, 7)); // Each octave has 8 notes, so we map to 0-7
+            // Map the mouseY position to an octave jump
+            let octaveJump = round(map(mouseY, 0, height, 0, 2)); // We allow for 2 octave jumps
+            // Calculate the final index in the cMajorScale array
+            let index = noteIndex + octaveJump * 8; // Jump to the correct octave
+
+            // Use the index to set the frequency from the cMajorScale array
+            createSynth.freq(cMajorScale[index]);
 
             // using another oscillator, drive the amp of the createSynth such that
             // it's ALLOWED to reach it's current amp via getAmp OR the other sine wave forces it to 0
@@ -1469,6 +1600,10 @@
             for(let hex of newHexagons){
                 hex.selfTargetX += centerDelta.x;
                 hex.selfTargetY += centerDelta.y;
+                // let's also set them backward a proportional amount
+                // so they lerp to the new position
+                hex.x -= centerDelta.x;
+                hex.y -= centerDelta.y;
             }
             oldCenter = newCenter;
 
@@ -1585,7 +1720,7 @@
 
 
                 // if it's scaled to zero, flag for removal
-                if(hex.size < 0.01){
+                if(hex.size < 10){
                     toRemove.push(hex);
                 }
                 if(appstate.drawSplats){
