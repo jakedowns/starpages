@@ -74,18 +74,17 @@
             }
         </style>
         <h1 style="text-align: center;">welcome to the 'hexagons' demo</h1>
-        <p style="text-align: center;">⚠️Flashing light warning.⚠️ <br/>(🔊Audio-only Version coming soon!)</p>
+        <p style="text-align: center;">⚠️Flashing light warning.⚠️ <br/>(🔊Audio-only Version coming soon!)<br/>🤳 not working on mobile yet, sadly</p>
         <div class="inner" >
             <p style="text-align: center;">⌨️ press 'k' to see this menu</p>
             <h4 style="text-align: center;">shortcuts</h4>
             <ul>
-                <li>📺 press '/' to go fullscreen</li>
-                <li>🫧 press '.' to hide the ui</li>
-                <li>🤳 not working on mobile yet, sadly</li>
-                <li>🧹 press 'd' to delete all (clear)</li>
-                <li>👕 hold "T" to "draw"</li>
                 <li>🐹 scroll mouse wheel to "zoom"</li>
+                <li>👕 hold "T" to "draw"</li>
+                <li>🧹 press 'd' to delete all (clear)</li>
                 <li>🔀 press 'r' to randomize settings</li>
+                <li>🫧 press '.' to hide the ui</li>
+                <li>📺 press '/' to go fullscreen</li>
             </ul>
         </div>
         <button onclick="document.getElementsByClassName('one-time').forEach(t=>t.style.display='none')">ok</button>
@@ -234,10 +233,17 @@
         let sliders = {}
         let dirtySinceReset = false;
 
-        function keyUp(){
+        function keyReleased(){
             if(key == 'p'){ 
                 appstate.drawHexes = !appstate.drawHexes;
             }
+            if(key == 'o'){ 
+                appstate.drawSplats = !appstate.drawSplats;
+            }
+            if(key == 'k'){
+                document.getElementById('one-time').style.display = 'block';
+            }
+            plinkTriangleEnv.play()
         }
 
         function keyPressed() {
