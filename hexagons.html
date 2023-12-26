@@ -73,16 +73,20 @@
                 color: palegoldenrod;
             }
         </style>
-        <h1>welcome to the 'hexagons' demo</h1>
-        <p>⚠️Flashing light warning.⚠️ <br/>(🔊Audio-only Version coming soon!)</p>
-        <div class="inner">
-            <p>📺 press '/' to go fullscreen</p>
-            <p>🫧 press '.' to hide the ui</p>
-            <p>🤳 not working on mobile yet, sadly</p>
-            <p>🧹 press 'd' to delete all (clear)</p>
-            <p>👕 hold "T" to "draw"</p>
-            <p>🐹 scroll mouse wheel to "zoom"</p>
-            <p>🔀 press 'r' to randomize settings</p>
+        <h1 style="text-align: center;">welcome to the 'hexagons' demo</h1>
+        <p style="text-align: center;">⚠️Flashing light warning.⚠️ <br/>(🔊Audio-only Version coming soon!)</p>
+        <div class="inner" >
+            <p style="text-align: center;">⌨️ press 'k' to see this menu</p>
+            <h4 style="text-align: center;">shortcuts</h4>
+            <ul>
+                <li>📺 press '/' to go fullscreen</li>
+                <li>🫧 press '.' to hide the ui</li>
+                <li>🤳 not working on mobile yet, sadly</li>
+                <li>🧹 press 'd' to delete all (clear)</li>
+                <li>👕 hold "T" to "draw"</li>
+                <li>🐹 scroll mouse wheel to "zoom"</li>
+                <li>🔀 press 'r' to randomize settings</li>
+            </ul>
         </div>
         <button onclick="document.getElementsByClassName('one-time').forEach(t=>t.style.display='none')">ok</button>
     </div>
@@ -1120,15 +1124,15 @@
                 endShape(CLOSE);
                 noFill();
 
-                    // draw a bar that represents the current avgTargetVelocity.mag() value
-                    fill(255,255,255,100);
-                    rect(0,-height/2+25,avgTargetVelocity.mag()*10,50);
-                    noFill();
+                    // // draw a bar that represents the current avgTargetVelocity.mag() value
+                    // fill(255,255,255,100);
+                    // rect(0,-height/2+25,avgTargetVelocity.mag()*10,50);
+                    // noFill();
 
-                    // one for rollingAvgTargetVelocity
-                    fill(0,255,255,100);
-                    rect(0,-height/2+25,-rollingAvgTargetVelocity.mag()*10,50);
-                    noFill();
+                    // // one for rollingAvgTargetVelocity
+                    // fill(0,255,255,100);
+                    // rect(0,-height/2+25,-rollingAvgTargetVelocity.mag()*10,50);
+                    // noFill();
 
                     for(let i = 12; i > 0; i--){
                         // draw a trail of previous points at a diminishing opacity and size
