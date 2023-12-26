@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Content Viewer</title>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    .text-white {
+        color: #fff;
+    }
+  /* Additional CSS */
+  .menu-button {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .desktop-menu {
+      display: none;
+    }
+    .menu-button {
+      display: block;
+    }
+    /* Adjust layout for tablet landscape/desktop */
+    .layout {
+      display: flex;
+    }
+    .menu-sections {
+      flex-basis: 30%;
+    }
+    .content-viewer {
+      flex-basis: 70%;
+      margin-left: 1rem;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .mobile-menu {
+      display: none;
+    }
+  }
+
+  /* Dark theme styling */
+  body {
+    background-color: #111827; /* Tailwind color: bg-gray-900 */
+  }
+
+  .menu-section {
+    background-color: #4B5563; /* Tailwind color: bg-gray-600 */
+    color: #F9FAFB; /* Tailwind color: text-gray-100 */
+  }
+
+  .menu-section:hover {
+    background-color: #6B7280; /* Tailwind color: bg-gray-500 */
+  }
+
+  .active-section {
+    background-color: #6D28D9; /* Tailwind color: bg-purple-700 */
+  }
+
+  .title {
+    color: #F9FAFB; /* Tailwind color: text-gray-100 */
+  }
+
+  .mobile-menu-button {
+    color: #F9FAFB; /* Tailwind color: text-gray-100 */
+  }
+
+  .mobile-menu-close {
+    color: #EF4444; /* Tailwind color: text-red-500 */
+  }
+
+  /* Content Viewer */
+  .content-viewer {
+    background-color: #1F2937; /* Tailwind color: bg-gray-800 */
+    color: #F9FAFB; /* Tailwind color: text-gray-100 */
+    padding: 2rem;
+    margin-top: 1rem;
+    border-radius: 0.5rem;
+  }
+</style>
+</head>
+<body class="font-sans">
+
+<!-- Combined Layout -->
+<div class="layout">
+  <!-- Menu Sections -->
+  <div class="menu-sections flex flex-col items-start p-8">
+    <div class="text-2xl font-bold mb-4 title">building tetris with p5.js and chatGPT</div>
+    <div class="text-l font-semibold mb-2 text-white">A step by step guide to building a Tetris game with p5.js and integrating it with chatGPT for an interactive tutorial experience.<br/>using Gherkin Behavior Driven Development focused prompting</div>
+    <div class="space-y-2">
+      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('building')">1. building the grid</div>
+      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('tetrominos')">2. tetrominos</div>
+      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('game')">3. game loop</div>
+      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('controls')">4. controls</div>
+      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('mobile')">5. mobile touch responsive considerations</div>
+      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('future')">6. future work</div>
+    </div>
+  </div>
+  <!-- Content Viewer -->
+  <div class="content-viewer" id="contentViewer">Select a section to view details.</div>
+</div>
+
+<!-- Mobile Layout -->
+<div class="md:hidden">
+  <div class="flex flex-col items-center p-4">
+    <div class="flex justify-between items-center w-full mb-4">
+      <div class="text-xl font-bold title">title</div>
+      <button class="menu-button text-3xl mobile-menu-button" onclick="toggleMobileMenu()">
+        &#9776;
+      </button>
+    </div>
+    <div class="content-viewer" id="mobileContentViewer">Select a section to view details.</div>
+  </div>
+  <!-- Mobile Menu -->
+  <div class="mobile-menu absolute top-0 left-0 w-full h-full bg-gray-800 p-4 hidden" id="mobileMenu">
+    <div class="flex justify-between items-center mb-4">
+      <div class="text-xl font-bold title">pick section:</div>
+      <button class="text-2xl mobile-menu-close" onclick="toggleMobileMenu()">&times;</button>
+    </div>
+    <div class="space-y-2">
+      <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('building')">1. building the grid</div>
+      <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('tetrominos')">2. tetrominos</div>
+      <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('game')">3. game loop</div>
+        <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('controls')">4. controls</div>
+        <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('mobile')">5. mobile touch responsive considerations</div>
+        <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('future')">6. future work</div>
+    </div>
+  </div>
+</div>
+
+<div id="building" class="content hidden">
+<h2 class="text-2xl font-bold mb-4">Building the Grid</h2>
+<p class="mb-4">In this section, we will discuss how to build the grid for our Tetris game using p5.js. The grid is a crucial component of the game as it is where the Tetris blocks will be placed and moved around.</p>
+<p class="mb-4">We will be using a 2D array to represent our grid. Each cell in the array will represent a cell in the Tetris grid. We will initialize all cells to be empty at the start of the game.</p>
+<p class="mb-4">We will also need to create a function to draw the grid on the screen. This function will loop through each cell in our 2D array and draw a square at the corresponding location on the screen.</p>
+<p class="mb-4">Finally, we will need to create a function to update the grid. This function will be called whenever a Tetris block is moved or rotated. It will update the 2D array to reflect the new state of the grid.</p>
+</div>
+
+<div id="tetrominos" class="content hidden">
+<h2 class="text-2xl font-bold mb-4">Tetrominos</h2>
+<p class="mb-4">In this section, we will discuss how to create the Tetrominos for our Tetris game using p5.js. The Tetrominos are the shapes that will be falling from the top of the screen. There are seven different Tetrominos in total: I, J, L, O, S, T, and Z.</p>
+<p class="mb-4">We will be using a 2D array to represent each Tetromino. Each cell in the array will represent a cell in the Tetromino. We will initialize all cells to be empty at the start of the game.</p>
+<p class="mb-4">We will also need to create a function to draw the Tetromino on the screen. This function will loop through each cell in our 2D array and draw a square at the corresponding location on the screen.</p>
+<p class="mb-4">Finally, we will need to create a function to update the Tetromino. This function will be called whenever a Tetromino is moved or rotated. It will update the 2D array to reflect the new state of the Tetromino.</p>
+</div>
+
+<div id="game" class="content hidden">
+<h2 class="text-2xl font-bold mb-4">Game Loop</h2>
+<p class="mb-4">In this section, we will discuss how to create the game loop for our Tetris game using p5.js. The game loop is responsible for updating the state of the game and drawing it on the screen.</p>
+<p class="mb-4">We will need to create a function to update the state of the game. This function will be called every frame and will be responsible for updating the position of the Tetromino and checking if it has collided with any other Tetrominos.</p>
+<p class="mb-4">We will also need to create a function to draw the state of the game on the screen. This function will be called every frame and will be responsible for drawing the Tetromino and the grid.</p>
+<p class="mb-4">Finally, we will need to create a function to handle user input. This function will be called whenever the user presses a key on the keyboard. It will be responsible for moving the Tetromino and rotating it.</p>
+</div>
+
+<div id="controls" class="content hidden">
+<h2 class="text-2xl font-bold mb-4">Controls</h2>
+<p class="mb-4">In this section, we will discuss how to create the controls for our Tetris game using p5.js. The controls are responsible for moving the Tetromino and rotating it.</p>
+<p class="mb-4">We will need to create a function to handle user input. This function will be called whenever the user presses a key on the keyboard. It will be responsible for moving the Tetromino and rotating it.</p>
+<p class="mb-4">We will also need to create a function to check if the Tetromino has collided with any other Tetrominos. This function will be called whenever the Tetromino is moved or rotated. It will be responsible for checking if the Tetromino has collided with any other Tetrominos.</p>
+<p class="mb-4">Finally, we will need to create a function to update the state of the game. This function will be called every frame and will be responsible for updating the position of the Tetromino and checking if it has collided with any other Tetrominos.</p>
+</div>
+
+<div id="mobile" class="content hidden">
+<h2 class="text-2xl font-bold mb-4">Mobile Touch Responsive Considerations</h2>
+<p class="mb-4">In this section, we will discuss how to make our Tetris game touch responsive using p5.js. The game will be playable on both desktop and mobile devices.</p>
+<p class="mb-4">We will need to create a function to handle user input. This function will be called whenever the user presses a key on the keyboard or touches the screen. It will be responsible for moving the Tetromino and rotating it.</p>
+<p class="mb-4">We will also need to create a function to check if the Tetromino has collided with any other Tetrominos. This function will be called whenever the Tetromino is moved or rotated. It will be responsible for checking if the Tetromino has collided with any other Tetrominos.</p>
+<p class="mb-4">Finally, we will need to create a function to update the state of the game. This function will be called every frame and will be responsible for updating the position of the Tetromino and checking if it has collided with any other Tetrominos.</p>
+</div>
+
+<div id="future" class="content hidden">
+<h2 class="text-2xl font-bold mb-4">Future Work</h2>
+<p class="mb-4">In this section, we will discuss some ideas for future work on our Tetris game using p5.js. The game is currently playable on both desktop and mobile devices.</p>
+<p class="mb-4">We could add more Tetrominos to the game. There are seven different Tetrominos in total: I, J, L, O, S, T, and Z.</p>
+<p class="mb-4">We could also add more levels to the game. Currently, there is only one level.</p>
+<p class="mb-4">We could also add a high score system to the game. Currently, there is no way to keep track of the player's score.</p>
+<p class="mb-4">We could also consider adding a multiplayer mode to the game. This would allow players to compete against each other in real-time, adding a new level of challenge and excitement to the game.</p>
+<p class="mb-4">We could also consider adding custom themes to the game. This would allow players to personalize their gaming experience and make the game more visually appealing.</p>
+
+</div>
+
+<script>
+  // JavaScript for showing and hiding content
+  function showContent(id) {
+    const content = document.getElementById(id);
+    //content.classList.remove('hidden');
+    // show content in .content-viewer elements
+    document.querySelectorAll('.content-viewer').forEach(viewer => {
+      viewer.innerHTML = content.innerHTML;
+    });
+  }
+
+  function hideContent(id) {
+    const content = document.getElementById(id);
+    //content.classList.add('hidden');
+    // clear .content-viewer
+  }
+
+  // select the first section by default
+  document.addEventListener('DOMContentLoaded', () => {
+    showContent('building');
+  });
+
+  // Modify switchContent and switchContentMobile functions to show and hide content
+  function switchContent(section) {
+    hideAllContent();
+    showContent(section);
+  }
+
+  function switchContentMobile(section) {
+    hideAllContent();
+    showContent(section);
+    toggleMobileMenu();
+  }
+
+  function hideAllContent() {
+    hideContent('building');
+    // Add more hideContent calls here for other sections
+  }
+</script>
+
+
+<script>
+  // JavaScript for mobile menu toggle
+  function toggleMobileMenu() {
+    const mobileMenu = document.getElementById('mobileMenu');
+    mobileMenu.classList.toggle('hidden');
+  }
+
+  // JavaScript for content switching
+//   function switchContent(section) {
+//     const contentViewer = document.getElementById('contentViewer');
+//     contentViewer.textContent = `Content for ${section}`;
+//   }
+
+//   function switchContentMobile(section) {
+//     const mobileContentViewer = document.getElementById('mobileContentViewer');
+//     mobileContentViewer.textContent = `Content for ${section}`;
+//     toggleMobileMenu();
+//   }
+</script>
+
+</body>
+</html>

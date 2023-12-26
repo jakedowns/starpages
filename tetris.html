@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Game Prototype</title>
+    <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            background-color: #121212;
+            color: #fff;
+        }
+
+        .game-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            max-width: 100vw;
+            margin: auto;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-gap: 2px;
+            width: 100%;
+            height: 100%;
+        }
+
+        .grid-cell {
+            background-color: #333;
+            border: 1px solid #444;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="game-container">
+        <div id="tetris-grid" class="grid"></div>
+    </div>
+
+    <script>
+        let tetrisBlocks = [];
+        let currentBlock;
+        let gameSpeed = 1000;
+        let lastMove = 0;
+        function setup() {
+            noCanvas();
+            //gameLogic();
+        }
+        // redraw the grid on resize
+        window.addEventListener('resize', drawGrid);
+        function draw() {
+            gameLoop();
+        }
+
+        function drawGrid() {
+            const tetrisGrid = select('#tetris-grid');
+            // Clear existing grid
+            tetrisGrid.html('');
+            // Standard Tetris grid size is 10x20
+            for (let i = 0; i < 200; i++) {
+                const cell = createDiv('');
+                cell.addClass('grid-cell');
+                tetrisGrid.child(cell);
+            }
+        }
+
+        function createBlock() {
+            let blockTypes = [
+                [[1, 1, 1, 1]],
+                [[1, 1], [1, 1]],
+                [[1, 1, 0], [0, 1, 1]],
+                [[0, 1, 1], [1, 1]],
+                [[1, 1, 1], [0, 1, 0]],
+                [[0, 1, 1], [0, 1, 0], [0, 1, 0]],
+                [[1, 1], [1, 0], [1, 0]]
+            ];
+            let blockType = blockTypes[floor(random(0, blockTypes.length))];
+            let block = {
+                x: floor(random(0, 10)),
+                y: 0,
+                blockType: blockType
+            };
+            return block;
+        }
+
+        function drawBlock(block) {
+            for (let y = 0; y < block.blockType.length; y++) {
+                for (let x = 0; x < block.blockType[y].length; x++) {
+                    if (block.blockType[y][x] === 1) {
+                        let cell = select('#tetris-grid').child((block.y + y) * 10 + block.x + x);
+                        cell.style('background-color', '#f00');
+                    }
+                }
+            }
+        }
+
+        function moveBlock(block, x, y) {
+            block.x += x;
+            block.y += y;
+        }
+
+        function gameLoop() {
+            if (millis() - lastMove > gameSpeed) {
+                if (!currentBlock) {
+                    currentBlock = createBlock();
+                }
+                moveBlock(currentBlock, 0, 1);
+                drawBlock(currentBlock);
+                lastMove = millis();
+            }
+        }
+
+    </script>
+</body>
+
+</html>

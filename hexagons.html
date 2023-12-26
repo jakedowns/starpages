@@ -633,6 +633,9 @@
             }
 
             function reset(){
+                // emulate a resize
+                createHexGrid();
+
                 // loop through all the editor defaults and set them
                 for (let key in editor_defaults) {
                     if (
@@ -1573,8 +1576,8 @@
             }else if(appstate.currentTargetMode === TARGET_MODE_INFINITY){
                 /** @see InfinityPlotter.getCurrentPointEased **/
                 let infinityPoint = plotter.getCurrentPointEased(frameCount);
-                appstate.target.x = infinityPoint.x;
-                appstate.target.y = infinityPoint.y;
+                appstate.target.x = infinityPoint.x + (appstate.infinityScale * width / 2);
+                appstate.target.y = infinityPoint.y + (appstate.infinityScale * height / 2);
             }else{
                 // DEFAULT: TARGET_MODE_CENTER
                 // set target to center of screen
@@ -1874,7 +1877,7 @@
                     tintedImage.copy(sprite, 0, 0, sprite.width, sprite.height, 0, 0, sprite.width, sprite.height);
 
                     let d = dist(target.x, target.y, x, y);
-                    let alpha = map(d, 0, width, appstate.roundCapAlpha, 0); // Alpha based on distance from mouse
+                    let alpha = 50; //map(d, 0, width, appstate.roundCapAlpha, 0); // Alpha based on distance from mouse
 
                     tintedImage.loadPixels();
                     for (let i = 0; i < tintedImage.pixels.length; i += 4) {
@@ -1887,7 +1890,7 @@
                         tintedImage.pixels[i] = red(tinted); // R value
                         tintedImage.pixels[i + 1] = green(tinted); // G value
                         tintedImage.pixels[i + 2] = blue(tinted); // B value
-                        tintedImage.pixels[i + 3] = a * alpha; // A value based on the existing A value
+                        tintedImage.pixels[i + 3] = a; // a; // * alpha; // A value based on the existing A value
                     }
                     tintedImage.updatePixels();
 
@@ -1904,10 +1907,10 @@
             }
 
             // Draw from tintedCache
-            image(tintedCache[spriteType+'_'+colorKey], 0, 0);
             if(appstate.jitterSplatRotation){
                 rotate(random(0, TWO_PI));
             }
+            image(tintedCache[spriteType+'_'+colorKey], 0, 0);
             pop();
         }
 
@@ -1986,7 +1989,7 @@
                 // // Draw the tinted image from the cache
                 // image(tintedCache[imageKey], 0, 0);
 
-                // drawSplatAtPositionWithTint(hex.x, hex.y, hex.size, getQuantizedColorKeyForHex(hex), 'IBS')
+                drawSplatAtPositionWithTint(hex.x, hex.y, hex.size, getQuantizedColorKeyForHex(hex), 'IBS')
 
                 // pop();
             }
