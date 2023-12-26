@@ -240,7 +240,7 @@
 
             if(key === 'q'){
                 plinkTriangleEnv.play()
-                appstate.quantize();
+                snapAllHexesToGrid();
             }
 
             
@@ -1476,13 +1476,14 @@
 
             // Map the mouseY position to a pitch bend factor
             // Center of y (height / 2) = no pitch bend
-            let pitchBend = map(mouseY, 0, height, 0.5, 2); // Adjust these values as needed
+            let pitchBendIndex = round(map(mouseY, 0, height, 0, 20) / 2) * 2; // Snap mouseY into increments of 2
+            let pitchBend = map(pitchBendIndex, 0, 20, 0.1, 4); // Adjust these values as needed
 
             // Calculate the final frequency
             let frequency = rootNotes[noteIndex] * pitchBend;
 
             // Set the frequency of the createSynth
-            createSynth.freq(frequency);
+            createSynth.freq(frequency, 0.0001);
 
             // Map the mouseY position to a volume level
             let volumeLevel = map(mouseY, 0, height, 0, 1); // We map the volume level from 0 to 1
@@ -1493,10 +1494,10 @@
             // Using another oscillator, drive the amp of the createSynth such that
             // it's ALLOWED to reach its current amp via getAmp OR the other sine wave forces it to 0
             // Refer to it as createSynthAmpscillator (assumed it's already defined)
-            createSynth.amp(constrain(createSynth.getAmp() * createSynthAmpscillator.getAmp(), 0, 0.7));
+            createSynth.amp(constrain(createSynth.getAmp() * createSynthAmpscillator.getAmp(), 0, 1));
 
             // Same for deleteSynth
-            deleteSynth.amp(constrain(deleteSynth.getAmp() * createSynthAmpscillator.getAmp(), 0, 0.7));
+            deleteSynth.amp(constrain(deleteSynth.getAmp() * createSynthAmpscillator.getAmp(), 0, 1));
             //     a: directionChangeDectedThisFrame,
             //     b: velocitySpikedThisFrame,
             //     c: keyIsDown(SHIFT)
