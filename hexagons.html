@@ -224,7 +224,8 @@
                     // same for buttons
                     for (let key in buttons) {
                         if(key === 'toggleRecording'
-                        || key === 'reset'){
+                        || key === 'reset' 
+                        || buttons[key].ignore){
                             continue;
                         }
                         if (buttons.hasOwnProperty(key)) {
@@ -291,6 +292,7 @@
         let bassSynth, bassSynthTargetAmp = 0;
         
         function setup() {
+            avgTargetVelocity = createVector(0, 0);
             synth = new p5.Oscillator();
             synth.setType('sine');
             synth.freq(440);
@@ -305,6 +307,7 @@
 
             snareSynth = new p5.Noise('brown');
             snareSynth.amp(0);
+            //snareSynth.freq(440);
             snareSynth.start();
 
             // derrived from matplotlib magma color scheme
@@ -430,6 +433,32 @@
 
             }
 
+            function randomize(){
+                // pick random values based on the slider ranges
+                for (let key in sliders) {
+                    if (sliders.hasOwnProperty(key)) {
+                        let slider = sliders[key];
+                        let {min,max} = slider;
+                        let randomVal = random(min,max);
+                        slider.action(randomVal);
+                        slider.instance.value(randomVal);
+                    }
+                }
+                // pick random values for the buttons
+                for (let key in buttons) {
+                    if (buttons.hasOwnProperty(key)) {
+                        let button = buttons[key];
+                        if(key === 'toggleRecording' || key === 'reset' || key === 'isUiVisible' || key === 'random' || button.ignore){
+                            continue;
+                        }
+                        let {min,max} = button;
+                        let randomVal = random(min,max);
+                        button.action(randomVal);
+                        button.instance.html(button.label + ` (${randomVal})`);
+                    }
+                }
+            }
+
             function reset(){
                 // loop through all the editor defaults and set them
                 for (let key in editor_defaults) {
@@ -440,6 +469,14 @@
                     ) {
                         appstate[key] = editor_defaults[key];
                         console.warn('reset to ',key,'to',editor_defaults[key]);
+
+                        if(sliders.hasOwnProperty(key)){
+                            sliders[key].instance.value(editor_defaults[key]);
+                        }
+                        else if(buttons.hasOwnProperty(key)){
+                            buttons[key].instance.html(buttons[key].label + ` (${editor_defaults[key]})`);
+                        }
+
                     }else{
                         console.warn('failed to reset',key);
                     }
@@ -448,6 +485,11 @@
             function handleButtonPress(button,key){
                 console.warn('handleButtonPress',button,key)
                 button.action(appstate[key]);
+
+                if(button.ignore){
+                    return;
+                }
+
                 if(button.key === 'toggleRecording'){
                     return;
                 }
@@ -540,6 +582,13 @@
                     label: 'Reset', 
                     action: reset
                 },
+
+                'random': {
+                    ignore: true,
+                    key: 'random',
+                    label: 'Randomize', 
+                    action: randomize
+                }
                 
             };
 
@@ -786,7 +835,7 @@
         let t = 0;
         let avgMouseVelocity = { x: 0, y: 0 };
         let mousePositionHistory = [];
-        let avgTargetVelocity = { x: 0, y: 0 };
+        let avgTargetVelocity;
         let targetPositionHistory = [];
         let directionChangeDectedThisFrame = false;
         let velocitySpikedThisFrame = false;
@@ -870,13 +919,14 @@
             synth.freq(map(target.y, 0, height, 20, 500), 0.1);
 
             if(
-                directionChangeDectedThisFrame 
-                || velocitySpikedThisFrame 
-                || keyIsDown(SHIFT)
+                // directionChangeDectedThisFrame 
+                // || velocitySpikedThisFrame 
+                //|| 
+                keyIsDown(SHIFT)
             ){
                 // play a one-shot on the snare synth
                 // by doing a quick attack envelope
-                snareSynth.amp(0.5, 0);
+                snareSynth.amp(0.5, .01);
             } else {
                 // followed by a lerped-out decay
                 snareSynth.amp(0, 1);
@@ -1255,7 +1305,7 @@
                 this.size = lerp(this.size, this.targetSize, LERP_FACTOR);
                 this.x = lerp(this.x, this.selfTargetX, LERP_FACTOR);
                 this.y = lerp(this.y, this.selfTargetY, LERP_FACTOR);
-                this.targetRotationAngle = atan2(this.y - this.selfTargetY, this.x - this.selfTargetX) * appstate.hexRotationSpeed;
+                this.targetRotationAngle += appstate.hexRotationSpeed * 1.01;
                 // use hexRotationRandomness to drive a probability that the angle will be randomized
                 // TODO: we should probably only set this once, when the hex is created
                 // or very infrequently
@@ -1272,7 +1322,18 @@
                 translate(this.x, this.y);
                 rotate(this.rotationAngle);
                 fill(this.color);
-                stroke(255);
+
+                // Calculate the distance from the target
+                let distanceFromTarget = dist(this.x, this.y, appstate.target.x, appstate.target.y);
+                // let _avgTargetVelocity = Math.sqrt(Math.pow(avgTargetVelocity.x, 2) + Math.pow(avgTargetVelocity.y, 2));
+                // Map the stroke color based on the distance from the target and the average target velocity
+                // console.warn(_avgTargetVelocity);
+                let strokeColor = map(avgTargetVelocity.mag(), 0, 100, 0, 255)
+                let maxDist = min(width, height) / 2;
+                distanceFromTarget = maxDist - distanceFromTarget;
+                strokeColor = map(strokeColor * distanceFromTarget, 0, 255 * maxDist, 0, 255)
+
+                stroke(strokeColor);
                 //noStroke(); 
                 strokeWeight(1);
                 beginShape();
