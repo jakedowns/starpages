@@ -1,246 +1,511 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Interactive Content Viewer</title>
-<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-    .text-white {
-        color: #fff;
-    }
-  /* Additional CSS */
-  .menu-button {
-    display: none;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Content Viewer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-javascript.min.js"></script>
+    <style>
+        .text-white {
+            color: #fff;
+        }
 
-  @media (min-width: 768px) {
-    .desktop-menu {
-      display: none;
-    }
-    .menu-button {
-      display: block;
-    }
-    /* Adjust layout for tablet landscape/desktop */
-    .layout {
-      display: flex;
-    }
-    .menu-sections {
-      flex-basis: 30%;
-    }
-    .content-viewer {
-      flex-basis: 70%;
-      margin-left: 1rem;
-    }
-  }
+        /* Additional CSS */
+        .menu-button {
+            display: none;
+        }
 
-  @media (max-width: 767px) {
-    .mobile-menu {
-      display: none;
-    }
-  }
+        @media (min-width: 768px) {
+            .desktop-menu {
+                display: none;
+            }
 
-  /* Dark theme styling */
-  body {
-    background-color: #111827; /* Tailwind color: bg-gray-900 */
-  }
+            .menu-button {
+                display: block;
+            }
 
-  .menu-section {
-    background-color: #4B5563; /* Tailwind color: bg-gray-600 */
-    color: #F9FAFB; /* Tailwind color: text-gray-100 */
-  }
+            /* Adjust layout for tablet landscape/desktop */
+            .layout {
+                display: flex;
+                flex-direction: row;
+            }
 
-  .menu-section:hover {
-    background-color: #6B7280; /* Tailwind color: bg-gray-500 */
-  }
+            .menu-sections {
+                flex-basis: 30%;
+            }
 
-  .active-section {
-    background-color: #6D28D9; /* Tailwind color: bg-purple-700 */
-  }
+            .content-viewer {
+                flex-basis: 70%;
+                margin-left: 1rem;
+            }
 
-  .title {
-    color: #F9FAFB; /* Tailwind color: text-gray-100 */
-  }
+            .content-viewer-list {
+                max-height: 100vh;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+            }
+        }
 
-  .mobile-menu-button {
-    color: #F9FAFB; /* Tailwind color: text-gray-100 */
-  }
+        @media (max-width: 767px) {
+            .mobile-menu {
+                display: none;
+            }
+        }
 
-  .mobile-menu-close {
-    color: #EF4444; /* Tailwind color: text-red-500 */
-  }
+        /* Dark theme styling */
+        body {
+            background-color: #111827;
+            /* Tailwind color: bg-gray-900 */
+        }
 
-  /* Content Viewer */
-  .content-viewer {
-    background-color: #1F2937; /* Tailwind color: bg-gray-800 */
-    color: #F9FAFB; /* Tailwind color: text-gray-100 */
-    padding: 2rem;
-    margin-top: 1rem;
-    border-radius: 0.5rem;
-  }
-</style>
+        .menu-section {
+            background-color: #4B5563;
+            /* Tailwind color: bg-gray-600 */
+            color: #F9FAFB;
+            /* Tailwind color: text-gray-100 */
+        }
+
+        .menu-section:hover {
+            background-color: #6B7280;
+            /* Tailwind color: bg-gray-500 */
+        }
+
+        .active-section {
+            background-color: #6D28D9;
+            /* Tailwind color: bg-purple-700 */
+        }
+
+        .title {
+            color: #F9FAFB;
+            /* Tailwind color: text-gray-100 */
+        }
+
+        .mobile-menu-button {
+            color: #F9FAFB;
+            /* Tailwind color: text-gray-100 */
+        }
+
+        .mobile-menu-close {
+            color: #EF4444;
+            /* Tailwind color: text-red-500 */
+        }
+
+        /* Content Viewer */
+        .content-viewer {
+            background-color: #1F2937;
+            /* Tailwind color: bg-gray-800 */
+            color: #F9FAFB;
+            /* Tailwind color: text-gray-100 */
+            padding: 2rem;
+            margin-top: 1rem;
+            border-radius: 0.5rem;
+        }
+    </style>
 </head>
+
 <body class="font-sans">
 
-<!-- Combined Layout -->
-<div class="layout">
-  <!-- Menu Sections -->
-  <div class="menu-sections flex flex-col items-start p-8">
-    <div class="text-2xl font-bold mb-4 title">building tetris with p5.js and chatGPT</div>
-    <div class="text-l font-semibold mb-2 text-white">A step by step guide to building a Tetris game with p5.js and integrating it with chatGPT for an interactive tutorial experience.<br/>using Gherkin Behavior Driven Development focused prompting</div>
-    <div class="space-y-2">
-      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('building')">1. building the grid</div>
-      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('tetrominos')">2. tetrominos</div>
-      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('game')">3. game loop</div>
-      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('controls')">4. controls</div>
-      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('mobile')">5. mobile touch responsive considerations</div>
-      <div class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('future')">6. future work</div>
+    <!-- Combined Layout -->
+    <div class="layout">
+        <!-- Menu Sections -->
+        <div class="menu-sections flex flex-col items-start p-8">
+            <div class="text-2xl font-bold mb-4 title">building tetris with p5.js and chatGPT</div>
+            <div class="text-l font-semibold mb-2 text-white">A step by step guide using Gherkin Behavior Driven
+                Development focused prompting</div>
+            <div class="space-y-2">
+                <div id="nav-building" class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('building')">1.
+                    building the grid</div>
+                <div id="nav-tetrominos" class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('tetrominos')">2.
+                    tetrominos</div>
+                <div id="nav-game" class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('game')">3. game loop
+                </div>
+                <div id="nav-controls" class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('controls')">4.
+                    controls</div>
+                <div id="nav-mobile" class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('mobile')">5. mobile
+                    touch responsive considerations</div>
+                <div id="nav-future" class="menu-section p-2 w-64 rounded cursor-pointer" onclick="switchContent('future')">6. future
+                    work</div>
+            </div>
+            <script>
+                // Highlight the section's #anchor box top closest to the current scroll y offset
+                window.addEventListener('scroll', function() {
+                    const sections = document.querySelectorAll('.menu-section');
+                    let closest = null;
+                    sections.forEach(section => {
+                        const rect = section.getBoundingClientRect();
+                        if (rect.top > 0 && rect.top < window.innerHeight) {
+                            closest = section;
+                        }
+                    });
+                    if (closest) {
+                        sections.forEach(section => {
+                            section.classList.remove('active-section');
+                        });
+                        closest.classList.add('active-section');
+                    }
+                });
+            </script>
+        </div>
+        <!-- Content Viewer List (scroll container) -->
+        <div id="contentViewerList" class="content-viewer-list">
+            <div class="content-viewer">
+                <div id="building" class="content">
+                    <h2 class="text-2xl font-bold mb-4">Building the Grid</h2>
+                    <p class="mb-4">In this section, we will discuss how to build the grid for our Tetris game using p5.js.
+                        The grid is a crucial component of the game as it is where the Tetris blocks will be placed and
+                        moved around.</p>
+                    <p class="mb-4">We will be using a 2D array to represent our grid. Each cell in the array will represent
+                        a cell in the Tetris grid. We will initialize all cells to be empty at the start of the game.</p>
+                    <p class="mb-4">We will also need to create a function to draw the grid on the screen. This function
+                        will loop through each cell in our 2D array and draw a square at the corresponding location on the
+                        screen.</p>
+                    <p class="mb-4">Finally, we will need to create a function to update the grid. This function will be
+                        called whenever a Tetris block is moved or rotated. It will update the 2D array to reflect the new
+                        state of the grid.</p>
+                    <form id="gridForm" class="flex justify-left items-left mb-16">
+                        <div class="mr-4">
+                            <label for="rows" class="text-white">Rows:</label><br>
+                            <input type="number" id="rows" name="rows" value="20" onchange="updateGrid()"
+                                class="bg-black text-white text-2xl w-16">
+                        </div>
+                        <div>
+                            <label for="columns" class="text-white">Columns:</label><br>
+                            <input type="number" id="columns" name="columns" value="10" onchange="updateGrid()"
+                                class="bg-black text-white text-2xl w-16">
+                        </div>
+                        <div class="flex items-end mt-4 ml-4">
+                            <button onclick="resetGrid()"
+                                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Reset</button>
+                        </div>
+                        <script>
+                            function resetGrid() {
+                                document.getElementById('rows').value = 20;
+                                document.getElementById('columns').value = 10;
+                                updateGrid();
+                            }
+                        </script>
+                    </form>
+    
+                    <h3 class="text-xl font-bold mb-2">Prompt Output:</h3>
+                    <p class="text-gray-500 text-sm mb-2">Click on the prompt to copy it to clipboard</p>
+                    <button class="copyButton" onclick="copyToClipboard('building')"
+                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                        &#128203; Copy Prompt
+                    </button>
+    
+                    <div id="promptOutput-building" onclick="copyToClipboard('building')"
+                        class="cursor-pointer p-2 rounded border border-gray-300 bg-black text-white"
+                        style="font-family: 'Courier New', monospace; white-space: pre-wrap;">Prompt will be displayed
+                        here...</div>
+    
+                    <script>
+                        function updateGrid() {
+                            const rows = document.getElementById('rows').value;
+                            const columns = document.getElementById('columns').value;
+                            const prompt = `Given a grid of ${rows} rows and ${columns} columns, we will initialize a 2D array to represent our grid. Each cell in the array will represent a cell in the Tetris grid. All cells will be empty at the start of the game. We will use p5.js to create a function to draw the grid on the screen. This function will loop through each cell in our 2D array and draw a square at the corresponding location on the screen. We will also create a function to update the grid. This function will be called whenever a Tetris block is moved or rotated. It will update the 2D array to reflect the new state of the grid.`;
+                            document.getElementById('promptOutput').textContent = prompt;
+                        }
+                        window.updateTetrominoPrompt = function () {
+                            const prompt = `Given 7 Tetrominos (I, J, L, O, S, T, and Z), we will initialize a 2D array to represent each Tetromino. Each cell in the array will represent a block in the Tetromino. We will use p5.js to create a function to draw a Tetromino on the screen. This function will loop through each cell in the Tetromino's 2D array and draw a square at the corresponding location on the screen. We will also create a function to update the position and rotation of a Tetromino. This function will be called whenever a Tetromino is moved or rotated. It will update the 2D array to reflect the new state of the Tetromino.`;
+                            document.getElementById('promptOutput').textContent = prompt;
+                        };
+                        function copyToClipboard() {
+                            const prompt = document.getElementById('promptOutput').textContent;
+                            navigator.clipboard.writeText(prompt);
+                            showCopyAlert();
+                        }
+                        function showCopyAlert() {
+                            const copyAlert = document.getElementById('copyAlert');
+                            copyAlert.classList.remove('hidden');
+                            setTimeout(() => {
+                                copyAlert.classList.add('hidden');
+                            }, 1000);
+                        }
+                        window.onload = updateGrid;
+                    </script>
+                </div>
+            </div>
+    
+            <div class="content-viewer">
+                <div id="tetrominos" class="content">
+                    <h2 class="text-2xl font-bold mb-4">Section 2. Tetrominos</h2>
+                    <p class="mb-4">In this section, we will discuss how to create the Tetrominos for our Tetris game using
+                        p5.js. The Tetrominos are the shapes that will be falling from the top of the screen. There are
+                        seven different Tetrominos in total: I, J, L, O, S, T, and Z.</p>
+                    <p class="mb-4">We will be using a 2D array to represent each Tetromino. Each cell in the array will
+                        represent a cell in the Tetromino. We will initialize all cells to be empty at the start of the
+                        game.</p>
+                    <p class="mb-4">We will also need to create a function to draw the Tetromino on the screen. This
+                        function will loop through each cell in our 2D array and draw a square at the corresponding location
+                        on the screen.</p>
+                    <p class="mb-4">Finally, we will need to create a function to update the Tetromino. This function will
+                        be called whenever a Tetromino is moved or rotated. It will update the 2D array to reflect the new
+                        state of the Tetromino.</p>
+                    <h3 class="text-xl font-bold mb-2">Prompt Output:</h3>
+                    <p class="text-gray-500 text-sm mb-2">Click on the prompt to copy it to clipboard</p>
+                    <button class="copyButton" onclick="copyToClipboard('tetrominos')"
+                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                        &#128203; Copy Prompt
+                    </button>
+    
+                    <div id="promptOutput-tetrominos" onclick="copyToClipboard('tetrominos')"
+                        class="cursor-pointer p-2 rounded border border-gray-300 bg-black text-white"
+                        style="font-family: 'Courier New', monospace; white-space: pre-wrap;">Prompt will be displayed
+                        here...</div>
+                    <ol>
+                        <li>
+                            <p>Define Tetrominos: Create 2D arrays for each of the seven Tetromino shapes (I, J, L, O, S, T,
+                                and Z). Each cell in these arrays represents a block in the Tetromino.</p>
+                            <pre><code class="language-javascript">
+            const I = [
+                [1, 1, 1, 1]
+            ];
+            const J = [
+                [1, 0, 0],
+                [1, 1, 1]
+            ];
+            const L = [
+                [0, 0, 1],
+                [1, 1, 1]
+            ];
+            const O = [
+                [1, 1],
+                [1, 1]
+            ];
+            const S = [
+                [0, 1, 1],
+                [1, 1, 0]
+            ];
+            const T = [
+                [0, 1, 0],
+                [1, 1, 1]
+            ];
+            const Z = [
+                [1, 1, 0],
+                [0, 1, 1]
+            ];
+            </code></pre>
+                        </li>
+                        <li>
+                            <p>Drawing Tetrominos: Develop a function to draw a Tetromino on the screen. This function
+                                should loop through each cell in the Tetromino's 2D array and draw a square at the
+                                corresponding location.</p>
+                            <pre><code class="language-javascript">
+            function drawTetromino(tetromino, x, y, size) {
+                for (let i = 0; i < tetromino.length; i++) {
+                for (let j = 0; j < tetromino[i].length; j++) {
+                    if (tetromino[i][j] === 1) {
+                    rect(x + j * size, y + i * size, size, size);
+                    }
+                }
+                }
+            }
+            </code></pre>
+                        </li>
+                        <li>
+                            <p>Updating Tetrominos: Implement a function to update the position and rotation of a Tetromino.
+                                This function should modify the Tetromino's 2D array to reflect its new state after movement
+                                or rotation.</p>
+                            <pre><code class="language-javascript">
+            function updateTetromino(tetromino, direction) {
+                // Rotate or move the tetromino based on the direction
+                // This is a placeholder and needs to be implemented based on the game's logic
+            }
+            </code></pre>
+                        </li>
+                    </ol>
+    
+                </div>
+            </div>
+    
+            <div class="content-viewer">
+                <div id="game" class="content">
+                    <h2 class="text-2xl font-bold mb-4">Game Loop</h2>
+                    <p class="mb-4">In this section, we will discuss how to create the game loop for our Tetris game using
+                        p5.js. The game loop is responsible for updating the state of the game and drawing it on the screen.
+                    </p>
+                    <p class="mb-4">We will need to create a function to update the state of the game. This function will be
+                        called every frame and will be responsible for updating the position of the Tetromino and checking
+                        if it has collided with any other Tetrominos.</p>
+                    <p class="mb-4">We will also need to create a function to draw the state of the game on the screen. This
+                        function will be called every frame and will be responsible for drawing the Tetromino and the grid.
+                    </p>
+                    <p class="mb-4">Finally, we will need to create a function to handle user input. This function will be
+                        called whenever the user presses a key on the keyboard. It will be responsible for moving the
+                        Tetromino and rotating it.</p>
+                </div>
+            </div>
+    
+            <div class="content-viewer">
+                <div id="controls" class="content">
+                    <h2 class="text-2xl font-bold mb-4">Controls</h2>
+                    <p class="mb-4">In this section, we will discuss how to create the controls for our Tetris game using
+                        p5.js. The controls are responsible for moving the Tetromino and rotating it.</p>
+                    <p class="mb-4">We will need to create a function to handle user input. This function will be called
+                        whenever the user presses a key on the keyboard. It will be responsible for moving the Tetromino and
+                        rotating it.</p>
+                    <p class="mb-4">We will also need to create a function to check if the Tetromino has collided with any
+                        other Tetrominos. This function will be called whenever the Tetromino is moved or rotated. It will
+                        be responsible for checking if the Tetromino has collided with any other Tetrominos.</p>
+                    <p class="mb-4">Finally, we will need to create a function to update the state of the game. This
+                        function will be called every frame and will be responsible for updating the position of the
+                        Tetromino and checking if it has collided with any other Tetrominos.</p>
+                </div>
+            </div>
+    
+            <div class="content-viewer">
+                <div id="mobile" class="content">
+                    <h2 class="text-2xl font-bold mb-4">Mobile Touch Responsive Considerations</h2>
+                    <p class="mb-4">In this section, we will discuss how to make our Tetris game touch responsive using
+                        p5.js. The game will be playable on both desktop and mobile devices.</p>
+                    <p class="mb-4">We will need to create a function to handle user input. This function will be called
+                        whenever the user presses a key on the keyboard or touches the screen. It will be responsible for
+                        moving the Tetromino and rotating it.</p>
+                    <p class="mb-4">We will also need to create a function to check if the Tetromino has collided with any
+                        other Tetrominos. This function will be called whenever the Tetromino is moved or rotated. It will
+                        be responsible for checking if the Tetromino has collided with any other Tetrominos.</p>
+                    <p class="mb-4">Finally, we will need to create a function to update the state of the game. This
+                        function will be called every frame and will be responsible for updating the position of the
+                        Tetromino and checking if it has collided with any other Tetrominos.</p>
+                </div>
+            </div>
+    
+            <div class="content-viewer">
+                <div id="future" class="content">
+                    <h2 class="text-2xl font-bold mb-4">Future Work</h2>
+                    <p class="mb-4">In this section, we will discuss some ideas for future work on our Tetris game using
+                        p5.js. The game is currently playable on both desktop and mobile devices.</p>
+                    <p class="mb-4">We could add more Tetrominos to the game. There are seven different Tetrominos in total:
+                        I, J, L, O, S, T, and Z.</p>
+                    <p class="mb-4">We could also add more levels to the game. Currently, there is only one level.</p>
+                    <p class="mb-4">We could also add a high score system to the game. Currently, there is no way to keep
+                        track of the player's score.</p>
+                    <p class="mb-4">We could also consider adding a multiplayer mode to the game. This would allow players
+                        to compete against each other in real-time, adding a new level of challenge and excitement to the
+                        game.</p>
+                    <p class="mb-4">We could also consider adding custom themes to the game. This would allow players to
+                        personalize their gaming experience and make the game more visually appealing.</p>
+    
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
-  <!-- Content Viewer -->
-  <div class="content-viewer" id="contentViewer">Select a section to view details.</div>
-</div>
 
-<!-- Mobile Layout -->
-<div class="md:hidden">
-  <div class="flex flex-col items-center p-4">
-    <div class="flex justify-between items-center w-full mb-4">
-      <div class="text-xl font-bold title">title</div>
-      <button class="menu-button text-3xl mobile-menu-button" onclick="toggleMobileMenu()">
-        &#9776;
-      </button>
+    <!-- Mobile Layout -->
+    <div class="md:hidden">
+        <div class="flex flex-col items-center p-4">
+            <div class="flex justify-between items-center w-full mb-4">
+                <div class="text-xl font-bold title">title</div>
+                <button class="menu-button text-3xl mobile-menu-button" onclick="toggleMobileMenu()">
+                    &#9776;
+                </button>
+            </div>
+            <!-- <div class="content-viewer" id="mobileContentViewer">Select a section to view details.</div> -->
+        </div>
+        <!-- Mobile Menu -->
+        <div class="mobile-menu absolute top-0 left-0 w-full h-full bg-gray-800 p-4 hidden" id="mobileMenu">
+            <div class="flex justify-between items-center mb-4">
+                <div class="text-xl font-bold title">pick section:</div>
+                <button class="text-2xl mobile-menu-close" onclick="toggleMobileMenu()">&times;</button>
+            </div>
+            <div class="space-y-2">
+                <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContent('building')">1.
+                    building the grid</div>
+                <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContent('tetrominos')">
+                    2. tetrominos</div>
+                <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContent('game')">3.
+                    game loop</div>
+                <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContent('controls')">4.
+                    controls</div>
+                <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContent('mobile')">5.
+                    mobile touch responsive considerations</div>
+                <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContent('future')">6.
+                    future work</div>
+            </div>
+        </div>
     </div>
-    <div class="content-viewer" id="mobileContentViewer">Select a section to view details.</div>
-  </div>
-  <!-- Mobile Menu -->
-  <div class="mobile-menu absolute top-0 left-0 w-full h-full bg-gray-800 p-4 hidden" id="mobileMenu">
-    <div class="flex justify-between items-center mb-4">
-      <div class="text-xl font-bold title">pick section:</div>
-      <button class="text-2xl mobile-menu-close" onclick="toggleMobileMenu()">&times;</button>
+
+    <div id="copyAlert" class="fixed top-0 right-0 bg-green-500 text-white p-2 rounded hidden">Copied to clipboard ✅
     </div>
-    <div class="space-y-2">
-      <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('building')">1. building the grid</div>
-      <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('tetrominos')">2. tetrominos</div>
-      <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('game')">3. game loop</div>
-        <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('controls')">4. controls</div>
-        <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('mobile')">5. mobile touch responsive considerations</div>
-        <div class="menu-section p-2 w-full rounded cursor-pointer" onclick="switchContentMobile('future')">6. future work</div>
-    </div>
-  </div>
-</div>
 
-<div id="building" class="content hidden">
-<h2 class="text-2xl font-bold mb-4">Building the Grid</h2>
-<p class="mb-4">In this section, we will discuss how to build the grid for our Tetris game using p5.js. The grid is a crucial component of the game as it is where the Tetris blocks will be placed and moved around.</p>
-<p class="mb-4">We will be using a 2D array to represent our grid. Each cell in the array will represent a cell in the Tetris grid. We will initialize all cells to be empty at the start of the game.</p>
-<p class="mb-4">We will also need to create a function to draw the grid on the screen. This function will loop through each cell in our 2D array and draw a square at the corresponding location on the screen.</p>
-<p class="mb-4">Finally, we will need to create a function to update the grid. This function will be called whenever a Tetris block is moved or rotated. It will update the 2D array to reflect the new state of the grid.</p>
-</div>
+    
 
-<div id="tetrominos" class="content hidden">
-<h2 class="text-2xl font-bold mb-4">Tetrominos</h2>
-<p class="mb-4">In this section, we will discuss how to create the Tetrominos for our Tetris game using p5.js. The Tetrominos are the shapes that will be falling from the top of the screen. There are seven different Tetrominos in total: I, J, L, O, S, T, and Z.</p>
-<p class="mb-4">We will be using a 2D array to represent each Tetromino. Each cell in the array will represent a cell in the Tetromino. We will initialize all cells to be empty at the start of the game.</p>
-<p class="mb-4">We will also need to create a function to draw the Tetromino on the screen. This function will loop through each cell in our 2D array and draw a square at the corresponding location on the screen.</p>
-<p class="mb-4">Finally, we will need to create a function to update the Tetromino. This function will be called whenever a Tetromino is moved or rotated. It will update the 2D array to reflect the new state of the Tetromino.</p>
-</div>
+    <script>
+        // JavaScript for showing and hiding content
+        function showContent(id) {
+            const content = document.getElementById(id);
+            //content.classList.remove('hidden');
+            // show content in .content-viewer elements
+            // document.querySelectorAll('.content-viewer').forEach(viewer => {
+            //   viewer.innerHTML = content.innerHTML;
+            // });
+        }
 
-<div id="game" class="content hidden">
-<h2 class="text-2xl font-bold mb-4">Game Loop</h2>
-<p class="mb-4">In this section, we will discuss how to create the game loop for our Tetris game using p5.js. The game loop is responsible for updating the state of the game and drawing it on the screen.</p>
-<p class="mb-4">We will need to create a function to update the state of the game. This function will be called every frame and will be responsible for updating the position of the Tetromino and checking if it has collided with any other Tetrominos.</p>
-<p class="mb-4">We will also need to create a function to draw the state of the game on the screen. This function will be called every frame and will be responsible for drawing the Tetromino and the grid.</p>
-<p class="mb-4">Finally, we will need to create a function to handle user input. This function will be called whenever the user presses a key on the keyboard. It will be responsible for moving the Tetromino and rotating it.</p>
-</div>
+        function hideContent(id) {
+            const content = document.getElementById(id);
+            //content.classList.add('hidden');
+            // clear .content-viewer
+        }
 
-<div id="controls" class="content hidden">
-<h2 class="text-2xl font-bold mb-4">Controls</h2>
-<p class="mb-4">In this section, we will discuss how to create the controls for our Tetris game using p5.js. The controls are responsible for moving the Tetromino and rotating it.</p>
-<p class="mb-4">We will need to create a function to handle user input. This function will be called whenever the user presses a key on the keyboard. It will be responsible for moving the Tetromino and rotating it.</p>
-<p class="mb-4">We will also need to create a function to check if the Tetromino has collided with any other Tetrominos. This function will be called whenever the Tetromino is moved or rotated. It will be responsible for checking if the Tetromino has collided with any other Tetrominos.</p>
-<p class="mb-4">Finally, we will need to create a function to update the state of the game. This function will be called every frame and will be responsible for updating the position of the Tetromino and checking if it has collided with any other Tetrominos.</p>
-</div>
+        // select the first section by default
+        document.addEventListener('DOMContentLoaded', () => {
+            showContent('building');
+        });
 
-<div id="mobile" class="content hidden">
-<h2 class="text-2xl font-bold mb-4">Mobile Touch Responsive Considerations</h2>
-<p class="mb-4">In this section, we will discuss how to make our Tetris game touch responsive using p5.js. The game will be playable on both desktop and mobile devices.</p>
-<p class="mb-4">We will need to create a function to handle user input. This function will be called whenever the user presses a key on the keyboard or touches the screen. It will be responsible for moving the Tetromino and rotating it.</p>
-<p class="mb-4">We will also need to create a function to check if the Tetromino has collided with any other Tetrominos. This function will be called whenever the Tetromino is moved or rotated. It will be responsible for checking if the Tetromino has collided with any other Tetrominos.</p>
-<p class="mb-4">Finally, we will need to create a function to update the state of the game. This function will be called every frame and will be responsible for updating the position of the Tetromino and checking if it has collided with any other Tetrominos.</p>
-</div>
+        // Modify switchContent and switchContentMobile functions to show and hide content
+        function switchContent(section) {
+            const contentViewerList = document.getElementById('contentViewerList');
+            const sectionElement = document.getElementById(section);
+            const top = sectionElement.offsetTop;
+            contentViewerList.scrollTo({ top: top, behavior: 'smooth' });
+            // if mobile menu visible, hide it
+            const mobileMenu = document.getElementById('mobileMenu');
+            if (mobileMenu.classList.contains('hidden') === false) {
+                toggleMobileMenu();
+            }
+        }
 
-<div id="future" class="content hidden">
-<h2 class="text-2xl font-bold mb-4">Future Work</h2>
-<p class="mb-4">In this section, we will discuss some ideas for future work on our Tetris game using p5.js. The game is currently playable on both desktop and mobile devices.</p>
-<p class="mb-4">We could add more Tetrominos to the game. There are seven different Tetrominos in total: I, J, L, O, S, T, and Z.</p>
-<p class="mb-4">We could also add more levels to the game. Currently, there is only one level.</p>
-<p class="mb-4">We could also add a high score system to the game. Currently, there is no way to keep track of the player's score.</p>
-<p class="mb-4">We could also consider adding a multiplayer mode to the game. This would allow players to compete against each other in real-time, adding a new level of challenge and excitement to the game.</p>
-<p class="mb-4">We could also consider adding custom themes to the game. This would allow players to personalize their gaming experience and make the game more visually appealing.</p>
+        function hideAllContent() {
+            hideContent('building');
+            // Add more hideContent calls here for other sections
+        }
+    </script>
 
-</div>
 
+    <script>
+        // JavaScript for mobile menu toggle
+        function toggleMobileMenu() {
+            const mobileMenu = document.getElementById('mobileMenu');
+            mobileMenu.classList.toggle('hidden');
+        }
+
+        // JavaScript for content switching
+        //   function switchContent(section) {
+        //     const contentViewer = document.getElementById('contentViewer');
+        //     contentViewer.textContent = `Content for ${section}`;
+        //   }
+
+        //   function switchContentMobile(section) {
+        //     const mobileContentViewer = document.getElementById('mobileContentViewer');
+        //     mobileContentViewer.textContent = `Content for ${section}`;
+        //     toggleMobileMenu();
+        //   }
+    </script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GYK2ZMX0M9"></script>
 <script>
-  // JavaScript for showing and hiding content
-  function showContent(id) {
-    const content = document.getElementById(id);
-    //content.classList.remove('hidden');
-    // show content in .content-viewer elements
-    document.querySelectorAll('.content-viewer').forEach(viewer => {
-      viewer.innerHTML = content.innerHTML;
-    });
-  }
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
 
-  function hideContent(id) {
-    const content = document.getElementById(id);
-    //content.classList.add('hidden');
-    // clear .content-viewer
-  }
-
-  // select the first section by default
-  document.addEventListener('DOMContentLoaded', () => {
-    showContent('building');
-  });
-
-  // Modify switchContent and switchContentMobile functions to show and hide content
-  function switchContent(section) {
-    hideAllContent();
-    showContent(section);
-  }
-
-  function switchContentMobile(section) {
-    hideAllContent();
-    showContent(section);
-    toggleMobileMenu();
-  }
-
-  function hideAllContent() {
-    hideContent('building');
-    // Add more hideContent calls here for other sections
-  }
+  gtag('config', 'G-GYK2ZMX0M9');
 </script>
-
-
-<script>
-  // JavaScript for mobile menu toggle
-  function toggleMobileMenu() {
-    const mobileMenu = document.getElementById('mobileMenu');
-    mobileMenu.classList.toggle('hidden');
-  }
-
-  // JavaScript for content switching
-//   function switchContent(section) {
-//     const contentViewer = document.getElementById('contentViewer');
-//     contentViewer.textContent = `Content for ${section}`;
-//   }
-
-//   function switchContentMobile(section) {
-//     const mobileContentViewer = document.getElementById('mobileContentViewer');
-//     mobileContentViewer.textContent = `Content for ${section}`;
-//     toggleMobileMenu();
-//   }
-</script>
-
 </body>
+
 </html>
