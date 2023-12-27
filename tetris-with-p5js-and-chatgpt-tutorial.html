@@ -300,23 +300,22 @@
 
         .timeline-wrapper {
             /* position: absolute; */
-            height: 100%;
+            height: 390px;
             width: 2px;
         }
 
         .timeline-bg {
-            top: 12px;
+            /* top: 12px; */
+            top: -8px;
             width: 10px;
-            height: 100%;
+            height: 390px;
             background-color: #ddd;
             position: absolute;
             z-index: 1;
-            max-height: 800px;
         }
 
         .timeline_covered {
-            max-height: 800px;
-            top: 10px;
+            top: -8px;
             width: 10px;
             height: 25%;
             z-index: 2;
@@ -335,7 +334,7 @@
             background-color: #ddd;
             /* margin-bottom: 10px; */
             /* top: 6.25px; */
-            margin: 24px 0;
+            margin: 23.5px 0;
             left: -8px;
             top: -20px;
             box-sizing: border-box;
@@ -380,6 +379,12 @@
                 filter: blur(5px);
                 
             }
+        }
+        .content-viewer {
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.2), 0 1px 2px 0 rgba(0, 0, 0, 0.12);
+        }
+        .content-viewer:hover {
+            box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.32), 0 2px 10px 0 rgba(0, 0, 0, 0.24);
         }
         .content-viewer:hover .header-image-wrapper {
             img {
@@ -450,6 +455,7 @@
                                 <div id="timeline-game" class="timeline-circle"></div>
                                 <div id="timeline-controls" class="timeline-circle"></div>
                                 <div id="timeline-mobile" class="timeline-circle"></div>
+                                <div id="timeline-results" class="timeline-circle"></div>
                                 <div id="timeline-future" class="timeline-circle"></div>
                             </div>
                         </div>
@@ -1079,13 +1085,26 @@ const bgImages = {
             });
 
             // Update the height of timeline_covered
-            const progress = (visitedIndex) / navSections.length;
-            timelineCovered.style.height = `${progress * 100}%`;
+            const progress = (visitedIndex+1) / (totalSections);
+            const oneSection = totalHeight / totalSections;
+            
+            timelineCovered.style.height = `${Math.min(progress * 100, 100)}%`;
+
+            console.warn('%',{
+                progress,
+                visitedIndex,
+                totalSections,
+                totalHeight,
+                scrollTop: contentViewerList.scrollTop,
+                clientHeight: contentViewerList.clientHeight,
+                scrollBottom: contentViewerList.scrollTop + contentViewerList.clientHeight,
+                scrollHeight: contentViewerList.scrollHeight,
+            })
 
             // If we've visited the last section, set the height to 100%
-            if (contentViewerList.scrollTop + contentViewerList.clientHeight >= totalHeight) {
-                timelineCovered.style.height = '100%';
-            }
+            // if (contentViewerList.scrollTop + contentViewerList.clientHeight >= totalHeight) {
+            //     timelineCovered.style.height = '100%';
+            // }
         }
     }
     const setup2 = function () {
@@ -1132,7 +1151,6 @@ const bgImages = {
         window.onload = () => {
             updateGrid();
             updateTetrominoPrompt();
-            timelineCovered = document.querySelector('.timeline_covered');
             setup2();
             onScroll();
 
