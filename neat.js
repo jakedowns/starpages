@@ -11741,6 +11741,7 @@ const SO_DO_IT = ()=>{
 }
 // central command definitions
 const InvokableCommands = {
+    "Pilot Wave Visualization - Veratasium - Is This What Quantum Mechanics Looks Like?":"https://www.youtube.com/watch?v=WIyTZDHuarQ",
     "Test Driven Development"(){
         system.invoke("https://en.wikipedia.org/wiki/List_of_unit_testing_frameworks")
     },
