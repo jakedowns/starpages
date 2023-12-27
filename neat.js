@@ -13200,7 +13200,10 @@ const InvokableCommands = {
     },
 
     "what do i have going on today?":"check my calendar",
-
+    "(new window) learn bdd by building"(){
+        window.open("https://jakedowns.github.io/starpages/tetris-with-p5js-and-chatgpt-tutorial.html", "_blank", "width=800,height=600");
+    },
+    "learn bdd by building tetris with p5.js and chatgpt - interactive tutorial by jakedowns":"tetris-with-p5js-and-chatgpt-tutorial.html",
     "hexagons": "https://jakedowns.github.io/starpages/hexagons.html",
     "hexagons (new window)"(){
         let handle = window.open("https://jakedowns.github.io/starpages/hexagons.html", "_blank", "width=800,height=600");
