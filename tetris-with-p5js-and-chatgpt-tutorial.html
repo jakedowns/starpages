@@ -49,10 +49,13 @@
                 flex-basis: 70%;
                 margin-left: 1rem;
             }
+            #contentViewerList {
+                margin-top: calc(50% - 33%);
+            }
 
             .content-viewer-outer {
                 max-height: 100vh;
-                overflow-y: scroll;
+                overflow-y: auto;
             }
 
             /* aka #contentViewerList */
@@ -120,11 +123,64 @@
             margin-top: 1rem;
             border-radius: 0.5rem;
         }
+
+        .header-image-wrapper {
+            cursor: pointer;
+            h2 {
+                text-align: center;
+                padding: 20px;
+            }
+            border-top: 1px solid #fff;
+            border-right: 1px solid #666;
+            border-bottom: 1px solid #333;
+            border-left: 1px solid #666;
+            border-radius: 0.5rem;
+            img {
+                border-radius: 0.5rem;
+                opacity: 0.1;
+                transition: all 0.3s ease;
+                filter: blur(5px);
+                
+            }
+        }
+        .content-viewer:hover .header-image-wrapper {
+            img {
+                opacity: 0.5;
+                filter: blur(0px);
+                
+            }
+        }
+
+        :root {
+            --max-columns: 4;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(var(--max-columns), 1fr);
+        }
+        .content-viewer {
+            transition: all 0.3s ease;
+        }
+        body:not(.force-to-one-col) .content-viewer {            
+            transition: max-height 0.3s ease;
+            max-height: 100px;
+            overflow: hidden;
+        }
+        body.force-to-one-col .grid-container {
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+        }
+        body.force-to-one-col .content-viewer {
+                width: 100% !important;
+                flex-basis: 100% !important;
+            }
     </style>
 </head>
 
 <body class="font-sans">
-
+    <div class="bg-img show"></div>
     <!-- Combined Layout -->
     <div class="layout">
         <!-- Menu Sections -->
@@ -133,66 +189,51 @@
             <div class="text-l font-semibold mb-2 text-white">A step by step guide using Gherkin Behavior Driven
                 Development focused prompting</div>
             <style>
-                .menu-section::before {
-                    content: '';
-                    position: absolute;
+
+                :root {
+                    --bg-image-in: url('./res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp');
+                    --bg-image-out: url('./res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp');
+                    --bg-image: var(--bg-image-in);
+                }
+                .bg-img {
+                    position: fixed;
                     top: 0;
                     left: 0;
                     width: 100%;
                     height: 100%;
-                    background-image: url('./res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp');
+                    background-image: var(--bg-image);
                     background-size: cover;
                     background-position: center center;
-                    opacity: 0;
                     transition: opacity 0.3s ease, transform 0.3s ease;
                     transform: translateY(-10px);
+                    opacity: 0.01;
                     z-index: -1;
                 }
-
-                /* .menu-section::after {
-                    content: '';
+                .bg-img::before,
+                .bg-img::after {
+                    content: "";
                     position: absolute;
                     top: 0;
                     left: 0;
                     width: 100%;
                     height: 100%;
-                    background-image: url('./res/9800c48a-6a59-4caa-adbc-864eec10b6de.webp');
+                    background-size: cover;
+                    background-position: center center;
+                    transition: opacity 0.3s ease;
+                }
+                .bg-img::before {
+                    background-image: var(--bg-image-out);
+                    opacity: 1;
+                }
+                .bg-img::after {
+                    background-image: var(--bg-image-in);
                     opacity: 0;
-                    transition: opacity 0.3s ease, transform 0.3s ease;
-                    transform: translateY(-10px);
-                    z-index: -1;
-                } */
-                .menu-section#nav-intro::before {
-                    background-image: url('/res/DALL·E 2023-12-26 15.57.30 - A visually compelling blog header image, designed in dark mode, that encapsulates the themes of artificial intelligence, programming, and Tetris, with.png');
                 }
-
-                .menu-section#nav-terms::before {
-                    background-image: url('./res/9800c48a-6a59-4caa-adbc-864eec10b6de.webp');
+                .bg-img.show::before {
+                    opacity: 0;
                 }
-
-                .menu-section#nav-building::before {
-                    background-image: url('./res/6a6cf0d2-7a1b-4cbd-b6ec-004aa01fb20b.webp');
-                }
-
-                #nav-controls::before {
-                    background-image: url('./res/DALL·E 2023-12-26 16.45.30 - Create a pixel art image showing a dynamic scene of game development, where workers handle keyboard and touch inputs, including giant finger and keybo.png');
-                }
-
-                .menu-section#nav-tetrominos::before {
-                    background-image: url('./res/9f57e694-d11b-4721-9076-10a647235738.webp');
-                }
-
-                .menu-section#nav-game::before {
-                    background-image: url('./res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp');
-                }
-
-                #nav-future::before {
-                    background-image: url('./res/DALL·E 2023-12-26 16.44.44 - Create a large, detailed mega pixel art image depicting a scene where workers are handling keyboard and touch inputs and processing them in a queue of.png');
-                }
-
-                .menu-section:hover::before {
-                    opacity: .1;
-                    transform: translateY(0);
+                .bg-img.show::after {
+                    opacity: 1;
                 }
 
                 .timeline-wrapper {
@@ -260,7 +301,19 @@
                     }
                 }
             </style>
-            <div class="flex flex-row">
+            <div class="flex flex-row flex-wrap">
+                <div class="flex flex-row w-full">
+                    <button
+                    onclick="switchContent('results');"
+                    class="bg-green-500 hover:bg-green-700 text-white font-bold p-4 m-4 rounded w-1/2">Play</button>
+                <button
+                    onclick="scrollToPreviousSection();"
+                    class="w-1/2 bg-red-500 hover:bg-red-700 text-white font-bold p-4 m-4 rounded float-left">Prev</button>
+                <button
+                    onclick="scrollToNextSection();"
+                    class="w-1/2 bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
+                </div>
+                <div class="relative">
 
                 <div class="timeline-wrapper relative block">
                     <div class="timeline-bg"></div>
@@ -278,7 +331,8 @@
                         </div>
                     </div>
                 </div>
-                <div class="space-y-2 pl-8">
+                
+                <div class="space-y-2 pl-8 absolute" style="left: 100%; right: 0; top: 0;">
                     <div id="nav-intro" class="menu-section p-2 w-64 rounded cursor-pointer"
                         onclick="switchContent('intro')">intro</div>
                     <div id="nav-terms" class="menu-section p-2 w-64 rounded cursor-pointer"
@@ -293,23 +347,67 @@
                         onclick="switchContent('controls')">4. controls</div>
                     <div id="nav-mobile" class="menu-section p-2 w-64 rounded cursor-pointer"
                         onclick="switchContent('mobile')">5. mobile considerations</div>
+                    <div id="nav-final-result" class="bg-green menu-section p-2 w-64 rounded cursor-pointer"
+                            onclick="switchContent('results')">7. final result</div>
                     <div id="nav-future" class="menu-section p-2 w-64 rounded cursor-pointer"
                         onclick="switchContent('future')">6. future
                         work</div>
                 </div>
+                </div>
             </div>
             <script>
+                const bgImages = {
+                    'intro': '/res/DALL·E 2023-12-26 15.57.30 - A visually compelling blog header image, designed in dark mode, that encapsulates the themes of artificial intelligence, programming, and Tetris, with.png',
+                    'terms': './res/9800c48a-6a59-4caa-adbc-864eec10b6de.webp',
+                    'building': './res/6a6cf0d2-7a1b-4cbd-b6ec-004aa01fb20b.webp',
+                    'controls': './res/DALL·E 2023-12-26 16.45.30 - Create a pixel art image showing a dynamic scene of game development, where workers handle keyboard and touch inputs, including giant finger and keybo.png',
+                    'mobile': './res/DALL·E 2023-12-26 19.21.19 - Create a pixel art image showing a dynamic scene of game development, where workers handle keyboard and touch inputs, including giant finger and keybo.png',
+                    'tetrominos': './res/9f57e694-d11b-4721-9076-10a647235738.webp',
+                    'game': './res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp',
+                    'future': './res/DALL·E 2023-12-26 16.44.44 - Create a large, detailed mega pixel art image depicting a scene where workers are handling keyboard and touch inputs and processing them in a queue of.png'
+                };
+                document.querySelectorAll('.content-viewer, .menu-section').forEach((element) => {
+                    element.addEventListener('mouseenter', (event) => {
+                        let bgImage = bgImages[event.target.id.split('nav-').join('')];
+                        console.warn("bgImage", {bgImage, id:event.target.id})
+                        let targetElement = event.target;
 
+                        while(!bgImage && targetElement.parentElement) {
+                            targetElement = targetElement.parentElement;
+                            bgImage = bgImages[targetElement.id || targetElement.dataset.sectionKey];
+                        }
+
+                        if(bgImage) {
+                            document.documentElement.style.setProperty('--bg-image-out', `url(${document.documentElement.style.getPropertyValue('--bg-image-in')})`);
+                            document.documentElement.style.setProperty('--bg-image-in', `url(${bgImage})`);
+                            document.getElementsByClassName('bg-img')[0].classList.add('swap');
+                        }else{
+                            console.error("No bgImage found for", {id:event.target.id})
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.menu-sections, .content-viewer').forEach((element) => {
+                    element.addEventListener('mouseout', (event) => {
+                        // make sure we ACTUALLY moused OUT of the target not into a child
+                        if (event.relatedTarget && event.target.contains(event.relatedTarget)) {
+                            return;
+                        }
+                        if (event.target.classList.contains('menu-section')) {
+                            //document.querySelector('.bg-img').classList.remove('swap');
+                        }
+                    });
+                });
             </script>
         </div>
 
         <!-- Content Viewer List (scroll container) -->
         
         <div class="content-viewer-outer md:ml-[400px]">
-            <div id="contentViewerList" class="content-viewer-list pr-12">
-                <div class="content-viewer rounded-t-lg flex flex-row p-0">
+            <div id="contentViewerList" class="content-viewer-list pr-12 grid-container">
+                <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="intro">
                     <div id="intro" class="content rounded-t-lg overflow-hidden flex flex-col">
-                        <div class="relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                        <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
                             <img src="/res/DALL·E 2023-12-26 15.57.30 - A visually compelling blog header image, designed in dark mode, that encapsulates the themes of artificial intelligence, programming, and Tetris, with.png"
                                 alt="Background Image" class="absolute inset-0 w-full h-full object-cover opacity-50">
                             <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -331,14 +429,19 @@
                                 <p class="mb-4">Let's get started!</p>
                             </div>
                         </div>
-                        <button
-                            onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
-                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
+                        <div class="flex flex-row justify-between">
+                            <button
+                                onclick="switchContent('results');"
+                                class="bg-green-500 hover:bg-green-700 text-white font-bold p-4 m-4 rounded w-1/2">Play</button>
+                            <button
+                                onclick="let nextElement = this.parentElement.parentElement.parentElement.nextElementSibling; nextElement.scrollIntoView({behavior: 'smooth'}); setTimeout(() => { window.scrollBy(0, -100); }, 500);"
+                                class="w-1/2 bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
+                        </div>
                     </div>
                 </div>
-                <div class="content-viewer rounded-t-lg flex flex-row p-0">
+                <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="terms">
                     <div id="terms" class="content rounded-t-lg overflow-hidden flex-col">
-                        <div class="relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                        <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
                             <img src="./res/9800c48a-6a59-4caa-adbc-864eec10b6de.webp" alt="Background Image"
                                 class="absolute inset-0 w-full h-full object-cover opacity-50">
                             <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -400,9 +503,9 @@
                             class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
                     </div>
                 </div>
-                <div class="content-viewer rounded-t-lg flex flex-row p-0">
+                <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="building">
                     <div id="building" class="content rounded-t-lg overflow-hidden flex-col"">
-                    <div class=" relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                    <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
                         <img src="./res/6a6cf0d2-7a1b-4cbd-b6ec-004aa01fb20b.webp" alt="Background Image"
                             class="absolute inset-0 w-full h-full object-cover opacity-50">
                         <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -469,128 +572,19 @@
                             style="font-family: 'Courier New', monospace; white-space: pre-wrap;">Prompt will be
                             displayed
                             here...</div>
-
-                        <script>
-                            function updateGrid() {
-                                const rows = document.getElementById('rows').value;
-                                const columns = document.getElementById('columns').value;
-                                const prompt = `Given a grid of ${rows} rows and ${columns} columns, we will initialize a 2D array to represent our grid. Each cell in the array will represent a cell in the Tetris grid. All cells will be empty at the start of the game. We will use p5.js to create a function to draw the grid on the screen. This function will loop through each cell in our 2D array and draw a square at the corresponding location on the screen. We will also create a function to update the grid. This function will be called whenever a Tetris block is moved or rotated. It will update the 2D array to reflect the new state of the grid.`;
-                                document.getElementById('promptOutput-building').textContent = prompt;
-                            }
-                            window.updateTetrominoPrompt = function () {
-                                const prompt = `Given 7 Tetrominos (I, J, L, O, S, T, and Z), we will initialize a 2D array to represent each Tetromino. Each cell in the array will represent a block in the Tetromino. We will use p5.js to create a function to draw a Tetromino on the screen. This function will loop through each cell in the Tetromino's 2D array and draw a square at the corresponding location on the screen. We will also create a function to update the position and rotation of a Tetromino. This function will be called whenever a Tetromino is moved or rotated. It will update the 2D array to reflect the new state of the Tetromino.`;
-                                document.getElementById('promptOutput-tetrominos').textContent = prompt;
-                            };
-                            function copyToClipboard(key) {
-                                const prompt = document.getElementById(`promptOutput-${key}`).textContent;
-                                console.warn('copied', prompt)
-                                navigator.clipboard.writeText(prompt);
-                                showCopyAlert();
-                            }
-                            function showCopyAlert() {
-                                const copyAlert = document.getElementById('copyAlert');
-                                copyAlert.classList.remove('hidden');
-                                setTimeout(() => {
-                                    copyAlert.classList.add('hidden');
-                                }, 1000);
-                            }
-                            let contentViewerList,
-                                timelineCovered, totalHeight, totalSections;
-                            const onScroll = function () {
-
-                                const sections = document.querySelectorAll('.content');
-                                const navSections = document.querySelectorAll('.menu-section');
-                                let closest = null;
-                                let closestTop = Infinity;
-                                let visitedIndex = 0;
-
-                                sections.forEach((section, index) => {
-                                    const rect = section.getBoundingClientRect();
-                                    const parentRect = contentViewerList.getBoundingClientRect();
-                                    const relativeTop = rect.top - parentRect.top;
-                                    const bottomEdgeInViewPort = rect.bottom - 100 >= parentRect.top;
-                                    const topEdgeCloseToViewportTop = relativeTop >= 0 && relativeTop < 30;
-
-                                    if (bottomEdgeInViewPort || topEdgeCloseToViewportTop) {
-                                        if (relativeTop < closestTop) {
-                                            closest = navSections[index];
-                                            closestTop = relativeTop;
-                                            visitedIndex = index;
-                                        }
-                                    }
-                                });
-
-                                if (closest) {
-                                    navSections.forEach(section => {
-                                        section.classList.remove('active-section');
-                                    });
-                                    closest.classList.add('active-section');
-
-                                    // Add visited class to the corresponding timeline circle
-                                    const timelineCircles = document.querySelectorAll('.timeline-circle');
-                                    timelineCircles.forEach((circle, index) => {
-                                        if (index <= visitedIndex) {
-                                            circle.classList.add('visited');
-                                        } else {
-                                            circle.classList.remove('visited');
-                                        }
-                                    });
-
-                                    // Update the height of timeline_covered
-                                    const progress = (visitedIndex) / navSections.length;
-                                    timelineCovered.style.height = `${progress * 100}%`;
-
-                                    // If we've visited the last section, set the height to 100%
-                                    if (contentViewerList.scrollTop + contentViewerList.clientHeight >= totalHeight) {
-                                        timelineCovered.style.height = '100%';
-                                    }
-                                }
-                            }
-                            const setup2 = function () {
-                                contentViewerList = document.getElementsByClassName('content-viewer-outer')[0];
-                                timelineCovered = document.querySelector('.timeline_covered');
-                                totalHeight = contentViewerList.scrollHeight;
-                                totalSections = document.querySelectorAll('.menu-section').length;
-                                // This script is responsible for highlighting the section's #anchor box top closest to the current scroll y offset
-                                // It listens for the 'scroll' event on the 'contentViewerList' element
-                                // On each 'scroll' event, it calculates which section is closest to the top of the 'contentViewerList'
-                                // It then removes the 'active-section' class from all sections and adds it to the closest section
-                                // This gives the effect of the closest section being highlighted as the user scrolls through the content
-                                // If the highlighting is not working as expected, there could be a few potential issues:
-                                // 1. The 'scroll' event is not being fired. This could be due to the 'contentViewerList' not being scrollable, or the event listener not being added correctly.
-                                // 2. The calculations for determining the closest section are incorrect. This could be due to incorrect use of the getBoundingClientRect() method, or issues with the parentRect and relativeTop calculations.
-                                // 3. The 'active-section' class is not being added or removed correctly. This could be due to a typo in the class name, or issues with the classList.add() and classList.remove() methods.
-                                // To fix these issues, ensure that the 'scroll' event is being fired, the calculations are correct, and the 'active-section' class is being added and removed correctly.
-
-
-                                contentViewerList.addEventListener('scroll', onScroll);
-                            }
-                            window.onload = () => {
-                                updateGrid();
-                                updateTetrominoPrompt();
-                                timelineCovered = document.querySelector('.timeline_covered');
-                                setup2();
-                                onScroll();
-
-    confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0 }
-    });
-                            }
-                        </script>
                     </div>
                     <button
-                        onclick="document.getElementById('building').parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
-                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">
-                        Next
-                    </button>
+                            onclick="this.parentElement.parentElement.previousElementSibling.scrollIntoView({behavior: 'smooth'});"
+                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-left">Prev</button>
+                        <button
+                            onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
+                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
                 </div>
             </div>
 
-            <div class="content-viewer rounded-t-lg flex flex-row p-0">
+            <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="tetrominos">
                 <div id="tetrominos" class="content rounded-t-lg overflow-hidden flex-col"">
-                    <div class=" relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                    <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
                     <img src="./res/9f57e694-d11b-4721-9076-10a647235738.webp" alt="Background Image"
                         class="absolute inset-0 w-full h-full object-cover opacity-50">
                     <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -666,16 +660,17 @@
                 </div>
 
                 <button
+                    onclick="this.parentElement.parentElement.previousElementSibling.scrollIntoView({behavior: 'smooth'});"
+                    class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-left">Prev</button>
+                <button
                     onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
-                    class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">
-                    Next
-                </button>
+                    class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
             </div>
         </div>
 
-        <div class="content-viewer rounded-t-lg flex flex-row p-0">
+        <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="game">
             <div id="game" class="content rounded-t-lg overflow-hidden flex-col"">
-                        <div class=" relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                        <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
                 <img src="./res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp" alt="Background Image"
                     class="absolute inset-0 w-full h-full object-cover opacity-50">
                 <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -697,18 +692,20 @@
                     called whenever the user presses a key on the keyboard. It will be responsible for moving the
                     Tetromino and rotating it.</p>
             </div>
-            <button onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
-                class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">
-                Next
-            </button>
+            <button
+                onclick="this.parentElement.parentElement.previousElementSibling.scrollIntoView({behavior: 'smooth'});"
+                class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-left">Prev</button>
+            <button
+                onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
+                class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
         </div>
 
 
     </div>
 
-    <div class="content-viewer rounded-t-lg flex flex-row p-0">
+    <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="controls">
         <div id="controls" class="content rounded-t-lg overflow-hidden flex-col"">
-                    <div class=" relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                    <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
             <img src="./res/DALL·E 2023-12-26 16.45.30 - Create a pixel art image showing a dynamic scene of game development, where workers handle keyboard and touch inputs, including giant finger and keybo.png"
                 alt="Background Image" class="absolute inset-0 w-full h-full object-cover opacity-50">
             <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -729,12 +726,18 @@
                 function will be called every frame and will be responsible for updating the position of the
                 Tetromino and checking if it has collided with any other Tetrominos.</p>
         </div>
+        <button
+            onclick="this.parentElement.parentElement.previousElementSibling.scrollIntoView({behavior: 'smooth'});"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-left">Prev</button>
+        <button
+            onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
     </div>
     </div>
 
-    <div class="content-viewer rounded-t-lg flex flex-row p-0">
+    <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="mobile">
         <div id="mobile" class="content rounded-t-lg overflow-hidden flex-col"">
-                    <div class=" relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                    <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
             <img src="./res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp" alt="Background Image"
                 class="absolute inset-0 w-full h-full object-cover opacity-50">
             <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -755,13 +758,19 @@
                 function will be called every frame and will be responsible for updating the position of the
                 Tetromino and checking if it has collided with any other Tetrominos.</p>
         </div>
+        <button
+            onclick="this.parentElement.parentElement.previousElementSibling.scrollIntoView({behavior: 'smooth'});"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-left">Prev</button>
+        <button
+            onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
     </div>
     </div>
 
 
-    <div class="content-viewer rounded-t-lg flex flex-row p-0">
+    <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="results">
         <div id="results" class="content rounded-t-lg overflow-hidden flex-col"">
-                    <div class=" relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                    <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
             <img src="./res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp" alt="Background Image"
                 class="absolute inset-0 w-full h-full object-cover opacity-50">
             <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -776,13 +785,19 @@
                 understanding of how the different parts of the game work together.</p>
             <p class="mb-4">Enjoy playing your Tetris game!</p>
         </div>
+        <button
+            onclick="this.parentElement.parentElement.previousElementSibling.scrollIntoView({behavior: 'smooth'});"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-left">Prev</button>
+        <button
+            onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button>
     </div>
     </div>
 
 
-    <div class="content-viewer rounded-t-lg flex flex-row p-0">
+    <div class="content-viewer rounded-t-lg flex flex-row p-0" data-section-key="future">
         <div id="future" class="content rounded-t-lg overflow-hidden flex-col"">
-                    <div class=" relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
+                    <div class="header-image-wrapper relative aspect-w-16 aspect-h-9 p-0 min-h-[100px] max-h-[400px]">
             <img src="./res/3d6e5e06-df51-4ef2-8b0e-1985ff458716.webp" alt="Background Image"
                 class="absolute inset-0 w-full h-full object-cover opacity-50">
             <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
@@ -818,10 +833,16 @@
                 <input type="submit" value="Submit">
             </form>
         </div>
+        <button
+            onclick="this.parentElement.parentElement.previousElementSibling.scrollIntoView({behavior: 'smooth'});"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-left">Prev</button>
+        <!-- <button
+            onclick="this.parentElement.parentElement.nextElementSibling.scrollIntoView({behavior: 'smooth'});"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold p-4 m-4 rounded float-right">Next</button> -->
     </div> <!-- end div#future.content -->
     </div> <!-- end div.content-viewer -->
-    <div class="col-span-3 w-full credits bg-midnightblue text-palegoldenrod p-4 border-gray-300 border-radius rounded-lg m-4">
-        by <a href="https://jakedowns.com" target="_newtab">jake downs</a> and chatgpt. <a href="https://github.com/jakedowns/starpages" target="_newtab">Fork this project on Github!</a> | <a href="https://github.com/jakedowns/starpages/blob/main/tetris-with-p5js-and-chatgpt-tutorial.html" target="_newtab">View Source Code</a>
+    <div class="col-span-4 text-center w-full credits bg-midnightblue text-palegoldenrod p-4 border-gray-300 border-radius rounded-lg m-4">
+        by <a href="https://patreon.com/jakedowns" target="_newtab">jake downs</a> and chatgpt. <a href="https://github.com/jakedowns/starpages" target="_newtab">Fork this project on Github!</a> | <a href="https://github.com/jakedowns/starpages/blob/main/tetris-with-p5js-and-chatgpt-tutorial.html" target="_newtab">View Source Code</a>
     </div>
     </div> <!-- end div -->
     </div> <!-- end div -->
@@ -849,7 +870,137 @@
     </div>
 
 
+    <script>
+        function updateGrid() {
+            const rows = document.getElementById('rows').value;
+            const columns = document.getElementById('columns').value;
+            const prompt = `Given a grid of ${rows} rows and ${columns} columns, we will initialize a 2D array to represent our grid. Each cell in the array will represent a cell in the Tetris grid. All cells will be empty at the start of the game. We will use p5.js to create a function to draw the grid on the screen. This function will loop through each cell in our 2D array and draw a square at the corresponding location on the screen. We will also create a function to update the grid. This function will be called whenever a Tetris block is moved or rotated. It will update the 2D array to reflect the new state of the grid.`;
+            document.getElementById('promptOutput-building').textContent = prompt;
+        }
+        window.updateTetrominoPrompt = function () {
+            const prompt = `Given 7 Tetrominos (I, J, L, O, S, T, and Z), we will initialize a 2D array to represent each Tetromino. Each cell in the array will represent a block in the Tetromino. We will use p5.js to create a function to draw a Tetromino on the screen. This function will loop through each cell in the Tetromino's 2D array and draw a square at the corresponding location on the screen. We will also create a function to update the position and rotation of a Tetromino. This function will be called whenever a Tetromino is moved or rotated. It will update the 2D array to reflect the new state of the Tetromino.`;
+            document.getElementById('promptOutput-tetrominos').textContent = prompt;
+        };
+        function copyToClipboard(key) {
+            const prompt = document.getElementById(`promptOutput-${key}`).textContent;
+            console.warn('copied', prompt)
+            navigator.clipboard.writeText(prompt);
+            showCopyAlert();
+        }
+        function showCopyAlert() {
+            const copyAlert = document.getElementById('copyAlert');
+            copyAlert.classList.remove('hidden');
+            setTimeout(() => {
+                copyAlert.classList.add('hidden');
+            }, 1000);
+        }
+        let contentViewerList,
+            timelineCovered, totalHeight, totalSections;
+        const onScroll = function () {
 
+            const sections = document.querySelectorAll('.content');
+            const navSections = document.querySelectorAll('.menu-section');
+            let closest = null;
+            let closestTop = Infinity;
+            let visitedIndex = 0;
+
+            sections.forEach((section, index) => {
+                const rect = section.getBoundingClientRect();
+                const parentRect = contentViewerList.getBoundingClientRect();
+                const relativeTop = rect.top - parentRect.top;
+                const bottomEdgeInViewPort = rect.bottom - 100 >= parentRect.top;
+                const topEdgeCloseToViewportTop = relativeTop >= 0 && relativeTop < 30;
+
+                if (bottomEdgeInViewPort || topEdgeCloseToViewportTop) {
+                    if (relativeTop <= closestTop) {
+                        closest = navSections[index];
+                        closestTop = relativeTop;
+                        visitedIndex = index;
+                    }
+                }
+            });
+
+            if (closest) {
+                navSections.forEach(section => {
+                    section.classList.remove('active-section');
+                });
+                closest.classList.add('active-section');
+
+                // Add visited class to the corresponding timeline circle
+                const timelineCircles = document.querySelectorAll('.timeline-circle');
+                timelineCircles.forEach((circle, index) => {
+                    if (index <= visitedIndex) {
+                        circle.classList.add('visited');
+                    } else {
+                        circle.classList.remove('visited');
+                    }
+                });
+
+                // Update the height of timeline_covered
+                const progress = (visitedIndex) / navSections.length;
+                timelineCovered.style.height = `${progress * 100}%`;
+
+                // If we've visited the last section, set the height to 100%
+                if (contentViewerList.scrollTop + contentViewerList.clientHeight >= totalHeight) {
+                    timelineCovered.style.height = '100%';
+                }
+            }
+        }
+        const setup2 = function () {
+
+            document.addEventListener('click',(e)=>{
+                // if we clicked on or in a ".content-viewer" element
+                // toggle the css-var "--max-columns" between 4 and 1
+                // toggle body class .force-to-one-col
+                if (e.target.closest('.content-viewer')) {
+
+                    const ignoredElements = ['button', 'input', 'textarea', 'pre', 'code', 'a', 'p', 'span'];
+                    if(ignoredElements.some(element => e.target.closest(element))){
+                        // ignore clicks on buttons, inputs, textareas, code blocks, and links
+                        return;
+                    }
+
+                    const maxColumns = getComputedStyle(document.documentElement).getPropertyValue('--max-columns');
+                    document.documentElement.style.setProperty('--max-columns', maxColumns === '4' ? '1' : '4');
+                    document.body.classList.toggle('force-to-one-col');
+
+                    // scroll to that element
+                    e.target.closest('.content-viewer').scrollIntoView({behavior: 'smooth'});
+                }
+            })
+
+            contentViewerList = document.getElementsByClassName('content-viewer-outer')[0];
+            timelineCovered = document.querySelector('.timeline_covered');
+            totalHeight = contentViewerList.scrollHeight;
+            totalSections = document.querySelectorAll('.menu-section').length;
+            // This script is responsible for highlighting the section's #anchor box top closest to the current scroll y offset
+            // It listens for the 'scroll' event on the 'contentViewerList' element
+            // On each 'scroll' event, it calculates which section is closest to the top of the 'contentViewerList'
+            // It then removes the 'active-section' class from all sections and adds it to the closest section
+            // This gives the effect of the closest section being highlighted as the user scrolls through the content
+            // If the highlighting is not working as expected, there could be a few potential issues:
+            // 1. The 'scroll' event is not being fired. This could be due to the 'contentViewerList' not being scrollable, or the event listener not being added correctly.
+            // 2. The calculations for determining the closest section are incorrect. This could be due to incorrect use of the getBoundingClientRect() method, or issues with the parentRect and relativeTop calculations.
+            // 3. The 'active-section' class is not being added or removed correctly. This could be due to a typo in the class name, or issues with the classList.add() and classList.remove() methods.
+            // To fix these issues, ensure that the 'scroll' event is being fired, the calculations are correct, and the 'active-section' class is being added and removed correctly.
+
+
+            contentViewerList.addEventListener('scroll', onScroll);
+        }
+        window.onload = () => {
+            updateGrid();
+            updateTetrominoPrompt();
+            timelineCovered = document.querySelector('.timeline_covered');
+            setup2();
+            onScroll();
+
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0 }
+            });
+        }
+    </script>
     <script>
         // JavaScript for showing and hiding content
         function showContent(id) {
@@ -872,10 +1023,69 @@
             showContent('building');
         });
 
+        function scrollToSection(direction){
+            const contentViewerList = document.getElementsByClassName('content-viewer-outer')[0];
+            const contentSections = Array.from(document.querySelectorAll('.content-viewer'));
+            const currentScrollTop = contentViewerList.scrollTop;
+            const currentClientHeight = contentViewerList.clientHeight;
+            let nextSection = null;
+
+            // Find the section that takes up the most of the viewport
+            let maxSection = null;
+            let maxSectionCoverage = 0;
+
+            for (let i = 0; i < contentSections.length; i++) {
+                const section = contentSections[i];
+                const sectionTop = Math.max(section.getBoundingClientRect().top, 0);
+                const sectionBottom = Math.min(section.getBoundingClientRect().bottom, window.innerHeight);
+                const sectionCoverage = sectionBottom - sectionTop;
+
+                if (sectionCoverage > maxSectionCoverage) {
+                    maxSection = section;
+                    maxSectionCoverage = sectionCoverage;
+                }
+            }
+
+            // Find the next or previous section relative to the current section
+            const currentIndex = contentSections.indexOf(maxSection);
+            if (direction === 'next' && currentIndex < contentSections.length - 1) {
+                nextSection = contentSections[currentIndex + 1];
+            } else if (direction === 'previous' && currentIndex > 0) {
+                nextSection = contentSections[currentIndex - 1];
+            }
+
+            // Scroll to the next or previous section if it exists
+            if (nextSection) {
+                const nextScrollTop = nextSection.offsetTop;
+                contentViewerList.scrollTo({ top: nextScrollTop, behavior: 'smooth' });
+            }
+        }
+
+        function scrollToNextSection(){
+            scrollToSection('next');
+        }
+
+        function scrollToPreviousSection(){
+            scrollToSection('previous');
+        }
         // Modify switchContent and switchContentMobile functions to show and hide content
         function switchContent(section) {
+            // if we're not in force-to-one-col mode, enter it now
+            const maxColumns = getComputedStyle(document.documentElement).getPropertyValue('--max-columns');
+            if (maxColumns === '4') {
+                document.documentElement.style.setProperty('--max-columns', '1');
+                document.body.classList.add('force-to-one-col');
+            }else{
+                //document.body.classList.remove('force-to-one-col');
+            }
+
+
             const contentViewerList = document.getElementsByClassName('content-viewer-outer')[0];
             const sectionElement = document.getElementById(section);
+            if(!sectionElement){
+                console.error("no section element found for", section)
+                return;
+            }
             const top = sectionElement.offsetTop;
             contentViewerList.scrollTo({ top: top, behavior: 'smooth' });
             // if mobile menu visible, hide it
