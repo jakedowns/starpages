@@ -434,9 +434,8 @@
     <div class="layout">
         <!-- Menu Sections -->
         <div class="menu-sections flex flex-col items-start p-8">
-            <div class="text-2xl font-bold mb-4 title">building tetris with p5.js and chatGPT</div>
-            <div class="text-l font-semibold mb-2 text-white">A step by step guide using Gherkin Behavior Driven
-                Development focused prompting</div>
+            <div class="text-2xl font-bold mb-4 title cursor-pointer" onclick="switchContent('intro')">learning BDD by building tetris with p5.js and chatGPT</div>
+            <div class="text-l font-semibold mb-2 text-white">A step by step guide using Behavior Driven Development focused prompting</div>
             
             <div class="flex flex-row flex-wrap">
                 <div class="flex flex-row w-full">
@@ -642,21 +641,41 @@
                                     <h3 class="font-bold text-xl">Given</h3>
                                     <p>What's the first <strong>Given</strong> we can think of as a user?</p>
                                 </div>
-                                <input type="text" class="text-2xl w-full bg-black text-yellow p-4 m-4 rounded-xl" placeholder="I start a new game...">
+                                <input type="text" class="border-t-gray-600 border-x-gray-400 border-b-gray-300 border-2 text-2xl w-full bg-black text-yellow p-4 m-4 rounded-xl" placeholder="I start a new game...">
                             </div>
                             <div class="bg-purple-900 text-white p-4 rounded-lg mb-4 flex flex-row justify-between">
                                 <div>
                                     <h3 class="font-bold text-xl">When</h3>
                                     <p>What's the first <strong>When</strong> we can think of as a user?</p>
                                 </div>
-                                <input type="text" class="text-2xl w-full bg-black text-purple p-4 m-4 rounded-xl" placeholder="I wait a few frames...">
+                                <input type="text" class="border-t-gray-600 border-x-gray-400 border-b-gray-300 border-2 text-2xl w-full bg-black text-purple p-4 m-4 rounded-xl" placeholder="I wait a few frames...">
                             </div>
                             <div class="bg-orange-900 text-white p-4 rounded-lg mb-4 flex flex-row justify-between">
                                 <div>
                                     <h3 class="font-bold text-xl">Then</h3>
                                     <p>What's the first <strong>Then</strong> we can think of as a user?</p>
                                 </div>
-                                <input type="text" class="text-2xl w-full bg-black text-orange p-4 m-4 rounded-xl" placeholder="I see the first piece falling into the top row...">
+                                <input type="text" class="border-t-gray-600 border-x-gray-400 border-b-gray-300 border-2 text-2xl w-full bg-black text-orange p-4 m-4 rounded-xl" placeholder="I see the first piece falling into the top row...">
+                            </div>
+
+                            <div class="bg-red-900 text-white p-4 rounded-lg mb-4 flex flex-row justify-between w-auto">
+                                <div>
+                                    <h3 class="font-bold text-xl">Hold Up!</h3>
+                                    <p>Wait a minute, we can't assert we see a <strong>Piece</strong> on the <strong>Grid</strong> unless we assert we have a fresh <strong>Grid</strong> instance. so, let's create THAT scenario first:</p>
+
+                                    <div class="m-4 border-2 border-black rounded-2xl p-4 flex flex-col">
+                                        <p class="flex flex-row text-gray-400"><strong class="basis-32 text-right pr-4">Comment</strong> make sure the grid renders empty for a new game</p>
+                                        <p class="flex flex-row"><strong class="basis-32 text-right pr-4">Scenario</strong> User starts new game, sees grid</p>
+                                        <p class="flex flex-row"><strong class="basis-32 text-right pr-4">Given</strong> a fresh New Game</p>
+                                        <p class="flex flex-row"><strong class="basis-32 text-right pr-4">When</strong> I view the first frame</p>
+                                        <p class="flex flex-row"><strong class="basis-32 text-right pr-4">Then</strong> I see The Grid</p>
+                                        <div class="flex flex-row">
+                                            <button class="px-2 py-2 hover:bg-blue-600 m-4 rounded-2xl border-2 border-blue-900 bg-blue-800">Validate Scenario</button>
+                                            <button class="px-2 py-2 hover:bg-green-600 m-4 rounded-2xl border-2 border-green-900 bg-green-800">Add Scenario</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- <input type="text" class="text-2xl w-full bg-black text-red p-4 m-4 rounded-xl" placeholder="I start a new game..."> -->
                             </div>
 
                             <p class="mb-4">In this section, we will discuss how to build the grid for our Tetris game using
