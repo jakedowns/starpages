@@ -607,11 +607,52 @@
                             <img src="./res/6a6cf0d2-7a1b-4cbd-b6ec-004aa01fb20b.webp" alt="Background Image"
                                 class="absolute inset-0 w-full h-full object-cover ">
                             <div class="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                                <h2 class="text-2xl font-bold mb-4">building the grid</h2>
+                                <h2 class="text-2xl font-bold mb-4">Building the Grid</h2>
                             </div>
                         </div>
                         <div class="p-4">
                             <h2 class="text-2xl font-bold mb-4">Building the Grid</h2>
+
+                            <div class="clickable bg-blue-900 text-white p-4 rounded-lg mb-4 cursor-pointer" onclick="event.preventDefault(); this.querySelectorAll('.hidden, .hidden-decision').forEach((e)=>{e.classList.remove('hidden')});this.querySelector('.hideonreveal').classList.add('hidden');">
+                                <h3 class="font-bold text-xl">Guess What's Next!</h3>
+                                <p>What's the first decision we have to make about our game?</p>
+                                <strong class="hideonreveal">Click to reveal the answer</strong>
+                                <p class="hidden">How about we decide if we want to make a 2D, 3D or 2.5D game!</p>
+                            </div>
+                            <div class="my-4 rounded-lg p-4 border-2 border-gray-200 hidden hidden-decision">
+                                <h3 class="text-xl font-bold mb-2">Game Dimension Decision</h3>
+                                <p class="mb-4">This is a critical decision point in our game development process. The dimension we choose (2D, 3D, or 2.5D) will significantly impact the complexity of our game and the player's experience. Let's make a well-informed decision!</p>
+                                <label for="gameDimension" class="text-xl font-bold mb-2">Choose the game dimension:</label>
+                                <input type="range" id="gameDimension" name="gameDimension" min="1" max="3" value="2" class="slider w-full h-6 rounded-full">
+                                <div class="flex justify-between text-sm font-bold mt-2">
+                                    <span>2D</span>
+                                    <span>2.5D</span>
+                                    <span>3D</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-yellow-900 text-white p-4 rounded-lg mb-4 flex flex-row justify-between">
+                                <div>
+                                    <h3 class="font-bold text-xl">Given</h3>
+                                    <p>What's the first <strong>Given</strong> we can think of as a user?</p>
+                                </div>
+                                <input type="text" class="text-2xl w-full bg-black text-yellow p-4 m-4 rounded-xl" placeholder="I start a new game...">
+                            </div>
+                            <div class="bg-purple-900 text-white p-4 rounded-lg mb-4 flex flex-row justify-between">
+                                <div>
+                                    <h3 class="font-bold text-xl">When</h3>
+                                    <p>What's the first <strong>When</strong> we can think of as a user?</p>
+                                </div>
+                                <input type="text" class="text-2xl w-full bg-black text-purple p-4 m-4 rounded-xl" placeholder="I wait a few frames...">
+                            </div>
+                            <div class="bg-orange-900 text-white p-4 rounded-lg mb-4 flex flex-row justify-between">
+                                <div>
+                                    <h3 class="font-bold text-xl">Then</h3>
+                                    <p>What's the first <strong>Then</strong> we can think of as a user?</p>
+                                </div>
+                                <input type="text" class="text-2xl w-full bg-black text-orange p-4 m-4 rounded-xl" placeholder="I see the first piece falling into the top row...">
+                            </div>
+
                             <p class="mb-4">In this section, we will discuss how to build the grid for our Tetris game using
                                 p5.js.
                                 The grid is a crucial component of the game as it is where the Tetris blocks will be placed
@@ -745,7 +786,9 @@
         </code></pre>
                                 </li>
                             </ol>
-        
+                            <p>Tetrominos are a great usecase for "Scenario Outlines" in Gherkin BDD. We can easily define a map of valid rotations, for example, and loop through them all, reusing the same logic to validate all 7 * 4 possibilities;</p>
+                            <p>ChatGPT Says: Don't Forget... <span></span></p>
+                            <p class="mb-2">Remember to always test your game thoroughly. Make sure all Tetromino rotations and movements work as expected and the game ends when it should.</p>
                         </div>
         
                         <button
@@ -1121,6 +1164,11 @@ const bgImages = {
                 const ignoredElements = ['button', 'input', 'textarea', 'pre', 'code', 'a', 'p', 'span'];
                 if(ignoredElements.some(element => e.target.closest(element))){
                     // ignore clicks on buttons, inputs, textareas, code blocks, and links
+                    return;
+                }
+                const ignoredClassnames = ['clickable','copyButton'];
+                if(ignoredClassnames.some(className => e.target.closest(`.${className}`))){
+                    // ignore clicks on elements with the "clickable" class
                     return;
                 }
 
