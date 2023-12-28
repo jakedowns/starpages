@@ -54,10 +54,10 @@ io.on('connection', (socket) => {
         // if the message is json, then it's a command
         try {
             const command = JSON.parse(message);
-            console.warn('parsed to: ',command)
+            console.warn('parsed to: ',command, {'for socket id':socket.id})
             if (command.type === 'get') {
                 if (command.target === 'features') {
-                    console.warn('running select...');
+                    console.warn('running select...', {tsocket: typeof socket, sid: socket.id});
                     db.all('SELECT * FROM features', [], (err: any, rows: any) => {
                         console.warn('get features',{err,rows})
                         if (err) {
@@ -73,13 +73,13 @@ io.on('connection', (socket) => {
             else if(command.type === 'put') {
                 if(command.target === 'features') {
                     console.warn('running insert...');
-                    db.run('INSERT INTO features (name, description) VALUES (?, ?)', [command.name, command.description], (err: any, rows: any) => {
-                        console.warn('put features',{err,rows})
+                    db.run('INSERT INTO features (name, description) VALUES (?, ?)', [command.name, command.description], (err: any) => {
+                        console.warn('put features',{err})
                         if (err) {
                             console.error(err);
                             return;
                         }
-                        socket.emit('message', { features: rows });
+                        socket.emit('message', { success: true });
                     });
                 }else{
                     console.warn('Unknown put target',command);

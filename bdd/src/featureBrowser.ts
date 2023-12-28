@@ -68,6 +68,44 @@ class FeatureGroup {
         this.subGroupIDs = subGroupIDs;
         this.thingPositions = thingPositions;
     }
+    public static fromSortableTreeNodeData(data: SortableTreeNodeData): FeatureGroup {
+        // cast data.data to FeatureGroup
+        if (!data.data) {
+            throw new Error('Invalid input: data.data should be an object');
+        }
+        // if (!data.data.id) {
+        //     throw new Error('Invalid input: data.data.id should be a number');
+        // }
+        // if (!data.data.name) {
+        //     throw new Error('Invalid input: data.data.name should be a string');
+        // }
+        // if (!data.data.superGroupIDs) {
+        //     throw new Error('Invalid input: data.data.superGroupIDs should be an array');
+        // }
+        // if (!data.data.subGroupIDs) {
+        //     throw new Error('Invalid input: data.data.subGroupIDs should be an array');
+        // }
+        // if (!data.data.thingPositions) {
+        //     throw new Error('Invalid input: data.data.thingPositions should be an array');
+        // }
+        let _temp : FeatureGroup = data.data as unknown as FeatureGroup;
+        // console.warn('TODO: see if we have _more_ info in the dataMap cache...',{
+        //     cacheHitOrMiss: dataMap.has(_temp.id),
+        //     cacheValue: dataMap.get(_temp.id),
+        // });
+
+        // Retrieve the cached value, if it exists
+        const cachedFeatureGroup = dataMap.get(_temp.id) as FeatureGroup | undefined;
+
+        // Merge the cached data with the defaults from _temp
+        return new FeatureGroup(
+            _temp.id, 
+            cachedFeatureGroup?.name ?? _temp.name, 
+            cachedFeatureGroup?.superGroupIDs ?? _temp.superGroupIDs ?? [], 
+            cachedFeatureGroup?.subGroupIDs ?? _temp.subGroupIDs ?? [], 
+            cachedFeatureGroup?.thingPositions ?? _temp.thingPositions ?? new ThingPositionList()
+        );
+    }
 }
 
 interface Scenario {
@@ -109,7 +147,15 @@ type ScenarioDescription = string;
 type ScenarioName = string;
 type ScenarioId = number;
 type FeatureOrGroup = Feature | FeatureGroup;
-const dataMap = new Map<number, FeatureOrGroup>();
+
+type FeatureDataMapType = Map<number, FeatureOrGroup>;
+
+class FeatureDataMap extends Map<number, FeatureOrGroup> {
+    constructor() {
+        super();
+    }
+}
+const dataMap: FeatureDataMapType = new FeatureDataMap();
 // type FeatureReferenceTreeNode = {
 //     id: number;
 //     items: FeatureReferenceTreeNode[];
@@ -121,31 +167,55 @@ const dataMap = new Map<number, FeatureOrGroup>();
 //     items: feature.items ? featuresToTreeNodes(feature.items) : [] // recursive call for nested items
 // }));
 
-// interface SortableTreeNodeData {
-//     id: number;
-//     name: string;
-//     children?: SortableTreeNodeData[];
-//     nodes?: SortableTreeNodeData[];
+const treeData: SortableTreeNodeData[] = [];
+treeData.push({
+    data:{
+        // only a placeholder "id" link to our big, central, flat data cache
+        id: 1,
+        name: "Feature 1",
+    },
+    nodes:[]
+});
+
+// function convertToSortableTreeData(groups: FeatureGroup[], _dataMap: FeatureDataMapType) {
+//     if (!Array.isArray(groups)) {
+//         throw new Error('Invalid input: groups should be an array');
+//     }
+
+//     return groups.map(group => {
+//         if (!group || !group.id || !group.name) {
+//             console.warn('Warning: Invalid group encountered', group);
+//             return null;
+//         }
+
+//         const nodes = group.thingPositions
+//             .map((pos: any) => {
+//                 if (!pos || !pos.id) {
+//                     console.warn('Warning: Invalid position encountered', pos);
+//                     return null;
+//                 }
+
+//                 const childGroup = _dataMap.get(pos.id);
+//                 if (!childGroup) {
+//                     console.warn(`Warning: No child group found for id ${pos.id}`);
+//                     return null;
+//                 }
+
+//                 return {
+//                     id: childGroup.id,
+//                     name: childGroup.name,
+//                     children: convertToSortableTreeData(childGroup.thingPositions, _dataMap)
+//                 };
+//             })
+//             .filter((node: any) => node !== null);
+
+//         return { id: group.id, name: group.name, nodes };
+//     }).filter(group => group !== null);
 // }
 
-function convertToSortableTreeData(groups: FeatureGroup[]): SortableTreeNodeData[] {
-    return groups.map(group => ({
-        id: group.id,
-        name: group.name,
-        data: group,
-        nodes: group.thingPositions.map((pos: ThingPosition) => {
-            // For this example, let's assume every child is another group.
-            // In a real scenario, you would fetch the actual Feature or FeatureGroup from somewhere
-            // based on the id in pos.
-            const childGroup = treeData.find(g => g.id === pos.id); // Replace with actual data fetching logic
-            return childGroup ? {
-                id: childGroup.id,
-                name: childGroup.name,
-                children: convertToSortableTreeData(childGroup.thingPositions.map(p => treeData.find(g => g.id === p.id) as FeatureGroup))
-            } : null;
-        }).filter(child => child !== null) as SortableTreeNodeData[]
-    }));
-}
+// Usage
+// const treeDataMap = new Map(treeData.map(group => [group.id, group]));
+// const sortableTreeData = convertToSortableTreeData(featureGroups, treeDataMap);
 
 interface TreeNode {
     id: number;
@@ -247,14 +317,8 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
         console.warn('onChange', treeData);
     }
 
-
-    // Example data
-    const rootGroups: FeatureGroup[] = [];
-
-    const rootNodes = rootGroups; //.map(id => toTreeNodes(dataMap.get(id)));
-
     new SortableTree({
-        nodes: convertToSortableTreeData(rootNodes),
+        nodes: treeData, //convertToSortableTreeData(rootNodes, dataMap),
         element: document.getElementById('your-tree-element-id') ?? document.createElement('div'),
         onChange
     });
@@ -274,12 +338,40 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
         })
     }
 
+    function getNestedHtml(featureGroup: SortableTreeNodeData, html: string = '') {
+        const group:FeatureGroup = FeatureGroup.fromSortableTreeNodeData(featureGroup);
+        if(!featureGroup){
+            return '';
+        }
+        if(typeof featureGroup.nodes !== 'undefined'){
+            if(featureGroup.nodes.length === 0){
+                return '';
+            }
+            // if it's not an array ...
+            if(!Array.isArray(featureGroup.nodes)){
+                return '';
+            }
+            featureGroup.nodes.forEach((entry, index) => {
+                html += getNestedHtml(entry, html);
+            });
+        }else{
+            if(featureGroup.data.id){
+                html += `<div class="featureGroup" id="featureGroup${group.id}">ID ${group.id}: <span contenteditable="true" onblur="commitChanges(event,'featureGroup',${group.id})">${group.name}</span></div>`;
+            }
+        }
+        return html;
+    }
+
     function reRender() {
         let html = '';
         html += '<div id="featureContainer">';
-        // features.forEach((feature, index) => {
-        //     html += `<div class="draggable" draggable="true" ondragstart="drag(event)" id="feature${index}" contenteditable="true" onblur="commitChanges(event, 'feature', ${index})">${feature.name}</div>`;
-        // });
+        html += `
+number of root nodes: ${treeData.length}<br/>
+number of dataMap entries: ${dataMap.size}
+`;
+        treeData.forEach((entry, index) => {
+            html += getNestedHtml(entry, html)
+        });
         html += '</div>';
         html += '<button id="addScenario">Add Scenario</button><br>';
         html += '<button id="addFeature">Add Feature</button><br>';
@@ -290,16 +382,26 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
 
     element.addEventListener('click', (event) => {
         if (event.target && (event.target as HTMLElement).id === 'addFeatureGroup') {
-            // featureGroups.push({
-            //     id: Date.now(),
-            //     name: "New Feature Group",
-            //     /** root features in this level of the data structure */
-            //     features: [],
-            //     /** directly-referenced "child-ish" feature group ids */
-            //     subGroups: [],
-            //     /** directly-referenced "parent-ish" feature group id */
-            //     superGroup: null
-            // })
+            let _new_thing_temp_id = performance.now(); // event timestamp?
+            dataMap.set(_new_thing_temp_id, {
+                id: _new_thing_temp_id,
+                name: "New Feature Group",
+                superGroupIDs: [],
+                subGroupIDs: [],
+                thingPositions: new ThingPositionList()
+            });
+            treeData.push({
+                data:{
+                    id: _new_thing_temp_id,
+                    name: "New Feature Group", 
+                    // we mirror cached name so we don't 
+                    // have to do lookup in big data cache during high-speed operations
+
+                    // need to look into performance trade-offs of this approach vs
+                    // slinging copies of the data around
+                },
+                nodes:[]
+            });
             reRender();
         }
         if (event.target && (event.target as HTMLElement).id === 'addFeature') {
@@ -323,14 +425,5 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
             reRender();
         }
         // Handle feature selection and display Scenario titles and descriptions
-    });
-
-    // UI elements for adding, renaming, editing, deleting features
-    // UI elements for adding scenarios, re-ordering them
-    // UI elements for grouping features into feature groups
-    // UI elements for drag / drop feature/feature groups to re-nest or un-nest them
-    // UI elements for adding Given, When, and Then type steps to the Scenario
-
-    // Scenarios also have a name, description, and "tags" tokenized input field
-    // The GWT step fields are also fuzzy-search ahead and search all valid commands throughout the system using a typeahead suggestion api
+    })
 }
