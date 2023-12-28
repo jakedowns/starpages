@@ -219,9 +219,102 @@ treeData.push({
     data:{
         // only a placeholder "id" link to our big, central, flat data cache
         id: 1,
-        name: "Feature 1",
+        name: "user features",
     },
+    nodes:[{
+        data: {
+            id: 2,
+            name: "watched-lots.feature"
+        },
+        nodes:[]
+    },{
+        data: {
+            id: 3,
+            name: "user-account-registration.feature"
+        },
+        nodes:[]
+    },{
+        data: {
+            id: 4,
+            name: "kyc.feature"
+        },
+        nodes:[]
+    },{
+        data: {
+            id: 5,
+            name: 'mailing-list-preferences.feature'
+        },
+        nodes:[]
+    }]
+},{
+    data: { id: 99, name: "day of sale"},
     nodes:[]
+},{
+    data: { id: 100, name: "admin features"},
+    nodes:[
+        {
+            data: {id: 1001, name: "gherkin-test-manager.feature"},
+            nodes: []
+        },
+        {
+            data: {id: 1002, name: "reset-test-db.feature"},
+            nodes: []
+        },
+    ]
+},{
+    data: { id: 100, name: "dev exp features"},
+    nodes:[
+        {
+            data: {id: 1001, name: "ci-cd.feature"},
+            nodes: []
+        },
+        {
+            data: {id: 1002, name: ".feature"},
+            nodes: []
+        },
+    ]
+},{
+    /* surfacing hidden functionality */
+    data: { id: 101, name: "photo editor features"},
+    nodes:[{
+        data:{ id: 1011, name: "item-page-photo-editor-shortcuts.feature"},
+        nodes:[]
+    }]
+},{
+    data:{
+        id: 6,
+        name: "user sale features"
+    },
+    nodes:[
+        {
+            data: { id: 7, name: "user-sale-registration.feature"},
+            nodes:[]
+        },
+        {
+            data: { id: 77, name: "user-bidding.feature"},
+            nodes: [],
+        },
+        {
+            data: { id: 999, name: "user-sms-notification.feature"},
+            nodes:[]
+        },
+        {
+            data: { id: 8, name: "user-email-verification.feature"},
+            nodes:[]
+        },
+        {
+            data: { id: 9, name: "user-address-management.feature"},
+            nodes:[]
+        },
+        {
+            data: { id: 10, name: "user-watched-lots.feature"},
+            nodes:[]
+        },
+        {
+            data: { id: 11, name: "user-bid-history.feature"},
+            nodes:[]
+        }
+    ]
 });
 
 // function convertToSortableTreeData(groups: FeatureGroup[], _dataMap: FeatureDataMapType) {
@@ -367,7 +460,24 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
     let tree:SortableTree = new SortableTree({
         nodes: treeData, //convertToSortableTreeData(rootNodes, dataMap),
         element: document.getElementById('your-tree-element-id') ?? document.createElement('div'),
-        onChange
+        onChange,
+
+        initCollapseLevel: 4,
+        lockRootLevel: false,
+        styles: {
+            // tree: 'my-tree',
+            // node: 'my-tree__node',
+            // label: 'my-tree__label',
+            // subnodes: 'my-tree__subnodes',
+            // collapse: 'my-tree__collapse',
+        },
+
+        stateId: 'tree-basic',
+
+        renderLabel: (props) => {
+            return props.id + ' ' + props.name
+        }
+        
     });
     window.theTree = tree;
 
@@ -386,29 +496,7 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
         })
     }
 
-    function getNestedHtml(featureGroup: SortableTreeNodeData, html: string = '') {
-        const group:FeatureGroup = FeatureGroup.fromSortableTreeNodeData(featureGroup);
-        if(!featureGroup){
-            return '';
-        }
-        if(typeof featureGroup.nodes !== 'undefined'){
-            if(featureGroup.nodes.length === 0){
-                return '';
-            }
-            // if it's not an array ...
-            if(!Array.isArray(featureGroup.nodes)){
-                return '';
-            }
-            featureGroup.nodes.forEach((entry, index) => {
-                html += getNestedHtml(entry, html);
-            });
-        }else{
-            if(featureGroup.data.id){
-                html += `<div class="featureGroup" id="featureGroup${group.id}">ID ${group.id}: <span contenteditable="true" onblur="commitChanges(event,'featureGroup',${group.id})">${group.name}</span></div>`;
-            }
-        }
-        return html;
-    }
+    console.warn('what?',window.toggleExportArea)
 
     window.toggleExportArea = function(){
         showExportingArea=!showExportingArea;
@@ -418,6 +506,36 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
         }
         window.reRender();
     }
+    
+
+    function getNestedHtml(featureGroup: SortableTreeNodeData) {
+        const group:FeatureGroup = FeatureGroup.fromSortableTreeNodeData(featureGroup);
+        if(!featureGroup){
+            return '';
+        }
+        let output = '';
+        if(typeof featureGroup.nodes !== 'undefined'){
+            if(featureGroup.nodes.length === 0){
+                return '';
+            }
+            // if it's not an array ...
+            if(!Array.isArray(featureGroup.nodes)){
+                return '';
+            }
+            featureGroup.nodes.forEach((entry, index) => {
+                output += getNestedHtml(entry);
+            });
+        }else{
+            if(featureGroup.data.id){
+                output += `${featureGroup.data.id} ${featureGroup.data.name}}`
+            }else{
+                output += `bad fG data`
+            }
+        }
+        return output;
+    }
+
+    
 
     let doPrettyPrint = false;
     let importing = false;
@@ -436,14 +554,16 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
         window.reRender();
     }
     window.togglePrettyPrint = togglePrettyPrint;
-    function _reRender() {
-        let html = '';
-        html += '<div id="featureContainer">';
-        html += `
-        <label for="prettyPrint">Pretty Print&nbsp;
+
+
+/**
+ 
+
+<label for="prettyPrint">Pretty Print&nbsp;
         <input type="checkbox" id="prettyPrint" onclick="togglePrettyPrint()" ${doPrettyPrint?'checked="checked"':''} />
         </label>
-<div class="importExport">
+
+ <div class="importExport">
     <button onclick="toggleImportArea()">Import</button>
     <div class="import">
         <textarea id="import" class="${importing?'':'hidden'}"  placeholder="Paste JSON here to import"></textarea>
@@ -453,12 +573,20 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
         <textarea id="export" class="${showExportingArea?'':'hidden'}" placeholder="JSON export will appear here"></textarea>
     </div>
 </div>
+ */
 
-number of root nodes: ${treeData.length}<br/>
+    function _reRender() {
+        let html = '';
+        html += '<div id="featureContainer">';
+        html += `
+number of root nodes: ${treeData[0].nodes.length}<br/>
+number of first level nodes: ${treeData[0].nodes.reduce((total,next)=>{
+    return total+next.nodes.length;
+},0)}<br/>
 number of dataMap entries: ${dataMap.size}
 `;
-        treeData.forEach((entry, index) => {
-            html += getNestedHtml(entry, html)
+        treeData[0].nodes.forEach((entry, index) => {
+            html += getNestedHtml(entry)
         });
         html += '</div>';
         html += '<button id="addScenario">Add Scenario</button><br>';
@@ -468,8 +596,9 @@ number of dataMap entries: ${dataMap.size}
 
         displayStateAsExport();
     }
-    window.addEventListener('reRender',_reRender);
-    window.dispatchEvent(new Event('reRender'));
+    _reRender();
+    // window.addEventListener('reRender',_reRender);
+    // window.dispatchEvent(new Event('reRender'));
 
     element.addEventListener('click', (event) => {
         if (event.target && (event.target as HTMLElement).id === 'addFeatureGroup') {
@@ -481,7 +610,7 @@ number of dataMap entries: ${dataMap.size}
                 subGroupIDs: [],
                 thingPositions: new ThingPositionList()
             });
-            treeData.push({
+            treeData[0].nodes.push({
                 data:{
                     id: _new_thing_temp_id,
                     name: "New Feature Group", 
@@ -491,7 +620,10 @@ number of dataMap entries: ${dataMap.size}
                     // need to look into performance trade-offs of this approach vs
                     // slinging copies of the data around
                 },
-                nodes:[]
+                nodes:[{
+                    data:{},
+                    nodes:[]
+                }]
             });
 
             // update SortableTree

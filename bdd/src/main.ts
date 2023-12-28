@@ -13,10 +13,10 @@ declare global {
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
     <h1>Gherkin Feature Test Manager</h1>
-    <div class="card">
-      <button type="button" class="button button-primary">Reset Database...</button>
-      <button type="button" class="button button-primary">Import Database...</button>
-      <button type="button" class="button button-primary">Export Database...</button>
+    <div class="card flex-row flex space-between">
+      <button type="button" class="button button-primary">Reset</button>
+      <button type="button" class="button button-primary">Import</button>
+      <button type="button" class="button button-primary">Export</button>
     </div>
     <div id="featureBrowser"></div>
     <div id="your-tree-element-id"></div>
