@@ -42,6 +42,7 @@ h1 {
   text-align: center;
 }
 
+
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -93,4 +94,49 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+.importExport {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  border-radius: 30px;
+  min-height: 33vh;
+  height: 100%;
+  position: relative;
+}
+.importExport .import,
+.importExport .export {
+  display: flex;
+  /* flex-direction: column;
+  align-items: center;
+  position: relative; */
+  flex-basis: calc(50% - 40px);
+  flex-grow: 1;
+  flex-shrink: 1;
+  background: green;
+  width: 50%;
+  overflow: hidden;
+  padding: 10px;
+  box-sizing: border-box;
+}
+button {
+  margin: 10px;
+  width: 100%;
+  display: block;
+  height: 50px;
+}
+.importExport .export {
+  background: purple;
+}
+.importExport textarea {
+  width: 90vw;
+  border-radius: 30px;
+  padding: 30px;
+  box-sizing: border-box;
+  margin: 20px auto;
+  min-height: 100%;
+  height: 100%;
+}
+.hidden {
+  display: none;
 }

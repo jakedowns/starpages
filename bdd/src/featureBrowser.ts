@@ -1,4 +1,5 @@
 import SortableTree from 'sortable-tree';
+import 'sortable-tree/dist/sortable-tree.css';
 import type {
     SortableTreeNodeData,
     SortableTreeOnChangeFunction
@@ -7,7 +8,21 @@ import type {
 declare global {
     interface Window {
         commitChanges: (event: Event, type: string, index: number) => void;
+        displayStateAsExport: () => void;
+        processJSONStateImport: () => void;
+        doPrettyPrint: boolean;
+        importing: boolean;
+        reRender: () => void;
+        toggleExportArea: () => void;
+        toggleImportArea: () => void;
+        togglePrettyPrint: () => void;
+
+        theTree: SortableTree;
     }
+}
+
+window.reRender = () => {
+    window.dispatchEvent(new Event('reRender'));
 }
 
 interface Feature {
@@ -107,6 +122,38 @@ class FeatureGroup {
         );
     }
 }
+
+/** 
+ * Here's the code related to importing and exporting features
+ * for now, we're going to use a simple JSON format for import/export
+*/
+
+function displayStateAsExport(){
+    let text: string = JSON.stringify({dataMap, treeData}, null, window.doPrettyPrint?2:undefined);
+    const element = document.getElementById('export');
+    if(element){
+        element.innerText = text;
+    }
+}
+window.displayStateAsExport = displayStateAsExport;
+function processJSONStateImport(){
+    const element = document.getElementById('import');
+    if(element){
+        const text = element.innerText;
+        try{
+            const json = JSON.parse(text);
+            if(json.dataMap && json.treeData){
+                dataMap.clear();
+                dataMap.set(...json.dataMap);
+                treeData.splice(0, treeData.length, ...json.treeData);
+                window.dispatchEvent(new Event('reRender'));
+            }
+        }catch(e){
+            console.error(e);
+        }
+    }
+}
+window.processJSONStateImport = processJSONStateImport;
 
 interface Scenario {
     id: ScenarioId;
@@ -317,11 +364,12 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
         console.warn('onChange', treeData);
     }
 
-    new SortableTree({
+    let tree:SortableTree = new SortableTree({
         nodes: treeData, //convertToSortableTreeData(rootNodes, dataMap),
         element: document.getElementById('your-tree-element-id') ?? document.createElement('div'),
         onChange
     });
+    window.theTree = tree;
 
     window.commitChanges = (event: Event, type: string, index: number) => {
         const target = event.target as HTMLElement;
@@ -362,10 +410,50 @@ export function setupFeatureBrowser(element: HTMLDivElement) {
         return html;
     }
 
-    function reRender() {
+    window.toggleExportArea = function(){
+        showExportingArea=!showExportingArea;
+        const element = document.getElementById('export');
+        if(element){
+            element.classList.toggle('hidden', !showExportingArea)
+        }
+        window.reRender();
+    }
+
+    let doPrettyPrint = false;
+    let importing = false;
+    let showExportingArea = false;
+    window.doPrettyPrint = doPrettyPrint;
+    window.importing = importing;
+    function toggleImportArea(){
+        importing=!importing;
+        if(importing){window.processJSONStateImport();}
+        window.reRender();
+        console.log(importing)
+    }
+    window.toggleImportArea = toggleImportArea;
+    function togglePrettyPrint(){
+        doPrettyPrint=!doPrettyPrint;
+        window.reRender();
+    }
+    window.togglePrettyPrint = togglePrettyPrint;
+    function _reRender() {
         let html = '';
         html += '<div id="featureContainer">';
         html += `
+        <label for="prettyPrint">Pretty Print&nbsp;
+        <input type="checkbox" id="prettyPrint" onclick="togglePrettyPrint()" ${doPrettyPrint?'checked="checked"':''} />
+        </label>
+<div class="importExport">
+    <button onclick="toggleImportArea()">Import</button>
+    <div class="import">
+        <textarea id="import" class="${importing?'':'hidden'}"  placeholder="Paste JSON here to import"></textarea>
+    </div>
+    <button onclick="toggleExportArea()">Export</button>
+    <div class="export">
+        <textarea id="export" class="${showExportingArea?'':'hidden'}" placeholder="JSON export will appear here"></textarea>
+    </div>
+</div>
+
 number of root nodes: ${treeData.length}<br/>
 number of dataMap entries: ${dataMap.size}
 `;
@@ -377,8 +465,11 @@ number of dataMap entries: ${dataMap.size}
         html += '<button id="addFeature">Add Feature</button><br>';
         html += '<button id="addFeatureGroup">Add Feature Group</button>';
         element.innerHTML = html;
+
+        displayStateAsExport();
     }
-    reRender();
+    window.addEventListener('reRender',_reRender);
+    window.dispatchEvent(new Event('reRender'));
 
     element.addEventListener('click', (event) => {
         if (event.target && (event.target as HTMLElement).id === 'addFeatureGroup') {
@@ -402,7 +493,11 @@ number of dataMap entries: ${dataMap.size}
                 },
                 nodes:[]
             });
-            reRender();
+
+            // update SortableTree
+            //window.theTree.
+
+            _reRender();
         }
         if (event.target && (event.target as HTMLElement).id === 'addFeature') {
             // features.push({
@@ -412,7 +507,7 @@ number of dataMap entries: ${dataMap.size}
             //     tags: [],
             //     scenarios: []
             // });
-            reRender();
+            _reRender();
         }
         if (event.target && (event.target as HTMLElement).id === 'addScenario') {
             // features.push({
@@ -422,7 +517,7 @@ number of dataMap entries: ${dataMap.size}
             //     tags: [],
             //     steps: []
             // });
-            reRender();
+            _reRender();
         }
         // Handle feature selection and display Scenario titles and descriptions
     })
