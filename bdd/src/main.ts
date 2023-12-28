@@ -1,24 +1,59 @@
 import './style.css'
-import typescriptLogo from './typescript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.ts'
+import { setupFeatureBrowser } from './featureBrowser'
+import { io } from 'socket.io-client';
+
+// window type def for getFeatures and putFeature
+declare global {
+  interface Window {
+    getFeatures: () => void;
+    putFeature: (name: string, description: string) => void;
+  }
+}
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
-    <a href="https://vitejs.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>Vite + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
+    <h1>Gherkin Feature Test Manager</h1>
+    <div class="card flex-row flex space-between">
+      <button type="button" class="button button-primary">Reset</button>
+      <button type="button" class="button button-primary">Import</button>
+      <button type="button" class="button button-primary">Export</button>
     </div>
-    <p class="read-the-docs">
-      Click on the Vite and TypeScript logos to learn more
-    </p>
+    <div id="featureBrowser"></div>
+    <div id="your-tree-element-id"></div>
   </div>
 `
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+setupFeatureBrowser(document.querySelector<HTMLDivElement>('#featureBrowser')!)
+
+// Connect to Socket.IO server
+const socket = io('http://127.0.0.1:3009');
+
+console.warn('hello');
+
+function getFeatures(){
+  socket.emit('message', JSON.stringify({
+      type:'get',
+      target:'features'
+  }));
+}
+window.getFeatures = getFeatures;
+function putFeature(name: string, description: string){
+  socket.emit('message', JSON.stringify({
+    type:'put',
+    target:'features',
+    name,
+    description
+  }));
+}
+window.putFeature = putFeature;
+// Send a message once connected
+socket.on('connect', () => {
+    console.log('Connected to Socket.IO server');
+    socket.emit('message', 'Hello from Client!');
+
+    getFeatures();
+    putFeature('my first test feature '+Date.now(), 'this is a test feature');
+});
+socket.on('message', (message: string) => {
+    console.log('server says:',message);
+});
