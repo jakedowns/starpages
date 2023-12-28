@@ -150,6 +150,8 @@
                 :end-drag="endDrag"
             ></scenario-list>
         </div>
+        <!-- Resize Handle -->
+        <div id="resize-handle" class="resize-handle"></div>
         <div class="w-1/2 overflow-y-auto overflow-x-hidden">
             <scenario-details v-if="selectedScenario"
                 :selected-scenario="selectedScenario"
@@ -704,6 +706,15 @@
     width: 100%;
 }
 }
+.resize-handle {
+    background-color: #ccc; /* Visible color */
+    width: 10px; /* Width of the handle */
+    cursor: ew-resize; /* Cursor style */
+    height: 100%; /* Full height */
+    position: absolute; /* Make it overlay */
+    z-index: 10; /* Ensure it's above other elements */
+    left: 100px;
+}
 </style>
 
 <script>
@@ -752,6 +763,12 @@
         window.gwt_eventbus = MainEventBus;
         const app = Vue.createApp({
             setup() {
+                const projects = ref([
+                    {
+                        name: 'BDD Test Manager',
+                        description: 'a suite of tests describing a basic Gherkin Test Manager app'
+                    }
+                ])
                 const features = ref([{
                     name: 'GWT MVP -- Features',
                     description: 'This is the minimum viable product for the Gherkin Web Test Manager',
@@ -1322,6 +1339,43 @@
         
         app.mount('#app');
     }
-    document.addEventListener('DOMContentLoaded', start);
+    let resizeHandlePositionX = -1;
+    document.addEventListener('DOMContentLoaded', ()=>{
+        start();
+        const resizeHandle = document.getElementById('resize-handle');
+        const leftPanel = resizeHandle.previousElementSibling;
+        const rightPanel = resizeHandle.nextElementSibling;
+        let isDragging = false;
+
+        // Listen for mousedown, mousemove, and mouseup events
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            isDragging = true;
+        });
+
+        // reads the width of the leftPanel to initialize resizeHandlePositionX
+        // and sets the widths of the 3 elements
+        function updateOnResize(){
+            console.warn('updateOnResize',leftPanel.getBoundingClientRect().width);
+            resizeHandlePositionX = resizeHandlePositionX === -1 ? leftPanel.getBoundingClientRect().width : resizeHandlePositionX;
+            leftPanel.style.width = resizeHandlePositionX + 'px';
+            rightPanel.style.width = `calc(100% - ${resizeHandlePositionX}px)`;
+            resizeHandle.style.left = resizeHandlePositionX + 'px';
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            resizeHandlePositionX = e.clientX;
+            // constrain between min: 50 and max 100vw - 50
+            resizeHandlePositionX = Math.max(50, Math.min(resizeHandlePositionX, window.innerWidth - 50));
+            updateOnResize();
+        });
+        // once on init
+        updateOnResize();
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+    });
 </script>
 </body>
