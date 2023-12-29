@@ -117,6 +117,7 @@
         const TARGET_MODE_CENTER = 2;
 
         window._appstate = {
+            maxVolume: 0.5,
             roundCapAlpha: 50,
             snapCreateToGrid: 0,
             infinityScale: 1,
@@ -461,7 +462,8 @@
                 'sortDrawOrder',
                 'splatColorAnimSpeed',
                 'splatScale',
-                'infinityScale'
+                'infinityScale',
+                'maxVolume'
             ];
             let data = {};
             keys.forEach(key => {
@@ -826,6 +828,15 @@
             }
 
             buttons = {
+                'emptyLocalStorage': {
+                    label: 'Empty Local Storage',
+                    key: 'emptyLocalStorage',
+                    action: function () {
+                        //localStorage.removeItem('hexagons');
+                        localStorage.clear();
+                        location.reload();
+                    }
+                },
                 'quantize': {
                     label: 'Quantize', 
                     key: 'quantize',
@@ -980,6 +991,15 @@
             
 
             sliders = {
+                'maxVolume':{
+                    label: 'Max Volume',
+                    min: 0,
+                    max: 1,
+                    value: appstate.maxVolume,
+                    action: function(val){
+                        appstate.maxVolume = val;
+                    }
+                },
                 'roundCapAlpha':{
                     label: 'Round Cap Alpha',
                     min: 0,
@@ -990,7 +1010,7 @@
                     }
                 },
                 'splatScale': { 
-                    label: 'Splat Scale', min: 0.01, max: 1, step: 0.001, 
+                    label: 'Splat Scale', min: 0, max: 0.1, step: 0.001, 
                     value: appstate.splatScale, 
                     action: function(val) { 
                         //console.warn('splatScale',val);
@@ -1460,6 +1480,7 @@
             }
         }
 
+        let max_synth_velocity_peak = 0;
         function updateSynths(){
 
             let {target} = appstate;
@@ -1481,13 +1502,63 @@
                 //synth.setType('sine');
             }
             let lerpDuration = 0.1;
+            const mag = avgTargetVelocity.mag();
+            if(mag > max_synth_velocity_peak){
+                max_synth_velocity_peak = mag;
+            }
+            // decay over time
+            max_synth_velocity_peak *= 0.999;
             // instead of a static lerp duration, make it shorter if the target is moving faster
-            lerpDuration = map(avgTargetVelocity.mag(), 0, 50, 0.1, 0.01);
+            lerpDuration = map(mag, 0, max_synth_velocity_peak, 0.1, 0.01);
             lerpDuration = constrain(lerpDuration, 0.01, 0.1)
 
             // lerp bass synth amp towards target
             let currentAmp = bassSynth.getAmp();
-            bassSynth.amp(lerp(currentAmp, bassSynthTargetAmp, 0.5), lerpDuration);
+            // constrain to max maxVolume
+            //currentAmp = constrain(currentAmp, 0, appstate.maxVolume);
+            bassSynthTargetAmp = constrain(constrain(bassSynthTargetAmp, 0, appstate.maxVolume),0,1);
+            // the next line fixes:
+            // Uncaught TypeError: Failed to execute 'linearRampToValueAtTime' on 'AudioParam': The provided double value is non-finite.
+            //
+
+            bassSynthTargetAmp = bassSynthTargetAmp >= Math.infinity || bassSynthTargetAmp <= -Math.infinity ? 0 : bassSynthTargetAmp;
+            bassSynthTargetAmp = isNaN(bassSynthTargetAmp) ? 0 : bassSynthTargetAmp;
+            // cast to string, and back to double with 2 decimal places
+            bassSynthTargetAmp = parseFloat(bassSynthTargetAmp.toFixed(2));
+            // truncate to 2 decimal places
+            bassSynthTargetAmp = Math.round(bassSynthTargetAmp * 100) / 100;
+
+            bassSynth.__jake_debug = {
+                currentAmp,
+                bassSynthTargetAmp,
+                lerpDuration
+            }
+
+            // Usage
+            let lerpResult = safeLerp(currentAmp, bassSynthTargetAmp, 0.5);
+            if (isFiniteNumber(lerpResult) && isFiniteNumber(lerpDuration)) {
+                bassSynth.amp(lerpResult, lerpDuration);
+            } else {
+                // Handle the error or use default values
+                try {
+                    bassSynth.amp(0, lerpDuration);
+                    // console.warn('safeLerp error', {
+                    //     lerpResult,
+                    //     lerpDuration,
+                    //     currentAmp,
+                    //     bassSynthTargetAmp
+                    // })
+                } catch (error) {
+                    console.error('safeLerp error', {
+                        lerpResult,
+                        lerpDuration,
+                        currentAmp,
+                        bassSynthTargetAmp
+                    })
+                }
+            }
+
+            //bassSynth.amp(lerp(currentAmp, bassSynthTargetAmp, 0.5), lerpDuration);
 
             let currFreq = bassSynth.getFreq();
             bassSynth.freq(
@@ -1505,10 +1576,7 @@
             let currentFreq = synth.getFreq();
             synth.freq(lerp(currentFreq, synthTargetFreq, 0.1), 0.1);
 
-            // Adjust the amplitude based on the avg target velocity. High velocity results in high amplitude and vice versa.
-            let constrainedMax = 1;
-            let constrainedMaxReading = 50;
-            let constrainedVelocity = constrain(avgTargetVelocity.mag(), 0, constrainedMaxReading);
+            //let constrainedVelocity = avgTargetVelocity.mag();
             // Set the amplitude of the synth. The map function is used to map the constrained velocity to a range between 1 and 0.
             // The parameters of the map function are as follows:
             // - constrainedVelocity: The current velocity of the target.
@@ -1516,7 +1584,18 @@
             // - 0: The lower limit of the range to map to.
             // - 1: The upper limit of the range to map to.
             // - 0.1: The ramp time in seconds for the amplitude to reach the target level.
-            synth.amp(map(constrainedVelocity, constrainedMaxReading, 0, constrainedMax, 0), 0.1);
+            try {
+                synth.amp(map(mag, 0, max_synth_velocity_peak, 0, appstate.maxVolume), 0.1);
+            } catch (error) {
+                console.error('synth.amp error', {
+                    mag,
+                    max_synth_velocity_peak,
+                    appstate_maxVolume: appstate.maxVolume
+                })
+            }
+            // synth.amp(
+            //     constrain(map(mag, 0, max_synth_velocity_peak, 0, appstate.maxvolume), 0, 1)
+            // );
 
             synth.freq(map(target.y, 0, height, 20, 500), 0.1);
 
@@ -1592,6 +1671,24 @@
             //     c: keyIsDown(SHIFT)
             // })
         }
+        
+        function isFiniteNumber(value) {
+            return Number.isFinite(value);
+        }
+
+        function safeLerp(v0, v1, t) {
+            if (isFiniteNumber(v0) && isFiniteNumber(v1) && isFiniteNumber(t)) {
+                return v0 + t * (v1 - v0);  // Standard lerp formula
+            } else {
+                // Handle non-finite numbers, possibly by returning a default value
+                return defaultAmp;  // Assuming defaultAmp is a predefined safe value
+            }
+        }
+
+        
+
+        
+        
         let createHarmonyIndex = 0;
         // main draw loop
         function draw() {
@@ -1900,6 +1997,10 @@
             
         }
 
+        function emptyLocalStorage(){
+            localStorage.clear();
+        }
+
         function drawSplatAtPositionWithTint(x, y, size, colorKey, spriteType) {
             //return;
             // draw a copy of the sprite as a shadow
@@ -1938,7 +2039,7 @@
                     tintedImage.copy(sprite, 0, 0, sprite.width, sprite.height, 0, 0, sprite.width, sprite.height);
 
                     let d = dist(target.x, target.y, x, y);
-                    let alpha = 50; //map(d, 0, width, appstate.roundCapAlpha, 0); // Alpha based on distance from mouse
+                    let alpha = map(d, 0, width, appstate.roundCapAlpha, 0); // Alpha based on distance from mouse
 
                     tintedImage.loadPixels();
                     for (let i = 0; i < tintedImage.pixels.length; i += 4) {
@@ -1951,7 +2052,10 @@
                         tintedImage.pixels[i] = red(tinted); // R value
                         tintedImage.pixels[i + 1] = green(tinted); // G value
                         tintedImage.pixels[i + 2] = blue(tinted); // B value
-                        tintedImage.pixels[i + 3] = a; // a; // * alpha; // A value based on the existing A value
+
+                        let a_mapped = map(alpha, 0, 255, 0, a); // A value based on the existing A value
+
+                        tintedImage.pixels[i + 3] = a_mapped; // A value based on the existing A value
                     }
                     tintedImage.updatePixels();
 
