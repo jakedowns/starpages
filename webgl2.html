@@ -13,6 +13,7 @@
 <body>
     <canvas id="glCanvas"></canvas>
     <script>
+        // fsshader fragment shader source frag shader here
         const fsSource = `
 precision mediump float;
 uniform vec2 uResolution;
@@ -21,25 +22,50 @@ uniform sampler2D uOffsetTexture;
 uniform sampler2D uBaseTexture;
 uniform int uMode;
 uniform int uPxDensity;
+
+uniform int uSortOffset;
+uniform int uSortStepSize;
+
 vec2 corrected;
 void main() {
     // adjust for pixel density
     corrected = gl_FragCoord.xy / (uResolution * float(uPxDensity));
+
+    // if uSortOffset > 0, we need to check if _this_ pixel's corresponding index
+    // falls within uSortStepSize worth of pixels as expressed in a 1D array of rgba values
+    // if so, we need to return yellow
+    // int numPixels = int(uResolution.x * uResolution.y);
+    int correctedNumPixels = int(uResolution.x * uResolution.y) / uPxDensity;
+    int correctedSortOffset = uSortOffset; // / uPxDensity;
+    int correctedSortStepSize = uSortStepSize; // / uPxDensity;
+    if(correctedSortOffset > 0){
+        // we need to check if this pixel's corresponding index falls within the sort window
+        // if so, we need to return yellow
+        int correctedPixelIndex = int(corrected.y * uResolution.x + corrected.x);
+        if(correctedPixelIndex >= correctedSortOffset && correctedPixelIndex < correctedSortOffset + correctedSortStepSize){
+            gl_FragColor = vec4(1.0,1.0,0.0,1.0);
+            return;
+        }
+    }
     
     if(uMode == 1){
-        // default mode: use the offset texture's r channel to offset our x lookup in the OPPPOSITE direction
-        // and use offset texture's g channel to offset our y lookup in the OPPPOSITE direction
+        // default mode: use the offset texture's [r]ed channel to offset our uv/xy[x] lookup in the OPPPOSITE direction
+        // and use offset texture's [g]reen channel to offset our uv/xy[y] lookup in the OPPPOSITE direction
         
         gl_FragColor = texture2D(uBaseTexture, corrected.x - vec2(texture2D(uOffsetTexture, corrected).r, corrected.y - texture2D(uOffsetTexture, corrected).g));
-    }else if(uMode == 3){
+    }else if(uMode == 2){
         // debug sample offset texture
         gl_FragColor = texture2D(uOffsetTexture, corrected);
+
+        // set the green channel to an average of the two
+        gl_FragColor.g = 0.0; //(gl_FragColor.r + gl_FragColor.b) / 2.0;
+        gl_FragColor.a = 1.0;
 
         // // 3. lerp from base texture towards "target" offset texture
         // gl_FragColor = mix(texture2D(uBaseTexture, corrected), texture2D(uOffsetTexture, corrected), 0.5);
         
         // apply purple tint
-        gl_FragColor = vec4(gl_FragColor.rgb + vec3(0.5,0,0.5), 1.0);
+        // gl_FragColor = vec4(gl_FragColor.rgb + vec3(0.5,0,0.5), 1.0);
     }else{
         // fallback mode
         // debug sample unmodified base texture
@@ -57,7 +83,7 @@ void main() {
         let frameCount = 0;
         let seed = 0;
         let MODE = 0;
-        let _pixel_density = 2; // scale for higher density
+        let _pixel_density = 4; //6 // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
         Object.defineProperty(window, "pixel_density", {
             get: function(){
                 return _pixel_density;
@@ -123,11 +149,11 @@ void main() {
         let numPixels = 0;
         let fixedPixelsX,fixedPixelsY;
         function initializePositionsAndOffsetData() {
-            if(typeof outputSurfacePositionBuffer == "undefined"){
-                //throw new Error("outputSurfacePositionBuffer is undefined");
-                console.error("outputSurfacePositionBuffer is undefined");
-                return;
-            }
+            // if(typeof outputSurfacePositionBuffer == "undefined"){
+            //     //throw new Error("outputSurfacePositionBuffer is undefined");
+            //     console.error("outputSurfacePositionBuffer is undefined");
+            //     return;
+            // }
             
             // Update buffers with new data
             gl.bindBuffer(gl.ARRAY_BUFFER, outputSurfacePositionBuffer);
@@ -180,23 +206,25 @@ void main() {
                 // bind the base texture to our initial pixel data ( a frozen snapshot of the initial state of the pixels for our lerping algo. to work with )
                 gl.bindTexture(gl.TEXTURE_2D, baseTexture);
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+
             }
+            resetOffsetTexture();
 
-            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+            // gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
 
-            // Only use R and G channels, force A channel to 1
-            let offsetPixelData = pixelData.map((value, index) => {
-                if (index === 3) {
-                    return 255; // full alpha
-                }
-                if (index === 2) {
-                    // average of R and G channels
-                    return (pixelData[index - 2] + pixelData[index - 1]) / 2;
-                }
-                return value;
-            });
+            // // Only use R and G channels, force A channel to 1
+            // let offsetPixelData = pixelData.map((value, index) => {
+            //     if (index === 3) {
+            //         return 255; // full alpha
+            //     }
+            //     if (index === 2) {
+            //         // average of R and G channels
+            //         return (pixelData[index - 2] + pixelData[index - 1]) / 2;
+            //     }
+            //     return value;
+            // });
 
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, offsetPixelData);
+            // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, offsetPixelData);
 
             // Bind the output position buffer.
             gl.bindBuffer(gl.ARRAY_BUFFER, outputSurfacePositionBuffer);
@@ -248,12 +276,78 @@ void main() {
         }
 
         let swapped = false;
+        let DID_COMPLETE_SORT_SINCE_RESET = false;
         // current sorting offset
         // we pass this to our fragment shader 
         // so we can color the pixels that are currently being sorted
         // we also pass the window width, so we can color the pixels that are being compared
         let sortOffset = 0;
-        window.sortWindowWidth = -1; //10e3; // Number of elements to sort per call, adjust as needed
+        window.sortStepSize = 10; //-1; //10e3; // Number of elements to sort per call, adjust as needed
+        window.current_sortStepSize = window.sortStepSize;
+
+        function resetOffsetTexture(){
+            // reset offset texture to all 0s with 255 for alpha channel
+            let zeros = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
+            zeros = zeros.map((value, index) => {
+                if (index === 3) {
+                    return 255;
+                }
+                return value;
+            });
+            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, zeros);
+        }
+
+        function newCheck(inner_i, currentColor, currentHSV, nextColor, nextHSV){
+            let swapped = 0;
+            let rankA = 0; // should we swap?
+            let rankB = 0;
+            rankA += currentHSV[0] > nextHSV[0] ? 1 : 0;
+            rankB += currentHSV[0] < nextHSV[0] ? 1 : 0;
+
+            rankA += currentHSV[1] > nextHSV[1] ? 1 : 0;
+            rankB += currentHSV[1] < nextHSV[1] ? 1 : 0;
+
+            rankA += currentHSV[2] > nextHSV[2] ? 1 : 0;
+            rankB += currentHSV[2] < nextHSV[2] ? 1 : 0;
+
+            rankA *= currentColor[3]/255; // account for alpha
+            rankB *= nextColor[3]/255; // account for alpha
+
+            //console.warn({rankA,rankB})
+
+            if(rankA > rankB){
+                // Swap colors in pixel data
+                // [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
+                // [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
+                // [pixelData[inner_i * bytesPerPixel + 2], pixelData[(inner_i + 1) * bytesPerPixel + 2]] = [pixelData[(inner_i + 1) * bytesPerPixel + 2], pixelData[inner_i * bytesPerPixel + 2]];
+
+                // NOTE: we don't swap, we're going to just update our pixelData using r to represent x offset, and g to represent y offset
+                // we'll use the fragment shader to do the actual swapping
+                // use our fixedPixelsX to account for row/column wrapping in this x/y calculation
+                // we're visually how far the pixel has moved in terms of 1D array indexes, from it's original position to it's sorted position over time
+                // we're going to be additively writing incremental changes as brightness adjustments to the offset texture
+                // negative when we need to move left/up, positive when we need to move right/down
+                // keeping in mind that we're accounting for going from 1D array space to 2D screen space as though the array were laid out in a rasterized pattern
+                let x_offset = (inner_i + 1) % fixedPixelsX - inner_i % fixedPixelsX;
+                let y_offset = Math.floor((inner_i + 1) / fixedPixelsX) - Math.floor(inner_i / fixedPixelsX);
+
+                // make the offset a fixed value from 0 - 0.1
+                x_offset = Math.sign(x_offset) * 0.1;
+                y_offset = Math.sign(y_offset) * 0.1;
+
+                // NOTE: given how array shifting works, we need to "write" an additive value to the offset texture for each intermediary pixel between the two pixels we're swapping
+                // nice thing about this algo is, it's bitwise, so we can do it in parallel, AND there's no interviening pixels, so we don't have to account for it with our current sort algo
+                pixelData[inner_i * bytesPerPixel] += x_offset;
+                pixelData[inner_i * bytesPerPixel + 1] += y_offset;
+                // empty green channel
+                pixelData[inner_i * bytesPerPixel + 2] = 0;
+
+                swapped = true;
+            }
+            return swapped;
+        }
+
         /** 
          * return true if swapped
          * */
@@ -263,13 +357,32 @@ void main() {
             swapped = false;
 
             const numPixels = fixedPixelsX * fixedPixelsY;
-            let _sortWindowWidth = window.sortWindowWidth === -1 ? numPixels : window.sortWindowWidth;
+            let _sortStepSize = window.sortStepSize === -1 ? numPixels : window.sortStepSize;
+
+            if (window.sortStepSize === -1) {
+                let scale;
+                if (numPixels < 1e5) {
+                    // do multiple passes per frame when the image is small enough to fit into a single pass
+                    scale = 1e5 / numPixels;
+                } else {
+                    // break into smaller chunks for large images
+                    scale = numPixels / 1e5;
+                }
+                _sortStepSize = numPixels * scale; // Adjusting for pixel density
+            }
+            window.current_sortStepSize = _sortStepSize;
             
-            // if _sortWindowWidth is > than the size of threads on our GPU, we need to break it up into multiple passes
+            // if _sortStepSize is > than the size of threads on our GPU, we need to break it up into multiple passes
 
             // Calculate the end of the current sorting window
-            //const windowEnd = Math.min(sortOffset + _sortWindowWidth, numPixels - 1);
-            const windowEnd = Math.max(0, sortOffset + _sortWindowWidth);
+            //const windowEnd = Math.min(sortOffset + _sortStepSize, numPixels - 1);
+            const windowEnd = Math.max(0, sortOffset + _sortStepSize);
+
+            // NOTE: there's a bug where if the offset is too large, we always wrap around before reaching the end of the base texture
+            // we need to detect when this might happen and apply a correction to the window size to make sure that the whole texture is sorted
+            // NOTE sortOffset is dynamic, and windowEnd is dynamic, so,
+            // our heuristic to check if we might've overlooked pixels is defined as:
+            // 
 
             for (let i = sortOffset; i < windowEnd - 1; i++) {
                 let inner_i = i
@@ -291,26 +404,9 @@ void main() {
                 }
 
                 // convert to hsb , sort by hue, then value, then saturation
-                // const currentHSV = rgbToHsv(currentColor[0], currentColor[1], currentColor[2]);
-                // const nextHSV = rgbToHsv(nextColor[0], nextColor[1], nextColor[2]);
-                // let rankA = 0;
-                // let rankB = 0;
-                // rankA += currentHSV[0] > nextHSV[0] ? 1 : 0;
-                // rankB += currentHSV[0] < nextHSV[0] ? 1 : 0;
-
-                // rankA += currentHSV[1] > nextHSV[1] ? 1 : 0;
-                // rankB += currentHSV[1] < nextHSV[1] ? 1 : 0;
-
-                // rankA += currentHSV[2] > nextHSV[2] ? 1 : 0;
-                // rankB += currentHSV[2] < nextHSV[2] ? 1 : 0;
-
-                // //console.warn({rankA,rankB})
-
-                // if(rankA > rankB){
-                //     // Swap colors in pixel data
-                //     [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
-                //     [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
-                //     [pixelData[inner_i * bytesPerPixel + 2], pixelData[(inner_i + 1) * bytesPerPixel + 2]] = [pixelData[(inner_i + 1) * bytesPerPixel + 2], pixelData[inner_i * bytesPerPixel + 2]];
+                // const currentHSV = rgbToHsv(currentColor);
+                // const nextHSV = rgbToHsv(nextColor);
+                // if(newCheck(inner_i, currentColor, currentHSV, nextColor, nextHSV)){
                 //     swapped = true;
                 // }
             }
@@ -323,9 +419,14 @@ void main() {
             }
 
             // Update the sorting offset
-            sortOffset += _sortWindowWidth;
-            if (sortOffset >= numPixels - 1) {
-                sortOffset = 0; // Reset the offset if we've reached the end
+            sortOffset += _sortStepSize;
+            // wrap around
+            sortOffset = sortOffset % numPixels;
+            //console.warn({sortOffset,_sortStepSize});
+
+            // if we've somehow gone negative, flip positive and clamp to 0
+            if(sortOffset < 0){
+                sortOffset = Math.max(0,sortOffset);
             }
 
             return swapped;
@@ -406,7 +507,7 @@ gl_Position = aVertexPosition;
                     //uPixelPositions: gl.getUniformLocation(shaderProgram, 'uPixelPositions'),
 
                     uSortOffset: gl.getUniformLocation(shaderProgram, 'uSortOffset'),
-                    uSortWindowWidth: gl.getUniformLocation(shaderProgram, 'uSortWindowWidth'),
+                    uSortStepSize: gl.getUniformLocation(shaderProgram, 'uSortStepSize'),
                 },
             };
         }
@@ -468,6 +569,18 @@ gl_Position = aVertexPosition;
             //if (deltaTime > 0){//0.001) {
             if(do_sort){
                 const swapped = applyBubbleSortStep();
+                if(!swapped && DID_COMPLETE_SORT_SINCE_RESET === false && window.sortStepSize <= 2){
+                    DID_COMPLETE_SORT_SINCE_RESET = true;
+                }else{
+                    if(!swapped && !DID_COMPLETE_SORT_SINCE_RESET && window.sortStepSize > 2){
+                        // reduce sortStepSize
+                        window.sortStepSize = Math.max(2,parseInt(window.sortStepSize / 2));
+                    }
+                    if(swapped && !DID_COMPLETE_SORT_SINCE_RESET && window.sortStepSize < window.current_sortStepSize){
+                        // increase sortStepSize
+                        window.sortStepSize = Math.min(window.current_sortStepSize,parseInt(window.sortStepSize * 2));
+                    }
+                }
             }
             //}
 
@@ -476,7 +589,7 @@ gl_Position = aVertexPosition;
             requestAnimationFrame(render);
         }
         document.addEventListener('click', (e)=>{
-            MODE = (MODE + 1) % 5;
+            MODE = (MODE + 1) % 3;
             console.log("MODE",MODE);
 
             if(!window.do_sort){
@@ -501,10 +614,10 @@ gl_Position = aVertexPosition;
 
             // Only use R and G channels, force A channel to 1
             pixelData = pixelData.map((value, index) => {
-                if (index % 4 === 3) {
+                if (index === 3) {
                     return 255;
                 }
-                if (index % 4 === 2) {
+                if (index === 2) {
                     return 0;
                 }
                 return value;
@@ -524,9 +637,9 @@ gl_Position = aVertexPosition;
             // Set the shader uniforms
 
             // sortOffset
-            gl.uniform1i(programInfo.uniformLocations.uSortOffset, sortOffset);
-            // sortWindowWidth
-            gl.uniform1i(programInfo.uniformLocations.uSortWindowWidth, sortWindowWidth);
+            gl.uniform1i(programInfo.uniformLocations.uSortOffset, parseInt(sortOffset/numPixels));
+            // sortStepSize
+            gl.uniform1i(programInfo.uniformLocations.uSortStepSize, parseInt(sortStepSize));
 
             gl.uniform2f(programInfo.uniformLocations.uResolution, Math.floor(canvas.width/pixel_density), Math.floor(canvas.height/pixel_density));
             gl.uniform1f(programInfo.uniformLocations.uTime, performance.now() / 1000);
@@ -545,6 +658,7 @@ gl_Position = aVertexPosition;
 
         let imageTex;
         function loadImageAsTexture(imageSource) {
+            resetOffsetTexture();
             imageTex = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, imageTex);
 
@@ -663,6 +777,8 @@ gl_Position = aVertexPosition;
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 
             handleImageLoadForBaseTex(image);
+
+            DID_COMPLETE_SORT_SINCE_RESET = false;
         }
 
         function handleImageLoadForBaseTex(image) {
@@ -683,29 +799,29 @@ gl_Position = aVertexPosition;
             ctx.drawImage(image, 0, 0);
             let imageData = ctx.getImageData(0, 0, image.width, image.height);
 
-            // check if image data is all 0s...
-            let allZero = true;
-            for(let i = 0; i < imageData.data.length; i++){
-                if(imageData.data[i] !== 0){
-                    allZero = false;
-                    console.warn('non-zero pixel data',i,imageData.data[i]);
-                    break;
-                }
-            }
-            if(allZero){
-                throw new Error("Image data is all 0s");
-            }
-            let countNonzero = 0;
-            // jump in steps of four, ignore rgb if alpha is lower than 1
-            for(let i = 0; i < imageData.data.length; i+=4){
-                if(imageData.data[i+3] > 0){
-                    // only count if at least 1 component is non-zero
-                    if(imageData.data[i] > 0 || imageData.data[i+1] > 0 || imageData.data[i+2] > 0){
-                        countNonzero++;
-                    }
-                }
-            }
-            console.warn('countNonzero',countNonzero/(imageData.data.length/4));
+            // // check if image data is all 0s...
+            // let allZero = true;
+            // for(let i = 0; i < imageData.data.length; i++){
+            //     if(imageData.data[i] !== 0){
+            //         allZero = false;
+            //         console.warn('non-zero pixel data',i,imageData.data[i]);
+            //         break;
+            //     }
+            // }
+            // if(allZero){
+            //     throw new Error("Image data is all 0s");
+            // }
+            // let countNonzero = 0;
+            // // jump in steps of four, ignore rgb if alpha is lower than 1
+            // for(let i = 0; i < imageData.data.length; i+=4){
+            //     if(imageData.data[i+3] > 0){
+            //         // only count if at least 1 component is non-zero
+            //         if(imageData.data[i] > 0 || imageData.data[i+1] > 0 || imageData.data[i+2] > 0){
+            //             countNonzero++;
+            //         }
+            //     }
+            // }
+            // console.warn('countNonzero',countNonzero/(imageData.data.length/4));
 
             // Create a new pixel array for baseTex
             let baseTexPixels = new Uint8Array(baseTexWidth * baseTexHeight * 4); // Assuming RGBA
@@ -744,6 +860,13 @@ gl_Position = aVertexPosition;
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, baseTexWidth, baseTexHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, baseTexPixels);
 
             console.warn('loaded number of pixels',baseTexPixels.length/4, baseTexPixels);
+
+            // sortStepSize = 
+            //     baseTexPixels > 1e5 
+            //     ? baseTexPixels * (baseTexPixels / 1e5)
+            //     : (1e5 / baseTexPixels) * baseTexPixels; 
+
+            
             
         }
 
@@ -757,6 +880,8 @@ gl_Position = aVertexPosition;
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     loadImageAsTexture(event.target.result); // Use loadImageAsTexture function
+                    do_sort = true
+                    MODE = 1;
                 };
                 reader.readAsDataURL(file);
             } catch (e) {
