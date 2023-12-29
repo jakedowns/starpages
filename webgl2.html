@@ -10,30 +10,73 @@
 <body>
     <canvas id="glCanvas"></canvas>
     <script>
+        // note: we've bound the position buffer to the vertex shader's "aVertexPosition" attribute
+        // we've bound the offset texture to the fragment shader's "uOffsetTexture" uniform
+        // and, critically, we've bound the offset texture to texture unit 0 (gl.TEXTURE0)
+        // currently, the vertex shader does nothing, since we need a highly subdivided mesh to see the effect of the offset texture
+        // so for now, we're using a simple "pass-through" vertex shader, which simply passes the vertex position to the fragment shader
         let then = 0;
         let canvas, gl;
         let positionBuffer;
         let offsetTexture;
         let shaderProgram, programInfo;
-        let positions = [];
+        //let positions = [];
         let pixelData;
         const bytesPerPixel = 4; // For RGBA format
 
-        window.addEventListener("resize", resizeCanvas);
+        window.addEventListener("resize", ()=>{
+            // onResize
+            resizeCanvas();
+            // todo: they sould grow and shrink dynamically...
+            initializePositionsAndOffsetData();
+        });
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             gl.viewport(0, 0, canvas.width, canvas.height);
-
-            initializePositionsAndOffsetData();
         }
 
+        // two triangles that cover the entire screen
+        // our display surface positions, not our inner "pixel" positions
+        const output_surface_positions = [
+            -1, -1,
+            1, -1,
+            -1, 1,
+            -1, 1,
+            1, -1,
+            1, 1,
+        ];
+
+        // CPU position buffer mirrors to the GPU "offset texture":
+        // these "positional" offsets are used as "Target" x, y values
+        // and the fragment shader uses these "target" values, 
+        // and lerps the "current" value _towards_ 
+        // the "target" value over a parameterized duration of time
+        // offsetTexture: [screenWidth x screenHeight] (rgba); where r = x offset, and g = y offset | b,a are unused for now
+
+        // we artificially delay the sorting algo. to help visualize the sorting process
+        // we then show how parallelism can be used to speed up the sorting process (bitonic sort) + realtime "accumulation" of the sorted values (similar to Raytracing stochastic accumulation)
+
         function initializePositionsAndOffsetData() {
-            console.warn("Initializing positions and pixel data");
+            if(typeof positionBuffer == "undefined"){
+                //throw new Error("positionBuffer is undefined");
+                console.error("positionBuffer is undefined");
+                return;
+            }
+            
+            // Update buffers with new data
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, output_surface_positions, gl.DYNAMIC_DRAW);
+
+            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+            return;
+            /*
+            console.warn("Initializing output_surface_positions and pixel data");
             
             const numPixels = canvas.width * canvas.height;
-            positions = new Float32Array(numPixels * 2); // x, y for each pixel
+            pixel_positions = new Float32Array(numPixels * 2); // x, y for each pixel
             pixelData = new Uint8Array(numPixels * bytesPerPixel); // RGBA for each pixel
 
             // Initialize position and pixel data
@@ -43,8 +86,8 @@
                     const pixelIndex = (y * canvas.width + x) * bytesPerPixel;
 
                     // Set position (x, y)
-                    positions[index] = (x / canvas.width) * 2 - 1; // Convert to clip space
-                    positions[index + 1] = (y / canvas.height) * 2 - 1; // Convert to clip space
+                    pixel_positions[index] = (x / canvas.width) * 2 - 1; // Convert to clip space
+                    pixel_positions[index + 1] = (y / canvas.height) * 2 - 1; // Convert to clip space
 
                     // Initialize pixel data with random colors
                     pixelData[pixelIndex] = Math.floor(Math.random() * 256); // R
@@ -60,52 +103,60 @@
 
             gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+            */
         }
 
         let swapped = false;
-        function applyBubbleSortStep() {
-            console.warn("Applying bubble sort step");
-            // Apply one step of the bubble sort algorithm
-            swapped = false;
-            const numPixels = canvas.width * canvas.height;
-            for (let i = 0; i < numPixels - 1; i++) {
-                const currentColor = pixelData.subarray(i * bytesPerPixel, (i + 1) * bytesPerPixel);
-                const nextColor = pixelData.subarray((i + 1) * bytesPerPixel, (i + 2) * bytesPerPixel);
+        /** 
+         * return true if swapped
+         * */
+        // function applyBubbleSortStep() {
+        //     console.warn("Applying bubble sort step");
+        //     // Apply one step of the bubble sort algorithm
+        //     swapped = false;
+        //     const numPixels = canvas.width * canvas.height;
+        //     for (let i = 0; i < numPixels - 1; i++) {
+        //         const currentColor = pixelData.subarray(i * bytesPerPixel, (i + 1) * bytesPerPixel);
+        //         const nextColor = pixelData.subarray((i + 1) * bytesPerPixel, (i + 2) * bytesPerPixel);
 
-                // Compare colors based on the sum of RGB values
-                if (currentColor[0] + currentColor[1] + currentColor[2] > nextColor[0] + nextColor[1] + nextColor[2]) {
-                    // Swap colors in pixel data
-                    [pixelData[i * bytesPerPixel], pixelData[(i + 1) * bytesPerPixel]] = [pixelData[(i + 1) * bytesPerPixel], pixelData[i * bytesPerPixel]];
-                    [pixelData[i * bytesPerPixel + 1], pixelData[(i + 1) * bytesPerPixel + 1]] = [pixelData[(i + 1) * bytesPerPixel + 1], pixelData[i * bytesPerPixel + 1]];
-                    [pixelData[i * bytesPerPixel + 2], pixelData[(i + 1) * bytesPerPixel + 2]] = [pixelData[(i + 1) * bytesPerPixel + 2], pixelData[i * bytesPerPixel + 2]];
+        //         // Compare colors based on the sum of RGB values
+        //         if (currentColor[0] + currentColor[1] + currentColor[2] > nextColor[0] + nextColor[1] + nextColor[2]) {
+        //             // Swap colors in pixel data
+        //             [pixelData[i * bytesPerPixel], pixelData[(i + 1) * bytesPerPixel]] = [pixelData[(i + 1) * bytesPerPixel], pixelData[i * bytesPerPixel]];
+        //             [pixelData[i * bytesPerPixel + 1], pixelData[(i + 1) * bytesPerPixel + 1]] = [pixelData[(i + 1) * bytesPerPixel + 1], pixelData[i * bytesPerPixel + 1]];
+        //             [pixelData[i * bytesPerPixel + 2], pixelData[(i + 1) * bytesPerPixel + 2]] = [pixelData[(i + 1) * bytesPerPixel + 2], pixelData[i * bytesPerPixel + 2]];
 
-                    // Update offset data to reflect the swap
-                    const x1 = i % canvas.width;
-                    const y1 = Math.floor(i / canvas.width);
-                    const x2 = (i + 1) % canvas.width;
-                    const y2 = Math.floor((i + 1) / canvas.width);
+        //             // Update offset data to reflect the swap
+        //             const x1 = i % canvas.width;
+        //             const y1 = Math.floor(i / canvas.width);
+        //             const x2 = (i + 1) % canvas.width;
+        //             const y2 = Math.floor((i + 1) / canvas.width);
 
-                    // offsetData[i * bytesPerPixel] = x2 % 256;
-                    // offsetData[i * bytesPerPixel + 1] = y2 % 256;
-                    // offsetData[(i + 1) * bytesPerPixel] = x1 % 256;
-                    // offsetData[(i + 1) * bytesPerPixel + 1] = y1 % 256;
+        //             // offsetData[i * bytesPerPixel] = x2 % 256;
+        //             // offsetData[i * bytesPerPixel + 1] = y2 % 256;
+        //             // offsetData[(i + 1) * bytesPerPixel] = x1 % 256;
+        //             // offsetData[(i + 1) * bytesPerPixel + 1] = y1 % 256;
 
-                    swapped = true;
-                }
-            }
+        //             swapped = true;
+        //         }
+        //     }
 
-            // Update the texture with the sorted pixel data
-            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
-            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+        //     // Update the texture with the sorted pixel data
+        //     gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+        //     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
 
-            return swapped;
-        }
+        //     return swapped;
+        // }
         function onGLReady(){
             console.log("Initializing WebGL");
 
             // Create and bind the position buffer
             positionBuffer = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+            // go ahead and pop our initial data into the position buffer
+            // we'll update it later
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(output_surface_positions), gl.DYNAMIC_DRAW);
 
             // Create and bind the offset texture
             offsetTexture = gl.createTexture();
@@ -115,25 +166,25 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
+            // @requires gl, canvas
             resizeCanvas();
 
-            const vsSource = `
-                attribute vec4 aVertexPosition;
-                varying vec2 vTextureCoord;
-                void main() {
-                    gl_Position = aVertexPosition;
-                    vTextureCoord = aVertexPosition.xy * 0.5 + 0.5;
-                }
-            `;
+            // @requires positionBuffer
+            initializePositionsAndOffsetData();
 
+            // for now we just pass-thru
+            // later when we add sub-divided mesh, we'll need to use a vertex shader
+            const vsSource = `
+attribute vec4 aVertexPosition;
+void main() {
+    gl_Position = aVertexPosition;
+}
+            `;
             const fsSource = `
-                precision mediump float;
-                varying vec2 vTextureCoord;
-                uniform sampler2D uOffsetTexture;
-                void main() {
-                    vec4 color = texture2D(uOffsetTexture, vTextureCoord);
-                    gl_FragColor = color;
-                }
+precision mediump float;
+void main() {
+    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+}
             `;
 
             shaderProgram = initShaderProgram(gl, vsSource, fsSource);
@@ -145,7 +196,7 @@
                 },
                 uniformLocations: {
                     uTime: gl.getUniformLocation(shaderProgram, 'uTime'),
-                    uOffsetTexture: gl.getUniformLocation(shaderProgram, 'uOffsetTexture'), // Add this line
+                    // uOffsetTexture: gl.getUniformLocation(shaderProgram, 'uOffsetTexture'), // Add this line
                 },
             };
 
@@ -164,6 +215,13 @@
                     return null;
                 }
 
+                // if there are ANY gl errors, re-throw the error
+                const error = gl.getError();
+                if (error !== gl.NO_ERROR) {
+                    //throw new Error('WebGL Error: ' + error);
+                    console.error('WebGL Error: ', error);
+                }
+
                 return shaderProgram;
             }
 
@@ -172,6 +230,13 @@
                 const shader = gl.createShader(type);
                 gl.shaderSource(shader, source);
                 gl.compileShader(shader);
+
+                // if there are ANY gl errors, re-throw the error
+                const error = gl.getError();
+                if (error !== gl.NO_ERROR) {
+                    //throw new Error('WebGL Error: ' + error);
+                    console.error('WebGL Error: ', error);
+                }
 
                 if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
                     console.error('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
@@ -189,13 +254,13 @@
             then = now;
 
             // apply one step every second
-            if (deltaTime > 1) {
-                const swapped = applyBubbleSortStep();
-                if (!swapped) {
-                    // If no swaps were made, the array is sorted
-                    console.log('Array sorted!');
-                }
-            }
+            // if (deltaTime > 1) {
+            //     const swapped = applyBubbleSortStep();
+            //     if (!swapped) {
+            //         // If no swaps were made, the array is sorted
+            //         console.log('Array sorted!');
+            //     }
+            // }
 
             drawScene(gl, programInfo, positionBuffer, deltaTime);
 
@@ -214,8 +279,9 @@
             // Bind the position buffer.
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 
-            // Tell WebGL how to pull out the positions from the position
-            // buffer into the vertexPosition attribute.
+            // Tell WebGL how to pull out the positions from the 
+            // positionBuffer into the vertexPosition attribute called "aVertexPosition"
+            // note: it WAS reading rg as xy, but now we're going back to an array of float pairs
             {
                 const numComponents = 2;  // pull out 2 values per iteration
                 const type = gl.FLOAT;    // the data in the buffer is 32bit floats
@@ -234,8 +300,8 @@
             }
 
             // Bind the offset texture to a texture unit
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+            //gl.activeTexture(gl.TEXTURE0);
+            //gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
             
 
             // Use our program when drawing
@@ -243,7 +309,7 @@
 
             // Set the shader uniforms
             gl.uniform1f(programInfo.uniformLocations.uTime, deltaTime);
-            gl.uniform1i(programInfo.uniformLocations.uOffsetTexture, 0);
+            //gl.uniform1i(programInfo.uniformLocations.uOffsetTexture, 0);
 
             {
                 const offset = 0;
@@ -260,6 +326,8 @@
                 //console.error('Unable to initialize WebGL. Your browser may not support it.');
                 return;
             }
+            // prepares:
+            // positionBuffer, 
             onGLReady();            
             requestAnimationFrame(render);
 
