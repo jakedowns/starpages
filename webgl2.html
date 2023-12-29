@@ -1,4 +1,7 @@
 <!DOCTYPE html>
+<!-- 
+    > add bitonic sort to our todo list 
+-->
 <html>
 <head>
     <title>WebGL Pixel Sorter</title>
@@ -10,6 +13,40 @@
 <body>
     <canvas id="glCanvas"></canvas>
     <script>
+        const fsSource = `
+precision mediump float;
+uniform vec2 uResolution;
+uniform float uTime;
+uniform sampler2D uOffsetTexture;
+uniform sampler2D uBaseTexture;
+uniform int uMode;
+uniform int uPxDensity;
+vec2 corrected;
+void main() {
+    // adjust for pixel density
+    corrected = gl_FragCoord.xy / (uResolution * float(uPxDensity));
+    
+    if(uMode == 0){
+        // 0. sample base texture
+        gl_FragColor = texture2D(uBaseTexture, corrected);
+    }else if(uMode == 1){
+        // 1. sample offset texture
+        gl_FragColor = texture2D(uOffsetTexture, corrected);
+    }else if(uMode == 2){
+        // 2. vary color with time
+        gl_FragColor = vec4(gl_FragColor.rgb + sin(uTime)*0.5, 1.0);
+    }else if(uMode == 3){
+        // 3. lerp from base texture towards "target" offset texture
+        gl_FragColor = mix(texture2D(uBaseTexture, corrected), texture2D(uOffsetTexture, corrected), 0.5);
+        // apply purple tint
+        gl_FragColor = vec4(gl_FragColor.rgb + vec3(0.5,0,0.5), 1.0);
+    }else{
+        // 4. lerp from base texture towards "target" offset texture
+        gl_FragColor = mix(texture2D(uBaseTexture, corrected), texture2D(uOffsetTexture, corrected), 0.5);
+    }
+}
+        `;
+        
         // note: we've bound the outputSurfacePositionBuffer to the vertex shader's "aVertexPosition" attribute
         // we've bound the offset texture to the fragment shader's "uOffsetTexture" uniform
         // and, critically, we've bound the offset texture to texture unit 0 (gl.TEXTURE0)
@@ -19,7 +56,7 @@
         let frameCount = 0;
         let seed = 0;
         let MODE = 0;
-        let pixel_density = 16; // scale for higher density
+        let pixel_density = 2; // scale for higher density
 
         let then = 0;
         let canvas, gl;
@@ -201,18 +238,6 @@
                     [pixelData[i * bytesPerPixel], pixelData[(i + 1) * bytesPerPixel]] = [pixelData[(i + 1) * bytesPerPixel], pixelData[i * bytesPerPixel]];
                     [pixelData[i * bytesPerPixel + 1], pixelData[(i + 1) * bytesPerPixel + 1]] = [pixelData[(i + 1) * bytesPerPixel + 1], pixelData[i * bytesPerPixel + 1]];
                     [pixelData[i * bytesPerPixel + 2], pixelData[(i + 1) * bytesPerPixel + 2]] = [pixelData[(i + 1) * bytesPerPixel + 2], pixelData[i * bytesPerPixel + 2]];
-
-                    // Update offset data to reflect the swap
-                    const x1 = i % fixedPixelsX;
-                    const y1 = Math.floor(i / fixedPixelsX);
-                    const x2 = (i + 1) % fixedPixelsX;
-                    const y2 = Math.floor((i + 1) / fixedPixelsX);
-
-                    // offsetData[i * bytesPerPixel] = x2 % 256;
-                    // offsetData[i * bytesPerPixel + 1] = y2 % 256;
-                    // offsetData[(i + 1) * bytesPerPixel] = x1 % 256;
-                    // offsetData[(i + 1) * bytesPerPixel + 1] = y1 % 256;
-
                     swapped = true;
                 }
             }
@@ -240,39 +265,7 @@ gl_Position = aVertexPosition;
 }
         `;
         // samples from uBaseTexture and uOffsetTexture
-        const fsSource = `
-precision mediump float;
-uniform vec2 uResolution;
-uniform float uTime;
-uniform sampler2D uBaseTexture;
-uniform sampler2D uOffsetTexture;
-uniform int uMode;
-const int pxDensity = 16;
-vec2 corrected;
-void main() {
-    // adjust for pixel density
-    corrected = gl_FragCoord.xy / (uResolution * float(pxDensity));
-    
-    if(uMode == 0){
-        // 0. sample base texture
-        gl_FragColor = texture2D(uBaseTexture, corrected);
-    }else if(uMode == 1){
-        // 1. sample offset texture
-        gl_FragColor = texture2D(uOffsetTexture, corrected);
-    }else if(uMode == 2){
-        // 2. vary color with time
-        gl_FragColor = vec4(gl_FragColor.rgb + sin(uTime)*0.5, 1.0);
-    }else if(uMode == 3){
-        // 3. lerp from base texture towards "target" offset texture
-        gl_FragColor = mix(texture2D(uBaseTexture, corrected), texture2D(uOffsetTexture, corrected), 0.5);
-        // apply purple tint
-        gl_FragColor = vec4(gl_FragColor.rgb + vec3(0.5,0,0.5), 1.0);
-    }else{
-        // 4. lerp from base texture towards "target" offset texture
-        gl_FragColor = mix(texture2D(uBaseTexture, corrected), texture2D(uOffsetTexture, corrected), 0.5);
-    }
-}
-        `;
+        
 
         function initShaderProgram(gl, vsSource, fsSource) {
             console.warn('[Debug] initShaderProgram',{gl,vsSource,fsSource});
@@ -332,6 +325,7 @@ void main() {
                 uniformLocations: {
                     uMode: gl.getUniformLocation(shaderProgram, 'uMode'),
                     uTime: gl.getUniformLocation(shaderProgram, 'uTime'),
+                    uPxDensity: gl.getUniformLocation(shaderProgram, 'uPxDensity'),
                     uResolution: gl.getUniformLocation(shaderProgram, 'uResolution'),
                     uOffsetTexture: gl.getUniformLocation(shaderProgram, 'uOffsetTexture'),
                     uBaseTexture: gl.getUniformLocation(shaderProgram, 'uBaseTexture'),
@@ -449,6 +443,7 @@ void main() {
             // Set the shader uniforms
             gl.uniform2f(programInfo.uniformLocations.uResolution, Math.floor(canvas.width/pixel_density), Math.floor(canvas.height/pixel_density));
             gl.uniform1f(programInfo.uniformLocations.uTime, performance.now() / 1000);
+            gl.uniform1i(programInfo.uniformLocations.uPxDensity, pixel_density);
             gl.uniform1i(programInfo.uniformLocations.uMode, MODE);
             //gl.uniform1f(programInfo.uniformLocations.uPixelPositions, pixel_positions)
             gl.uniform1i(programInfo.uniformLocations.uOffsetTexture, 0);
@@ -460,7 +455,51 @@ void main() {
                 gl.drawArrays(gl.TRIANGLES, offset, vertexCount);
             }
         }
+        function onImageDrop(event) {
+            // Handle image drop, load the image into baseTexture
+            event.preventDefault();
+
+            try {
+                const file = event.dataTransfer.files[0];
+                const reader = new FileReader();
+                reader.onload = function (event) {
+                    const image = new Image();
+                    image.onload = function () {
+                        // Resize the canvas to match the image
+                        canvas.width = image.width;
+                        canvas.height = image.height;
+                        fixedPixelsX = Math.floor(canvas.width/pixel_density);
+                        fixedPixelsY = Math.floor(canvas.height/pixel_density);
+                        initializePositionsAndOffsetData();
+
+                        // Draw the image to the canvas
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(image, 0, 0);
+
+                        // Get the image data
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                        // Copy the image data into pixelData
+                        for (let i = 0; i < imageData.data.length; i++) {
+                            pixelData[i] = imageData.data[i];
+                        }
+
+                        // Update the base texture
+                        gl.bindTexture(gl.TEXTURE_2D, baseTexture);
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+                    };
+                    image.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            } catch (e) {
+                console.error('Error loading image', e);
+            }
+        }
         function onReady(){
+            canvas.addEventListener("drop", onImageDrop);
+            canvas.addEventListener("dragover", function(event) { event.preventDefault(); });
+
+
             // WebGL context setup
             canvas = document.getElementById('glCanvas');
             gl = canvas.getContext('webgl');
