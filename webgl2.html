@@ -82,7 +82,7 @@ void main() {
 
         let frameCount = 0;
         let seed = 0;
-        let MODE = 0;
+        let MODE = 1;
         let _pixel_density = 4; //6 // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
         Object.defineProperty(window, "pixel_density", {
             get: function(){
@@ -93,6 +93,11 @@ void main() {
                 resizeCanvas();
             }
         });
+        Object.defineProperty(window, "MAX_SORT_STEP_SIZE", {
+            get: function(){
+                return 1e5 * 4; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
+            }
+        })
 
         let then = 0;
         let canvas, gl;
@@ -282,7 +287,7 @@ void main() {
         // so we can color the pixels that are currently being sorted
         // we also pass the window width, so we can color the pixels that are being compared
         let sortOffset = 0;
-        window.sortStepSize = 10; //-1; //10e3; // Number of elements to sort per call, adjust as needed
+        window.sortStepSize = 10e5; //-1; //10e3; // Number of elements to sort per call, adjust as needed
         window.current_sortStepSize = window.sortStepSize;
 
         function resetOffsetTexture(){
@@ -348,6 +353,22 @@ void main() {
             return swapped;
         }
 
+        let noSwapStreak = 0; // Track consecutive passes without swaps
+        let prevDidSwap = false; // Track whether a swap occurred in the previous pass
+
+        function finalSortPass() {
+            sortStepSize = 1; // Set window size to minimum
+            applyBubbleSortStep(); // Perform final sort pass
+        }
+
+        function isOverlookingPixels() {
+            // Implement logic to check for consistently overlooked pixels
+            // This could be a heuristic based on tracking which pixels haven't moved in several passes
+            // or it could be a heuristic based on the number of pixels that have moved in the last pass
+            
+            return false; // Placeholder return
+        }
+
         /** 
          * return true if swapped
          * */
@@ -355,6 +376,8 @@ void main() {
             //console.warn("Applying bubble sort step");
             // Apply one step of the bubble sort algorithm
             swapped = false;
+
+            let crossedCycleBoundaryThisPass = false;
 
             const numPixels = fixedPixelsX * fixedPixelsY;
             let _sortStepSize = window.sortStepSize === -1 ? numPixels : window.sortStepSize;
@@ -384,6 +407,20 @@ void main() {
             // our heuristic to check if we might've overlooked pixels is defined as:
             // 
 
+            // Update the sorting offset
+            sortOffset += _sortStepSize;
+            crossedCycleBoundaryThisPass = false;
+            if (sortOffset >= numPixels) {
+                crossedCycleBoundaryThisPass = true;
+                // wrap around
+                sortOffset = sortOffset % numPixels;
+                // if we didnt swap this pass, 
+                if(!prevDidSwap && !swapped){
+                    // note we attribute multiple passes without swaps to the same cycle
+                    noSwapStreak += Math.floor(((sortOffset % numPixels) / numPixels));
+                }
+            }
+
             for (let i = sortOffset; i < windowEnd - 1; i++) {
                 let inner_i = i
                 // if inner_i has gone out of bounds, we need to wrap it around
@@ -411,6 +448,8 @@ void main() {
                 // }
             }
 
+            
+            
             if (swapped) {
                 // If a swap occurred, update the texture
                 gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
@@ -418,16 +457,12 @@ void main() {
                 gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, fixedPixelsX, fixedPixelsY, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
             }
 
-            // Update the sorting offset
-            sortOffset += _sortStepSize;
-            // wrap around
-            sortOffset = sortOffset % numPixels;
-            //console.warn({sortOffset,_sortStepSize});
-
             // if we've somehow gone negative, flip positive and clamp to 0
             if(sortOffset < 0){
-                sortOffset = Math.max(0,sortOffset);
+                throw new Error("sortOffset is negative");
             }
+
+            prevDidSwap = swapped;
 
             return swapped;
         }
@@ -560,7 +595,7 @@ gl_Position = aVertexPosition;
 
             
         }
-        window.do_sort = false;
+        window.do_sort = 1;
         // Draw the scene repeatedly
         function render(now) {
             const deltaTime = now - then;
@@ -569,18 +604,42 @@ gl_Position = aVertexPosition;
             //if (deltaTime > 0){//0.001) {
             if(do_sort){
                 const swapped = applyBubbleSortStep();
-                if(!swapped && DID_COMPLETE_SORT_SINCE_RESET === false && window.sortStepSize <= 2){
-                    DID_COMPLETE_SORT_SINCE_RESET = true;
-                }else{
-                    if(!swapped && !DID_COMPLETE_SORT_SINCE_RESET && window.sortStepSize > 2){
-                        // reduce sortStepSize
+                // if(
+                //     noSwapStreak > 0 
+                //     && !DID_COMPLETE_SORT_SINCE_RESET 
+                //     && window.sortStepSize <= 2
+                // ){
+                //     DID_COMPLETE_SORT_SINCE_RESET = true;
+                // }else{
+                    if(
+                        noSwapStreak > 0 // did we make it a full cycle with no swaps?
+                        && !DID_COMPLETE_SORT_SINCE_RESET 
+                        && window.sortStepSize > 2
+                    ){
+                        // let's start confirming by decreasing our sortStepSize
+                        // reduce sortStepSize by factor of 2
                         window.sortStepSize = Math.max(2,parseInt(window.sortStepSize / 2));
+                        console.warn('decreasing sortStepSize',window.sortStepSize);
+                        if(window.sortStepSize <= 4){
+                            // run our final sort pass
+                            console.warn('final sort pass!')
+                            DID_COMPLETE_SORT_SINCE_RESET = true;
+                            finalSortPass();
+                        }
                     }
-                    if(swapped && !DID_COMPLETE_SORT_SINCE_RESET && window.sortStepSize < window.current_sortStepSize){
+                    if(
+                        // if noSwapStreak reset, and we haven't completed the sort since the last reset
+                        // and our current sortStepSize is less than our MAX_SORT_STEP_SIZE
+                        // we increase the sortStepSize by factor of 2
+                        noSwapStreak === 0 
+                        && !DID_COMPLETE_SORT_SINCE_RESET 
+                        && window.sortStepSize < window.MAX_SORT_STEP_SIZE
+                    ){
                         // increase sortStepSize
-                        window.sortStepSize = Math.min(window.current_sortStepSize,parseInt(window.sortStepSize * 2));
+                        window.sortStepSize = Math.min(window.MAX_SORT_STEP_SIZE,parseInt(window.sortStepSize * 2));
+                        console.warn('increasing sortStepSize',window.sortStepSize);
                     }
-                }
+                //}
             }
             //}
 
@@ -859,14 +918,7 @@ gl_Position = aVertexPosition;
             gl.bindTexture(gl.TEXTURE_2D, baseTexture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, baseTexWidth, baseTexHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, baseTexPixels);
 
-            console.warn('loaded number of pixels',baseTexPixels.length/4, baseTexPixels);
-
-            // sortStepSize = 
-            //     baseTexPixels > 1e5 
-            //     ? baseTexPixels * (baseTexPixels / 1e5)
-            //     : (1e5 / baseTexPixels) * baseTexPixels; 
-
-            
+            //console.warn('loaded number of pixels',baseTexPixels.length/4, baseTexPixels);
             
         }
 
