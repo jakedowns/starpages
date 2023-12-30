@@ -89,7 +89,7 @@ void main() {
         gl_FragColor.g = clamp(gl_FragColor.g, 0.0, 1.0);
         gl_FragColor.b = clamp(gl_FragColor.b, 0.0, 1.0);
         // make sure our alpha channel is 1.0
-        gl_FragColor.a = clamp(gl_FragColor.a, 0.1, 1.0);
+        gl_FragColor.a = 1.0; //clamp(gl_FragColor.a, 0.1, 1.0);
     }else if(uMode == 2){
         // ramp between "magma" dark black, purple, yellow, and white
         // based on the magnitude of sample r and g channels: texture2D(uOffsetTexture, corrected)
@@ -409,7 +409,7 @@ void main() {
             //if(rankA > rankB){
 
             // new: epsilon-based approach
-            if(rankA > rankB + 0.0001){
+            if(rankA > rankB + Math.random()*0.001){
                 // Swap colors in pixel data
                 [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
                 [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
