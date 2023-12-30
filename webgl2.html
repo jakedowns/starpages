@@ -13,7 +13,7 @@
 <body>
     <canvas id="glCanvas"></canvas>
     <script>
-        // fsshader fragment shader source frag shader here
+        // fsshader fragment shader source frag shader here fshader
         const fsSource = `
 precision mediump float;
 uniform vec2 uResolution;
@@ -53,6 +53,12 @@ void main() {
         // and use offset texture's [g]reen channel to offset our uv/xy[y] lookup in the OPPPOSITE direction
         
         gl_FragColor = texture2D(uBaseTexture, corrected.x - vec2(texture2D(uOffsetTexture, corrected).r, corrected.y - texture2D(uOffsetTexture, corrected).g));
+        // constrain r,g,b to 0.0 - 1.0
+        gl_FragColor.r = clamp(gl_FragColor.r, 0.0, 1.0);
+        gl_FragColor.g = clamp(gl_FragColor.g, 0.0, 1.0);
+        gl_FragColor.b = clamp(gl_FragColor.b, 0.0, 1.0);
+        // make sure our alpha channel is 1.0
+        gl_FragColor.a = 1.0;
     }else if(uMode == 2){
         // debug sample offset texture
         gl_FragColor = texture2D(uOffsetTexture, corrected);
