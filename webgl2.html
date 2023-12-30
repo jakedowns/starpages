@@ -798,6 +798,12 @@ gl_Position = aVertexPosition;
                     }
 
                     canvas.classList.add('unblur');
+                    let match = document.getElementsByClassName('drop-here-text');
+                    if (match.length > 0) {
+                        Array.from(match).forEach((el) => {
+                            el.parentElement.removeChild(el);
+                        });
+                    }
 
                     // Process clipboardBag as needed
                     console.warn({clipboardBag});
