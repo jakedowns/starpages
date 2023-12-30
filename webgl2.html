@@ -60,23 +60,37 @@
             position: relative;
             display: block;
             border-radius: 100px;
-            border: 1px solid white, 2px solid black;
+            border: 2px solid black;
             padding: 10px;
             font-size: 20px;
             color: white;
             cursor: pointer;
-            transition: all 0.5s ease-in-out;
+            transition: all 1s ease-in-out;
             background-color: #663dff;
-            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
             
         }
         .hide-video-button:hover {
             background-color: #663dff;
-            /* shifted version of:
-            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
-            */
-            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 15%, #cc4499 100%);
+            animation: gradient-animation 3s ease infinite; /* Apply the animation */
         }
+        @keyframes gradient-animation {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .hide-video-button {
+            background-size: 200% 200%; /* Extend the background size for the animation */
+            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
+            
+        }
+
     </style>
 </head>
 <body>
