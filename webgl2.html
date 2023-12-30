@@ -83,27 +83,41 @@ void main() {
         // default mode: use the offset texture's [r]ed channel to offset our uv/xy[x] lookup in the OPPPOSITE direction
         // and use offset texture's [g]reen channel to offset our uv/xy[y] lookup in the OPPPOSITE direction
         
-        gl_FragColor = texture2D(uBaseTexture, corrected.x - vec2(texture2D(uOffsetTexture, corrected).r, corrected.y - texture2D(uOffsetTexture, corrected).g));
+        gl_FragColor = texture2D(uOriginalPixelDataTexture, corrected.x - vec2(texture2D(uOffsetTexture, corrected).r, corrected.y - texture2D(uOffsetTexture, corrected).g));
         // constrain r,g,b to 0.0 - 1.0
         gl_FragColor.r = clamp(gl_FragColor.r, 0.0, 1.0);
         gl_FragColor.g = clamp(gl_FragColor.g, 0.0, 1.0);
         gl_FragColor.b = clamp(gl_FragColor.b, 0.0, 1.0);
         // make sure our alpha channel is 1.0
-        gl_FragColor.a = 1.0;
+        gl_FragColor.a = clamp(gl_FragColor.a, 0.1, 1.0);
     }else if(uMode == 2){
-        // debug sample offset texture
-        gl_FragColor = texture2D(uOffsetTexture, corrected);
+        // ramp between "magma" dark black, purple, yellow, and white
+        // based on the magnitude of sample r and g channels: texture2D(uOffsetTexture, corrected)
+        vec4 black = vec4(0.0,0.0,0.0,1.0);
+        vec4 purple = vec4(0.5,0.0,0.5,1.0);
+        vec4 magenta = vec4(1.0,0.0,1.0,1.0);
+        vec4 yellow = vec4(1.0,1.0,0.0,1.0);
+        vec4 white = vec4(1.0,1.0,1.0,1.0);
 
-        // set the green channel to an average of the two
-        gl_FragColor.g = (gl_FragColor.r + gl_FragColor.b) / 2.0;
-        //gl_FragColor.g = 0.0; 
+        // 1. sample offset texture's r and g channels
+        vec4 sample = texture2D(uOffsetTexture, corrected);
+
+        // 2. calculate magnitude of r and g channels
+        float magnitude = sqrt(sample.r * sample.r + sample.g * sample.g);
+
+        // 3. lerp from base texture towards "target" offset texture
+        // Corrected the nested mix functions
+        vec4 gradientSample = mix(black, 
+                                mix(purple, 
+                                    mix(magenta, 
+                                        mix(yellow, white, magnitude), 
+                                    magnitude),
+                                magnitude),
+                            magnitude);
+
+        // 4. set the fragment color
+        gl_FragColor = gradientSample;
         gl_FragColor.a = 1.0;
-
-        // // 3. lerp from base texture towards "target" offset texture
-        // gl_FragColor = mix(texture2D(uBaseTexture, corrected), texture2D(uOffsetTexture, corrected), 0.5);
-        
-        // apply purple tint
-        // gl_FragColor = vec4(gl_FragColor.rgb + vec3(0.5,0,0.5), 1.0);
     }else if(uMode == 3){
         gl_FragColor = texture2D(uBaseTexture, corrected);    
     }else{
@@ -259,7 +273,7 @@ void main() {
                         pixelData[pixelIndex] = Math.floor(Math.random() * 256); // R
                         pixelData[pixelIndex + 1] = Math.floor(Math.random() * 256); // G
                         pixelData[pixelIndex + 2] = Math.floor(Math.random() * 256); // B
-                        pixelData[pixelIndex + 3] = 255; // Alpha
+                        pixelData[pixelIndex + 3] = Math.floor(Math.random() * 256); // Alpha
                     }
                 }
 
@@ -901,7 +915,7 @@ gl_Position = aVertexPosition;
             // Only use R and G channels, force A channel to 1
             pixelData = pixelData.map((value, index) => {
                 if (index === 3) {
-                    return 255;
+                    return value <= 0 ? 1 : value; // full alpha
                 }
                 if (index === 2) {
                     return 0;
