@@ -7,10 +7,28 @@
     <title>WebGL Pixel Sorter</title>
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
-        canvas { width: 100%; height: 100% }
+        canvas { width: 100%; height: 100%; filter: blur(100px); transition: filter 0.5s ease-in-out; will-change: filter; }
+        canvas.unblur { filter: blur(0px); }
+        .drop-here-text {
+            pointer-events: none;
+            position: absolute;
+            left: 0; right: 0; top: 0; bottom: 0;
+            z-index: 1000;
+            font-size: 93px;
+            font-weight: bold;
+            text-align: center;
+            color: white;
+            font-family: sans-serif;
+            text-shadow: 4px 4px 5px white, 5px 5px 5px blue;
+        }
+        .drop-here-text span {
+            display: block;
+            font-size: 45px;
+        }
     </style>
 </head>
 <body>
+    <div class="drop-here-text">pixel sorter <span>(drop an image here)</span></div>
     <canvas id="glCanvas"></canvas>
     <script>
         // fsshader fragment shader source frag shader here fshader
@@ -940,6 +958,14 @@ gl_Position = aVertexPosition;
             // Handle image drop, load the image into baseTexture
             event.preventDefault();
 
+            canvas.classList.add('unblur');
+            let match = document.getElementsByClassName('drop-here-text');
+            if (match.length > 0) {
+                Array.from(match).forEach((el) => {
+                    el.parentElement.removeChild(el);
+                });
+            }
+
             try {
                 const file = event.dataTransfer.files[0];
                 const reader = new FileReader();
@@ -954,6 +980,10 @@ gl_Position = aVertexPosition;
             }
         }
         function onReady(){
+
+            if(!confirm('this demo may show flashing lights, are you sure you want to continue?')){
+                return;
+            }
             
             
             // WebGL context setup
