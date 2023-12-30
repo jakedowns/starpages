@@ -132,8 +132,8 @@ uniform int uSortStepSize;
 
 vec2 corrected;
 void main() {
-    gl_FragColor = vec4(0.0,1.0,0.0,1.0);
-    return;
+    // gl_FragColor = vec4(0.0,1.0,0.0,1.0);
+    // return;
 
     // adjust for pixel density
     corrected = gl_FragCoord.xy / (uResolution * float(uPxDensity));
