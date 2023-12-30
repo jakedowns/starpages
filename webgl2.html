@@ -14,7 +14,7 @@
             position: absolute;
             left: 0; right: 0; top: 0; bottom: 0;
             z-index: 1000;
-            font-size: 93px;
+            font-size: 43px;
             font-weight: bold;
             text-align: center;
             color: white;
@@ -23,12 +23,15 @@
         }
         .drop-here-text span {
             display: block;
-            font-size: 45px;
+            font-size: 25px;
+        }
+        .drop-here-text .hint {
+            font-size: 15px;
         }
     </style>
 </head>
 <body>
-    <div class="drop-here-text">pixel sorter*<span>drop an image here</span><br/>or<br/><span>tap here to select an image <span class="hint">(local only, doesn\'t get uploaded anywhere)</span></span></div>
+    <div class="drop-here-text">webgl pixel sorter*<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
     <script>
         // fsshader fragment shader source frag shader here fshader
@@ -38,6 +41,7 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform sampler2D uOffsetTexture;
 uniform sampler2D uBaseTexture;
+uniform sampler2D uOriginalPixelDataTexture;
 uniform int uMode;
 uniform int uPxDensity;
 
@@ -90,10 +94,12 @@ void main() {
         
         // apply purple tint
         // gl_FragColor = vec4(gl_FragColor.rgb + vec3(0.5,0,0.5), 1.0);
+    }else if(uMode == 3){
+        gl_FragColor = texture2D(uBaseTexture, corrected);    
     }else{
         // fallback mode
         // debug sample unmodified base texture
-        gl_FragColor = texture2D(uBaseTexture, corrected);    
+        gl_FragColor = texture2D(uOriginalPixelDataTexture, corrected);    
     }
 }
         `;
@@ -126,7 +132,7 @@ void main() {
         let then = 0;
         let canvas, gl;
         let outputSurfacePositionBuffer;
-        let offsetTexture, baseTexture;
+        let offsetTexture, baseTexture, originalPixelDataTexture;
         let shaderProgram, programInfo;
         let pixel_positions = [];
         let pixelData, originalPixelData, latestPixelDataSnapshot;
@@ -600,6 +606,7 @@ gl_Position = aVertexPosition;
                     uResolution: gl.getUniformLocation(shaderProgram, 'uResolution'),
                     uOffsetTexture: gl.getUniformLocation(shaderProgram, 'uOffsetTexture'),
                     uBaseTexture: gl.getUniformLocation(shaderProgram, 'uBaseTexture'),
+                    uOriginalPixelDataTexture: gl.getUniformLocation(shaderProgram, 'uOriginalPixelDataTexture'),
                     //uPixelPositions: gl.getUniformLocation(shaderProgram, 'uPixelPositions'),
 
                     uSortOffset: gl.getUniformLocation(shaderProgram, 'uSortOffset'),
@@ -628,7 +635,16 @@ gl_Position = aVertexPosition;
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+            // clone into originalPixelDataTexture
+            originalPixelDataTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, originalPixelDataTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
             
+
             // Create and bind the offset texture
             // where we track position offsets for each pixel
             // from their unsorted initial positions to their sorted final positions
@@ -797,13 +813,7 @@ gl_Position = aVertexPosition;
                         clipboardBag.images.push(b64);
                     }
 
-                    canvas.classList.add('unblur');
-                    let match = document.getElementsByClassName('drop-here-text');
-                    if (match.length > 0) {
-                        Array.from(match).forEach((el) => {
-                            el.parentElement.removeChild(el);
-                        });
-                    }
+                    hideIntroText()
 
                     // Process clipboardBag as needed
                     console.warn({clipboardBag});
@@ -812,6 +822,26 @@ gl_Position = aVertexPosition;
                     console.error('Error accessing clipboard:', error);
                     // Handle error appropriately
                 }
+        }
+        function hideIntroText(){
+            canvas.classList.add('unblur');
+            let match = document.getElementsByClassName('drop-here-text');
+            if (match.length > 0) {
+                Array.from(match).forEach((el) => {
+                    el.style.display = 'none';
+                });
+            }
+        }
+        function showIntroText(skipBlur=false){
+            if(!skipBlur){
+                canvas.classList.remove('unblur');
+            }
+            let match = document.getElementsByClassName('drop-here-text');
+            if (match.length > 0) {
+                Array.from(match).forEach((el) => {
+                    el.style.display = 'block';
+                });
+            }
         }
         document.addEventListener('keydown',async(e)=>{
             // if command v on mac,
@@ -824,8 +854,14 @@ gl_Position = aVertexPosition;
                 await onPasteAttempt();
             }
         },false)
+        document.addEventListener('dblclick',async(e)=>{
+            // reset
+            showIntroText(skipBlur=true);
+            loadImageAsTexture("./res/360_F_202297164_NSSIqkr7QKi5Ltjrizwh9XGzH0MNANRN.jpg");
+
+        },false)
         document.addEventListener('click', (e)=>{
-            MODE = (MODE + 1) % 3;
+            MODE = (MODE + 1) % 4;
             console.log("MODE",MODE);
 
             if(!window.do_sort){
@@ -865,6 +901,10 @@ gl_Position = aVertexPosition;
                 window.DID_BIND_BASE_SINCE_RESIZE = true;
                 gl.activeTexture(gl.TEXTURE1);
                 gl.bindTexture(gl.TEXTURE_2D, baseTexture);
+
+                // clone data into originalPixelDataTexture
+                gl.activeTexture(gl.TEXTURE3);
+                gl.bindTexture(gl.TEXTURE_2D, originalPixelDataTexture);
             }
 
             // Use our program when drawing
@@ -882,8 +922,9 @@ gl_Position = aVertexPosition;
             gl.uniform1i(programInfo.uniformLocations.uPxDensity, pixel_density);
             gl.uniform1i(programInfo.uniformLocations.uMode, MODE);
             //gl.uniform1f(programInfo.uniformLocations.uPixelPositions, pixel_positions)
-            gl.uniform1i(programInfo.uniformLocations.uOffsetTexture, 0);
-            gl.uniform1i(programInfo.uniformLocations.uBaseTexture, 1);
+            gl.uniform1i(programInfo.uniformLocations.uOffsetTexture, 0); // TEXTURE1
+            gl.uniform1i(programInfo.uniformLocations.uBaseTexture, 1); // TEXTURE2
+            gl.uniform1i(programInfo.uniformLocations.uOriginalPixelDataTexture, 3); // TEXTURE3
 
             {
                 const offset = 0;
@@ -1175,6 +1216,8 @@ gl_Position = aVertexPosition;
 
             // overwrite pixelData array with baseTexPixels
             pixelData = baseTexPixels;
+            // clone
+            originalPixelData = baseTexPixels.slice(0);
 
             // Bind to baseTex and update its texture
             gl.bindTexture(gl.TEXTURE_2D, baseTexture);
@@ -1193,7 +1236,7 @@ gl_Position = aVertexPosition;
             let match = document.getElementsByClassName('drop-here-text');
             if (match.length > 0) {
                 Array.from(match).forEach((el) => {
-                    el.parentElement.removeChild(el);
+                    el.parentElement.style.display = 'none';
                 });
             }
 
@@ -1246,7 +1289,7 @@ gl_Position = aVertexPosition;
                             await loadImageAsTexture(b64);
 
                             canvas.classList.add('unblur');
-                            match[0].parentElement.removeChild(match[0]);
+                            match[0].style.display = 'none';
                         }
                         input.click();
                     });
