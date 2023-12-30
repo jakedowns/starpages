@@ -13,7 +13,7 @@
             pointer-events: none;
             position: absolute;
             left: 0; right: 0; top: 0; bottom: 0;
-            z-index: 1000;
+            z-index: 998;
             font-size: 43px;
             font-weight: bold;
             text-align: center;
@@ -31,6 +31,41 @@
         .drop-here-text .hint {
             font-size: 15px;
         }
+        .intro-video {
+            top: 50%;
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        .video-underlay {
+            background-color: rgba(.1,0,.1,.8);
+            backdrop-filter: blur(10px);
+            position: absolute;
+            z-index: 999;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .hide-video-button {
+            text-align: center;
+            width: auto;
+            position: relative;
+            display: block;
+            border-radius: 100px;
+            border: 1px solid white, 2px solid black;
+            padding: 10px;
+            font-size: 20px;
+            color: white;
+            background-color: linear-gradient(90deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.5) 100%);
+            cursor: pointer;
+            transition: background-color 0.5s ease-in-out;
+        }
+        .hide-video-button:hover {
+            background-color: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.8) 50%, rgba(0,0,0,0.8) 100%);
+        }
     </style>
 </head>
 <body>
@@ -40,9 +75,24 @@
     <!-- buy me a coffee; ko-fi link -->
     <a href="https://ko-fi.com/jakedowns" target="_blank" style="position: absolute; top: 0; left: 0; z-index: 1000; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰 Buy me a coffee</a>
 
+    <div class="intro-video">
+        <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
+        <span class="hide-video-button" onclick="window.hideVideo()">Click to Continue... &gt;</span>
+    </div>
+
+    <div class="video-underlay" onclick="window.hideVideo()">
+        
+
+    </div>
+
     <div class="drop-here-text">webgl pixel sorter<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
     <script>
+        window.hideVideo = function(){
+            document.querySelector(".intro-video").style.display = "none";
+            document.querySelector(".video-underlay").style.display = "none";
+        }
         // fsshader fragment shader source frag shader here fshader
         const fsSource = `
 precision mediump float;
@@ -59,6 +109,9 @@ uniform int uSortStepSize;
 
 vec2 corrected;
 void main() {
+    gl_FragColor = vec4(0.0,1.0,0.0,1.0);
+    return;
+
     // adjust for pixel density
     corrected = gl_FragCoord.xy / (uResolution * float(uPxDensity));
 
@@ -178,6 +231,8 @@ void main() {
             if(gl){
                 try{
                     gl.viewport(0, 0, canvas.width, canvas.height);
+                    // gl.bindTexture(gl.TEXTURE_2D, baseTexture);
+                    gl.useProgram(programInfo.program);
                     gl.uniform2f(programInfo.uniformLocations.uResolution, Math.floor(canvas.width/pixel_density), Math.floor(canvas.height/pixel_density));
                 }catch(e){
                     console.error("Error resizing canvas",e);
@@ -899,7 +954,12 @@ gl_Position = aVertexPosition;
         });
         // draw scene
         function drawScene(gl, programInfo, deltaTime) {
-            gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
+
+            // draw a red square and return
+            gl.clearColor(1.0, 0.0, 1.0, 1.0);
+            // return;
+
+            // gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
             gl.clearDepth(1.0);                 // Clear everything
             gl.enable(gl.DEPTH_TEST);           // Enable depth testing
             gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
@@ -914,11 +974,13 @@ gl_Position = aVertexPosition;
 
             // Only use R and G channels, force A channel to 1
             pixelData = pixelData.map((value, index) => {
-                if (index === 3) {
-                    return value <= 0 ? 1 : value; // full alpha
-                }
+                // ignore green channel
                 if (index === 2) {
                     return 0;
+                }
+                // full alpha
+                if (index === 3) {
+                    return 255;
                 }
                 return value;
             });
@@ -1020,6 +1082,7 @@ gl_Position = aVertexPosition;
                 blobAsImageBase64: await imageBlobToBase64(imageBlob),
             })
             image.src = URL.createObjectURL(imageBlob);
+            let el = document.body.appendChild(image);
         }
 
         let pastedTexture;
@@ -1040,7 +1103,8 @@ gl_Position = aVertexPosition;
                 handleImageLoad(image);
             };
             image.src = b64;
-            console.warn('image.src',image.src);
+            let el = document.body.appendChild(image);
+            console.warn('image.src',{el,src:image.src});
 
 
 
@@ -1069,6 +1133,7 @@ gl_Position = aVertexPosition;
                 handleImageLoad(image);
             };
             image.src = imageSource;
+            let el = document.body.appendChild(image);
         }
         /*
         function loadImageAsTexture(url){
@@ -1163,6 +1228,7 @@ gl_Position = aVertexPosition;
         */
 
         function handleImageLoad(image) {
+            console.warn('handleImageLoad',{image})
             gl.bindTexture(gl.TEXTURE_2D, imageTex);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
 
@@ -1172,6 +1238,19 @@ gl_Position = aVertexPosition;
         }
 
         function handleImageLoadForBaseTex(image) {
+            console.warn('handleImageLoadForBaseTex',{image})
+            // ARE WE SURE the image loaded?
+            if(image.width === 0 || image.height === 0){
+                throw new Error("Image did not load");
+            }
+            console.warn('imgdata at this time:',{
+                w:image.width,
+                h:image.height,
+                imgW:image.width,
+                imgH:image.height,
+                blobURL: image.src,
+            })
+
             baseTexWidth = fixedPixelsX;
             baseTexHeight = fixedPixelsY;
             // Calculate scale and translation
@@ -1185,33 +1264,43 @@ gl_Position = aVertexPosition;
             let offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = image.width;
             offscreenCanvas.height = image.height;
+
+            window.debug_offscreenCanvas = offscreenCanvas;
+
+            console.warn('offscreenCanvas',{
+                w:offscreenCanvas.width,
+                h:offscreenCanvas.height,
+                imgW:image.width,
+                imgH:image.height,
+            });
+
             let ctx = offscreenCanvas.getContext('2d');
             ctx.drawImage(image, 0, 0);
             let imageData = ctx.getImageData(0, 0, image.width, image.height);
 
-            // // check if image data is all 0s...
-            // let allZero = true;
-            // for(let i = 0; i < imageData.data.length; i++){
-            //     if(imageData.data[i] !== 0){
-            //         allZero = false;
-            //         console.warn('non-zero pixel data',i,imageData.data[i]);
-            //         break;
-            //     }
-            // }
-            // if(allZero){
-            //     throw new Error("Image data is all 0s");
-            // }
-            // let countNonzero = 0;
-            // // jump in steps of four, ignore rgb if alpha is lower than 1
-            // for(let i = 0; i < imageData.data.length; i+=4){
-            //     if(imageData.data[i+3] > 0){
-            //         // only count if at least 1 component is non-zero
-            //         if(imageData.data[i] > 0 || imageData.data[i+1] > 0 || imageData.data[i+2] > 0){
-            //             countNonzero++;
-            //         }
-            //     }
-            // }
-            // console.warn('countNonzero',countNonzero/(imageData.data.length/4));
+            // check if image data is all 0s...
+            let allZero = true;
+            for(let i = 0; i < imageData.data.length; i++){
+                if(imageData.data[i] !== 0){
+                    allZero = false;
+                    console.warn('non-zero pixel data @ i:v',i,imageData.data[i]);
+                    break;
+                }
+            }
+            if(allZero){
+                throw new Error("Image data is all 0s");
+            }
+            let countNonzero = 0;
+            // jump in steps of four, ignore rgb if alpha is lower than 1
+            for(let i = 0; i < imageData.data.length; i+=4){
+                if(imageData.data[i+3] > 0){
+                    // only count if at least 1 component is non-zero
+                    if(imageData.data[i] > 0 || imageData.data[i+1] > 0 || imageData.data[i+2] > 0){
+                        countNonzero++;
+                    }
+                }
+            }
+            console.warn('% nonzero',countNonzero/(imageData.data.length/4));
 
             // Create a new pixel array for baseTex
             let baseTexPixels = new Uint8Array(baseTexWidth * baseTexHeight * 4); // Assuming RGBA
@@ -1242,6 +1331,8 @@ gl_Position = aVertexPosition;
                 }
             }
 
+            //console.warn(baseTexPixels.length,baseTexPixels)
+
             // overwrite pixelData array with baseTexPixels
             pixelData = baseTexPixels;
             // clone
@@ -1250,6 +1341,9 @@ gl_Position = aVertexPosition;
             // Bind to baseTex and update its texture
             gl.bindTexture(gl.TEXTURE_2D, baseTexture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, baseTexWidth, baseTexHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, baseTexPixels);
+
+            gl.bindTexture(gl.TEXTURE_2D, originalPixelDataTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, baseTexWidth, baseTexHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, originalPixelData);
 
             //console.warn('loaded number of pixels',baseTexPixels.length/4, baseTexPixels);
             
@@ -1276,9 +1370,9 @@ gl_Position = aVertexPosition;
         }
         function onReady(){
 
-            if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
-                return;
-            }
+            // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
+            //     return;
+            // }
 
             // if we're on a mobile device, change .drop-here-text > span to say "tap here to select an image <span class="hint">(local only, doesnt get uploaded anywhere)</span>"
             //if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)){
