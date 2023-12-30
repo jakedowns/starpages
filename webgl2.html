@@ -37,6 +37,10 @@
             left: 50%;
             transform: translate(-50%, -50%);
             z-index: 1000;
+            display: block;
+        }
+        p {
+            color: white;
         }
         .video-underlay {
             background-color: rgba(.1,0,.1,.8);
@@ -52,6 +56,7 @@
         .hide-video-button {
             text-align: center;
             width: auto;
+            margin: 0 auto;
             position: relative;
             display: block;
             border-radius: 100px;
@@ -59,12 +64,18 @@
             padding: 10px;
             font-size: 20px;
             color: white;
-            background-color: linear-gradient(90deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.5) 100%);
             cursor: pointer;
-            transition: background-color 0.5s ease-in-out;
+            transition: all 0.5s ease-in-out;
+            background-color: #663dff;
+            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
+            
         }
         .hide-video-button:hover {
-            background-color: linear-gradient(90deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.8) 50%, rgba(0,0,0,0.8) 100%);
+            background-color: #663dff;
+            /* shifted version of:
+            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
+            */
+            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 15%, #cc4499 100%);
         }
     </style>
 </head>
@@ -77,14 +88,12 @@
 
     <div class="intro-video">
         <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <p>NOTE: this only works on Windows + Chrome. I have not tested Android, and it is broken on MacOS/iOS (i dont know why, if you think you do, please reach out)</p>
         <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
         <span class="hide-video-button" onclick="window.hideVideo()">Click to Continue... &gt;</span>
     </div>
 
-    <div class="video-underlay" onclick="window.hideVideo()">
-        
-
-    </div>
+    <div class="video-underlay" onclick="window.hideVideo()"></div>
 
     <div class="drop-here-text">webgl pixel sorter<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
@@ -1033,57 +1042,57 @@ gl_Position = aVertexPosition;
             });
         }
 
-        async function loadImageBlobAsTexture(imageBlob){
-            imageTex = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, imageTex);
+        // async function loadImageBlobAsTexture(imageBlob){
+        //     imageTex = gl.createTexture();
+        //     gl.bindTexture(gl.TEXTURE_2D, imageTex);
             
-            // Set the parameters so we can render any size image.
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        //     // Set the parameters so we can render any size image.
+        //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-            // when texture area is small, bilinear filter the closest mipmap
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        //     // when texture area is small, bilinear filter the closest mipmap
+        //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 
-            // when texture area is large, bilinear filter the first mipmap
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        //     // when texture area is large, bilinear filter the first mipmap
+        //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-            // preload the texture will all green pixels
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,new Uint8Array([0, 255, 0, 255]));
+        //     // preload the texture will all green pixels
+        //     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,new Uint8Array([0, 255, 0, 255]));
 
-            // Upload the image into the texture.
-            const level = 0;
-            const internalFormat = gl.RGBA;
-            const srcFormat = gl.RGBA;
-            const srcType = gl.UNSIGNED_BYTE;
+        //     // Upload the image into the texture.
+        //     const level = 0;
+        //     const internalFormat = gl.RGBA;
+        //     const srcFormat = gl.RGBA;
+        //     const srcType = gl.UNSIGNED_BYTE;
 
-            const image = new Image();
-            image.onerror = function(e) {
-                console.error("Error loading image",e);
-            };
-            image.onabort = function(e) {
-                console.error("Error loading image",e);
-            };
-            image.onload = function(e) {
-                gl.bindTexture(gl.TEXTURE_2D, imageTex);
-                gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, image);
+        //     const image = new Image();
+        //     image.onerror = function(e) {
+        //         console.error("Error loading image",e);
+        //     };
+        //     image.onabort = function(e) {
+        //         console.error("Error loading image",e);
+        //     };
+        //     image.onload = function(e) {
+        //         gl.bindTexture(gl.TEXTURE_2D, imageTex);
+        //         gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, image);
 
-                // load into baseTexture
-                gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-                // base texture might have different dimensions, so we need to scale to FILL
-                let croppedToFillPixels = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
-                let croppedToFillPixelsIndex = 0;
-                // Calculate offsets
-                let offsetX = Math.max(0, (image.width - fixedPixelsX) / 2);
-                let offsetY = Math.max(0, (image.height - fixedPixelsY) / 2);
-            };
-            console.warn('imageBlob',{
-                imageBlob,
-                blobObjUrl: URL.createObjectURL(imageBlob),
-                blobAsImageBase64: await imageBlobToBase64(imageBlob),
-            })
-            image.src = URL.createObjectURL(imageBlob);
-            let el = document.body.appendChild(image);
-        }
+        //         // load into baseTexture
+        //         gl.bindTexture(gl.TEXTURE_2D, baseTexture);
+        //         // base texture might have different dimensions, so we need to scale to FILL
+        //         let croppedToFillPixels = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
+        //         let croppedToFillPixelsIndex = 0;
+        //         // Calculate offsets
+        //         let offsetX = Math.max(0, (image.width - fixedPixelsX) / 2);
+        //         let offsetY = Math.max(0, (image.height - fixedPixelsY) / 2);
+        //     };
+        //     console.warn('imageBlob',{
+        //         imageBlob,
+        //         blobObjUrl: URL.createObjectURL(imageBlob),
+        //         blobAsImageBase64: await imageBlobToBase64(imageBlob),
+        //     })
+        //     image.src = URL.createObjectURL(imageBlob);
+        //     let el = document.body.appendChild(image);
+        // }
 
         let pastedTexture;
         function loadBase64AsTexture(b64){
