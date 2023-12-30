@@ -7,8 +7,8 @@
     <title>WebGL Pixel Sorter</title>
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
-        canvas { width: 100%; height: 100%; filter: blur(100px); transition: filter 0.5s ease-in-out; will-change: filter; }
-        canvas.unblur { filter: blur(0px); }
+        canvas { width: 100%; height: 100%; opacity: 0.1; filter: blur(100px); transition: filter 0.5s ease-in-out, opacity 0.5 ease-in-out; will-change: filter; }
+        canvas.unblur { filter: blur(0px); opacity: 1; }
         .drop-here-text {
             pointer-events: none;
             position: absolute;
@@ -19,7 +19,7 @@
             text-align: center;
             color: white;
             font-family: sans-serif;
-            text-shadow: 4px 4px 5px white, 5px 5px 5px blue;
+            text-shadow: 4px 4px 5px black, 5px 5px 5px blue;
         }
         .drop-here-text span {
             display: block;
@@ -678,6 +678,187 @@ gl_Position = aVertexPosition;
 
             requestAnimationFrame(render);
         }
+        document.addEventListener('DOMContentLoaded', async () => {
+            let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
+            // create if not exist
+            if(!imageElement){
+                imageElement = document.createElement('img');
+                imageElement.id = 'image';
+                imageElement.style.display = 'none';
+                document.body.appendChild(imageElement);
+            }
+
+            
+        });
+        function createImageBitmap(imageBlob){
+            return new Promise((resolve,reject)=>{
+                let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
+                // create if not exist
+                if(!imageElement){
+                    imageElement = document.createElement('img');
+                    imageElement.id = 'image';
+                    imageElement.style.display = 'none';
+                    document.body.appendChild(imageElement);
+                }
+                imageElement.onload = function(e){
+                    // once we can read the image, we can forward it to our shader...
+                    resolve(imageElement);
+                }
+                imageElement.src = URL.createObjectURL(imageBlob);
+            });
+        }
+        async function onPasteAttempt(){
+            try {
+                    // Check if the Clipboard API is available
+                    if (!navigator.clipboard) {
+                        console.warn('Clipboard API not available.');
+                        throw new Error('Clipboard API not available');
+                    }
+
+                    // Attempt to read from the clipboard
+                    const clipboardItems = await navigator.clipboard.read();
+                    console.log('Clipboard items retrieved:', clipboardItems);
+
+                    let clipboardBag = {};
+
+                    // Find text content in clipboard items
+                    const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
+                    if (textItem) {
+                        const textBlob = await textItem.getType('text/plain');
+                        const text = await textBlob.text();
+                        console.log('Pasted text content: ', text);
+                        clipboardBag.text = text;
+                    }
+
+                    // Find HTML content in clipboard items
+                    const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
+                    if (htmlItem) {
+                        const htmlBlob = await htmlItem.getType('text/html');
+                        const html = await htmlBlob.text();
+                        console.log('Pasted HTML content: ', html);
+                        clipboardBag.html = html;
+                    }
+
+                    // Find any "image" items:
+                    const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
+                    // Alert if there's multiple, we only support one for now
+                    if (imageItems.length > 1) {
+                        alert('Multiple images found. Using the last image.');
+                    }
+                    for (const imageItem of imageItems) {
+                        const imageBlob = await imageItem.getType('image/png');
+                        //const image = await createImageBitmap(imageBlob);
+                        //console.log('Pasted image: ', image);
+                        clipboardBag.imageBlob = imageBlob;
+
+                        //loadImageBlobAsTexture(imageBlob);
+                        
+                        let b64 = await imageBlobToBase64(imageBlob);
+                        //console.log('Pasted image: ', b64);
+
+                        loadBase64AsTexture(b64);
+                    }
+
+                    // Process clipboardBag as needed
+                    console.warn({clipboardBag});
+
+                    // "<p><img src="file:///C:/Users/mail/AppData/Local/Packages/Microsoft.Windows.Photos_8wekyb3d8bbwe/TempState/ShareServiceTempFolder/icon_NEW_COMMAND.jpeg"></p>"
+                    // 1. detect html entries containing img tags, inject, then read pixel data to texture for later forwarding to shader
+                    if(clipboardBag.html?.includes("file:///")){
+
+                        // note: in 2023 in chrome on windows, when pasting an image,
+                        // it drops an img tag with an unreadable file:// url
+                        // the workaround to get the attempted pixel data is as such:
+                        // have a hidden form element on the page, when they drop the image, it'll populate the form element with the file:// url
+                        // then we can read the file:// url from the form element, and use it to load the image as a texture
+                        // then we can forward the image as a texture to our shader
+                        // NOTE: this method requires a remote server to host the page, as file:// urls are not allowed in chrome
+                        // we essentially upload, then immediately mirror back the base64 encoded image data to the shader
+                        // so our server never _holds_ the uploaded image, but it does "reflect" it due to browser file upload security restrictions and how pasting api is poorly implemented
+
+                        // if our hidden form and file input don't exist yet, create them,
+                        if(!document.getElementById('paste_reflect_upload_form')){
+                            // let form = document.createElement('form');
+                            // form.id = 'paste_reflect_upload_form';
+                            // form.style.display = 'none';
+                            // form.method = 'POST';
+                            // form.enctype = 'multipart/form-data';
+                            // form.action = 'https://www.google.com';
+                            // let input = document.createElement('input');
+                            // input.id = 'paste_reflect_upload_input';
+                            // input.type = 'file';
+                            // input.name = 'file';
+                            // input.accept = 'image/*';
+                            // form.appendChild(input);
+                            // document.body.appendChild(form);
+
+                            // is there a hack or a workaround where a worker or WASM has some kind of 
+                            // filesystem helper abstraction we could reflect this url to for secure resolution?
+                            // or some JS api for filesystem references i don't know about?
+
+                            // NOPE! "which may only be programmatically set to the empty string"
+
+
+                            // function onFormSubmit(e){
+                            //     e.preventDefault();
+                            //     console.warn('onFormSubmit',e);
+                            //     // read the file data from the form response
+                            //     let reader = new FileReader();
+                            //     reader.onload = function(e){
+                            //         // once we can read the image, we can forward it to our shader...
+                            //         loadImageAsTexture(e.target.result);
+                            //     }
+                            //     reader.readAsDataURL(e.target.response);
+                            // }
+                            // // bind
+                            // form.addEventListener('submit',onFormSubmit,false);
+                        }
+                        
+                        // put our file url into the form input
+                        // document.getElementById('paste_reflect_upload_input').value = clipboardBag.html.split('src="')[1].split('"')[0];
+                        // submit the form
+                        // document.getElementById('paste_reflect_upload_form').submit();
+                        // once the form is submitted, we can read the base64 encoded image data from the form response
+                        // and forward it to our shader...
+
+
+                        // extract src=" url using regex
+                        let parts = clipboardBag.html.split('src="');
+                        let src = parts[1].split('"')[0];
+                        console.warn({src});
+                        // inject an img element into the dom
+                        let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
+                        // create if not exist
+                        if(!imageElement){
+                            imageElement = document.createElement('img');
+                            imageElement.id = 'image';
+                            imageElement.style.display = 'none';
+                            document.body.appendChild(imageElement);
+                        }
+                        imageElement.onload = function(e){
+                            // once we can read the image, we can forward it to our shader...
+                            loadImageAsTexture(src);
+                        }
+                        imageElement.src = src;
+
+                    }
+
+                } catch (error) {
+                    console.error('Error accessing clipboard:', error);
+                    // Handle error appropriately
+                }
+        }
+        document.addEventListener('keydown',async(e)=>{
+            // if command v on mac,
+            // or control v on other,
+            // paste image from clipboard
+            if ( 
+                (e.keyCode === 22 || e.keyCode === 86)
+                && (e.metaKey || e.ctrlKey)
+            ){
+                await onPasteAttempt();
+            }
+        },false)
         document.addEventListener('click', (e)=>{
             MODE = (MODE + 1) % 3;
             console.log("MODE",MODE);
@@ -744,6 +925,88 @@ gl_Position = aVertexPosition;
                 const vertexCount = 6;
                 gl.drawArrays(gl.TRIANGLES, offset, vertexCount);
             }
+        }
+
+        function imageBlobToBase64(imageBlob){
+            return new Promise((resolve,reject)=>{
+                let reader = new FileReader();
+                reader.onload = function(e){
+                    resolve(e.target.result);
+                }
+                reader.readAsDataURL(imageBlob);
+            });
+        }
+
+        function loadImageBlobAsTexture(imageBlob){
+            imageTex = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, imageTex);
+            
+            // Set the parameters so we can render any size image.
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            // when texture area is small, bilinear filter the closest mipmap
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
+            // when texture area is large, bilinear filter the first mipmap
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+            // preload the texture will all green pixels
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,new Uint8Array([0, 255, 0, 255]));
+
+            // Upload the image into the texture.
+            const level = 0;
+            const internalFormat = gl.RGBA;
+            const srcFormat = gl.RGBA;
+            const srcType = gl.UNSIGNED_BYTE;
+
+            const image = new Image();
+            image.onerror = function(e) {
+                console.error("Error loading image",e);
+            };
+            image.onabort = function(e) {
+                console.error("Error loading image",e);
+            };
+            image.onload = function(e) {
+                gl.bindTexture(gl.TEXTURE_2D, imageTex);
+                gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, image);
+
+                // load into baseTexture
+                gl.bindTexture(gl.TEXTURE_2D, baseTexture);
+                // base texture might have different dimensions, so we need to scale to FILL
+                let croppedToFillPixels = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
+                let croppedToFillPixelsIndex = 0;
+                // Calculate offsets
+                let offsetX = Math.max(0, (image.width - fixedPixelsX) / 2);
+                let offsetY = Math.max(0, (image.height - fixedPixelsY) / 2);
+            };
+            console.warn('imageBlob',{
+                imageBlob,
+                blobObjUrl: URL.createObjectURL(imageBlob),
+                blobAsImageBase64: imageBlobToBase64(imageBlob),
+            })
+            image.src = URL.createObjectURL(imageBlob);
+        }
+
+        let pastedTexture;
+        function loadBase64AsTexture(b64){
+            // assume string input
+
+            // create a new image element
+            let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
+            // create if not exist
+            if(!imageElement){
+                imageElement = document.createElement('img');
+                imageElement.id = 'image';
+                imageElement.style.display = 'none';
+                document.body.appendChild(imageElement);
+            }
+            imageElement.onload = function(e){
+                // once we can read the image, we can forward it to our shader...
+                handleImageLoad(imageElement);
+            }
+            imageElement.src = b64;
+            
         }
 
         let imageTex;
@@ -981,7 +1244,7 @@ gl_Position = aVertexPosition;
         }
         function onReady(){
 
-            if(!confirm('this demo may show flashing lights, are you sure you want to continue?')){
+            if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
                 return;
             }
             
