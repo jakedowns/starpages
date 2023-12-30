@@ -329,9 +329,9 @@ void main() {
 
             if(rankA > rankB){
                 // Swap colors in pixel data
-                // [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
-                // [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
-                // [pixelData[inner_i * bytesPerPixel + 2], pixelData[(inner_i + 1) * bytesPerPixel + 2]] = [pixelData[(inner_i + 1) * bytesPerPixel + 2], pixelData[inner_i * bytesPerPixel + 2]];
+                [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
+                [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
+                [pixelData[inner_i * bytesPerPixel + 2], pixelData[(inner_i + 1) * bytesPerPixel + 2]] = [pixelData[(inner_i + 1) * bytesPerPixel + 2], pixelData[inner_i * bytesPerPixel + 2]];
 
                 // NOTE: we don't swap, we're going to just update our pixelData using r to represent x offset, and g to represent y offset
                 // we'll use the fragment shader to do the actual swapping
@@ -436,9 +436,16 @@ void main() {
                 const currentColor = pixelData.subarray(inner_i * bytesPerPixel, (inner_i + 1) * bytesPerPixel);
                 const nextColor = pixelData.subarray((inner_i + 1) * bytesPerPixel, (inner_i + 2) * bytesPerPixel);
 
-
                 // Compare colors based on the sum of RGB values
-                if (currentColor[0] + currentColor[1] + currentColor[2] > nextColor[0] + nextColor[1] + nextColor[2]) {
+                if (
+                    currentColor[0] 
+                    + currentColor[1] 
+                    + currentColor[2] 
+                    > 
+                    nextColor[0] 
+                    + nextColor[1] 
+                    + nextColor[2]
+                ) {
                     // Swap colors in pixel data
                     [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
                     [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
