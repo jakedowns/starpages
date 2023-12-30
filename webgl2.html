@@ -20,6 +20,9 @@
             color: white;
             font-family: sans-serif;
             text-shadow: 4px 4px 5px black, 5px 5px 5px blue;
+            -webkit-text-strokes: 1px black;
+            top: 50%;
+            transform: translateY(-50%);
         }
         .drop-here-text span {
             display: block;
@@ -31,7 +34,13 @@
     </style>
 </head>
 <body>
-    <div class="drop-here-text">webgl pixel sorter*<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
+    <!-- fork me on github -->
+    <a href="https://github.com/jakedowns/starpages/blob/main/webgl2.html" target="_blank" style="position: absolute; top: 0; right: 0; z-index: 1000; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">Fork me on GitHub</a>
+
+    <!-- buy me a coffee; ko-fi link -->
+    <a href="https://ko-fi.com/jakedowns" target="_blank" style="position: absolute; top: 0; left: 0; z-index: 1000; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰 Buy me a coffee</a>
+
+    <div class="drop-here-text">webgl pixel sorter<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
     <script>
         // fsshader fragment shader source frag shader here fshader
@@ -86,7 +95,8 @@ void main() {
         gl_FragColor = texture2D(uOffsetTexture, corrected);
 
         // set the green channel to an average of the two
-        gl_FragColor.g = 0.0; //(gl_FragColor.r + gl_FragColor.b) / 2.0;
+        gl_FragColor.g = (gl_FragColor.r + gl_FragColor.b) / 2.0;
+        //gl_FragColor.g = 0.0; 
         gl_FragColor.a = 1.0;
 
         // // 3. lerp from base texture towards "target" offset texture
@@ -381,7 +391,11 @@ void main() {
 
             //console.warn({rankA,rankB})
 
-            if(rankA > rankB){
+            // old:
+            //if(rankA > rankB){
+
+            // new: epsilon-based approach
+            if(rankA > rankB + 0.0001){
                 // Swap colors in pixel data
                 [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
                 [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
@@ -1232,14 +1246,7 @@ gl_Position = aVertexPosition;
             // Handle image drop, load the image into baseTexture
             event.preventDefault();
 
-            canvas.classList.add('unblur');
-            let match = document.getElementsByClassName('drop-here-text');
-            if (match.length > 0) {
-                Array.from(match).forEach((el) => {
-                    el.parentElement.style.display = 'none';
-                });
-            }
-
+            hideIntroText();
             try {
                 const file = event.dataTransfer.files[0];
                 const reader = new FileReader();
@@ -1288,11 +1295,11 @@ gl_Position = aVertexPosition;
                             console.warn({blob_as_b64:b64})
                             await loadImageAsTexture(b64);
 
-                            canvas.classList.add('unblur');
-                            match[0].style.display = 'none';
+                            hideIntroText();
                         }
                         input.click();
                     });
+
                     match[0].addEventListener("drop", onImageDrop);
                     match[0].addEventListener("dragover", function(event) { event.preventDefault(); });
                 }
