@@ -28,7 +28,7 @@
     </style>
 </head>
 <body>
-    <div class="drop-here-text">pixel sorter <span>(drop an image here)</span></div>
+    <div class="drop-here-text">pixel sorter*<span>drop an image here</span><br/>or<br/><span>tap here to select an image <span class="hint">(local only, doesn\'t get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
     <script>
         // fsshader fragment shader source frag shader here fshader
@@ -1215,12 +1215,50 @@ gl_Position = aVertexPosition;
             if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
                 return;
             }
+
+            // if we're on a mobile device, change .drop-here-text > span to say "tap here to select an image <span class="hint">(local only, doesnt get uploaded anywhere)</span>"
+            //if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)){
+                let match = document.getElementsByClassName('drop-here-text');
+                if(!match.length){
+                    throw new Error("no .drop-here-text element found");
+                }
+                if (match.length > 0) {
+                    console.warn('match',match)
+                    // Array.from(match).forEach((el) => {
+                    //     el.innerHTML = '';
+                    // });
+                    match[0].style.pointerEvents = 'auto';
+                    match[0].addEventListener('click',async(e)=>{
+                        let input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = async(e)=>{
+                            let file = e.target.files[0];
+                            console.warn(file);
+
+                            // get a blob for the file
+                            let blob = await file.arrayBuffer();
+                            blob = new Blob([blob], {type: file.type});
+                            console.warn(blob);
+
+                            let b64 = await imageBlobToBase64(blob);
+                            console.warn({blob_as_b64:b64})
+                            await loadImageAsTexture(b64);
+
+                            canvas.classList.add('unblur');
+                            match[0].parentElement.removeChild(match[0]);
+                        }
+                        input.click();
+                    });
+                    match[0].addEventListener("drop", onImageDrop);
+                    match[0].addEventListener("dragover", function(event) { event.preventDefault(); });
+                }
+            //}
             
             
             // WebGL context setup
             canvas = document.getElementById('glCanvas');
-            canvas.addEventListener("drop", onImageDrop);
-            canvas.addEventListener("dragover", function(event) { event.preventDefault(); });
+            
             gl = canvas.getContext('webgl');
 
             if (!gl) {
