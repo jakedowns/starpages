@@ -136,7 +136,7 @@ void main() {
             // onResize
             resizeCanvas();
             // todo: they sould grow and shrink dynamically...
-            initializePositionsAndOffsetData();
+            initializePositionsAndOffsetData(keepPixelData = true);
         });
 
         function resizeCanvas() {
@@ -177,7 +177,7 @@ void main() {
         // we then show how parallelism can be used to speed up the sorting process (bitonic sort) + realtime "accumulation" of the sorted values (similar to Raytracing stochastic accumulation)
         let numPixels = 0;
         let fixedPixelsX,fixedPixelsY;
-        function initializePositionsAndOffsetData() {
+        function initializePositionsAndOffsetData(keepPixelData = true) {
             // if(typeof outputSurfacePositionBuffer == "undefined"){
             //     //throw new Error("outputSurfacePositionBuffer is undefined");
             //     console.error("outputSurfacePositionBuffer is undefined");
@@ -206,8 +206,27 @@ void main() {
             //     return;
             // }
 
-            pixel_positions = new Float32Array(numPixels * 2); // x, y for each pixel
-            if(typeof pixelData === "undefined" || pixelData.length !== numPixels * bytesPerPixel){
+            // if `pixel_positions` is empty or undefined, we need to initialize it
+            // otherwise, we need to determine to grow or shrink it
+            if(typeof pixel_positions === "undefined" || !pixel_positions.length){
+                pixel_positions = new Float32Array(numPixels * 2); // x, y for each pixel
+            }else{
+                // shrink || grow
+                // if we're shrinking, we need to truncate the array
+                // if we're growing, we need to pad the array
+                if(pixel_positions.length > numPixels * 2){
+                    // truncate
+                    pixel_positions = pixel_positions.slice(0,numPixels * 2);
+                }else if(pixel_positions.length < numPixels * 2){
+                    // pad
+                    let new_pixel_positions = new Float32Array(numPixels * 2);
+                    new_pixel_positions.set(pixel_positions);
+                    pixel_positions = new_pixel_positions;
+                }
+            }
+
+            
+            if(typeof pixelData === "undefined" || !pixelData.length){
                 pixelData = new Uint8Array(numPixels * bytesPerPixel); // RGBA for each pixel
 
                 // Initialize position and pixel data
@@ -236,6 +255,17 @@ void main() {
                 gl.bindTexture(gl.TEXTURE_2D, baseTexture);
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
 
+            }else{
+                // grow or shrink pixelData
+                if(pixelData.length > numPixels * bytesPerPixel){
+                    // truncate
+                    pixelData = pixelData.slice(0,numPixels * bytesPerPixel);
+                }else if(pixelData.length < numPixels * bytesPerPixel){
+                    // pad
+                    let new_pixelData = new Uint8Array(numPixels * bytesPerPixel);
+                    new_pixelData.set(pixelData);
+                    pixelData = new_pixelData;
+                }
             }
             resetOffsetTexture();
 
@@ -1006,7 +1036,7 @@ gl_Position = aVertexPosition;
                 handleImageLoad(imageElement);
             }
             imageElement.src = b64;
-            
+
         }
 
         let imageTex;
