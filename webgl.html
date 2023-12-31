@@ -47,7 +47,8 @@
             const planeGeometry = new THREE.PlaneGeometry(2 * aspect, 2);
 
             const textureLoader = new THREE.TextureLoader();
-            const texture = textureLoader.load('./res/alien.png');
+            let rand_int_1_thru_17 = Math.floor(Math.random() * 17) + 1;
+            const texture = textureLoader.load(`./res/bg_${rand_int_1_thru_17}.png`);
 
             // Custom Shader
             const shaderMaterial = new THREE.ShaderMaterial({
@@ -70,8 +71,11 @@
                         // Use the uniforms in your shader logic
                         vec2 uv = gl_FragCoord.xy / u_resolution;
 
+                        float force = sin(uv.y * 20.0 + u_time) * 0.1;
                         
-                        uv.y += sin(uv.x * 10.0 + u_time) * 0.1;
+                        uv.y += sin(uv.x * 10.0 + u_time) * force;
+                        uv.y += u_time * 0.1;
+                        uv.y = mod(uv.y, 1.0);
 
 
                         //vec3 color = vec3(0.25 + 0.25 * sin(u_time),0.35 + 0.35 * cos(u_time), 0.5 + 0.5 * sin(u_time));
