@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>WebGL Rainbow Shader</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #000; }
+        canvas { width: 100%; height: 100% }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <input type="file" accept="image/*" id="fileupload" />
+    <script>
+        document.addEventListener("DOMContentLoaded",()=>{
+            document.getElementById("fileupload").addEventListener("change", (e) => {
+                const file = e.target.files[0];
+                if (file.type.indexOf('image') === 0) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        texture.image.src = e.target.result;
+                        texture.needsUpdate = true;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            const canvas = document.getElementById("canvas");
+            const renderer = new THREE.WebGLRenderer({canvas});
+
+            // Orthographic camera setup
+            const frustumSize = 1;
+            const aspect = canvas.clientWidth / canvas.clientHeight;
+            const camera = new THREE.OrthographicCamera(
+                frustumSize * aspect / -2, 
+                frustumSize * aspect / 2, 
+                frustumSize / 2, 
+                frustumSize / -2, 
+                1, 
+                1000
+            );
+            camera.position.z = 2;
+
+            const scene = new THREE.Scene();
+
+            // Full-screen plane geometry
+            const planeGeometry = new THREE.PlaneGeometry(2 * aspect, 2);
+
+            const textureLoader = new THREE.TextureLoader();
+            const texture = textureLoader.load('./res/alien.png');
+
+            // Custom Shader
+            const shaderMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    u_texture: { value: texture },
+                    u_time: { value: 1.0 },
+                    u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    // Add other uniforms here
+                },
+                vertexShader: `
+                    void main() {
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform float u_time;
+                    uniform vec2 u_resolution;
+                    uniform sampler2D u_texture;
+                    void main() {
+                        // Use the uniforms in your shader logic
+                        vec2 uv = gl_FragCoord.xy / u_resolution;
+
+                        
+                        uv.y += sin(uv.x * 10.0 + u_time) * 0.1;
+
+
+                        //vec3 color = vec3(0.25 + 0.25 * sin(u_time),0.35 + 0.35 * cos(u_time), 0.5 + 0.5 * sin(u_time));
+                        vec3 color = texture2D(u_texture, uv).rgb;
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                `
+            });
+
+            // Creating and adding the plane to the scene
+            const plane = new THREE.Mesh(planeGeometry, shaderMaterial);
+            scene.add(plane);
+
+            function resizeRendererToDisplaySize(renderer) {
+                const canvas = renderer.domElement;
+                const width = canvas.clientWidth;
+                const height = canvas.clientHeight;
+                const needResize = canvas.width !== width || canvas.height !== height;
+                if (needResize) {
+                    renderer.setSize(width, height, false);
+                }
+                return needResize;
+            }
+
+            function animate(time) {
+                if (resizeRendererToDisplaySize(renderer)) {
+                    const canvas = renderer.domElement;
+                    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+                    camera.updateProjectionMatrix();
+                }
+                
+                shaderMaterial.uniforms.u_time.value = time * 0.001; // Convert time to seconds
+                shaderMaterial.uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+
+
+                renderer.render(scene, camera);
+
+                requestAnimationFrame(animate);
+            }
+
+            requestAnimationFrame(animate);
+
+            // when a user drops an image on the canvas, load it to our texture
+            canvas.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    const file = e.dataTransfer.files[0];
+                    if (file.type.indexOf('image') === 0) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            texture.image.src = e.target.result;
+                            texture.needsUpdate = true;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                }
+            });
+            canvas.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            
+            document.addEventListener("resize",()=>{
+                const canvas = document.getElementById("canvas");
+                const renderer = new THREE.WebGLRenderer({canvas});
+                const width = canvas.clientWidth;
+                const height = canvas.clientHeight;
+                renderer.setSize(width, height, false);
+            })
+        });
+
+    </script>
+</body>
+</html>

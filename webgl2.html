@@ -103,6 +103,13 @@
             animation: gradient-animation 3s ease infinite; /* Apply the animation */
         }
 
+        #imageLoader {
+            position: absolute;
+            right: 0; bottom: 10px;
+            z-index: 1001;
+            cursor: pointer;
+        }
+
     </style>
 </head>
 <body>
@@ -111,6 +118,8 @@
 
     <!-- buy me a coffee; ko-fi link -->
     <a href="https://ko-fi.com/jakedowns" target="_blank" style="position: absolute; top: 0; left: 0; z-index: 1000; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰 Buy me a coffee</a>
+
+    <input type="file" id="imageLoader" name="imageLoader" style="position: absolute;"/>
 
     <div class="intro-video">
         <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
@@ -128,7 +137,10 @@
         window.reverseSort = true;
         window.capturer = null;
         window.capturing = false;
-        window.capturedFrames = 0;        
+        window.capturedFrames = 0;    
+        
+        window.selectedImageTexture;
+        
         window.hideVideo = function(){
             document.querySelector(".intro-video").style.display = "none";
             document.querySelector(".video-underlay").style.display = "none";
@@ -153,13 +165,15 @@
             window.capturer.save();
         }
         // fsshader fragment shader source frag shader here fshader
-        const fsSource = `
+
+        let fsSource = `
 precision mediump float;
 uniform vec2 uResolution;
 uniform float uTime;
-uniform sampler2D uOffsetTexture;
 uniform sampler2D uBaseTexture;
 uniform sampler2D uOriginalPixelDataTexture;
+uniform sampler2D uOffsetTexture;
+uniform sampler2D uSelectedImageTexture;
 uniform float uSwirlTurns;
 uniform float uSwirlAmp;
 vec2 center = vec2(0.5, 0.5); // Center of the swirl, usually the middle of the texture
@@ -296,9 +310,10 @@ void main() {
         // 4. set the fragment color
         gl_FragColor = gradientSample;
     }else if(uMode == 3){
-        // Apply the swirl
-        // corrected = applySwirl(corrected, uSwirlTurns, uSwirlAmp, center);
         gl_FragColor = texture2D(uBaseTexture, corrected);    
+    }else if(uMode == 4){
+        // debug sample uSelectedImageTexture
+        gl_FragColor = texture2D(uSelectedImageTexture, corrected);
     }else{
         // fallback mode
         // debug sample unmodified base texture
@@ -308,6 +323,16 @@ void main() {
     gl_FragColor.a = 1.0; //clamp(gl_FragColor.a, 0.1, 1.0);
 }
         `;
+
+    // bare bones debug
+    // make sure we set, otherwise safari won't work
+//     fsSource = `
+// precision mediump float;
+// void main() {
+//     gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+// }
+// `
+
         
         // note: we've bound the outputSurfacePositionBuffer to the vertex shader's "aVertexPosition" attribute
         // we've bound the offset texture to the fragment shader's "uOffsetTexture" uniform
@@ -897,6 +922,8 @@ gl_Position = aVertexPosition;
                 return null;
             }
 
+            console.warn("LINK STATUS:",gl.getProgramParameter(shaderProgram, gl.LINK_STATUS));
+
             // if there are ANY gl errors, re-throw the error
             const error = gl.getError();
             if (error !== gl.NO_ERROR) {
@@ -971,7 +998,7 @@ gl_Position = aVertexPosition;
 
             // go ahead and pop our initial data into the position buffer
             // we'll update it later
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(output_surface_positions), gl.DYNAMIC_DRAW);
+            //gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(output_surface_positions), gl.DYNAMIC_DRAW);
         }
 
         function setupTextures(){
@@ -1304,8 +1331,9 @@ gl_Position = aVertexPosition;
         document.addEventListener('touchend', (e) => {
             checkDoubleTapDetected();
         }, false);
+        var num_modes = 5;
         document.addEventListener('click', (e)=>{
-            MODE = (MODE + 1) % 4;
+            MODE = (MODE + 1) % num_modes;
             console.log("MODE",MODE);
 
             checkDoubleTapDetected();
@@ -1339,9 +1367,15 @@ gl_Position = aVertexPosition;
                 { t: "uniform1f", k: "uTime", getter: _=>performance.now() / 1000},
                 { t: "uniform1i", k: "uPxDensity", getter: _=>pixel_density},
                 { t: "uniform1i", k: "uMode", getter: _=>MODE},
+                
+                // 
                 { t: "uniform1i", k: "uOffsetTexture", getter: _=>0},
                 { t: "uniform1i", k: "uBaseTexture", getter: _=>1},
+                { t: "uniform1i", k: "uSelectedImageTexture", getter: _=>2},
                 { t: "uniform1i", k: "uOriginalPixelDataTexture", getter: _=>3},
+                { t: "uniform1i", k: "uUpdatedPixelDataTexture", getter: _=>4},
+                { t: "uniform1i", k: "uLerpedColorTexture", getter: _=>5},
+
                 { t: "uniform1f", k: "uScrollOffsetYSpeed", getter: _=>window.uScrollOffsetYSpeed},
                 { t: "uniform1f", k: "uScrollOffsetXSpeed", getter: _=>window.uScrollOffsetXSpeed},
 
@@ -1536,9 +1570,6 @@ gl_Position = aVertexPosition;
             image.src = b64;
             let el = document.body.appendChild(image);
             console.warn('image.src',{el,src:image.src});
-
-
-
         }
 
         let imageTex;
@@ -1719,7 +1750,10 @@ gl_Position = aVertexPosition;
                 }
             }
             if(allZero){
-                throw new Error("Image data is all 0s");
+                throw new Error("Image data is all 0s",{
+                    imageData,
+                    image,
+                });
             }
             let countNonzero = 0;
             // jump in steps of four, ignore rgb if alpha is lower than 1
@@ -1778,6 +1812,39 @@ gl_Position = aVertexPosition;
 
             //console.warn('loaded number of pixels',baseTexPixels.length/4, baseTexPixels);
             
+        }
+
+        document.getElementById('imageLoader').addEventListener('change', handleImage2, false);
+
+        async function handleImage2(e) {
+            hideIntroText();
+            hideVideo();
+            console.warn("handleImage2",e);
+            var reader = new FileReader();
+            reader.onload = function(event) {
+                if(event.target.readyState != FileReader.DONE) return;
+                var img = new Image();
+                console.warn("handleImage2>reader.onload",event);
+                img.onload = function() {
+                    console.warn('handleImage2>img',img);
+                    //selectedImageTexture = gl.createTexture();
+                    gl.useProgram(programInfo.program);
+                    //gl.bindTexture(gl.TEXTURE_2D, selectedImageTexture);
+                    gl.bindTexture(gl.TEXTURE_2D, baseTexture);
+                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.bindTexture(gl.TEXTURE_2D, null);
+                    if(gl.getError() != gl.NO_ERROR) {
+                        console.error("handleImage2>img>gl error",gl.getError());
+                        debugger;
+                    }
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);     
         }
 
 
