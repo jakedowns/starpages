@@ -122,6 +122,7 @@
     <div class="drop-here-text">webgl pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
     <script>
+        window.uReflectionY = 0.5; // 0.5 = no reflection, 0 = full reflection, 1 = no reflection
         window.reverseSort = true;
         window.capturer = null;
         window.capturing = false;
@@ -162,6 +163,9 @@ uniform float uSwirlAmp;
 vec2 center = vec2(0.5, 0.5); // Center of the swirl, usually the middle of the texture
 uniform int uMode;
 uniform int uPxDensity;
+
+uniform float uReflectionX;
+uniform float uReflectionY;
 
 uniform float uScrollOffsetYSpeed;
 uniform float uScrollOffsetXSpeed;
@@ -329,6 +333,8 @@ void main() {
             },
             set: function(value){
                 _max_step_sort_size = value;
+                current_sortStepSize = value;
+                sortStepSize = value;
             }
         })
 
@@ -520,6 +526,11 @@ void main() {
             //     return;
             // }
 
+            if(!keepPixelData){
+                pixel_positions = [];
+                pixelData = undefined;
+            }
+
             // if `pixel_positions` is empty or undefined, we need to initialize it
             // otherwise, we need to determine to grow or shrink it
             if(typeof pixel_positions === "undefined" || !pixel_positions.length){
@@ -539,7 +550,7 @@ void main() {
                 }
             }
 
-            
+            resetOffsetTexture();
             if(typeof pixelData === "undefined" || !pixelData.length){
                 pixelData = new Uint8Array(numPixels * bytesPerPixel); // RGBA for each pixel
 
@@ -581,7 +592,7 @@ void main() {
                     pixelData = new_pixelData;
                 }
             }
-            resetOffsetTexture();
+            
 
             // gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
 
@@ -658,7 +669,7 @@ void main() {
         window.sortStepSize = 10e5; //-1; //10e3; // Number of elements to sort per call, adjust as needed
         window.current_sortStepSize = window.sortStepSize;
 
-        function resetOffsetTexture(){
+        function resetOffsetTexture(erasePixelData = false){
             // reset offset texture to all 0s with 255 for alpha channel
             let zeros = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
             zeros = zeros.map((value, index) => {
@@ -669,6 +680,11 @@ void main() {
             });
             gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, zeros);
+
+            if(erasePixelData){
+                // reset pixel data to all 0s
+                pixelData = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
+            }
         }
 
         function newCheck(inner_i, currentColor, currentHSV, nextColor, nextHSV){
@@ -939,6 +955,9 @@ gl_Position = aVertexPosition;
 
                     uSortOffset: gl.getUniformLocation(shaderProgram, 'uSortOffset'),
                     uSortStepSize: gl.getUniformLocation(shaderProgram, 'uSortStepSize'),
+
+                    uReflectionX: gl.getUniformLocation(shaderProgram, 'uReflectionX'),
+                    uReflectionY: gl.getUniformLocation(shaderProgram, 'uReflectionY'),
                 },
             };
         }
@@ -1079,10 +1098,11 @@ gl_Position = aVertexPosition;
         window.uScrollOffsetXSpeed = -0.05;
 
         window.bigSweepActive = false, window.bigSweepInterval = 0;
-        window.tickBigSweep = function(){
-            if(window.bigSweepActive){
-                window.mouseX = (Math.sin(Date.now()*0.001) + 1) * window.innerWidth/4
-                window.mouseY = (Math.cos(Date.now()*0.001) + 1) * window.innerHeight/4
+        window.sweepFactor = 0.1;
+        window.tickBigSweep = function() {
+            if (window.bigSweepActive) {
+                window.mouseX = (Math.sin(Date.now() * 0.001) + 1) * ((window.innerWidth / 2) * window.sweepFactor);
+                window.mouseY = (Math.cos(Date.now() * 0.001) + 1) * ((window.innerHeight / 2) * window.sweepFactor);
             }
         }
         window.toggleBigSweep = function(){
@@ -1242,35 +1262,47 @@ gl_Position = aVertexPosition;
             mouseY = e.touches[0].clientY;
         })
 
-        // mobile double-tap
-        let doubleTapDected = false, doubleTapTimeout = null, doubleTapDelay = 300;
-        document.addEventListener('touchend',async(e)=>{
-            if(doubleTapDected){
-                // reset
-                doubleTapDected = false;
+        // Mobile double-tap detection
+        let doubleTapDetected = false;
+        let doubleTapTimeout = null;
+        const doubleTapDelay = 300;
+
+        // uniform "double-tap"/double-click detection
+
+        function checkDoubleTapDetected(){
+            if (doubleTapDetected) {
+                // Reset
+                doubleTapDetected = false;
                 clearTimeout(doubleTapTimeout);
                 doubleTapTimeout = null;
-                // reset
-                showIntroText(skipBlur=true);
+                
+                ShowIntroText();
+                
+                // Actions to perform on double tap
+                showIntroText(true); // Assuming skipBlur is a parameter of showIntroText
                 loadImageAsTexture("./res/360_F_202297164_NSSIqkr7QKi5Ltjrizwh9XGzH0MNANRN.jpg");
-            }else{
-                doubleTapDected = true;
-                doubleTapTimeout = setTimeout(()=>{
-                    doubleTapDected = false;
+            } else {
+                doubleTapDetected = true;
+                doubleTapTimeout = setTimeout(() => {
+                    // Actions to perform if not a double tap
+                    // Currently, it's set to perform the same actions, 
+                    // but you can change this to suit your needs.
+
+                    // Reset double tap detection
+                    doubleTapDetected = false;
                     doubleTapTimeout = null;
-                },doubleTapDelay);
+                }, doubleTapDelay);
             }
-        },false)
+        }
 
-        document.addEventListener('dblclick',async(e)=>{
-            // reset
-            showIntroText(skipBlur=true);
-            loadImageAsTexture("./res/360_F_202297164_NSSIqkr7QKi5Ltjrizwh9XGzH0MNANRN.jpg");
-
-        },false)
+        document.addEventListener('touchend', (e) => {
+            checkDoubleTapDetected();
+        }, false);
         document.addEventListener('click', (e)=>{
             MODE = (MODE + 1) % 4;
             console.log("MODE",MODE);
+
+            checkDoubleTapDetected();
 
             if(!window.do_sort){
                 window.do_sort = true;
@@ -1282,8 +1314,41 @@ gl_Position = aVertexPosition;
             window.mouseX = e.clientX;
             window.mouseY = e.clientY;
         });
+
+        let uniforms = []
+        function maybeSetUniforms(gl){
+            if(uniforms.length > 0){
+                return;
+            }
+            uniforms = [
+                //uReflectionX
+                { t: "uniform1f", k: "uReflectionX", getter: _=>window.uReflectionX},
+                { t: "uniform1f", k: "uReflectionY", getter: _=>window.uReflectionY},
+                { t: "uniform1i", k: "uSortOffset", getter: _=>parseInt(sortOffset/numPixels)},
+                { t: "uniform1i", k: "uSortStepSize", getter: _=>parseInt(sortStepSize)},
+                { t: "uniform2f", k: "uResolution", getter: _=>[
+                    Math.floor(canvas.width/pixel_density), 
+                    Math.floor(canvas.height/pixel_density)
+                ]},
+                { t: "uniform1f", k: "uTime", getter: _=>performance.now() / 1000},
+                { t: "uniform1i", k: "uPxDensity", getter: _=>pixel_density},
+                { t: "uniform1i", k: "uMode", getter: _=>MODE},
+                { t: "uniform1i", k: "uOffsetTexture", getter: _=>0},
+                { t: "uniform1i", k: "uBaseTexture", getter: _=>1},
+                { t: "uniform1i", k: "uOriginalPixelDataTexture", getter: _=>3},
+                { t: "uniform1f", k: "uScrollOffsetYSpeed", getter: _=>window.uScrollOffsetYSpeed},
+                { t: "uniform1f", k: "uScrollOffsetXSpeed", getter: _=>window.uScrollOffsetXSpeed},
+
+                // gl.uniform1f(UL.uSwirlTurns, uSwirlTurns);
+                { t: "uniform1f", k: "uSwirlTurns", getter: _=>uSwirlTurns},
+                // gl.uniform1f(UL.uSwirlAmp, uSwirlAmp);
+                { t: "uniform1f", k: "uSwirlAmp", getter: _=>uSwirlAmp},
+            ]
+        }
+
         // draw scene
         function drawScene(gl, programInfo, deltaTime) {
+            maybeSetUniforms(gl);
 
             // draw a red square and return
             gl.clearColor(1.0, 0.0, 1.0, 1.0);
@@ -1328,29 +1393,6 @@ gl_Position = aVertexPosition;
                 gl.bindTexture(gl.TEXTURE_2D, originalPixelDataTexture);
             }
 
-            // Use our program when drawing
-            gl.useProgram(programInfo.program);
-
-            // Set the shader uniforms
-
-            // sortOffset
-            gl.uniform1i(programInfo.uniformLocations.uSortOffset, parseInt(sortOffset/numPixels));
-            // sortStepSize
-            gl.uniform1i(programInfo.uniformLocations.uSortStepSize, parseInt(sortStepSize));
-
-            gl.uniform2f(programInfo.uniformLocations.uResolution, Math.floor(canvas.width/pixel_density), Math.floor(canvas.height/pixel_density));
-            gl.uniform1f(programInfo.uniformLocations.uTime, performance.now() / 1000);
-            gl.uniform1i(programInfo.uniformLocations.uPxDensity, pixel_density);
-            gl.uniform1i(programInfo.uniformLocations.uMode, MODE);
-            //gl.uniform1f(programInfo.uniformLocations.uPixelPositions, pixel_positions)
-            gl.uniform1i(programInfo.uniformLocations.uOffsetTexture, 0); // TEXTURE1
-            gl.uniform1i(programInfo.uniformLocations.uBaseTexture, 1); // TEXTURE2
-            gl.uniform1i(programInfo.uniformLocations.uOriginalPixelDataTexture, 3); // TEXTURE3
-
-            //
-            gl.uniform1f(programInfo.uniformLocations.uScrollOffsetYSpeed, window.uScrollOffsetYSpeed)
-            gl.uniform1f(programInfo.uniformLocations.uScrollOffsetXSpeed, window.uScrollOffsetXSpeed)
-
             // Adjusting the origin to be the middle of the window
             let midX = window.innerWidth / 2;
             let midY = window.innerHeight / 2;
@@ -1365,10 +1407,39 @@ gl_Position = aVertexPosition;
 
             // Mapping swirl amplitude to adjustedMouseY
             // -midY (-1) - midY (1) => 0.001 - 3
-            uSwirlAmp = 0.001 + (adjustedMouseY / midY) * 3;
+            uSwirlAmp = 0.001 + (adjustedMouseY / midY) * 3;            
 
-            gl.uniform1f(programInfo.uniformLocations.uSwirlTurns, uSwirlTurns);
-            gl.uniform1f(programInfo.uniformLocations.uSwirlAmp, uSwirlAmp);
+            // Use our program when drawing
+            gl.useProgram(programInfo.program);
+
+            // Update the shader uniforms
+            const UL = programInfo.uniformLocations;
+            uniforms.forEach(({t,k,getter})=>{
+                if(typeof gl[t] !== 'function'){
+                    throw new Error("gl[t] is not a function",{
+                        t,k,getter,
+                        glt: gl[t],
+                    });
+                }
+                // console.warn('uniforms.forEach',{t,k,getter})
+                // console.warn({key:k,thing:typeof UL[k]});
+                if(typeof getter !== 'function'){
+                    throw new Error("getter is not a function",{
+                        t,k,getter,
+                        glt: gl[t],
+                        ULk: UL[k],
+                    });
+                }
+                let extras = [];
+                if(t === 'uniform2f'){
+                    extras = getter();
+                }else if(t === 'uniform1f' || t === 'uniform1i'){
+                    extras = [getter()];
+                };
+                gl[t](UL[k], ...extras);
+            })
+
+            
 
             {
                 const offset = 0;
