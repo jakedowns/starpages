@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>WebGL Rainbow Shader</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <style>
         body { margin: 0; background-color: #000; }
         canvas { width: 100%; height: 100% }
@@ -13,7 +14,50 @@
     <canvas id="canvas"></canvas>
     <input type="file" accept="image/*" id="fileupload" />
     <script>
+        function setupCapturing(){
+            try{
+                // Create a capturer that exports a WebM video
+                var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
+                var motionBlurFrames = 0;//2;
+                capturer = isWebMSupported 
+                ? new CCapture( { 
+                    format: 'webm', 
+                    motionBlurFrames,
+                    verbose: false, 
+                    fps: 120 
+                } ) 
+                : new CCapture( { 
+                    format: 'png', 
+                    motionBlurFrames,
+                    verbose: false, 
+                    framerate: 120 
+                } );
+            }catch(e){
+                console.error('failed to create capturer',e);
+            }
+            window.startCapture = function(){
+                if(!window.capturer){
+                    console.warn("capturer not initialized");
+                    return;
+                }
+                window.capturing = true;
+                window.capturedFrames = 0;
+                window.capturer.start();
+                animate();
+            }
+            window.stopCapture = function(){
+                if(!window.capturer){
+                    console.warn("capturer not initialized");
+                    return;
+                }
+                window.capturing = false;
+                window.capturer.stop();
+                window.capturer.save();
+            }
+        }
         document.addEventListener("DOMContentLoaded",()=>{
+            setupCapturing();
+
             document.getElementById("fileupload").addEventListener("change", (e) => {
                 const file = e.target.files[0];
                 if (file.type.indexOf('image') === 0) {
@@ -74,7 +118,7 @@
                         float force = sin(uv.y * 20.0 + u_time) * 0.1;
                         
                         uv.y += sin(uv.x * 10.0 + u_time) * force;
-                        uv.y += u_time * 0.1;
+                        uv.y += u_time * 0.05;
                         uv.y = mod(uv.y, 1.0);
 
 
@@ -91,8 +135,13 @@
 
             function resizeRendererToDisplaySize(renderer) {
                 const canvas = renderer.domElement;
-                const width = canvas.clientWidth;
-                const height = canvas.clientHeight;
+                let width = canvas.clientWidth;
+                let height = canvas.clientHeight;
+
+                // force to even dimensions for ffmpeg compatibility
+                width = 2 * Math.floor(width / 2);
+                height = 2 * Math.floor(height / 2);
+
                 const needResize = canvas.width !== width || canvas.height !== height;
                 if (needResize) {
                     renderer.setSize(width, height, false);
@@ -100,9 +149,13 @@
                 return needResize;
             }
 
-            function animate(time) {
+            window.animate = function(time) {
                 if (resizeRendererToDisplaySize(renderer)) {
                     const canvas = renderer.domElement;
+                    // enforce dimensions of 2 for ffmpeg compatibility
+                    canvas.width = 2 * Math.floor(canvas.clientWidth / 2);
+                    canvas.height = 2 * Math.floor(canvas.clientHeight / 2);
+
                     camera.aspect = canvas.clientWidth / canvas.clientHeight;
                     camera.updateProjectionMatrix();
                 }
@@ -114,6 +167,14 @@
                 renderer.render(scene, camera);
 
                 requestAnimationFrame(animate);
+
+                if(window.capturing){
+                    window.capturer.capture(canvas);
+                    window.capturedFrames++;
+                    if(window.capturedFrames >= 1200){
+                        window.stopCapture();
+                    }
+                }
             }
 
             requestAnimationFrame(animate);
