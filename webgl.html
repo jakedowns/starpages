@@ -8,12 +8,40 @@
     <style>
         body { margin: 0; background-color: #000; }
         canvas { width: 100%; height: 100% }
+        #pasteFromClipboardPrompt {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 50px;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            pointer-events: none;
+        }
+        #pasteFromClipboardPrompt.show {
+            opacity: 1;
+            pointer-events: all;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     <input type="file" accept="image/*" id="fileupload" />
+    <progress id="progress" value="0" max="100"></progress>
+    <div id="pasteFromClipboardPrompt" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; color: #fff; opacity: 0; transition: opacity 0.5s ease-in-out;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+            <h1>Paste from clipboard?</h1>
+            <p>Press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste the image from your clipboard.</p>
+            <p>Press <kbd>Esc</kbd> to dismiss this message.</p>
+            <button onclick="window.doPasteFromClipboard()">Tap Here</button>
+        </div>
+    </div>
+    <button onclick="window.startCapture()">record video</button>
     <script>
+        window.frame_blend_mode = "additive";
+        window.do_clear_frame = false;
+        window.maxFrames = 120 * 10;
+        window.progress = document.getElementById("progress");
         function setupCapturing(){
             try{
                 // Create a capturer that exports a WebM video
@@ -57,6 +85,56 @@
         }
         document.addEventListener("DOMContentLoaded",()=>{
             setupCapturing();
+
+            const pasteFromClipboardPrompt = document.getElementById("pasteFromClipboardPrompt");
+            function showPasteFromClipboardPrompt(){
+                pasteFromClipboardPrompt.classList.add("show");
+                setTimeout(()=>{
+                    pasteFromClipboardPrompt.classList.remove("show");
+                },5000);
+            }
+            function hidePasteFromClipboardPrompt(){
+                pasteFromClipboardPrompt.classList.remove("show");
+            }
+            let didShowClipboardPrompt = false;
+            let clipboardCheckInterval = setInterval(async()=>{
+                if(didShowClipboardPrompt){
+                    return;
+                }
+                didShowClipboardPrompt = true;
+                try{
+                    const text = await navigator.clipboard.readText();
+                    if(text){
+                        showPasteFromClipboardPrompt();
+                    }else{
+                        hidePasteFromClipboardPrompt();
+                        console.warn('nothing in clipboard')
+                    }
+                }catch(e){
+                    console.error(e);
+                }
+            },1000);
+            window.doPasteFromClipboard = function(){
+                navigator.clipboard.readText().then((text)=>{
+                    const file = new Blob([text], {type: 'image/png'});
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        texture.image.src = e.target.result;
+                        texture.needsUpdate = true;
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            document.addEventListener("keydown",(e)=>{
+                if(e.key == "v" && (e.ctrlKey || e.metaKey)){
+                    try{
+                        window.doPasteFromClipboard();
+                    }catch(e){
+                        console.error(e);
+                    }
+                }
+            },false);
 
             document.getElementById("fileupload").addEventListener("change", (e) => {
                 const file = e.target.files[0];
@@ -163,6 +241,12 @@
                 shaderMaterial.uniforms.u_time.value = time * 0.001; // Convert time to seconds
                 shaderMaterial.uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
 
+                if(window.do_clear_frame){
+                    renderer.setClearColor(0x000000, 0);
+                    renderer.clear();
+                }else{
+                    renderer.setClearColor(0x000000, 1);
+                }
 
                 renderer.render(scene, camera);
 
@@ -171,7 +255,8 @@
                 if(window.capturing){
                     window.capturer.capture(canvas);
                     window.capturedFrames++;
-                    if(window.capturedFrames >= 1200){
+                    progress.value = (window.capturedFrames / maxFrames) * 100;
+                    if(window.capturedFrames >= maxFrames){
                         window.stopCapture();
                     }
                 }
