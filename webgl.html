@@ -18,6 +18,7 @@
             opacity: 0;
             transition: opacity 0.5s ease-in-out;
             pointer-events: none;
+            /* transition: opacity 0.5s ease-in-out; */
         }
         #pasteFromClipboardPrompt.show {
             opacity: 1;
@@ -45,7 +46,7 @@
         
         <button onclick="window.startCapture()">record video</button>
     </div>
-    <div id="pasteFromClipboardPrompt" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; color: #fff; opacity: 0; transition: opacity 0.5s ease-in-out;">
+    <div id="pasteFromClipboardPrompt">
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
             <h1>Paste from clipboard?</h1>
             <p>Press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste the image from your clipboard.</p>
@@ -139,16 +140,27 @@
                     console.error(e);
                 }
             },1000);
-            window.doPasteFromClipboard = function(){
-                navigator.clipboard.readText().then((text)=>{
-                    const file = new Blob([text], {type: 'image/png'});
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        texture.image.src = e.target.result;
-                        texture.needsUpdate = true;
-                    };
-                    reader.readAsDataURL(file);
-                });
+            
+            /* adds paste support for Clipboard ImageBlob -> Three.js Texture */
+            window.doPasteFromClipboard = async function(){
+                try{
+                    const items = await navigator.clipboard.read();
+                    console.warn('items',items)
+                    for (const item of items) {
+                        if (item.types.includes('image/png')) {
+                            const blob = await item.getType('image/png');
+                            const url = URL.createObjectURL(blob);
+                            texture.image.onload = function() {
+                                URL.revokeObjectURL(url);
+                                texture.needsUpdate = true;
+                            };
+                            texture.image.src = url;
+                            break;
+                        }
+                    }
+                }catch(e){
+                    console.error(e);
+                }
             }
 
             document.addEventListener("keydown",(e)=>{
