@@ -135,8 +135,13 @@
 
             function resizeRendererToDisplaySize(renderer) {
                 const canvas = renderer.domElement;
-                const width = canvas.clientWidth;
-                const height = canvas.clientHeight;
+                let width = canvas.clientWidth;
+                let height = canvas.clientHeight;
+
+                // force to even dimensions for ffmpeg compatibility
+                width = 2 * Math.floor(width / 2);
+                height = 2 * Math.floor(height / 2);
+
                 const needResize = canvas.width !== width || canvas.height !== height;
                 if (needResize) {
                     renderer.setSize(width, height, false);
@@ -147,6 +152,10 @@
             window.animate = function(time) {
                 if (resizeRendererToDisplaySize(renderer)) {
                     const canvas = renderer.domElement;
+                    // enforce dimensions of 2 for ffmpeg compatibility
+                    canvas.width = 2 * Math.floor(canvas.clientWidth / 2);
+                    canvas.height = 2 * Math.floor(canvas.clientHeight / 2);
+
                     camera.aspect = canvas.clientWidth / canvas.clientHeight;
                     camera.updateProjectionMatrix();
                 }
