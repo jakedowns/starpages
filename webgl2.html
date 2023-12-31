@@ -10,6 +10,7 @@
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
         canvas { width: 100%; height: 100%; opacity: 0.1; filter: blur(100px); transition: filter 0.5s ease-in-out, opacity 0.5 ease-in-out; will-change: filter; }
         canvas.unblur { filter: blur(0px); opacity: 1; }
+        canvas.undarken { opacity: 0.8; }
         .drop-here-text {
             pointer-events: none;
             position: absolute;
@@ -24,10 +25,18 @@
             -webkit-text-strokes: 1px black;
             top: 50%;
             transform: translateY(-50%);
+            transition: all 1s ease-in-out;
+        }
+        .drop-here-text.fadeout {
+            opacity: 0;
+            pointer-events: none;
         }
         .drop-here-text span {
             display: block;
             font-size: 25px;
+        }
+        .drop-here-text.fadeout span {
+            pointer-events: none;
         }
         .drop-here-text .hint {
             font-size: 15px;
@@ -113,11 +122,32 @@
     <div class="drop-here-text">webgl pixel sorter<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
     <script>
+        window.reverseSort = true;
         window.capturer = null;
-        
+        window.capturing = false;
+        window.capturedFrames = 0;        
         window.hideVideo = function(){
             document.querySelector(".intro-video").style.display = "none";
             document.querySelector(".video-underlay").style.display = "none";
+        }
+        window.startCapture = function(){
+            if(!window.capturer){
+                console.warn("capturer not initialized");
+                return;
+            }
+            window.capturing = true;
+            window.capturedFrames = 0;
+            window.capturer.start();
+            render();
+        }
+        window.stopCapture = function(){
+            if(!window.capturer){
+                console.warn("capturer not initialized");
+                return;
+            }
+            window.capturing = false;
+            window.capturer.stop();
+            window.capturer.save();
         }
         // fsshader fragment shader source frag shader here fshader
         const fsSource = `
@@ -149,15 +179,19 @@ vec2 applySwirl(vec2 uv, float uSwirlTurns, float uSwirlAmp, vec2 center) {
 
     // Calculate the angle for the swirl
     float angle = uSwirlTurns * 2.0 * PI * distance;
+    float scale = 1.5;
 
     // Adjust the angle based on the swirl amplitude
     if (uSwirlAmp < 0.5) {
         // Decay the spiral
-        angle *= mix(1.0, 0.0, (0.5 - uSwirlAmp) * 2.0);
+        angle *= mix(1.0, 0.0, (0.5 - uSwirlAmp) * scale);
     } else {
         // Accelerate the spiral's divergence
-        angle *= mix(1.0, 2.0, (uSwirlAmp - 0.5) * 2.0);
+        angle *= mix(1.0, 2.0, (uSwirlAmp - 0.5) * scale);
     }
+
+    // remap the range from 0.0 - 1.0 to 0.0 - 0.5
+    angle *= 0.5;
 
     // Rotate the coordinates
     mat2 rotation = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
@@ -172,6 +206,14 @@ void main() {
 
     // adjust for pixel density
     corrected = gl_FragCoord.xy / (uResolution * float(uPxDensity));
+    // adjust for aspect ratio to square pixels
+    //corrected.x *= uResolution.x / uResolution.y;
+
+    // adjust center for aspect ratio to square pixels
+    //center.x *= uResolution.x / uResolution.y;
+
+    // apply swirl
+    corrected = applySwirl(corrected, uSwirlTurns, uSwirlAmp, center);
 
     // if uSortOffset > 0, we need to check if _this_ pixel's corresponding index
     // falls within uSortStepSize worth of pixels as expressed in a 1D array of rgba values
@@ -235,6 +277,8 @@ void main() {
         // 4. set the fragment color
         gl_FragColor = gradientSample;
     }else if(uMode == 3){
+        // Apply the swirl
+        // corrected = applySwirl(corrected, uSwirlTurns, uSwirlAmp, center);
         gl_FragColor = texture2D(uBaseTexture, corrected);    
     }else{
         // fallback mode
@@ -275,7 +319,7 @@ void main() {
         let canvas, gl;
         let outputSurfacePositionBuffer;
         let offsetTexture, baseTexture, originalPixelDataTexture;
-        let uSwirlAmp, uSwirlTurns;
+        let uSwirlAmp = 1.0, uSwirlTurns = 3.0;
         let shaderProgram, programInfo;
         let pixel_positions = [];
         let pixelData, originalPixelData, latestPixelDataSnapshot;
@@ -288,11 +332,11 @@ void main() {
                 var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
                 capturer = isWebMSupported ? new CCapture( { 
                     format: 'webm', 
-                    motionBlurFrames: 2,
+                    motionBlurFrames: 12,
                     verbose: false, 
                     fps: 60 } ) : new CCapture( { 
                         format: 'png', 
-                        motionBlurFrames: 2,
+                        motionBlurFrames: 12,
                         verbose: false, 
                         framerate: 60 } );
             }catch(e){
@@ -316,6 +360,7 @@ void main() {
                     // });
                     match[0].style.pointerEvents = 'auto';
                     match[0].addEventListener('click',async(e)=>{
+                        document.querySelector('canvas')?.classList?.add('undarken');
                         let input = document.createElement('input');
                         input.type = 'file';
                         input.accept = 'image/*';
@@ -724,8 +769,7 @@ void main() {
                 const currentColor = pixelData.subarray(inner_i * bytesPerPixel, (inner_i + 1) * bytesPerPixel);
                 const nextColor = pixelData.subarray((inner_i + 1) * bytesPerPixel, (inner_i + 2) * bytesPerPixel);
 
-                // Compare colors based on the sum of RGB values
-                if (
+                let a_larger = (
                     currentColor[0] 
                     + currentColor[1] 
                     + currentColor[2] 
@@ -733,6 +777,15 @@ void main() {
                     nextColor[0] 
                     + nextColor[1] 
                     + nextColor[2]
+                ) ? 1 : 0;
+
+                if(window.reverseSort){
+                    a_larger = !a_larger;
+                }
+
+                // Compare colors based on the sum of RGB values
+                if (
+                    a_larger
                 ) {
                     // Swap colors in pixel data
                     [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
@@ -917,6 +970,7 @@ gl_Position = aVertexPosition;
         function render(now) {
             const deltaTime = now - then;
             then = now;
+            tickBigSweep();
 
             //if (deltaTime > 0){//0.001) {
             if(do_sort){
@@ -963,6 +1017,42 @@ gl_Position = aVertexPosition;
             drawScene(gl, programInfo, outputSurfacePositionBuffer, deltaTime);
 
             requestAnimationFrame(render);
+
+            if(window.capturing){
+                try {
+                    capturer.capture( canvas );
+                } catch (error) {
+                    console.log(error);
+                }
+            }
+        }
+
+        window.bigSweepActive = false, window.bigSweepInterval = 0;
+        window.tickBigSweep = function(){
+            if(window.bigSweepActive){
+                window.mouseX = (Math.sin(Date.now()*0.0015) + 1) * window.innerWidth/2
+                window.mouseY = (Math.cos(Date.now()*0.0015) + 1) * window.innerHeight/2
+            }
+        }
+        window.toggleBigSweep = function(){
+            window.bigSweepActive = !window.bigSweepActive;
+            console.warn("window.bigSweepActive",window.bigSweepActive);   
+        }
+
+        window.jiggleSwirl = false;
+        window.swirlFreq = 1;
+        window.swirlMax = 1;
+        window.toggleJiggleSwirl = function(){
+            window.jiggleSwirl = !window.jiggleSwirl;
+            console.warn("window.jiggleSwirl",window.jiggleSwirl);
+
+            clearInterval(window.mouseJiggler); 
+            if(window.jiggleSwirl){
+                window.mouseJiggler = setInterval(
+                    ()=>{
+                        window.mouseX = (Math.sin(Date.now()*window.swirlFreq*0.0015) * window.swirlMax*256)
+                    },16)
+            }
         }
         
         document.addEventListener('DOMContentLoaded', async () => {
@@ -1069,7 +1159,7 @@ gl_Position = aVertexPosition;
             let match = document.getElementsByClassName('drop-here-text');
             if (match.length > 0) {
                 Array.from(match).forEach((el) => {
-                    el.style.display = 'none';
+                    el.classList.add('fadeout');
                 });
             }
         }
@@ -1109,6 +1199,11 @@ gl_Position = aVertexPosition;
                 window.do_sort = true;
                 console.log("do_sort",window.do_sort);
             }
+        });
+        window.mouseX = window.mouseY = 0;
+        document.addEventListener('mousemove', (e)=>{
+            window.mouseX = e.clientX;
+            window.mouseY = e.clientY;
         });
         // draw scene
         function drawScene(gl, programInfo, deltaTime) {
@@ -1174,6 +1269,11 @@ gl_Position = aVertexPosition;
             gl.uniform1i(programInfo.uniformLocations.uOffsetTexture, 0); // TEXTURE1
             gl.uniform1i(programInfo.uniformLocations.uBaseTexture, 1); // TEXTURE2
             gl.uniform1i(programInfo.uniformLocations.uOriginalPixelDataTexture, 3); // TEXTURE3
+
+            // map swirl turns to mouse x:
+            // 0 (0) - 1 (clientWidth) => 1 - 4
+            uSwirlTurns = 0 + (mouseX / window.innerWidth) * 10;
+            uSwirlAmp = 0.001 + (mouseY / window.innerHeight) * 3;
 
             gl.uniform1f(programInfo.uniformLocations.uSwirlTurns, uSwirlTurns);
             gl.uniform1f(programInfo.uniformLocations.uSwirlAmp, uSwirlAmp);
