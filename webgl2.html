@@ -343,7 +343,8 @@ void main() {
         let frameCount = 0;
         let seed = 0;
         let MODE = 1;
-        let _pixel_density = 4; //6 // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
+        // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
+        let _pixel_density = 8; //4; 
         let _max_step_sort_size = 1e5 * 2;
         Object.defineProperty(window, "pixel_density", {
             get: function(){
@@ -1327,6 +1328,9 @@ gl_Position = aVertexPosition;
                 }, doubleTapDelay);
             }
         }
+        document.addEventListener('dblclick', (e) => {
+            checkDoubleTapDetected();
+        }, false);
 
         document.addEventListener('touchend', (e) => {
             checkDoubleTapDetected();
