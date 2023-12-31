@@ -4,11 +4,13 @@
 -->
 <html>
 <head>
-    <title>WebGL Pixel Sorter</title>
+    <title>WebGL Pixel Mixer - jakedowns</title>
+    <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
         canvas { width: 100%; height: 100%; opacity: 0.1; filter: blur(100px); transition: filter 0.5s ease-in-out, opacity 0.5 ease-in-out; will-change: filter; }
         canvas.unblur { filter: blur(0px); opacity: 1; }
+        canvas.undarken { opacity: 0.8; }
         .drop-here-text {
             pointer-events: none;
             position: absolute;
@@ -23,10 +25,18 @@
             -webkit-text-strokes: 1px black;
             top: 50%;
             transform: translateY(-50%);
+            transition: all 1s ease-in-out;
+        }
+        .drop-here-text.fadeout {
+            opacity: 0;
+            pointer-events: none;
         }
         .drop-here-text span {
             display: block;
             font-size: 25px;
+        }
+        .drop-here-text.fadeout span {
+            pointer-events: none;
         }
         .drop-here-text .hint {
             font-size: 15px;
@@ -71,24 +81,24 @@
         }
         .hide-video-button:hover {
             background-color: #663dff;
-            animation: gradient-animation 3s ease infinite; /* Apply the animation */
+            animation: gradient-animation 2s ease infinite; /* Apply the animation */
         }
         @keyframes gradient-animation {
-            0% {
+            0%, 100% {
                 background-position: 0% 50%;
             }
             50% {
                 background-position: 100% 50%;
             }
-            100% {
+            /* 100% {
                 background-position: 0% 50%;
-            }
+            } */
         }
 
         .hide-video-button {
             background-size: 200% 200%; /* Extend the background size for the animation */
             background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
-            
+            animation: gradient-animation 3s ease infinite; /* Apply the animation */
         }
 
     </style>
@@ -109,12 +119,35 @@
 
     <div class="video-underlay" onclick="window.hideVideo()"></div>
 
-    <div class="drop-here-text">webgl pixel sorter<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
+    <div class="drop-here-text">webgl pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
     <script>
+        window.reverseSort = true;
+        window.capturer = null;
+        window.capturing = false;
+        window.capturedFrames = 0;        
         window.hideVideo = function(){
             document.querySelector(".intro-video").style.display = "none";
             document.querySelector(".video-underlay").style.display = "none";
+        }
+        window.startCapture = function(){
+            if(!window.capturer){
+                console.warn("capturer not initialized");
+                return;
+            }
+            window.capturing = true;
+            window.capturedFrames = 0;
+            window.capturer.start();
+            render();
+        }
+        window.stopCapture = function(){
+            if(!window.capturer){
+                console.warn("capturer not initialized");
+                return;
+            }
+            window.capturing = false;
+            window.capturer.stop();
+            window.capturer.save();
         }
         // fsshader fragment shader source frag shader here fshader
         const fsSource = `
@@ -124,19 +157,76 @@ uniform float uTime;
 uniform sampler2D uOffsetTexture;
 uniform sampler2D uBaseTexture;
 uniform sampler2D uOriginalPixelDataTexture;
+uniform float uSwirlTurns;
+uniform float uSwirlAmp;
+vec2 center = vec2(0.5, 0.5); // Center of the swirl, usually the middle of the texture
 uniform int uMode;
 uniform int uPxDensity;
+
+uniform float uScrollOffsetYSpeed;
+uniform float uScrollOffsetXSpeed;
+
+float PI = 3.1415926535897932384626433832795;
 
 uniform int uSortOffset;
 uniform int uSortStepSize;
 
 vec2 corrected;
+
+vec2 applySwirl(vec2 uv, float uSwirlTurns, float uSwirlAmp, vec2 center) {
+    // Translate UV coordinates so that the center of the swirl is at (0,0)
+    vec2 offset = uv - center;
+
+    // Calculate the distance from the center
+    float distance = length(offset);
+
+    // Calculate the angle for the swirl
+    float angle = uSwirlTurns * 2.0 * PI * distance;
+    float scale = 1.5;
+
+    // Adjust the angle based on the swirl amplitude
+    if (uSwirlAmp < 0.5) {
+        // Decay the spiral
+        angle *= mix(1.0, 0.0, (0.5 - uSwirlAmp) * scale);
+    } else {
+        // Accelerate the spiral's divergence
+        angle *= mix(1.0, 2.0, (uSwirlAmp - 0.5) * scale);
+    }
+
+    // remap the range from 0.0 - 1.0 to 0.0 - 0.5
+    angle *= 0.5;
+
+    // Rotate the coordinates
+    mat2 rotation = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+    uv = center + rotation * offset;
+
+    return uv;
+}
+
 void main() {
     // gl_FragColor = vec4(0.0,1.0,0.0,1.0);
     // return;
 
     // adjust for pixel density
     corrected = gl_FragCoord.xy / (uResolution * float(uPxDensity));
+    // adjust for aspect ratio to square pixels
+    //corrected.x *= uResolution.x / uResolution.y;
+
+    // adjust center for aspect ratio to square pixels
+    //center.x *= uResolution.x / uResolution.y;
+
+    // apply swirl
+    corrected = applySwirl(corrected, uSwirlTurns, uSwirlAmp, center);
+
+    // scroll offset based on uScrollOffsetYSpeed
+    corrected.y += uTime * uScrollOffsetYSpeed; // * 0.01;
+    // wrap around
+    corrected.y = mod(corrected.y, 1.0);
+
+    // and X
+    corrected.x += uTime * uScrollOffsetXSpeed; // * 0.01;
+    // wrap around
+    corrected.x = mod(corrected.x, 1.0);
 
     // if uSortOffset > 0, we need to check if _this_ pixel's corresponding index
     // falls within uSortStepSize worth of pixels as expressed in a 1D array of rgba values
@@ -159,13 +249,19 @@ void main() {
         // default mode: use the offset texture's [r]ed channel to offset our uv/xy[x] lookup in the OPPPOSITE direction
         // and use offset texture's [g]reen channel to offset our uv/xy[y] lookup in the OPPPOSITE direction
         
-        gl_FragColor = texture2D(uOriginalPixelDataTexture, corrected.x - vec2(texture2D(uOffsetTexture, corrected).r, corrected.y - texture2D(uOffsetTexture, corrected).g));
+        vec4 offsetData = texture2D(uOffsetTexture, corrected);
+        vec2 offsetCoords = corrected;
+        offsetCoords.x += offsetData.r;
+        offsetCoords.y += offsetData.g;
+        // Apply the swirl
+        //offsetCoords = applySwirl(offsetCoords, uSwirlTurns, uSwirlAmp, center);
+
+        gl_FragColor = texture2D(uOriginalPixelDataTexture, offsetCoords);
         // constrain r,g,b to 0.0 - 1.0
         gl_FragColor.r = clamp(gl_FragColor.r, 0.0, 1.0);
         gl_FragColor.g = clamp(gl_FragColor.g, 0.0, 1.0);
         gl_FragColor.b = clamp(gl_FragColor.b, 0.0, 1.0);
-        // make sure our alpha channel is 1.0
-        gl_FragColor.a = 1.0; //clamp(gl_FragColor.a, 0.1, 1.0);
+        
     }else if(uMode == 2){
         // ramp between "magma" dark black, purple, yellow, and white
         // based on the magnitude of sample r and g channels: texture2D(uOffsetTexture, corrected)
@@ -193,14 +289,17 @@ void main() {
 
         // 4. set the fragment color
         gl_FragColor = gradientSample;
-        gl_FragColor.a = 1.0;
     }else if(uMode == 3){
+        // Apply the swirl
+        // corrected = applySwirl(corrected, uSwirlTurns, uSwirlAmp, center);
         gl_FragColor = texture2D(uBaseTexture, corrected);    
     }else{
         // fallback mode
         // debug sample unmodified base texture
         gl_FragColor = texture2D(uOriginalPixelDataTexture, corrected);    
     }
+    // make sure our alpha channel is 1.0
+    gl_FragColor.a = 1.0; //clamp(gl_FragColor.a, 0.1, 1.0);
 }
         `;
         
@@ -214,6 +313,7 @@ void main() {
         let seed = 0;
         let MODE = 1;
         let _pixel_density = 4; //6 // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
+        let _max_step_sort_size = 1e5 * 2;
         Object.defineProperty(window, "pixel_density", {
             get: function(){
                 return _pixel_density;
@@ -225,7 +325,10 @@ void main() {
         });
         Object.defineProperty(window, "MAX_SORT_STEP_SIZE", {
             get: function(){
-                return 1e5 * 4; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
+                return _max_step_sort_size; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
+            },
+            set: function(value){
+                _max_step_sort_size = value;
             }
         })
 
@@ -233,10 +336,113 @@ void main() {
         let canvas, gl;
         let outputSurfacePositionBuffer;
         let offsetTexture, baseTexture, originalPixelDataTexture;
+        let lerpedColorTexture;
+        let uSwirlAmp = 1.0, uSwirlTurns = 3.0;
         let shaderProgram, programInfo;
         let pixel_positions = [];
         let pixelData, originalPixelData, latestPixelDataSnapshot;
         const bytesPerPixel = 4; // For RGBA format
+
+        window.recenterMouseRefValue = function(){
+            mouseX=window.innerWidth/2;mouseY=window.innerHeight/2
+        }
+
+        // domready
+        function onReady(){
+            try{
+                // Create a capturer that exports a WebM video
+                var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
+                var motionBlurFrames = 0;//2;
+                capturer = isWebMSupported 
+                ? new CCapture( { 
+                    format: 'webm', 
+                    motionBlurFrames,
+                    verbose: false, 
+                    fps: 120 
+                } ) 
+                : new CCapture( { 
+                    format: 'png', 
+                    motionBlurFrames,
+                    verbose: false, 
+                    framerate: 120 
+                } );
+            }catch(e){
+                console.warn('failed to create capturer',e);
+            }
+
+            // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
+            //     return;
+            // }
+
+            // if we're on a mobile device, change .drop-here-text > span to say "tap here to select an image <span class="hint">(local only, doesnt get uploaded anywhere)</span>"
+            //if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)){
+                let match = document.getElementsByClassName('drop-here-text');
+                if(!match.length){
+                    throw new Error("no .drop-here-text element found");
+                }
+                if (match.length > 0) {
+                    console.warn('match',match)
+                    // Array.from(match).forEach((el) => {
+                    //     el.innerHTML = '';
+                    // });
+                    match[0].style.pointerEvents = 'auto';
+                    match[0].addEventListener('click',async(e)=>{
+
+                        if(document.querySelector('canvas')?.classList?.contains('unblur')){
+                            return;
+                        }
+
+                        document.querySelector('canvas')?.classList?.add('undarken');
+                        let input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        hideIntroText();
+                        input.onchange = async(e)=>{
+                            let file = e.target.files[0];
+                            console.warn(file);
+
+                            // get a blob for the file
+                            let blob = await file.arrayBuffer();
+                            blob = new Blob([blob], {type: file.type});
+                            console.warn(blob);
+
+                            let b64 = await imageBlobToBase64(blob);
+                            console.warn({blob_as_b64:b64})
+                            await loadImageAsTexture(b64);
+
+                            
+                        }
+                        input.click();
+                    });
+
+                    match[0].addEventListener("drop", onImageDrop);
+                    match[0].addEventListener("dragover", function(event) { event.preventDefault(); });
+                }
+            //}
+            
+            
+            // WebGL context setup
+            canvas = document.getElementById('glCanvas');
+            canvas.addEventListener("drop", onImageDrop);
+            canvas.addEventListener("dragover", function(event) { event.preventDefault(); });
+            
+            gl = canvas.getContext('webgl');
+
+            if (!gl) {
+                //console.error('Unable to initialize WebGL. Your browser may not support it.');
+                return;
+            }
+            // prepares:
+            // outputSurfacePositionBuffer, 
+            onGLReady();      
+            
+            loadImageAsTexture("./res/Screen-interface-design-Bill-Atkinson-Susan-Kare-1983.webp");
+            
+
+            requestAnimationFrame(render);
+
+            
+        }
 
         window.addEventListener("resize", ()=>{
             // onResize
@@ -596,8 +802,7 @@ void main() {
                 const currentColor = pixelData.subarray(inner_i * bytesPerPixel, (inner_i + 1) * bytesPerPixel);
                 const nextColor = pixelData.subarray((inner_i + 1) * bytesPerPixel, (inner_i + 2) * bytesPerPixel);
 
-                // Compare colors based on the sum of RGB values
-                if (
+                let a_larger = (
                     currentColor[0] 
                     + currentColor[1] 
                     + currentColor[2] 
@@ -605,6 +810,15 @@ void main() {
                     nextColor[0] 
                     + nextColor[1] 
                     + nextColor[2]
+                ) ? 1 : 0;
+
+                if(window.reverseSort){
+                    a_larger = !a_larger;
+                }
+
+                // Compare colors based on the sum of RGB values
+                if (
+                    a_larger
                 ) {
                     // Swap colors in pixel data
                     [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
@@ -713,6 +927,14 @@ gl_Position = aVertexPosition;
                     uOffsetTexture: gl.getUniformLocation(shaderProgram, 'uOffsetTexture'),
                     uBaseTexture: gl.getUniformLocation(shaderProgram, 'uBaseTexture'),
                     uOriginalPixelDataTexture: gl.getUniformLocation(shaderProgram, 'uOriginalPixelDataTexture'),
+                    //uniform float uSwirlTurns;
+                    uSwirlTurns: gl.getUniformLocation(shaderProgram, 'uSwirlTurns'),
+                    // uniform float uSwirlAmp;
+                    uSwirlAmp: gl.getUniformLocation(shaderProgram, 'uSwirlAmp'),
+
+                    uScrollOffsetYSpeed: gl.getUniformLocation(shaderProgram, 'uScrollOffsetYSpeed'),
+                    uScrollOffsetXSpeed: gl.getUniformLocation(shaderProgram, 'uScrollOffsetXSpeed'),
+
                     //uPixelPositions: gl.getUniformLocation(shaderProgram, 'uPixelPositions'),
 
                     uSortOffset: gl.getUniformLocation(shaderProgram, 'uSortOffset'),
@@ -760,6 +982,17 @@ gl_Position = aVertexPosition;
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+            // our output texture is actually a separate buffer where
+            // we lerp _it_ towards the base texture
+            // continually saving it's derrived value back to lerpedColorTexture so that,
+            // we can use lerpedColorTexture as our input texture for the next frame
+            lerpedColorTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, lerpedColorTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         }
 
         function onGLReady(){
@@ -783,6 +1016,7 @@ gl_Position = aVertexPosition;
         function render(now) {
             const deltaTime = now - then;
             then = now;
+            tickBigSweep();
 
             //if (deltaTime > 0){//0.001) {
             if(do_sort){
@@ -820,7 +1054,9 @@ gl_Position = aVertexPosition;
                     ){
                         // increase sortStepSize
                         window.sortStepSize = Math.min(window.MAX_SORT_STEP_SIZE,parseInt(window.sortStepSize * 2));
-                        console.warn('increasing sortStepSize',window.sortStepSize);
+                        console.warn('increasing sortStepSize',window.sortStepSize,{
+                            max: window.MAX_SORT_STEP_SIZE,
+                        });
                     }
                 //}
             }
@@ -829,7 +1065,47 @@ gl_Position = aVertexPosition;
             drawScene(gl, programInfo, outputSurfacePositionBuffer, deltaTime);
 
             requestAnimationFrame(render);
+
+            if(window.capturing){
+                try {
+                    capturer.capture( canvas );
+                } catch (error) {
+                    console.log(error);
+                }
+            }
         }
+
+        window.uScrollOffsetYSpeed = 0.05;
+        window.uScrollOffsetXSpeed = -0.05;
+
+        window.bigSweepActive = false, window.bigSweepInterval = 0;
+        window.tickBigSweep = function(){
+            if(window.bigSweepActive){
+                window.mouseX = (Math.sin(Date.now()*0.001) + 1) * window.innerWidth/4
+                window.mouseY = (Math.cos(Date.now()*0.001) + 1) * window.innerHeight/4
+            }
+        }
+        window.toggleBigSweep = function(){
+            window.bigSweepActive = !window.bigSweepActive;
+            console.warn("window.bigSweepActive",window.bigSweepActive);   
+        }
+
+        window.jiggleSwirl = false;
+        window.swirlFreq = 1;
+        window.swirlMax = 1;
+        window.toggleJiggleSwirl = function(){
+            window.jiggleSwirl = !window.jiggleSwirl;
+            console.warn("window.jiggleSwirl",window.jiggleSwirl);
+
+            clearInterval(window.mouseJiggler); 
+            if(window.jiggleSwirl){
+                window.mouseJiggler = setInterval(
+                    ()=>{
+                        window.mouseX = (Math.sin(Date.now()*window.swirlFreq*0.0015) * window.swirlMax*256)
+                    },16)
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', async () => {
             let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
             // create if not exist
@@ -934,7 +1210,7 @@ gl_Position = aVertexPosition;
             let match = document.getElementsByClassName('drop-here-text');
             if (match.length > 0) {
                 Array.from(match).forEach((el) => {
-                    el.style.display = 'none';
+                    el.classList.add('fadeout');
                 });
             }
         }
@@ -960,6 +1236,32 @@ gl_Position = aVertexPosition;
                 await onPasteAttempt();
             }
         },false)
+
+        document.addEventListener('touchmove',async(e)=>{
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+        })
+
+        // mobile double-tap
+        let doubleTapDected = false, doubleTapTimeout = null, doubleTapDelay = 300;
+        document.addEventListener('touchend',async(e)=>{
+            if(doubleTapDected){
+                // reset
+                doubleTapDected = false;
+                clearTimeout(doubleTapTimeout);
+                doubleTapTimeout = null;
+                // reset
+                showIntroText(skipBlur=true);
+                loadImageAsTexture("./res/360_F_202297164_NSSIqkr7QKi5Ltjrizwh9XGzH0MNANRN.jpg");
+            }else{
+                doubleTapDected = true;
+                doubleTapTimeout = setTimeout(()=>{
+                    doubleTapDected = false;
+                    doubleTapTimeout = null;
+                },doubleTapDelay);
+            }
+        },false)
+
         document.addEventListener('dblclick',async(e)=>{
             // reset
             showIntroText(skipBlur=true);
@@ -974,6 +1276,11 @@ gl_Position = aVertexPosition;
                 window.do_sort = true;
                 console.log("do_sort",window.do_sort);
             }
+        });
+        window.mouseX = window.mouseY = 0;
+        document.addEventListener('mousemove', (e)=>{
+            window.mouseX = e.clientX;
+            window.mouseY = e.clientY;
         });
         // draw scene
         function drawScene(gl, programInfo, deltaTime) {
@@ -1005,7 +1312,8 @@ gl_Position = aVertexPosition;
                 if (index === 3) {
                     return 255;
                 }
-                return value;
+                // clamp to 0-255
+                return Math.max(0, Math.min(255, value));
             });
 
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
@@ -1038,6 +1346,29 @@ gl_Position = aVertexPosition;
             gl.uniform1i(programInfo.uniformLocations.uOffsetTexture, 0); // TEXTURE1
             gl.uniform1i(programInfo.uniformLocations.uBaseTexture, 1); // TEXTURE2
             gl.uniform1i(programInfo.uniformLocations.uOriginalPixelDataTexture, 3); // TEXTURE3
+
+            //
+            gl.uniform1f(programInfo.uniformLocations.uScrollOffsetYSpeed, window.uScrollOffsetYSpeed)
+            gl.uniform1f(programInfo.uniformLocations.uScrollOffsetXSpeed, window.uScrollOffsetXSpeed)
+
+            // Adjusting the origin to be the middle of the window
+            let midX = window.innerWidth / 2;
+            let midY = window.innerHeight / 2;
+
+            // Adjust mouseX and mouseY to be relative to the middle of the window
+            let adjustedMouseX = mouseX - midX;
+            let adjustedMouseY = mouseY - midY;
+
+            // Mapping swirl turns to adjustedMouseX
+            // -midX (-1) - midX (1) => 1 - 4
+            uSwirlTurns = 1 + (adjustedMouseX / midX) * 3;
+
+            // Mapping swirl amplitude to adjustedMouseY
+            // -midY (-1) - midY (1) => 0.001 - 3
+            uSwirlAmp = 0.001 + (adjustedMouseY / midY) * 3;
+
+            gl.uniform1f(programInfo.uniformLocations.uSwirlTurns, uSwirlTurns);
+            gl.uniform1f(programInfo.uniformLocations.uSwirlAmp, uSwirlAmp);
 
             {
                 const offset = 0;
@@ -1391,74 +1722,8 @@ gl_Position = aVertexPosition;
                 console.error('Error loading dropped image', e);
             }
         }
-        function onReady(){
 
-            // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
-            //     return;
-            // }
-
-            // if we're on a mobile device, change .drop-here-text > span to say "tap here to select an image <span class="hint">(local only, doesnt get uploaded anywhere)</span>"
-            //if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)){
-                let match = document.getElementsByClassName('drop-here-text');
-                if(!match.length){
-                    throw new Error("no .drop-here-text element found");
-                }
-                if (match.length > 0) {
-                    console.warn('match',match)
-                    // Array.from(match).forEach((el) => {
-                    //     el.innerHTML = '';
-                    // });
-                    match[0].style.pointerEvents = 'auto';
-                    match[0].addEventListener('click',async(e)=>{
-                        let input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = 'image/*';
-                        input.onchange = async(e)=>{
-                            let file = e.target.files[0];
-                            console.warn(file);
-
-                            // get a blob for the file
-                            let blob = await file.arrayBuffer();
-                            blob = new Blob([blob], {type: file.type});
-                            console.warn(blob);
-
-                            let b64 = await imageBlobToBase64(blob);
-                            console.warn({blob_as_b64:b64})
-                            await loadImageAsTexture(b64);
-
-                            hideIntroText();
-                        }
-                        input.click();
-                    });
-
-                    match[0].addEventListener("drop", onImageDrop);
-                    match[0].addEventListener("dragover", function(event) { event.preventDefault(); });
-                }
-            //}
-            
-            
-            // WebGL context setup
-            canvas = document.getElementById('glCanvas');
-            canvas.addEventListener("drop", onImageDrop);
-            canvas.addEventListener("dragover", function(event) { event.preventDefault(); });
-            
-            gl = canvas.getContext('webgl');
-
-            if (!gl) {
-                //console.error('Unable to initialize WebGL. Your browser may not support it.');
-                return;
-            }
-            // prepares:
-            // outputSurfacePositionBuffer, 
-            onGLReady();      
-            
-            loadImageAsTexture("./res/Screen-interface-design-Bill-Atkinson-Susan-Kare-1983.webp");
-            
-
-            requestAnimationFrame(render);
-
-            
-        }
+        
         document.addEventListener("DOMContentLoaded", onReady);
 
     </script>
