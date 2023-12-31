@@ -6,7 +6,7 @@
 	"type": "module",
 	"scripts": {
 		"start": "node --harmony server.mjs",
-		"serve": "http-server -c-1 --cors='*' -o",
+		"serve": "http-server -c-1 --cors='*' -o -S -C ./self-signed-neat.app.key.crt -K ./self-signed-neat.app.key",
 		"both": "concurrently \"npm run start\" \"npm run serve\""
 	},
 	"keywords": [],

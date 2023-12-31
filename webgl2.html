@@ -1,11 +1,13 @@
 <!DOCTYPE html>
+<meta charset="utf-8">
 <!-- 
+    https://jakedowns.github.io/starpages/webgl2.html
     > add bitonic sort to our todo list 
 -->
 <html>
 <head>
     <title>WebGL Pixel Mixer - jakedowns</title>
-    <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
+    <!-- <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script> -->
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
         canvas { width: 100%; height: 100%; opacity: 0.1; filter: blur(100px); transition: filter 0.5s ease-in-out, opacity 0.5 ease-in-out; will-change: filter; }
@@ -357,23 +359,23 @@ void main() {
         function onReady(){
             try{
                 // Create a capturer that exports a WebM video
-                var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
-                var motionBlurFrames = 0;//2;
-                capturer = isWebMSupported 
-                ? new CCapture( { 
-                    format: 'webm', 
-                    motionBlurFrames,
-                    verbose: false, 
-                    fps: 120 
-                } ) 
-                : new CCapture( { 
-                    format: 'png', 
-                    motionBlurFrames,
-                    verbose: false, 
-                    framerate: 120 
-                } );
+                // var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
+                // var motionBlurFrames = 0;//2;
+                // capturer = isWebMSupported 
+                // ? new CCapture( { 
+                //     format: 'webm', 
+                //     motionBlurFrames,
+                //     verbose: false, 
+                //     fps: 120 
+                // } ) 
+                // : new CCapture( { 
+                //     format: 'png', 
+                //     motionBlurFrames,
+                //     verbose: false, 
+                //     framerate: 120 
+                // } );
             }catch(e){
-                console.warn('failed to create capturer',e);
+                console.error('failed to create capturer',e);
             }
 
             // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
@@ -1140,17 +1142,22 @@ gl_Position = aVertexPosition;
         });
         function createImageBitmap(imageBlob){
             return new Promise((resolve,reject)=>{
-                let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
-                // create if not exist
-                if(!imageElement){
-                    imageElement = document.createElement('img');
-                    imageElement.id = 'image';
-                    imageElement.style.display = 'none';
-                    document.body.appendChild(imageElement);
-                }
-                imageElement.onload = function(e){
+                // let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
+                // // create if not exist
+                // if(!imageElement){
+                //     imageElement = document.createElement('img');
+                //     imageElement.id = 'image';
+                //     imageElement.style.display = 'none';
+                //     document.body.appendChild(imageElement);
+                // }
+                // imageElement.onload = function(e){
+                //     // once we can read the image, we can forward it to our shader...
+                //     resolve(imageElement);
+                // }
+                let _image = new Image();
+                _image.onload = function(e){
                     // once we can read the image, we can forward it to our shader...
-                    resolve(imageElement);
+                    resolve(_image);
                 }
                 imageElement.src = URL.createObjectURL(imageBlob);
             });
@@ -1202,7 +1209,6 @@ gl_Position = aVertexPosition;
                     }
                     for (const imageItem of imageItems) {
                         const imageBlob = await imageItem.getType('image/png');
-                        //const image = await createImageBitmap(imageBlob);
                         //console.log('Pasted image: ', image);
                         clipboardBag.imageBlob = imageBlob;
 
@@ -1276,7 +1282,7 @@ gl_Position = aVertexPosition;
                 clearTimeout(doubleTapTimeout);
                 doubleTapTimeout = null;
                 
-                ShowIntroText();
+                showIntroText();
                 
                 // Actions to perform on double tap
                 showIntroText(true); // Assuming skipBlur is a parameter of showIntroText
