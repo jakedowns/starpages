@@ -4,7 +4,7 @@
 -->
 <html>
 <head>
-    <title>WebGL Pixel Sorter - jakedowns</title>
+    <title>WebGL Pixel Mixer - jakedowns</title>
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
@@ -81,24 +81,24 @@
         }
         .hide-video-button:hover {
             background-color: #663dff;
-            animation: gradient-animation 3s ease infinite; /* Apply the animation */
+            animation: gradient-animation 2s ease infinite; /* Apply the animation */
         }
         @keyframes gradient-animation {
-            0% {
+            0%, 100% {
                 background-position: 0% 50%;
             }
             50% {
                 background-position: 100% 50%;
             }
-            100% {
+            /* 100% {
                 background-position: 0% 50%;
-            }
+            } */
         }
 
         .hide-video-button {
             background-size: 200% 200%; /* Extend the background size for the animation */
             background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
-            
+            animation: gradient-animation 3s ease infinite; /* Apply the animation */
         }
 
     </style>
@@ -119,7 +119,7 @@
 
     <div class="video-underlay" onclick="window.hideVideo()"></div>
 
-    <div class="drop-here-text">webgl pixel sorter<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
+    <div class="drop-here-text">webgl pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     <canvas id="glCanvas"></canvas>
     <script>
         window.reverseSort = true;
@@ -162,6 +162,9 @@ uniform float uSwirlAmp;
 vec2 center = vec2(0.5, 0.5); // Center of the swirl, usually the middle of the texture
 uniform int uMode;
 uniform int uPxDensity;
+
+uniform float uScrollOffsetYSpeed;
+uniform float uScrollOffsetXSpeed;
 
 float PI = 3.1415926535897932384626433832795;
 
@@ -214,6 +217,16 @@ void main() {
 
     // apply swirl
     corrected = applySwirl(corrected, uSwirlTurns, uSwirlAmp, center);
+
+    // scroll offset based on uScrollOffsetYSpeed
+    corrected.y += uTime * uScrollOffsetYSpeed; // * 0.01;
+    // wrap around
+    corrected.y = mod(corrected.y, 1.0);
+
+    // and X
+    corrected.x += uTime * uScrollOffsetXSpeed; // * 0.01;
+    // wrap around
+    corrected.x = mod(corrected.x, 1.0);
 
     // if uSortOffset > 0, we need to check if _this_ pixel's corresponding index
     // falls within uSortStepSize worth of pixels as expressed in a 1D array of rgba values
@@ -300,6 +313,7 @@ void main() {
         let seed = 0;
         let MODE = 1;
         let _pixel_density = 4; //6 // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
+        let _max_step_sort_size = 1e5 * 2;
         Object.defineProperty(window, "pixel_density", {
             get: function(){
                 return _pixel_density;
@@ -311,7 +325,10 @@ void main() {
         });
         Object.defineProperty(window, "MAX_SORT_STEP_SIZE", {
             get: function(){
-                return 1e5 * 4; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
+                return _max_step_sort_size; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
+            },
+            set: function(value){
+                _max_step_sort_size = value;
             }
         })
 
@@ -319,26 +336,36 @@ void main() {
         let canvas, gl;
         let outputSurfacePositionBuffer;
         let offsetTexture, baseTexture, originalPixelDataTexture;
+        let lerpedColorTexture;
         let uSwirlAmp = 1.0, uSwirlTurns = 3.0;
         let shaderProgram, programInfo;
         let pixel_positions = [];
         let pixelData, originalPixelData, latestPixelDataSnapshot;
         const bytesPerPixel = 4; // For RGBA format
 
+        window.recenterMouseRefValue = function(){
+            mouseX=window.innerWidth/2;mouseY=window.innerHeight/2
+        }
+
         // domready
         function onReady(){
             try{
                 // Create a capturer that exports a WebM video
                 var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
-                capturer = isWebMSupported ? new CCapture( { 
+                var motionBlurFrames = 0;//2;
+                capturer = isWebMSupported 
+                ? new CCapture( { 
                     format: 'webm', 
-                    motionBlurFrames: 12,
+                    motionBlurFrames,
                     verbose: false, 
-                    fps: 60 } ) : new CCapture( { 
-                        format: 'png', 
-                        motionBlurFrames: 12,
-                        verbose: false, 
-                        framerate: 60 } );
+                    fps: 120 
+                } ) 
+                : new CCapture( { 
+                    format: 'png', 
+                    motionBlurFrames,
+                    verbose: false, 
+                    framerate: 120 
+                } );
             }catch(e){
                 console.warn('failed to create capturer',e);
             }
@@ -360,10 +387,16 @@ void main() {
                     // });
                     match[0].style.pointerEvents = 'auto';
                     match[0].addEventListener('click',async(e)=>{
+
+                        if(document.querySelector('canvas')?.classList?.contains('unblur')){
+                            return;
+                        }
+
                         document.querySelector('canvas')?.classList?.add('undarken');
                         let input = document.createElement('input');
                         input.type = 'file';
                         input.accept = 'image/*';
+                        hideIntroText();
                         input.onchange = async(e)=>{
                             let file = e.target.files[0];
                             console.warn(file);
@@ -377,7 +410,7 @@ void main() {
                             console.warn({blob_as_b64:b64})
                             await loadImageAsTexture(b64);
 
-                            hideIntroText();
+                            
                         }
                         input.click();
                     });
@@ -899,6 +932,8 @@ gl_Position = aVertexPosition;
                     // uniform float uSwirlAmp;
                     uSwirlAmp: gl.getUniformLocation(shaderProgram, 'uSwirlAmp'),
 
+                    uScrollOffsetYSpeed: gl.getUniformLocation(shaderProgram, 'uScrollOffsetYSpeed'),
+                    uScrollOffsetXSpeed: gl.getUniformLocation(shaderProgram, 'uScrollOffsetXSpeed'),
 
                     //uPixelPositions: gl.getUniformLocation(shaderProgram, 'uPixelPositions'),
 
@@ -947,6 +982,17 @@ gl_Position = aVertexPosition;
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+            // our output texture is actually a separate buffer where
+            // we lerp _it_ towards the base texture
+            // continually saving it's derrived value back to lerpedColorTexture so that,
+            // we can use lerpedColorTexture as our input texture for the next frame
+            lerpedColorTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, lerpedColorTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         }
 
         function onGLReady(){
@@ -1008,7 +1054,9 @@ gl_Position = aVertexPosition;
                     ){
                         // increase sortStepSize
                         window.sortStepSize = Math.min(window.MAX_SORT_STEP_SIZE,parseInt(window.sortStepSize * 2));
-                        console.warn('increasing sortStepSize',window.sortStepSize);
+                        console.warn('increasing sortStepSize',window.sortStepSize,{
+                            max: window.MAX_SORT_STEP_SIZE,
+                        });
                     }
                 //}
             }
@@ -1027,11 +1075,14 @@ gl_Position = aVertexPosition;
             }
         }
 
+        window.uScrollOffsetYSpeed = 0.05;
+        window.uScrollOffsetXSpeed = -0.05;
+
         window.bigSweepActive = false, window.bigSweepInterval = 0;
         window.tickBigSweep = function(){
             if(window.bigSweepActive){
-                window.mouseX = (Math.sin(Date.now()*0.0015) + 1) * window.innerWidth/2
-                window.mouseY = (Math.cos(Date.now()*0.0015) + 1) * window.innerHeight/2
+                window.mouseX = (Math.sin(Date.now()*0.001) + 1) * window.innerWidth/4
+                window.mouseY = (Math.cos(Date.now()*0.001) + 1) * window.innerHeight/4
             }
         }
         window.toggleBigSweep = function(){
@@ -1185,6 +1236,32 @@ gl_Position = aVertexPosition;
                 await onPasteAttempt();
             }
         },false)
+
+        document.addEventListener('touchmove',async(e)=>{
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+        })
+
+        // mobile double-tap
+        let doubleTapDected = false, doubleTapTimeout = null, doubleTapDelay = 300;
+        document.addEventListener('touchend',async(e)=>{
+            if(doubleTapDected){
+                // reset
+                doubleTapDected = false;
+                clearTimeout(doubleTapTimeout);
+                doubleTapTimeout = null;
+                // reset
+                showIntroText(skipBlur=true);
+                loadImageAsTexture("./res/360_F_202297164_NSSIqkr7QKi5Ltjrizwh9XGzH0MNANRN.jpg");
+            }else{
+                doubleTapDected = true;
+                doubleTapTimeout = setTimeout(()=>{
+                    doubleTapDected = false;
+                    doubleTapTimeout = null;
+                },doubleTapDelay);
+            }
+        },false)
+
         document.addEventListener('dblclick',async(e)=>{
             // reset
             showIntroText(skipBlur=true);
@@ -1270,10 +1347,25 @@ gl_Position = aVertexPosition;
             gl.uniform1i(programInfo.uniformLocations.uBaseTexture, 1); // TEXTURE2
             gl.uniform1i(programInfo.uniformLocations.uOriginalPixelDataTexture, 3); // TEXTURE3
 
-            // map swirl turns to mouse x:
-            // 0 (0) - 1 (clientWidth) => 1 - 4
-            uSwirlTurns = 0 + (mouseX / window.innerWidth) * 10;
-            uSwirlAmp = 0.001 + (mouseY / window.innerHeight) * 3;
+            //
+            gl.uniform1f(programInfo.uniformLocations.uScrollOffsetYSpeed, window.uScrollOffsetYSpeed)
+            gl.uniform1f(programInfo.uniformLocations.uScrollOffsetXSpeed, window.uScrollOffsetXSpeed)
+
+            // Adjusting the origin to be the middle of the window
+            let midX = window.innerWidth / 2;
+            let midY = window.innerHeight / 2;
+
+            // Adjust mouseX and mouseY to be relative to the middle of the window
+            let adjustedMouseX = mouseX - midX;
+            let adjustedMouseY = mouseY - midY;
+
+            // Mapping swirl turns to adjustedMouseX
+            // -midX (-1) - midX (1) => 1 - 4
+            uSwirlTurns = 1 + (adjustedMouseX / midX) * 3;
+
+            // Mapping swirl amplitude to adjustedMouseY
+            // -midY (-1) - midY (1) => 0.001 - 3
+            uSwirlAmp = 0.001 + (adjustedMouseY / midY) * 3;
 
             gl.uniform1f(programInfo.uniformLocations.uSwirlTurns, uSwirlTurns);
             gl.uniform1f(programInfo.uniformLocations.uSwirlAmp, uSwirlAmp);
