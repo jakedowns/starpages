@@ -999,7 +999,7 @@ gl_Position = aVertexPosition;
 
             // go ahead and pop our initial data into the position buffer
             // we'll update it later
-            //gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(output_surface_positions), gl.DYNAMIC_DRAW);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(output_surface_positions), gl.DYNAMIC_DRAW);
         }
 
         function setupTextures(){
