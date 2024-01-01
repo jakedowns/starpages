@@ -63,7 +63,7 @@
 <body>
     <canvas id="canvas"></canvas>
     <div id="controls"> 
-        <input type="file" accept="image/*" id="fileupload" />
+        <input type="file" accept="image/*,video/*" id="fileupload" />
         
         <progress id="progress" value="0" max="100"></progress>
         <button id="record-video-button" onclick="window.startCapture()">record video</button>
@@ -236,7 +236,15 @@
 
             document.getElementById("fileupload")?.addEventListener("change", (e) => {
                 const file = e.target.files[0];
-                if (file.type.indexOf('image') === 0) {
+                console.warn('filetype',file.type)
+                if (file.type.indexOf('video') === 0) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        window.setVideoAsChannel(e.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+                else if (file.type.indexOf('image') === 0) {
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         texture.image.src = e.target.result;
@@ -508,7 +516,15 @@
                 // ondrop
                 if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                     const file = e.dataTransfer.files[0];
-                    if (file.type.indexOf('image') === 0) {
+                    // we accept videos too
+                    if (file.type.indexOf('video') === 0) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            window.setVideoAsChannel(e.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                    else if (file.type.indexOf('image') === 0) {
                         const reader = new FileReader();
                         reader.onload = (e) => {
                             texture.image.src = e.target.result;
@@ -518,20 +534,23 @@
                         };
                         reader.readAsDataURL(file);
                     }
-                    // we accept video's too
-                    if (file.type.indexOf('video') === 0) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            window.setVideoAsChannel(e.target.result);
-                        };
-                        reader.readAsDataURL(file);
-                    }
+                    
                 }
             });
             canvas.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
             });
+
+            function imageBlobToBase64(imageBlob){
+                return new Promise((resolve,reject)=>{
+                    let reader = new FileReader();
+                    reader.onload = function(e){
+                        resolve(e.target.result);
+                    }
+                    reader.readAsDataURL(imageBlob);
+                });
+            }
 
             async function onPasteAttempt(){
                 try {
@@ -624,7 +643,10 @@
             document.addEventListener("mouseup",()=>{
                 window.isPaused = !window.isPaused;
 
-                document.getElementById("video").style.opacity = window.isPaused ? 0 : 0.1;
+                let vid;
+                if(vid = document.getElementById("video") && vid){
+                    vid.style.opacity = window.isPaused ? 0 : 0.1;
+                }
 
                 if(!did_react_to_first_user_input){
                     did_react_to_first_user_input = true;
