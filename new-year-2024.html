@@ -48,7 +48,7 @@
             top: 0;
             left: 0;
             width: 160px;
-            opacity: 0;
+            opacity: 0.5;
         }
     
     </style>
@@ -341,6 +341,16 @@
             // Global variable to store the last played video
             let lastPlayedVideo = null;
 
+            window.onVideoPause = function(){
+                window.fixedTime = shaderMaterial.uniforms.u_time.value;
+                window.isPaused = true;
+            }
+            window.onVideoResume = function(){
+                window.fixedTime = null;
+                window.isPaused = false;
+            }
+            window.isPaused = false;
+
             window.setVideoAsChannel = function(videoURL){
                 let video = document.getElementById("video");
                 if(!video){
@@ -350,6 +360,8 @@
                     video.loop = true;
                     // Add an event listener for when the video ends
                     video.onended = pickOne;
+                    video.onpause = onVideoPause;
+                    video.onplay = onVideoResume;
                     //video.muted = true;
                 }
                 
@@ -380,7 +392,12 @@
                     camera.updateProjectionMatrix();
                 }
                 
-                shaderMaterial.uniforms.u_time.value = time * 0.001; // Convert time to seconds
+                if(!window.fixedTime){
+                    
+                    shaderMaterial.uniforms.u_time.value = time * 0.001; // Convert time to seconds
+                }else{
+                    shaderMaterial.uniforms.u_time.value = window.fixedTime;
+                }
                 shaderMaterial.uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
                 updateMouseUniform();
 
@@ -390,7 +407,7 @@
                 // iChannel0: { value: texture },
                 // iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                 //
-                shaderMaterial.uniforms.iTime.value = time * 0.001; // Convert time to seconds
+                shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
                 shaderMaterial.uniforms.iChannel0.value = texture;
                 shaderMaterial.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight, 1.0);
 
@@ -443,10 +460,10 @@
 
             let did_react_to_first_user_input = false;
             let onuserinput = ()=>{
-                //if(!did_react_to_first_user_input){
-                    //did_react_to_first_user_input = true;
+                if(!did_react_to_first_user_input){
+                    did_react_to_first_user_input = true;
                     pickOne();
-                //}
+                }
             }
 
             // when a user drops an image on the canvas, load it to our texture
@@ -464,6 +481,14 @@
                         };
                         reader.readAsDataURL(file);
                     }
+                    // we accept video's too
+                    if (file.type.indexOf('video') === 0) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            window.setVideoAsChannel(e.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                    }
                 }
             });
             canvas.addEventListener('dragover', (e) => {
@@ -477,8 +502,24 @@
                 }
                 onuserinput();
             },false);
-            document.addEventListener("mousedown",onuserinput,false);
-            
+            document.addEventListener("mouseup",()=>{
+                window.isPaused = !window.isPaused;
+                if(!did_react_to_first_user_input){
+                    did_react_to_first_user_input = true;
+                    pickOne();
+                    return;
+                }
+                if(window.isPaused){
+                    document.getElementById("video")?.pause();
+                }else{
+                    document.getElementById("video")?.play();
+                }
+            });
+            document.addEventListener("dblclick",()=>{
+                onuserinput();
+
+                pickOne();
+            })
             document.addEventListener("resize",()=>{
                 canvas = document.getElementById("canvas");
                 const renderer = new THREE.WebGLRenderer({canvas,alpha:true});
