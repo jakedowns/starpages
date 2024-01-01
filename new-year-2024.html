@@ -338,6 +338,9 @@
                 shaderMaterial.uniforms.u_mouse.value.set(normalizedX, normalizedY);
             }
 
+            // Global variable to store the last played video
+            let lastPlayedVideo = null;
+
             window.setVideoAsChannel = function(videoURL){
                 let video = document.getElementById("video");
                 if(!video){
@@ -345,6 +348,8 @@
                     video.setAttribute('id', 'video');
                     video.crossOrigin = 'anonymous';
                     video.loop = true;
+                    // Add an event listener for when the video ends
+                    video.onended = pickOne;
                     //video.muted = true;
                 }
                 
@@ -415,6 +420,8 @@
             // first frame...
             requestAnimationFrame(animate);
 
+            // make sure we don't pick the same one back to back
+            // also make sure we auto switch to the next one after the end of the video
             function pickOne(){
                 // video time
                 let much = [
@@ -422,7 +429,15 @@
                     "Katy Perry - Dark Horse ft. Juicy J.mp4",
                     "Katy Perry - Firework (Official Music Video).mp4"
                 ]
-                let one = much[Math.floor(Math.random() * much.length)];
+                // Filter out the last played video
+                let filteredMuch = much.filter(v => v !== lastPlayedVideo);
+
+                // Randomly select a video from the filtered list
+                let one = filteredMuch[Math.floor(Math.random() * filteredMuch.length)];
+
+                // Update the last played video
+                lastPlayedVideo = one;
+
                 setVideoAsChannel("https://jakedowns.com/media/"+one);
             }
 
