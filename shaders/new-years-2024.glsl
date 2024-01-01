@@ -240,6 +240,21 @@ vec2 transform3DPointToUV(vec3 point, vec3 normal, float camDist) {
     // Mix the luminance into the existing color
     //col = mix(col, vec3(luminance), 0.5); // Adjust the 0.5 as needed for mixing amount
 
+    // use pixel brightness to offset the texture lookup
+    //float lum = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+    //vec2 offsetLookup = vec2(lum * 10.0, 0.0);
+    // vec4 texColor2 = texture(iChannel0, fragCoord/iResolution.xy + offsetLookup);
+    // col = mix(col, texColor2.rgb, 0.5);
+    
+    // show a Picture-in-Picture in the top left of the original iChannel0
+    // make sure to make it appear scaled down in the top left corner
+    vec2 PIP_TOP_LEFT_RANGE = vec2(0.0, 0.2);
+    vec2 PIP_SIZE = vec2(0.2, 0.2);
+    vec2 PIP_OFFSET = vec2(0.0, 0.0);
+    vec2 PIP_UV = (fragCoord.xy - iResolution.xy * PIP_TOP_LEFT_RANGE) / (iResolution.xy * PIP_SIZE);
+    float mask = step(0.0, PIP_UV.x) * step(0.0, PIP_UV.y) * step(PIP_UV.x, 1.0) * step(PIP_UV.y, 1.0);
+    col = mix(col, texture(iChannel0, PIP_UV + PIP_OFFSET).rgb, mask * 0.5);
+    
     // post
     col=pow(clamp(col,0.0,1.0),vec3(0.45)); 
     col=col*0.6+0.4*col*col*(3.0-2.0*col);  // contrast

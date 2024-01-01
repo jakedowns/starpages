@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <title>-- New Year's 2024 -- </title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script> -->
+    <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <!-- <script src="./res/import/dat.gui.min.js"></script> -->
     <!-- TODO: 
         https://threejs.org/examples/#webgl_video_panorama_equirectangular 
@@ -48,7 +48,7 @@
             top: 0;
             left: 0;
             width: 160px;
-            opacity: 0.4;
+            opacity: 0;
         }
     
     </style>
@@ -104,11 +104,11 @@
                 }
 
                 //window.maxFrames = 120 * image_height
-                console.warn('image_height',{
-                    image_height: window.image_height,
-                    maxFrames: window.maxFrames,
-                    height: window.innerHeight
-                })
+                // console.warn('image_height',{
+                //     image_height: window.image_height,
+                //     maxFrames: window.maxFrames,
+                //     height: window.innerHeight
+                // })
 
                 window.capturing = true;
                 window.capturedFrames = 0;
@@ -125,8 +125,10 @@
                 window.capturer.save();
             }
         }
+        let canvas;
         document.addEventListener("DOMContentLoaded",async()=>{
-            //setupCapturing();            
+            setupCapturing();            
+            
 
             window.fragmentShader = await (await fetch("./shaders/new-years-2024.glsl")).text();
 
@@ -212,7 +214,7 @@
                     reader.readAsDataURL(file);
                 }
             });
-            const canvas = document.getElementById("canvas");
+            canvas = document.getElementById("canvas");
             const renderer = new THREE.WebGLRenderer({canvas});
 
             // Orthographic camera setup
@@ -337,12 +339,18 @@
             }
 
             window.setVideoAsChannel = function(videoURL){
-                const video = document.createElement('video');
-                video.crossOrigin = 'anonymous';
-                video.loop = true;
-                //video.muted = true;
+                let video = document.getElementById("video");
+                if(!video){
+                    video = document.createElement('video');
+                    video.setAttribute('id', 'video');
+                    video.crossOrigin = 'anonymous';
+                    video.loop = true;
+                    //video.muted = true;
+                }
+                
                 video.src = videoURL;
-                video.showControls = true;
+                video.autoplay = true;
+                video.controls = true;
                 video.play();
                 video.oncanplay = function() {
                     texture = new THREE.VideoTexture(video);
@@ -393,23 +401,37 @@
                 if(window.capturing){
                     window.capturer.capture(canvas);
                     window.capturedFrames++;
-                    progress.value = (window.capturedFrames / maxFrames) * 100;
+                    if(progress){
+                        progress.value = (window.capturedFrames / maxFrames) * 100;
+                    }
                     if(window.capturedFrames >= maxFrames){
                         window.stopCapture();
                     }
                 }
             }
 
+            resizeRendererToDisplaySize(renderer);
+
             // first frame...
             requestAnimationFrame(animate);
 
+            function pickOne(){
+                // video time
+                let much = [
+                    "Katy Perry - California Gurls (Official Music Video) ft. Snoop Dogg.mp4",
+                    "Katy Perry - Dark Horse ft. Juicy J.mp4",
+                    "Katy Perry - Firework (Official Music Video).mp4"
+                ]
+                let one = much[Math.floor(Math.random() * much.length)];
+                setVideoAsChannel("https://jakedowns.com/media/"+one);
+            }
+
             let did_react_to_first_user_input = false;
             let onuserinput = ()=>{
-                if(!did_react_to_first_user_input){
-                    did_react_to_first_user_input = true;
-                    // video time
-                    setVideoAsChannel("https://jakedowns.com/media/Katy%20Perry%20-%20Dark%20Horse%20ft.%20Juicy%20J.mp4")
-                }
+                //if(!did_react_to_first_user_input){
+                    //did_react_to_first_user_input = true;
+                    pickOne();
+                //}
             }
 
             // when a user drops an image on the canvas, load it to our texture
@@ -443,7 +465,7 @@
             document.addEventListener("mousedown",onuserinput,false);
             
             document.addEventListener("resize",()=>{
-                const canvas = document.getElementById("canvas");
+                canvas = document.getElementById("canvas");
                 const renderer = new THREE.WebGLRenderer({canvas,alpha:true});
                 const width = canvas.clientWidth;
                 const height = canvas.clientHeight;
