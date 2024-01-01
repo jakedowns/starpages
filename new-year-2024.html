@@ -5,8 +5,8 @@
     <meta charset="utf-8">
     <title>-- New Year's 2024 -- </title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
-    <script src="./res/import/dat.gui.min.js"></script>
+    <!-- <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script> -->
+    <!-- <script src="./res/import/dat.gui.min.js"></script> -->
     <!-- TODO: 
         https://threejs.org/examples/#webgl_video_panorama_equirectangular 
         https://threejs.org/examples/#webgl_materials_video
@@ -55,8 +55,9 @@
 </head>
 <body>
     <canvas id="canvas"></canvas>
-    <div id="controls"> 
+    <!-- <div id="controls"> 
         <input type="file" accept="image/*" id="fileupload" />
+
         <progress id="progress" value="0" max="100"></progress>
         
         <button onclick="window.startCapture()">record video</button>
@@ -68,7 +69,7 @@
             <p>Press <kbd>Esc</kbd> to dismiss this message.</p>
             <button onclick="window.doPasteFromClipboard()">Tap Here</button>
         </div>
-    </div>
+    </div> -->
     <script>
         window.frame_blend_mode = "additive";
         window.do_clear_frame = false;
@@ -125,7 +126,7 @@
             }
         }
         document.addEventListener("DOMContentLoaded",async()=>{
-            setupCapturing();
+            //setupCapturing();            
 
             window.fragmentShader = await (await fetch("./shaders/new-years-2024.glsl")).text();
 
@@ -200,7 +201,7 @@
                 }
             },false);
 
-            document.getElementById("fileupload").addEventListener("change", (e) => {
+            document.getElementById("fileupload")?.addEventListener("change", (e) => {
                 const file = e.target.files[0];
                 if (file.type.indexOf('image') === 0) {
                     const reader = new FileReader();
@@ -245,12 +246,14 @@
 
             window.image_height = texture.height;
 
+            
+
             // Alternatively, use RepeatWrapping for wrap-around effect
             // texture.wrapS = THREE.RepeatWrapping;
             // texture.wrapT = THREE.RepeatWrapping;
 
             // Set how many times the texture should repeat
-            // texture.repeat.set(1, 1); // Adjust as needed
+            texture.repeat.set(2, 2); // Adjust as needed
 
             /* Match ShaderToy uniforms for compatibility */
             // ERROR: 0:151: 'iTime' : undeclared identifier
@@ -384,8 +387,9 @@
 
                 renderer.render(scene, camera);
 
+                // next frame
                 requestAnimationFrame(animate);
-
+                // or ... next frame
                 if(window.capturing){
                     window.capturer.capture(canvas);
                     window.capturedFrames++;
@@ -396,7 +400,17 @@
                 }
             }
 
+            // first frame...
             requestAnimationFrame(animate);
+
+            let did_react_to_first_user_input = false;
+            let onuserinput = ()=>{
+                if(!did_react_to_first_user_input){
+                    did_react_to_first_user_input = true;
+                    // video time
+                    setVideoAsChannel("https://jakedowns.com/media/Katy%20Perry%20-%20Dark%20Horse%20ft.%20Juicy%20J.mp4")
+                }
+            }
 
             // when a user drops an image on the canvas, load it to our texture
             canvas.addEventListener('drop', (e) => {
@@ -419,6 +433,14 @@
                 e.preventDefault();
                 e.stopPropagation();
             });
+
+            document.addEventListener("keydown",(e)=>{
+                if(e.key == "Escape"){
+                    hidePasteFromClipboardPrompt();
+                }
+                onuserinput();
+            },false);
+            document.addEventListener("mousedown",onuserinput,false);
             
             document.addEventListener("resize",()=>{
                 const canvas = document.getElementById("canvas");
