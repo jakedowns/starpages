@@ -173,7 +173,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     uv.x *= iResolution.x / iResolution.y;
 
     pixel_size = 1.0 / (iResolution.x * 3.0);
-	// camera
+	// camera, stime = sin(time), ctime = cos(time)
     stime = 0.7 + 0.3 * sin(iTime * 0.4);
     ctime = 0.7 + 0.3 * cos(iTime * 0.4); 
 
@@ -189,7 +189,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     vec3 sundir = normalize(vec3(0.1, 0.8, 0.6));
     vec3 sun = vec3(1.64, 1.27, 0.99);
-    vec3 skycolor = vec3(0.6, 1.5, 1.0);
+    vec3 skycolor = vec3(0.0);
 
     vec3 bg = exp(uv.y - 2.0) * vec3(0.4, 1.6, 1.0);
 

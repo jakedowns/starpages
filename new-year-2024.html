@@ -15,7 +15,7 @@
         
     -->
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; }
+        body { margin: 0; background-color: #000; overflow: hidden; position: relative; display: block; height: 100vh; width: 100vw; }
         canvas { width: 100%; height: 100%; background-color: #0FF; }
         #pasteFromClipboardPrompt {
             position: absolute;
@@ -50,17 +50,23 @@
             width: 160px;
             opacity: 0.5;
         }
+        #record-video-button {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 100px;
+            z-index: 1000;
+        }
     
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
-    <!-- <div id="controls"> 
+    <div id="controls"> 
         <input type="file" accept="image/*" id="fileupload" />
-
-        <progress id="progress" value="0" max="100"></progress>
         
-        <button onclick="window.startCapture()">record video</button>
+        <progress id="progress" value="0" max="100"></progress>
+        <button id="record-video-button" onclick="window.startCapture()">record video</button>
     </div>
     <div id="pasteFromClipboardPrompt">
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
@@ -69,7 +75,7 @@
             <p>Press <kbd>Esc</kbd> to dismiss this message.</p>
             <button onclick="window.doPasteFromClipboard()">Tap Here</button>
         </div>
-    </div> -->
+    </div>
     <script>
         window.frame_blend_mode = "additive";
         window.do_clear_frame = false;
@@ -142,8 +148,33 @@
             function hidePasteFromClipboardPrompt(){
                 pasteFromClipboardPrompt.classList.remove("show");
             }
-            // let didShowClipboardPrompt = false;
+            let didShowClipboardPrompt = false;
+            let currentClipboardBagValueHash = null;
+            let previousClipboardBagValueHash = null;
             // let clipboardCheckInterval = setInterval(async()=>{
+
+            //     if(didShowClipboardPrompt){
+            //         // check if clipboard has changed
+            //         let currentClipboardBagValueHash = null;
+            //         try{
+            //             const items = await navigator.clipboard.read();
+            //             let hash_string = '';
+            //             for (const item of items) {
+            //                 let types_concat = item.types.join('');
+            //                 hash_string += types_concat;
+            //                 hash_string += item.size ?? 0;
+            //                 hash_string += item.lastModified ?? 0;
+            //             }
+            //             console.warn({hash_string})
+            //             currentClipboardBagValueHash = hash_string;
+            //         }catch(e){
+            //             console.error(e);
+            //         }
+            //         if(currentClipboardBagValueHash != previousClipboardBagValueHash){
+            //             didShowClipboardPrompt = false;
+            //         }
+            //     }
+
             //     if(didShowClipboardPrompt){
             //         return;
             //     }
@@ -366,17 +397,18 @@
                 }
                 
                 video.src = videoURL;
-                video.autoplay = true;
+                video.autoplay = false; // true;
                 video.controls = true;
                 video.play();
+                
                 video.oncanplay = function() {
-                    texture = new THREE.VideoTexture(video);
-                    texture.minFilter = THREE.LinearFilter;
-                    texture.magFilter = THREE.LinearFilter;
-                    texture.format = THREE.RGBFormat;
-                    texture.crossOrigin = 'anonymous';
-                    texture.needsUpdate = true;
-                    shaderMaterial.uniforms.u_texture.value = texture;
+                    window.videoTexture = new THREE.VideoTexture(video);
+                    window.videoTexture.minFilter = THREE.LinearFilter;
+                    window.videoTexture.magFilter = THREE.LinearFilter;
+                    window.videoTexture.format = THREE.RGBFormat;
+                    window.videoTexture.crossOrigin = 'anonymous';
+                    window.videoTexture.needsUpdate = true;
+                    shaderMaterial.uniforms.u_texture.value = window.videoTexture.texture;
                 }
                 document.body.appendChild(video);
             }
@@ -440,6 +472,7 @@
             // make sure we don't pick the same one back to back
             // also make sure we auto switch to the next one after the end of the video
             function pickOne(){
+                console.warn("pick one called");
                 // video time
                 let much = [
                     "Katy Perry - California Gurls (Official Music Video) ft. Snoop Dogg.mp4",
@@ -468,9 +501,11 @@
 
             // when a user drops an image on the canvas, load it to our texture
             canvas.addEventListener('drop', (e) => {
+                did_react_to_first_user_input = true;
                 e.preventDefault();
                 e.stopPropagation();
-
+                
+                // ondrop
                 if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                     const file = e.dataTransfer.files[0];
                     if (file.type.indexOf('image') === 0) {
@@ -478,6 +513,8 @@
                         reader.onload = (e) => {
                             texture.image.src = e.target.result;
                             texture.needsUpdate = true;
+                            // "setImageAsChannel"
+                            shaderMaterial.uniforms.u_texture.value = texture;
                         };
                         reader.readAsDataURL(file);
                     }
@@ -496,14 +533,99 @@
                 e.stopPropagation();
             });
 
-            document.addEventListener("keydown",(e)=>{
+            async function onPasteAttempt(){
+                try {
+                        // Check if the Clipboard API is available
+                        if (!navigator.clipboard) {
+                            console.warn('Clipboard API not available.');
+                            throw new Error('Clipboard API not available');
+                        }
+
+                        // Attempt to read from the clipboard
+                        const clipboardItems = await navigator.clipboard.read();
+                        console.log('Clipboard items retrieved:', clipboardItems);
+
+                        let clipboardBag = {images:[]};
+
+                        // Find text content in clipboard items
+                        const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
+                        if (textItem) {
+                            const textBlob = await textItem.getType('text/plain');
+                            const text = await textBlob.text();
+                            console.log('Pasted text content: ', text);
+                            clipboardBag.text = text;
+                        }
+
+                        // Find HTML content in clipboard items
+                        const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
+                        if (htmlItem) {
+                            const htmlBlob = await htmlItem.getType('text/html');
+                            const html = await htmlBlob.text();
+                            console.log('Pasted HTML content: ', html);
+                            clipboardBag.html = html;
+                        }
+                        // Note: imageBlob is an instance of Blob
+                        // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
+                        // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
+                        // we need to do the slow, full conversion of a Blob to a base64 encoded string
+                        // then we can use that base64 encoded string to load the image as a texture
+                        
+
+
+                        // Find any "image" items:
+                        const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
+                        // Alert if there's multiple, we only support one for now
+                        if (imageItems.length > 1) {
+                            alert('Multiple images found. Using the last image.');
+                        }
+                        for (const imageItem of imageItems) {
+                            const imageBlob = await imageItem.getType('image/png');
+                            //console.log('Pasted image: ', image);
+                            clipboardBag.imageBlob = imageBlob;
+
+                            //loadImageBlobAsTexture(imageBlob);
+                            
+                            let b64 = await imageBlobToBase64(imageBlob);
+                            //console.log('Pasted image: ', b64);
+
+                            await loadBase64AsTexture(b64);
+                            clipboardBag.images.push(b64);
+                        }
+
+                        hideIntroText()
+
+                        // Process clipboardBag as needed
+                        console.warn({clipboardBag});
+
+                    } catch (error) {
+                        console.error('Error accessing clipboard:', error);
+                        // Handle error appropriately
+                    }
+            }
+
+            document.addEventListener("keydown",async(e)=>{
                 if(e.key == "Escape"){
                     hidePasteFromClipboardPrompt();
                 }
+
+                // if command v on mac,
+                // or control v on other,
+                // paste image from clipboard
+                if ( 
+                    (e.keyCode === 22 || e.keyCode === 86)
+                    && (e.metaKey || e.ctrlKey)
+                ){
+                    await onPasteAttempt();
+                    e.preventDefault();
+                }
+
                 onuserinput();
             },false);
             document.addEventListener("mouseup",()=>{
                 window.isPaused = !window.isPaused;
+
+                document.getElementById("video").style.opacity = window.isPaused ? 0 : 0.1;
+
                 if(!did_react_to_first_user_input){
                     did_react_to_first_user_input = true;
                     pickOne();
