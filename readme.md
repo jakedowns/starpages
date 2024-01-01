@@ -6,8 +6,9 @@ https://jakedowns.github.io/starpages
 | 👤 Name | 🎉 Happy New Year 2024 |
 |🚦**Status** | 🟡 On Hold |
 |🧾 *Description* | Using [Three.js > VideoTexture](https://threejs.org/docs/#api/en/textures/VideoTexture) to display videos on ['mandelbulb_' by EvilRyu on ShaderToy](https://www.shadertoy.com/view/MdXSWn) |
-| 🏷️ Tags | `three.js` `WebGL` `GLSL` `Javascript - ES6` `fractals` `mandlebrot` `video texture` |
-| 📚 Libraries | [`CCapture.js` - Capture Canvas to .webm/.mp4 @ fixed fps](https://github.com/spite/ccapture.js/) | 
+| 🏷️ Tags | `fractals` `mandlebrot` `video texture` |
+| 💬 Languages |  `glsl`, `javascript` |
+| 📚 Libraries |  - [`CCapture.js`](https://github.com/spite/ccapture.js/) - Capture Canvas to .webm/.mp4 @ fixed fps \n <br/> - [`Three.js`](https://github.com/mrdoob/three.js) - The one and only | 
 | 🌐 URL |  https://jakedowns.github.io/starpages/new-year-2024.html |
 | 👨‍💻 Source | https://github.com/jakedowns/starpages/blob/main/new-year-2024.html | 
 
