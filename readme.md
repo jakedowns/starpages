@@ -1,6 +1,30 @@
 https://jakedowns.github.io/starpages
 
 ## Demos / Starter Files:
+```
+|||
+|---|---|
+| 👤 Name | Project's Name |
+|🚦Status | Started Xxx XX, XXXX |
+|🧾 Description | Some nice words about the project |
+| 🏷️ Tags | {PROJ_TAGS_AS_TOKEN_FIELD_READONLY} | <!-- {READONLY_TOKEN_FIELD__PROJ_TAGS} // ~> RO_TF_P_TAGS / VIEWABLE_TAGLIST EDITABLE_TAGLIST -->
+| 💬 Languages |  {PROJ_LANGUAGES_AS_TOKEN_FIELD_READONLY} |
+| 📚 Libraries |  {PROJECT_LIBRARIES_FORMATTED_UL} | 
+| 🌐 URL |  https://jakedowns.github.io/starpages/{PROJECT_INDEX_FILENAME} |
+| 👨‍💻 Source | https://github.com/jakedowns/starpages/blob/main/{PROJECT_INDEX_FILENAME} | 
+```
+
+|||
+|---|---|
+| 👤 Name | Project's Name |
+|🚦Status | Started Xxx XX, XXXX |
+|🧾 Description | Some nice words about the project |
+| 🏷️ Tags | {PROJ_TAGS_AS_TOKEN_FIELD_READONLY} | <!-- {READONLY_TOKEN_FIELD__PROJ_TAGS} // ~> RO_TF_P_TAGS / VIEWABLE_TAGLIST EDITABLE_TAGLIST -->
+| 💬 Languages |  {PROJ_LANGUAGES_AS_TOKEN_FIELD_READONLY} |
+| 📚 Libraries |  {PROJECT_LIBRARIES_FORMATTED_UL} | 
+| 🌐 URL |  https://jakedowns.github.io/starpages/{PROJECT_INDEX_FILENAME} |
+| 👨‍💻 Source | https://github.com/jakedowns/starpages/blob/main/{PROJECT_INDEX_FILENAME} |
+
 | | |
 |---|---|
 | 👤 Name | 🎉 Happy New Year 2024 |
