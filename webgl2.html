@@ -16,7 +16,7 @@
     <script>
         window.capturerSpeedReduction = 0.5;
     </script>
-    <title>WebGL Pixel Mixer - jakedowns</title>
+    <title>Pixel Mixer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
@@ -44,7 +44,7 @@
             pointer-events: none;
             position: absolute;
             left: 0; right: 0; top: 0; bottom: 0;
-            z-index: 998;
+            z-index: 4000;
             font-size: 43px;
             font-weight: bold;
             text-align: center;
@@ -133,48 +133,52 @@
             background-color: #663dff;
             font-family: sans-serif;
             text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            background-size: 200% auto;
+            background-image: linear-gradient(90deg, #cc4499, #aa00ff, #663dff, #aa00ff, #cc4499);
+            transition: all 1s ease-in-out;
+            /* Apply the animation */
+            animation: gradient-animation 2s linear infinite;
         }
 
         /* here we use a rounded rectangle + a linear gradient to emulate gloss via psuedo element */
-        .hide-intro-button .btn-inner::before {
+        .hide-intro-button .btn-inner::after {
             content: "";
             position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
             border-radius: 100px;
-            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
-            z-index: -1;
+            background-color: rgba(255,255,255,0.1);
+            z-index: 1;
+            backdrop-filter: blur(50px);
         }
 
 
         .hide-intro-button:hover {
-            background-color: #663dff;
-            animation: gradient-animation 2s ease infinite; /* Apply the animation */
         }
         .hide-intro-button .btn-text {
             position: relative;
             font-size: 18px;
-            z-index: 1;
+            z-index: 2;
+            color: white;
+            text-shadow:  1px 1px 10px rgba(255,255,255,1); /* 1px 1px 1px rgba(0,0,0,0.8), */
             cursor: pointer;
         }
-        @keyframes gradient-animation {
-            0%, 100% {
-                background-position: 0% 50%;
-            }
-            50% {
-                background-position: 100% 50%;
-            }
-            /* 100% {
-                background-position: 0% 50%;
-            } */
-        }
 
-        .hide-intro-button {
-            background-size: 200% 200%; /* Extend the background size for the animation */
-            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
-            animation: gradient-animation 3s ease infinite; /* Apply the animation */
+        /*
+            1. we reflect the gradient over the Y axis
+            2. we animate the gradient over time from left to right infinitely
+            3. [#cc4499, #aa00ff, #663dff, #aa00ff, #cc4499]
+            4. we use a linear gradient to emulate gloss
+            5. we stretch it to 2x the width of the button
+        */
+        @keyframes gradient-animation {
+            0% { background-position: 0% 50%; }
+            99.99% { background-position: -200% 50%; }
+            100% { background-position: 0% 50%; }
         }
 
         #controls {
@@ -225,7 +229,7 @@
         <button onclick="window.startCapture()">record video</button>
     </div>
 
-    <div class="intro-card transition-opacity">
+    <div class="intro-card transition-opacity fade-out">
         <h1>Pixel Mixer Demo</h1>
         <p>v24.01.01.01 - Major Release 001</p>
         <p>Shout out to acerola on youtube for his original "I tried sorting pixels" video which inspired me to dig back into this</p>
@@ -240,11 +244,11 @@
         </button>
     </div>
 
-    <div class="intro-underlay" onclick="window.hideWelcome()"></div>
+    <div class="intro-underlay fade-out" onclick="window.hideWelcome()"></div>
 
-    <div class="drop-here-text">webgl pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
+    <div class="drop-here-text">pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     
-    <canvas id="canvas"></canvas>
+    <canvas id="canvas" classname="undarken"></canvas>
     <script>
         window.canvas;
         window.uReflectionY = 0.5; // 0.5 = no reflection, 0 = full reflection, 1 = no reflection
@@ -252,9 +256,37 @@
         window.capturer = null;
         window.capturing = false;
         window.capturedFrames = 0;    
-        window.maxFrames = 120 * 10;
-
+        window.targetRecordingFPS = 120;
+        Object.defineProperty(window, 'maxFrames', {
+            get: function() { return this.targetRecordingFPS * 10; }
+        });
+        window.videoIsPlaying = false;
+        // used to distinguish element's playback state from our virtual playback state(sub-0.1x playback rate)
+        window.videoIsVirtuallyPlaying = false; 
+        window.recordingStartedAt = 0;
+        window.recordingVirtualTimeSinceStart = 0;
+        window.subframePlaybackCurrentFrame = 0;
+        window.currentVideoTime = null;
         window.baseTexture = null;
+
+        window.isPaused = false;
+        window.theVideoplayerElement = null;
+        let _targetVideoPlaybackRate = 0.01;
+        let _targetVideoPlaybackRateClamped = 0.1;
+        Object.defineProperty(window, 'targetVideoPlaybackRate', {
+            get: function() {
+                return _targetVideoPlaybackRate;
+            },
+            set: function(value) {
+                _targetVideoPlaybackRate = value;
+                _targetVideoPlaybackRateClamped = parseFloat(Math.min(Math.max(value, 0.1), 1.0).toFixed(1));
+                if (window.theVideoplayerElement) {
+                    window.theVideoplayerElement.playbackRate = _targetVideoPlaybackRateClamped;
+                }else{
+                    console.warn('no video element to set playback rate on')
+                }
+            }
+        });
 
         // was: fsSource
         /*
@@ -288,6 +320,54 @@
             // 2. clone base -> target (refresh)
             // 3. clone base -> accumulator (refresh)
             // 4. clone base -> lerped (refresh)?
+        }
+
+        let handling_slow_motion_advance = false;
+
+        
+
+        function maybeAdvanceVideoOneFrame() {
+            if(!window.videoIsVirtuallyPlaying || window.targetVideoPlaybackRate >= 0.1){
+                return;
+            }
+            let frameDuration = 1 / window.targetRecordingFPS; //framerate;
+            let desiredSpeed = window.targetVideoPlaybackRate;// 0.05; // Replace with your desired speed
+            let playDuration = frameDuration / desiredSpeed;
+
+            function playSlowMotion() {
+                handling_slow_motion_advance = true;
+                theVideoplayerElement.play();
+                // advance in the smallest possible increment
+                // kicking to next event loop to make sure play isn't suppressed
+                setTimeout(() => {
+                    theVideoplayerElement.pause();
+                    theVideoplayerElement.currentTime += frameDuration;
+
+                    // update window: 
+                    // recordingVirtualTimeSinceStart
+                    // currentVideoTime
+                    // subframePlaybackCurrentFrame
+                    // capturedFrames
+
+                    handling_slow_motion_advance = false;
+                }, playDuration * 1000);
+            }
+
+            theVideoplayerElement.addEventListener('seeked', () => {
+                if (handling_slow_motion_advance) {
+                    playSlowMotion();
+                }
+            });
+
+            theVideoplayerElement.addEventListener('pause', () => {
+                if (handling_slow_motion_advance && theVideoplayerElement.currentTime < theVideoplayerElement.duration) {
+                    theVideoplayerElement.currentTime += frameDuration;
+                }
+            });
+
+            if (recordingVirtualTimeSinceStart >= window.subframePlaybackCurrentFrame * frameDuration) {
+                playSlowMotion();
+            }
         }
 
         window.setupThree = async function(){
@@ -588,38 +668,44 @@
                     window.isPaused = false;
                 }
             }
-            window.isPaused = false;
 
-            // a poly-fill of sorts to support playback rates below 0.1 (limit of double param in html5 video element)
-            window.forceLowPlaybackRate = true;
+            window.createVideoElement = function(){
+                let video = document.createElement('video');
+                video.setAttribute('id', 'video');
+                video.crossOrigin = 'anonymous';
+                video.loop = true;
+                // Add an event listener for when the video ends
+                video.onended = pickOne;
+                video.onpause = onVideoPause;
+                video.onplay = onVideoResume;
+                //video.muted = true;
 
-            window.theVideoplayerElement = null;
+                // min of the html attribute is 0.1, 
+                // if we want to go lower, we need to simulate with pause and manual frame-stepping
+                // see: window.targetVideoPlaybackRate
+                video.playbackRate = 0.1; 
+
+                video.pictureInPictureEnabled = true;
+                video.addEventListener('enterpictureinpicture', (event) => {
+                    console.warn('enterpictureinpicture',event)
+                });
+                video.addEventListener('leavepictureinpicture', (event) => {
+                    console.warn('leavepictureinpicture',event)
+                });
+                // video.addEventListener('loadedmetadata', (event) => {
+                //     console.warn('loadedmetadata',event)
+                // });
+                window.theVideoplayerElement = video;
+            }
+            
+            window.theVideoplayerElement = document.getElementById("video");
+            if(!window.theVideoplayerElement){
+                createVideoElement();
+            }
             window.setVideoAsChannel = function(videoURL){
-                console.warn('setVideoAsChannel',videoURL)
-                let video = document.getElementById("video");
-                if(!video){
-                    video = document.createElement('video');
-                    video.setAttribute('id', 'video');
-                    video.crossOrigin = 'anonymous';
-                    video.loop = true;
-                    // Add an event listener for when the video ends
-                    video.onended = pickOne;
-                    video.onpause = onVideoPause;
-                    video.onplay = onVideoResume;
-                    //video.muted = true;
-
-                    video.playbackRate = 0.1;
-
-                    video.pictureInPictureEnabled = true;
-                    video.addEventListener('enterpictureinpicture', (event) => {
-                        console.warn('enterpictureinpicture',event)
-                    });
-                    video.addEventListener('leavepictureinpicture', (event) => {
-                        console.warn('leavepictureinpicture',event)
-                    });
-
-                }
-                theVideoplayerElement = video;
+                //console.warn('setVideoAsChannel',videoURL)
+                
+                let video = window.theVideoplayerElement;
                 
                 video.src = videoURL;
                 video.autoplay = false; // true;
@@ -678,26 +764,33 @@
 
                 renderer.render(scene, camera);
 
-                if(window.playing){
-                    if(video.targetPlaybackRate < 0.1){
+                if(window.videoIsPlaying){
+                    // custom frame-by-frame playback mode kicks in below 0.1 playback rate
+                    // due to DOM limitations
+                    if(window.targetVideoPlaybackRate < 0.1){
                         video.pause();
                     }
                 }
 
-                window.capturedFrames++;
-                if(progress){
-                    progress.value = (window.capturedFrames / maxFrames) * 100;
-                }
-
+                
+                // let nth = ((1/(window.targetRecordingFPS)) * (window?.targetVideoPlaybackRate ?? 1) * window.capturerSpeedReduction);
+                // let adjustedFrame = Math.round(window.capturedFrames * nth);
+                // let maxFrames = Math.round(window.maxFrames * nth) * window.targetRecordingFPS;
+                maybeAdvanceVideoOneFrame();
+                
                 // or ... next frame
                 if(window.capturing){
+                    // update recording progress
+                    if(progress){
+                        progress.value = (window.subframePlaybackCurrentFrame / maxFrames) * 100;
+                    }
                     window.capturer.capture(canvas);
                     
                     if(window.capturedFrames >= maxFrames){
                         window.stopCapture();
                     }else{
                         
-                        let nth = ((1/(120)) * (theVideoplayerElement?.playbackRate ?? 1) * window.capturerSpeedReduction);
+                        
                         // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
                         setTimeout(() => {
                             window.animate(time + (nth/1000));
@@ -930,16 +1023,18 @@
             document.querySelector(".intro-card").classList.toggle("fade-out",true);
             document.querySelector(".intro-underlay").classList.toggle("fade-out",true);
         }
-        window.currentVideoTime = null;
+        
         window.startCapture = function(){
             if(!window.capturer){
                 console.warn("capturer not initialized");
                 return;
             }
+            window.recordingVirtualTimeSinceStart = 0;
+            window.subframePlaybackCurrentFrame = 0;
             window.capturing = true;
             window.capturedFrames = 0;
             window.capturer.start();
-            animate(1);
+            animate(0);
             theVideoplayerElement.pause();
             window.currentVideoTime = video.currentTime;
         }
@@ -1012,13 +1107,13 @@
                     format: 'webm', 
                     motionBlurFrames,
                     verbose: false, 
-                    fps: 120 
+                    fps: window.targetRecordingFPS 
                 } ) 
                 : new CCapture( { 
                     format: 'png', 
                     motionBlurFrames,
                     verbose: false, 
-                    framerate: 120 
+                    framerate: window.targetRecordingFPS 
                 } );
             }catch(e){
                 console.error('failed to create capturer',e);
@@ -1057,7 +1152,7 @@
             //     return;
             // }
             //window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
-            window.fragmentShaderSource = await (await fetch("./frosted-video-mandlebulb.glsl")).text();
+            window.fragmentShaderSource = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
             prepareCCapture();
             setupThree();
         }
