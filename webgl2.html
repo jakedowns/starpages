@@ -232,12 +232,12 @@
         
         <button class="hide-video-button">
             <span class="btn-inner">
-                <span  class="btn-text" onclick="window.hideVideo()">Click to Continue ➡️</span>
+                <span  class="btn-text" onclick="window.hideWelcome()">Click to Continue ➡️</span>
             </span>
         </button>
     </div>
 
-    <div class="video-underlay" onclick="window.hideVideo()"></div>
+    <div class="video-underlay" onclick="window.hideWelcome()"></div>
 
     <div class="drop-here-text">webgl pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     
@@ -249,6 +249,7 @@
         window.capturer = null;
         window.capturing = false;
         window.capturedFrames = 0;    
+        window.maxFrames = 120 * 10;
 
         // was: fsSource
         /*
@@ -575,6 +576,8 @@
                     video.onpause = onVideoPause;
                     video.onplay = onVideoResume;
                     //video.muted = true;
+
+                    video.playbackRate = 0.1;
                 }
                 
                 video.src = videoURL;
@@ -591,6 +594,9 @@
                     window.videoTexture.needsUpdate = true;
                     window.currentTexture = window.videoTexture;
                     console.warn('video should now be appearing on the canvas')
+
+                    // set playback rate to .01
+                    video.playbackRate = 0.01;
                 }
                 document.body.appendChild(video);
             }
@@ -851,9 +857,9 @@
         }
 
         
-        window.hideVideo = function(){
+        window.hideWelcome = function(){
             document.querySelector(".intro-card").classList.toggle("fade-out",true);
-            document.querySelector(".video-underlay").classList.toggle("fade-out",false);
+            document.querySelector(".video-underlay").classList.toggle("fade-out",true);
         }
         window.startCapture = function(){
             if(!window.capturer){
@@ -863,7 +869,7 @@
             window.capturing = true;
             window.capturedFrames = 0;
             window.capturer.start();
-            render();
+            
         }
         window.stopCapture = function(){
             if(!window.capturer){
@@ -956,14 +962,22 @@
                 return;
             }
 
-            // get a blob for the file
-            let blob = await file.arrayBuffer();
-            blob = new Blob([blob], {type: file.type});
-            console.warn(blob);
+            if(file.type.includes('image')){
+                // load the file into our Three.js baseTexture and reflect into our originalPixelDataTexture
+                let url = URL.createObjectURL(file);
+                let img = new Image();
+                img.src = url;
+                img.onload = function(){
+                    window.texture.image.src = url;
+                    window.texture.needsUpdate = true;
+                    // "setImageAsChannel"
+                    shaderMaterial.uniforms.iChannel0.value = texture;
 
-            let b64 = await imageBlobToBase64(blob);
-            console.warn({blob_as_b64:b64})
-            await loadImageAsTexture(b64);
+                    // update our originalPixelDataTexture (Three.js Texture)
+                    window.originalPixelDataTexture.image.src = url;
+                    window.originalPixelDataTexture.needsUpdate = true;
+                }
+            }
         }
 
         // domready
@@ -1066,9 +1080,9 @@
                     }
                 }
 
-                // bind the base texture to our initial pixel data ( a frozen snapshot of the initial state of the pixels for our lerping algo. to work with )
-                gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+                // Bind the base texture to our initial pixel data ( a frozen snapshot of the initial state of the pixels for our lerping algo. to work with )
+                THREE.WebGLRenderer.setTexture2D(baseTexture, 0);
+                THREE.WebGLRenderer.setTexture2D(pixelData, 0, THREE.RGBAFormat, fixedPixelsX, fixedPixelsY, 0, THREE.RGBAFormat, THREE.UnsignedByteType);
 
             }else{
                 // grow or shrink pixelData
@@ -1571,10 +1585,13 @@
                 doubleTapTimeout = null;
                 
                 showIntroText();
-                
-                // Actions to perform on double tap
-                showIntroText(true); // Assuming skipBlur is a parameter of showIntroText
-                loadImageAsTexture("./res/360_F_202297164_NSSIqkr7QKi5Ltjrizwh9XGzH0MNANRN.jpg");
+                // update url
+                let uri = "https://jakedowns.com/media/0006.mp4";
+                videoTexture.image.src = uri;
+                videoTexture.needsUpdate = true;
+
+                // set the video to be the base texture
+                currentTexture = videoTexture;
             } else {
                 doubleTapDetected = true;
                 doubleTapTimeout = setTimeout(() => {
