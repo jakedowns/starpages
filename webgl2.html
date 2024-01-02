@@ -18,7 +18,22 @@
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
-        canvas { width: 100%; height: 100%; opacity: 0.1; filter: blur(100px); transition: filter 0.5s ease-in-out, opacity 0.5 ease-in-out; will-change: filter; }
+        canvas {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+    
+            
+            width: 100vw; 
+            min-Width: 100vw; 
+            max-width: 100vw;
+            height: 100vh;
+            min-height: 100vh;
+            max-height: 100vh; 
+
+            filter: blur(100px); 
+            transition: filter 0.5s ease-in-out, opacity 0.5s ease-in-out; 
+            will-change: filter; 
+        }
         canvas.unblur { filter: blur(0px); opacity: 1; }
         canvas.undarken { opacity: 0.8; }
         .drop-here-text {
@@ -58,9 +73,24 @@
             transform: translate(-50%, -50%);
             z-index: 1000;
             display: block;
+            width: 100%;
+            max-width: 100vw;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .intro-video iframe {
+            height: auto;
+            width: 100%;
+            min-width: 100px;
+            max-width: 100%;
         }
         p {
             color: white;
+            font-size: 12px;
+            font-family: serif;
+        }
+        h1 {
+            font-family: sans-serif;
         }
         .video-underlay {
             background-color: rgba(.1,0,.1,.8);
@@ -111,34 +141,73 @@
             animation: gradient-animation 3s ease infinite; /* Apply the animation */
         }
 
+        #controls {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 100px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            align-items: stretch;
+        }
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 160px;
+            opacity: 0.5;
+        }
+        #record-video-button {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 100px;
+            z-index: 1000;
+        }
+
+        /* final z-indexes */
+        .intro-video { z-index: 1002; position: absolute; }
+        .video-underlay { z-index: 1001; }
+        #controls { z-index: 1000; }
+        video { z-index: 1000; }
+        canvas { z-index: 999; }
+
     </style>
 </head>
 <body>
     <!-- fork me on github -->
-    <a href="https://github.com/jakedowns/starpages/blob/main/webgl2.html" target="_blank" style="position: absolute; top: 0; right: 0; z-index: 1000; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">Fork me on GitHub</a>
+    <a href="https://github.com/jakedowns/starpages/blob/main/webgl2.html" target="_blank" style="position: absolute; top: 0; right: 0; z-index: 1003; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">Fork me on GitHub</a>
 
     <!-- buy me a coffee; ko-fi link -->
-    <a href="https://ko-fi.com/jakedowns" target="_blank" style="position: absolute; top: 0; left: 0; z-index: 1000; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰 Buy me a coffee</a>
+    <a href="https://ko-fi.com/jakedowns" target="_blank" style="position: absolute; top: 0; left: 0; z-index: 1003; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰 Buy me a coffee</a>
 
     <div id="controls"> 
-        <input type="file" accept="image/*" id="fileupload" />
+        <input type="file" accept="image/*,video/*,image/svg+xml" id="fileupload" />
         <progress id="progress" value="0" max="100"></progress>
         <button onclick="window.startCapture()">record video</button>
     </div>
 
     <div class="intro-video">
+        <h1>Pixel Mixer Demo</h1>
+        <p>v24.01.01.01 - Major Release 001</p>
+        <p>Shout out to acerola on youtube for his original "I tried sorting pixels" video which inspired me to dig back into this</p>
+        <p>Drop images and video on this webpage to have them mixed and blended in unique ways</p>
+        <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
         <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
         <p>NOTE: this only works on Windows + Chrome. I have not tested Android, and it is broken on MacOS/iOS (i dont know why, if you think you do, please reach out)</p>
-        <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
+        
         <span class="hide-video-button" onclick="window.hideVideo()">Click to Continue... &gt;</span>
     </div>
 
     <div class="video-underlay" onclick="window.hideVideo()"></div>
 
     <div class="drop-here-text">webgl pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
-    <!-- <canvas id="glCanvas"></canvas> -->
+    
     <canvas id="canvas"></canvas>
     <script>
+        window.canvas;
         window.uReflectionY = 0.5; // 0.5 = no reflection, 0 = full reflection, 1 = no reflection
         window.reverseSort = true;
         window.capturer = null;
@@ -159,7 +228,7 @@
         window.fragmentShaderSource = null;
         
         window.selectedImageTexture;
-
+        window.shaderMaterial;
 
         window.setupThree = async function(){
             window.fragmentShader = await (await fetch("./shaders/new-years-2024.glsl")).text();
@@ -260,9 +329,12 @@
                 }
             },false);
 
-            document.getElementById("fileupload")?.addEventListener("change", (e) => {
+            document.getElementById("fileupload").addEventListener("change", (e) => {
+                hideIntroText();
+
+                //console.warn('fileupload change',e);
                 const file = e.target.files[0];
-                console.warn('filetype',file.type)
+                //console.warn('filetype',file.type)
                 if (file.type.indexOf('video') === 0) {
                     const reader = new FileReader();
                     reader.onload = (e) => {
@@ -300,13 +372,51 @@
             // Full-screen plane geometry
             const planeGeometry = new THREE.PlaneGeometry(2 * aspect, 2);
 
-            const textureLoader = new THREE.TextureLoader();
+            window.textureLoader = new THREE.TextureLoader();
 
             let rand_int_1_thru_17 = Math.floor(Math.random() * 17) + 1;
             //let url = `./res/bg_${rand_int_1_thru_17}.png`;
             //let url = "./res/download (3).png";
             let url = "./res/download (10).png";
-            let texture = textureLoader.load(url);
+            window.texture = textureLoader.load(url);
+
+            // define our textures / buffers
+            // 1. our starting values (provided by user image or video, etc)
+            window.originalPixelDataTexture = new THREE.DataTexture(
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
+                fixedPixelsX, 
+                fixedPixelsY, 
+                THREE.RGBAFormat, 
+                THREE.UnsignedByteType
+            );
+            // 2. our target values
+            window.targetPixelDataTexture = new THREE.DataTexture(
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
+                fixedPixelsX, 
+                fixedPixelsY, 
+                THREE.RGBAFormat, 
+                THREE.UnsignedByteType
+            );
+            // 3. our "accumulator" texture, which we use to lerp between the original and target textures
+            // this is our output buffer for now, but we may add additional buffers later
+            window.lerpedColorTexture = new THREE.DataTexture(
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
+                fixedPixelsX, 
+                fixedPixelsY, 
+                THREE.RGBAFormat, 
+                THREE.UnsignedByteType
+            );
+            // 4. our "offset" buffer where we accumulate / calculate our offsets
+            window.offsetTexture = new THREE.DataTexture(
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
+                fixedPixelsX, 
+                fixedPixelsY, 
+                THREE.RGBAFormat, 
+                THREE.UnsignedByteType
+            );
+
+
+            window.currentTexture = texture;
             // Assuming you have a texture loaded into a variable named 'texture'
             texture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
             texture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
@@ -323,22 +433,17 @@
             texture.repeat.set(2, 2); // Adjust as needed
 
             /* Match ShaderToy uniforms for compatibility */
-            // ERROR: 0:151: 'iTime' : undeclared identifier
-            // ERROR: 0:244: 'iChannel0' : undeclared identifier
-            // ERROR: 0:244: 'iResolution' : undeclared identifier
-
             // Custom Shader
-            const shaderMaterial = new THREE.ShaderMaterial({
+            window.shaderMaterial = new THREE.ShaderMaterial({
                 uniforms: {
-                    u_texture: { value: texture },
                     u_time: { value: 1.0 },
                     u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-                    u_mouse: { value: new THREE.Vector2(0.0, 0.0) },
                     
                     // compatibility uniforms
                     iTime: { value: 1.0 },
                     iChannel0: { value: texture },
                     iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
+                    iMouse: { value: new THREE.Vector4(0.0) },
                 },
                 vertexShader: `
                     void main() {
@@ -351,7 +456,7 @@
             
 
             // Creating and adding the plane to the scene
-            const plane = new THREE.Mesh(planeGeometry, shaderMaterial);
+            window.plane = new THREE.Mesh(planeGeometry, shaderMaterial);
             scene.add(plane);
 
             function resizeRendererToDisplaySize(renderer) {
@@ -400,7 +505,13 @@
                 normalizedY = normalizedY * 2 - 1;
 
                 // Set the shader uniform
-                shaderMaterial.uniforms.u_mouse.value.set(normalizedX, normalizedY);
+                // Implement ShaderToy compatibility:
+                // Shows how to use the mouse input (only left button supported):
+                //      mouse.xy  = mouse position during last button down
+                //  abs(mouse.zw) = mouse position during last button click
+                // sign(mouse.z)  = button is down
+                // sign(mouse.w)  = button is clicked
+                shaderMaterial.uniforms.iMouse.value.set(normalizedX, normalizedY, window.leftMouseDown ? 1 : -1, 0);
             }
 
             // Global variable to store the last played video
@@ -442,7 +553,8 @@
                     window.videoTexture.format = THREE.RGBFormat;
                     window.videoTexture.crossOrigin = 'anonymous';
                     window.videoTexture.needsUpdate = true;
-                    shaderMaterial.uniforms.u_texture.value = window.videoTexture.texture;
+                    window.currentTexture = window.videoTexture;
+                    console.warn('video should now be appearing on the canvas')
                 }
                 document.body.appendChild(video);
             }
@@ -459,7 +571,6 @@
                 }
                 
                 if(!window.fixedTime){
-                    
                     shaderMaterial.uniforms.u_time.value = time * 0.001; // Convert time to seconds
                 }else{
                     shaderMaterial.uniforms.u_time.value = window.fixedTime;
@@ -474,7 +585,7 @@
                 // iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                 //
                 shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
-                shaderMaterial.uniforms.iChannel0.value = texture;
+                shaderMaterial.uniforms.iChannel0.value = currentTexture;
                 shaderMaterial.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight, 1.0);
 
                 if(window.do_clear_frame){
@@ -509,10 +620,11 @@
                 console.warn("pick one called");
                 // video time
                 let much = [
-                    "Katy Perry - California Gurls (Official Music Video) ft. Snoop Dogg.mp4",
-                    "Katy Perry - Dark Horse ft. Juicy J.mp4",
-                    "Katy Perry - Firework (Official Music Video).mp4"
+                    // "Katy Perry - California Gurls (Official Music Video) ft. Snoop Dogg.mp4",
+                    // "Katy Perry - Dark Horse ft. Juicy J.mp4",
+                    // "Katy Perry - Firework (Official Music Video).mp4"
                 ]
+                return;
                 // Filter out the last played video
                 let filteredMuch = much.filter(v => v !== lastPlayedVideo);
 
@@ -533,8 +645,8 @@
                 }
             }
 
-            // when a user drops an image on the canvas, load it to our texture
-            canvas.addEventListener('drop', (e) => {
+            window.droppedOnAnything = function(e){
+                console.warn('dropped on anything',e)
                 did_react_to_first_user_input = true;
                 e.preventDefault();
                 e.stopPropagation();
@@ -542,7 +654,7 @@
                 // ondrop
                 if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                     const file = e.dataTransfer.files[0];
-                    // we accept videos too
+                    // check if video first
                     if (file.type.indexOf('video') === 0) {
                         const reader = new FileReader();
                         reader.onload = (e) => {
@@ -556,14 +668,18 @@
                             texture.image.src = e.target.result;
                             texture.needsUpdate = true;
                             // "setImageAsChannel"
-                            shaderMaterial.uniforms.u_texture.value = texture;
+                            shaderMaterial.uniforms.iChannel0.value = texture;
                         };
                         reader.readAsDataURL(file);
                     }
                     
                 }
-            });
-            canvas.addEventListener('dragover', (e) => {
+            }
+
+            // when a user drops an image on the canvas, load it to our texture
+            window.addEventListener('drop', droppedOnAnything);
+            window.addEventListener('dragover', (e) => {
+                console.warn('dragover',e)
                 e.preventDefault();
                 e.stopPropagation();
             });
@@ -761,13 +877,9 @@
             }
         })
 
-        let then = 0;
-        let canvas, gl;
-        
-        let offsetTexture, baseTexture, originalPixelDataTexture;
-        let lerpedColorTexture;
+        //let then = 0;
         let uSwirlAmp = 1.0, uSwirlTurns = 3.0;
-        let shaderProgram, programInfo;
+        
         let pixel_positions = [];
         let pixelData, originalPixelData, latestPixelDataSnapshot;
         const bytesPerPixel = 4; // For RGBA format
@@ -820,33 +932,13 @@
 
         // domready
         async function onReady(){
-            window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
-
             // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
             //     return;
             // }
+            //window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
+            window.fragmentShaderSource = await (await fetch("./shaders/new-years-2024.glsl")).text();
             prepareCCapture();
-
-            let match = document.querySelector('.drop-here-text');
-            if(!match){
-                throw new Error("no .drop-here-text element found");
-            }
-            match.addEventListener('click',async(e)=>{
-                if(document.querySelector('canvas')?.classList?.contains('unblur')){
-                    return;
-                }
-
-                document.querySelector('canvas')?.classList?.add('undarken');
-                let input = document.createElement('input');
-                input.type = 'file';
-                input.accept = 'image/*';
-                hideIntroText();
-                input.onchange = handleFileInputChange
-                input.click();
-            });
-
-            match.addEventListener("drop", onImageDrop);
-            match.addEventListener("dragover", function(event) { event.preventDefault(); });
+            setupThree();
         }
 
         window.addEventListener("resize", ()=>{
@@ -862,16 +954,8 @@
             fixedPixelsX = Math.floor(canvas.width/pixel_density);
             fixedPixelsY = Math.floor(canvas.height/pixel_density);
             window.DID_BIND_BASE_SINCE_RESIZE = false;
-            // if(gl){
-            //     try{
-            //         gl.viewport(0, 0, canvas.width, canvas.height);
-            //         // gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-            //         gl.useProgram(programInfo.program);
-            //         gl.uniform2f(programInfo.uniformLocations.uResolution, Math.floor(canvas.width/pixel_density), Math.floor(canvas.height/pixel_density));
-            //     }catch(e){
-            //         console.error("Error resizing canvas",e);
-            //     }
-            // }
+            // update our iResolution uniform
+            shaderMaterial.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight, 1.0);
         }
 
         // two triangles that cover the entire screen
@@ -897,33 +981,8 @@
         let numPixels = 0;
         let fixedPixelsX,fixedPixelsY;
         function initializePositionsAndOffsetData(keepPixelData = true) {
-            // if(typeof outputSurfacePositionBuffer == "undefined"){
-            //     //throw new Error("outputSurfacePositionBuffer is undefined");
-            //     console.error("outputSurfacePositionBuffer is undefined");
-            //     return;
-            // }
-            
-            // Update buffers with new data
-            gl.bindBuffer(gl.ARRAY_BUFFER, outputSurfacePositionBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, output_surface_positions, gl.DYNAMIC_DRAW);
-            
-            //console.warn("Initializing output_surface_positions and pixel data");
-
-            
-            
             numPixels = canvas.width * canvas.height;
             numPixels = Math.floor(numPixels / pixel_density);
-
-            // error if not divisible by 4
-            // if(numPixels % 4 !== 0){
-            //     console.error("numPixels must be divisible by 4");
-            //     return;
-            // }
-            // // error if not divisible by 2
-            // if(numPixels % 2 !== 0){
-            //     console.error("numPixels must be divisible by 2");
-            //     return;
-            // }
 
             if(!keepPixelData){
                 pixel_positions = [];
@@ -971,10 +1030,6 @@
                     }
                 }
 
-                // Update buffers with new data
-                // gl.bindBuffer(gl.ARRAY_BUFFER, pixelPositionsBuffer);
-                // gl.bufferData(gl.ARRAY_BUFFER, pixel_positions, gl.DYNAMIC_DRAW);
-    
                 // bind the base texture to our initial pixel data ( a frozen snapshot of the initial state of the pixels for our lerping algo. to work with )
                 gl.bindTexture(gl.TEXTURE_2D, baseTexture);
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
@@ -990,46 +1045,6 @@
                     new_pixelData.set(pixelData);
                     pixelData = new_pixelData;
                 }
-            }
-            
-
-            // gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
-
-            // // Only use R and G channels, force A channel to 1
-            // let offsetPixelData = pixelData.map((value, index) => {
-            //     if (index === 3) {
-            //         return 255; // full alpha
-            //     }
-            //     if (index === 2) {
-            //         // average of R and G channels
-            //         return (pixelData[index - 2] + pixelData[index - 1]) / 2;
-            //     }
-            //     return value;
-            // });
-
-            // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, offsetPixelData);
-
-            // Bind the output position buffer.
-            gl.bindBuffer(gl.ARRAY_BUFFER, outputSurfacePositionBuffer);
-
-            // Tell WebGL how to pull out the positions from the 
-            // outputSurfacePositionBuffer into the vertexPosition attribute called "aVertexPosition"
-            // note: it WAS reading rg as xy, but now we're going back to an array of float pairs
-            {
-                const numComponents = 2;  // pull out 2 values per iteration
-                const type = gl.FLOAT;    // the data in the buffer is 32bit floats
-                const normalize = false;  // don't normalize
-                const stride = 0;         // how many bytes to get from one set to the next
-                const offset = 0;         // how many bytes inside the buffer to start from
-                gl.vertexAttribPointer(
-                    programInfo.attribLocations.vertexPosition,
-                    numComponents,
-                    type,
-                    normalize,
-                    stride,
-                    offset);
-                gl.enableVertexAttribArray(
-                    programInfo.attribLocations.vertexPosition);
             }
         }
 
@@ -1068,7 +1083,7 @@
         window.sortStepSize = 10e5; //-1; //10e3; // Number of elements to sort per call, adjust as needed
         window.current_sortStepSize = window.sortStepSize;
 
-        function resetOffsetTexture(erasePixelData = false){
+        window.resetOffsetTexture = function(erasePixelData = false){
             // reset offset texture to all 0s with 255 for alpha channel
             let zeros = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
             zeros = zeros.map((value, index) => {
@@ -1077,8 +1092,10 @@
                 }
                 return value;
             });
-            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, zeros);
+
+            // TODO!!! replace these two with THREE.js corresponding calls
+            // gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+            // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, zeros);
 
             if(erasePixelData){
                 // reset pixel data to all 0s
@@ -1254,9 +1271,11 @@
             
             if (swapped) {
                 // If a swap occurred, update the texture
-                gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+                window.baseTexture.needsUpdate = true;
+                window.offsetTexture.needsUpdate = true;
+                window.targetPixelDataTexture.needsUpdate = true;
                 // TODO: determine which bounding box DID change, and only update that region...
-                gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, fixedPixelsX, fixedPixelsY, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
+                window.baseTexture.image.data.set(pixelData);
             }
 
             // if we've somehow gone negative, flip positive and clamp to 0
@@ -1268,176 +1287,7 @@
 
             return swapped;
         }
-        // for now we just pass-thru
-        // later when we add sub-divided mesh, we'll need to use a vertex shader
-        const vsSource = `
-attribute vec4 aVertexPosition;
-void main() {
-gl_Position = aVertexPosition;
-}
-        `;
-        // samples from uBaseTexture and uOffsetTexture
-        
-        /*
 
-        function initShaderProgram(gl, vsSource, fsSource) {
-            console.warn('[Debug] initShaderProgram',{gl,vsSource,fsSource});
-            const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-            const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
-
-            const shaderProgram = gl.createProgram();
-            gl.attachShader(shaderProgram, vertexShader);
-            gl.attachShader(shaderProgram, fragmentShader);
-            gl.linkProgram(shaderProgram);
-
-            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-                console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(shaderProgram));
-                return null;
-            }
-
-            console.warn("LINK STATUS:",gl.getProgramParameter(shaderProgram, gl.LINK_STATUS));
-
-            // if there are ANY gl errors, re-throw the error
-            const error = gl.getError();
-            if (error !== gl.NO_ERROR) {
-                //throw new Error('WebGL Error: ' + error);
-                console.error('WebGL Error: ', error);
-            }
-
-            return shaderProgram;
-        }
-
-        function loadShader(gl, type, source) {
-            console.warn('loadShader',{gl,type,source})
-            const shader = gl.createShader(type);
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-
-            // if there are ANY gl errors, re-throw the error
-            const error = gl.getError();
-            if (error !== gl.NO_ERROR) {
-                //throw new Error('WebGL Error: ' + error);
-                console.error('WebGL Error: ', error);
-            }
-
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
-                gl.deleteShader(shader);
-                return null;
-            }
-
-            return shader;
-        }
-        
-        function preloadShaders(){
-            shaderProgram = initShaderProgram(gl, vsSource, fsSource);
-            // After initializing the shader program
-            programInfo = {
-                program: shaderProgram,
-                attribLocations: {
-                    vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
-                },
-                uniformLocations: {
-                    uMode: gl.getUniformLocation(shaderProgram, 'uMode'),
-                    uTime: gl.getUniformLocation(shaderProgram, 'uTime'),
-                    uPxDensity: gl.getUniformLocation(shaderProgram, 'uPxDensity'),
-                    uResolution: gl.getUniformLocation(shaderProgram, 'uResolution'),
-                    uOffsetTexture: gl.getUniformLocation(shaderProgram, 'uOffsetTexture'),
-                    uBaseTexture: gl.getUniformLocation(shaderProgram, 'uBaseTexture'),
-                    uOriginalPixelDataTexture: gl.getUniformLocation(shaderProgram, 'uOriginalPixelDataTexture'),
-                    //uniform float uSwirlTurns;
-                    uSwirlTurns: gl.getUniformLocation(shaderProgram, 'uSwirlTurns'),
-                    // uniform float uSwirlAmp;
-                    uSwirlAmp: gl.getUniformLocation(shaderProgram, 'uSwirlAmp'),
-
-                    uScrollOffsetYSpeed: gl.getUniformLocation(shaderProgram, 'uScrollOffsetYSpeed'),
-                    uScrollOffsetXSpeed: gl.getUniformLocation(shaderProgram, 'uScrollOffsetXSpeed'),
-
-                    //uPixelPositions: gl.getUniformLocation(shaderProgram, 'uPixelPositions'),
-
-                    uSortOffset: gl.getUniformLocation(shaderProgram, 'uSortOffset'),
-                    uSortStepSize: gl.getUniformLocation(shaderProgram, 'uSortStepSize'),
-
-                    uReflectionX: gl.getUniformLocation(shaderProgram, 'uReflectionX'),
-                    uReflectionY: gl.getUniformLocation(shaderProgram, 'uReflectionY'),
-                },
-            };
-        }
-        */
-
-        // function readyDisplaySurface(){
-        //     // Create and bind the position buffer
-        //     outputSurfacePositionBuffer = gl.createBuffer();
-        //     gl.bindBuffer(gl.ARRAY_BUFFER, outputSurfacePositionBuffer);
-
-        //     // go ahead and pop our initial data into the position buffer
-        //     // we'll update it later
-        //     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(output_surface_positions), gl.DYNAMIC_DRAW);
-        // }
-
-        function setupTextures(){
-            // our initial pixel data
-            // random noise for now, but we're going to add drag-and-drop later
-            
-            baseTexture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-            // clone into originalPixelDataTexture
-            originalPixelDataTexture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, originalPixelDataTexture);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-            
-
-            // Create and bind the offset texture
-            // where we track position offsets for each pixel
-            // from their unsorted initial positions to their sorted final positions
-            offsetTexture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-            // our output texture is actually a separate buffer where
-            // we lerp _it_ towards the base texture
-            // continually saving it's derrived value back to lerpedColorTexture so that,
-            // we can use lerpedColorTexture as our input texture for the next frame
-            lerpedColorTexture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, lerpedColorTexture);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            //gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        }
-
-        function onGLReady(){
-            console.log("Initializing WebGL");
-
-            preloadShaders();
-            readyDisplaySurface();
-            setupTextures();
-
-            // @requires gl, canvas
-            // faux "init" resize for updating to initial window size
-            resizeCanvas();
-
-
-            /** @deprecated: replacing custom binding with THREE.js **/
-            // @requires outputSurfacePositionBuffer
-            // initializePositionsAndOffsetData();
-
-            
-        }
-        window.do_sort = 1;
-        // Draw the scene repeatedly
-        
         /** @deprecating - STILL REFERENCING - DO NOT REMOVE YET - **/
         /*
         function render(now) {
@@ -1658,7 +1508,12 @@ gl_Position = aVertexPosition;
             }
         },false)
 
+
         document.addEventListener('touchmove',async(e)=>{
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+        })
+        document.addEventListener('touchstart',async(e)=>{
             mouseX = e.touches[0].clientX;
             mouseY = e.touches[0].clientY;
         })
@@ -1667,6 +1522,8 @@ gl_Position = aVertexPosition;
         let doubleTapDetected = false;
         let doubleTapTimeout = null;
         const doubleTapDelay = 300;
+
+        window.leftMouseDown = false;
 
         // uniform "double-tap"/double-click detection
 
@@ -1719,146 +1576,21 @@ gl_Position = aVertexPosition;
             window.mouseX = e.clientX;
             window.mouseY = e.clientY;
         });
-
-        let uniforms = []
-        function maybeSetUniforms(gl){
-            if(uniforms.length > 0){
-                return;
-            }
-            uniforms = [
-                //uReflectionX
-                { t: "uniform1f", k: "uReflectionX", getter: _=>window.uReflectionX},
-                { t: "uniform1f", k: "uReflectionY", getter: _=>window.uReflectionY},
-                { t: "uniform1i", k: "uSortOffset", getter: _=>parseInt(sortOffset/numPixels)},
-                { t: "uniform1i", k: "uSortStepSize", getter: _=>parseInt(sortStepSize)},
-                { t: "uniform2f", k: "uResolution", getter: _=>[
-                    Math.floor(canvas.width/pixel_density), 
-                    Math.floor(canvas.height/pixel_density)
-                ]},
-                { t: "uniform1f", k: "uTime", getter: _=>performance.now() / 1000},
-                { t: "uniform1i", k: "uPxDensity", getter: _=>pixel_density},
-                { t: "uniform1i", k: "uMode", getter: _=>MODE},
-                
-                // 
-                { t: "uniform1i", k: "uOffsetTexture", getter: _=>0},
-                { t: "uniform1i", k: "uBaseTexture", getter: _=>1},
-                { t: "uniform1i", k: "uSelectedImageTexture", getter: _=>2},
-                { t: "uniform1i", k: "uOriginalPixelDataTexture", getter: _=>3},
-                { t: "uniform1i", k: "uUpdatedPixelDataTexture", getter: _=>4},
-                { t: "uniform1i", k: "uLerpedColorTexture", getter: _=>5},
-
-                { t: "uniform1f", k: "uScrollOffsetYSpeed", getter: _=>window.uScrollOffsetYSpeed},
-                { t: "uniform1f", k: "uScrollOffsetXSpeed", getter: _=>window.uScrollOffsetXSpeed},
-
-                // gl.uniform1f(UL.uSwirlTurns, uSwirlTurns);
-                { t: "uniform1f", k: "uSwirlTurns", getter: _=>uSwirlTurns},
-                // gl.uniform1f(UL.uSwirlAmp, uSwirlAmp);
-                { t: "uniform1f", k: "uSwirlAmp", getter: _=>uSwirlAmp},
-            ]
-        }
-
-        // draw scene
-        function drawScene(gl, programInfo, deltaTime) {
-            maybeSetUniforms(gl);
-
-            // draw a red square and return
-            gl.clearColor(1.0, 0.0, 1.0, 1.0);
-            // return;
-
-            // gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
-            gl.clearDepth(1.0);                 // Clear everything
-            gl.enable(gl.DEPTH_TEST);           // Enable depth testing
-            gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
-
-            // Clear the canvas
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-            
-
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
-
-            // Only use R and G channels, force A channel to 1
-            pixelData = pixelData.map((value, index) => {
-                // ignore green channel
-                if (index === 2) {
-                    return 0;
-                }
-                // full alpha
-                if (index === 3) {
-                    return 255;
-                }
-                // clamp to 0-255
-                return Math.max(0, Math.min(255, value));
-            });
-
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixelData);
-
-            if(typeof window.DID_BIND_BASE_SINCE_RESIZE == "undefined"||window.DID_BIND_BASE_SINCE_RESIZE === false){
-                window.DID_BIND_BASE_SINCE_RESIZE = true;
-                gl.activeTexture(gl.TEXTURE1);
-                gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-
-                // clone data into originalPixelDataTexture
-                gl.activeTexture(gl.TEXTURE3);
-                gl.bindTexture(gl.TEXTURE_2D, originalPixelDataTexture);
-            }
-
-            // Adjusting the origin to be the middle of the window
-            let midX = window.innerWidth / 2;
-            let midY = window.innerHeight / 2;
-
-            // Adjust mouseX and mouseY to be relative to the middle of the window
-            let adjustedMouseX = mouseX - midX;
-            let adjustedMouseY = mouseY - midY;
-
-            // Mapping swirl turns to adjustedMouseX
-            // -midX (-1) - midX (1) => 1 - 4
-            uSwirlTurns = 1 + (adjustedMouseX / midX) * 3;
-
-            // Mapping swirl amplitude to adjustedMouseY
-            // -midY (-1) - midY (1) => 0.001 - 3
-            uSwirlAmp = 0.001 + (adjustedMouseY / midY) * 3;            
-
-            // Use our program when drawing
-            gl.useProgram(programInfo.program);
-
-            // Update the shader uniforms
-            const UL = programInfo.uniformLocations;
-            uniforms.forEach(({t,k,getter})=>{
-                if(typeof gl[t] !== 'function'){
-                    throw new Error("gl[t] is not a function",{
-                        t,k,getter,
-                        glt: gl[t],
-                    });
-                }
-                // console.warn('uniforms.forEach',{t,k,getter})
-                // console.warn({key:k,thing:typeof UL[k]});
-                if(typeof getter !== 'function'){
-                    throw new Error("getter is not a function",{
-                        t,k,getter,
-                        glt: gl[t],
-                        ULk: UL[k],
-                    });
-                }
-                let extras = [];
-                if(t === 'uniform2f'){
-                    extras = getter();
-                }else if(t === 'uniform1f' || t === 'uniform1i'){
-                    extras = [getter()];
-                };
-                gl[t](UL[k], ...extras);
-            })
-
-            
-
-            {
-                const offset = 0;
-                const vertexCount = 6;
-                gl.drawArrays(gl.TRIANGLES, offset, vertexCount);
-            }
-        }
-
+        document.addEventListener('mousedown', (e)=>{
+            window.leftMouseDown = e.button === 0;
+            window.middleMouseDown = e.button === 1;
+            window.rightMouseDown = e.button === 2;
+            // window.mouse_btn_3 = e.button === 3;
+            // window.mouse_btn_4 = e.button === 4;
+            // window.mouse_btn_5 = e.button === 5;
+            window.anyMouseDown = true;
+        });
+        document.addEventListener('mouseup', (e)=>{
+            window.anyMouseDown = false;
+            window.leftMouseDown = false;
+            window.middleMouseDown = false;
+            window.rightMouseDown = false;
+        });
         function imageBlobToBase64(imageBlob){
             return new Promise((resolve,reject)=>{
                 let reader = new FileReader();
@@ -1868,378 +1600,6 @@ gl_Position = aVertexPosition;
                 reader.readAsDataURL(imageBlob);
             });
         }
-
-        // async function loadImageBlobAsTexture(imageBlob){
-        //     imageTex = gl.createTexture();
-        //     gl.bindTexture(gl.TEXTURE_2D, imageTex);
-            
-        //     // Set the parameters so we can render any size image.
-        //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-        //     // when texture area is small, bilinear filter the closest mipmap
-        //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-
-        //     // when texture area is large, bilinear filter the first mipmap
-        //     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-        //     // preload the texture will all green pixels
-        //     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,new Uint8Array([0, 255, 0, 255]));
-
-        //     // Upload the image into the texture.
-        //     const level = 0;
-        //     const internalFormat = gl.RGBA;
-        //     const srcFormat = gl.RGBA;
-        //     const srcType = gl.UNSIGNED_BYTE;
-
-        //     const image = new Image();
-        //     image.onerror = function(e) {
-        //         console.error("Error loading image",e);
-        //     };
-        //     image.onabort = function(e) {
-        //         console.error("Error loading image",e);
-        //     };
-        //     image.onload = function(e) {
-        //         gl.bindTexture(gl.TEXTURE_2D, imageTex);
-        //         gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, image);
-
-        //         // load into baseTexture
-        //         gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-        //         // base texture might have different dimensions, so we need to scale to FILL
-        //         let croppedToFillPixels = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
-        //         let croppedToFillPixelsIndex = 0;
-        //         // Calculate offsets
-        //         let offsetX = Math.max(0, (image.width - fixedPixelsX) / 2);
-        //         let offsetY = Math.max(0, (image.height - fixedPixelsY) / 2);
-        //     };
-        //     console.warn('imageBlob',{
-        //         imageBlob,
-        //         blobObjUrl: URL.createObjectURL(imageBlob),
-        //         blobAsImageBase64: await imageBlobToBase64(imageBlob),
-        //     })
-        //     image.src = URL.createObjectURL(imageBlob);
-        //     let el = document.body.appendChild(image);
-        // }
-
-        let pastedTexture;
-        function loadBase64AsTexture(b64){
-            // assume string input
-
-            if(!b64.startsWith('data:image/png;base64,')){
-                throw new Error("b64 is not a valid base64 encoded image",b64);
-                //b64 = 'data:image/png;base64,' + b64;
-            }
-
-            // Create and load the image
-            const image = new Image();
-            image.onerror = function(e) { console.error("Error loading image", e); };
-            image.onabort = function(e) { console.error("Error loading image", e); };
-            image.onload = function() {
-                console.warn('image loaded',{image});
-                handleImageLoad(image);
-            };
-            image.src = b64;
-            let el = document.body.appendChild(image);
-            console.warn('image.src',{el,src:image.src});
-        }
-
-        let imageTex;
-        function loadImageAsTexture(imageSource) {
-            resetOffsetTexture();
-            imageTex = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, imageTex);
-
-            // Set the parameters so we can render any size image.
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-            // Preload the texture with all green pixels
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 255, 0, 255]));
-
-            // Create and load the image
-            const image = new Image();
-            image.onerror = function(e) { console.error("Error loading image", e); };
-            image.onabort = function(e) { console.error("Error loading image", e); };
-            image.onload = function() {
-                handleImageLoad(image);
-            };
-            image.src = imageSource;
-            let el = document.body.appendChild(image);
-        }
-        /*
-        function loadImageAsTexture(url){
-            // ./res/Screen-interface-design-Bill-Atkinson-Susan-Kare-1983.webp
-            imageTex = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, imageTex);
-            
-            // Set the parameters so we can render any size image.
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-            // when texture area is small, bilinear filter the closest mipmap
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-
-            // when texture area is large, bilinear filter the first mipmap
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-            // preload the texture will all green pixels
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,new Uint8Array([0, 255, 0, 255]));
-
-            // Upload the image into the texture.
-            const level = 0;
-            const internalFormat = gl.RGBA;
-            const srcFormat = gl.RGBA;
-            const srcType = gl.UNSIGNED_BYTE;
-
-            const image = new Image();
-            image.onerror = function(e) {
-                console.error("Error loading image",e);
-            };
-            image.onabort = function(e) {
-                console.error("Error loading image",e);
-            };
-            image.onload = function(e) {
-                gl.bindTexture(gl.TEXTURE_2D, imageTex);
-                gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, image);
-
-                // load into baseTexture
-                gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-                // base texture might have different dimensions, so we need to scale to FILL
-                let croppedToFillPixels = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
-                let croppedToFillPixelsIndex = 0;
-                // Calculate offsets
-                let offsetX = Math.max(0, (image.width - fixedPixelsX) / 2);
-                let offsetY = Math.max(0, (image.height - fixedPixelsY) / 2);
-                
-                // let tempImagePixelData = new Uint8Array(image.width * image.height * bytesPerPixel);
-                // for(let i = 0; i < tempImagePixelData.length; i++){
-                //     tempImagePixelData[i] = image.data[i];
-                // }
-
-
-                console.warn("image.data.length",image?.data?.length,{image})
-                for (let y = 0; y < fixedPixelsY; y++) {
-                    for (let x = 0; x < fixedPixelsX; x++) {
-                        // Adjust index to center the image
-                        let originalX = x + offsetX;
-                        let originalY = y + offsetY;
-                        
-                        let index;
-                        if (originalX < image.width && originalY < image.height) {
-                            // Pixel is within the bounds of the original image
-                            index = (originalY * image.width + originalX) * 4;
-                        } else {
-                            // Pixel is outside the bounds, use a default value
-                            index = -1;
-                        }
-
-                        if(!image.data) console.error("image.data is undefined");
-                        if(!image.data.length) console.error("image.data.length is ",image.data.length);
-                        
-
-                        if (index >= 0) {
-                            // Copy pixel data
-                            croppedToFillPixels[croppedToFillPixelsIndex++] = image.data[index];
-                            croppedToFillPixels[croppedToFillPixelsIndex++] = image.data[index + 1];
-                            croppedToFillPixels[croppedToFillPixelsIndex++] = image.data[index + 2];
-                            croppedToFillPixels[croppedToFillPixelsIndex++] = image.data[index + 3];
-                        } else {
-                            // Default pixel value (e.g., transparent)
-                            croppedToFillPixels[croppedToFillPixelsIndex++] = 0;
-                            croppedToFillPixels[croppedToFillPixelsIndex++] = 0;
-                            croppedToFillPixels[croppedToFillPixelsIndex++] = 0;
-                            croppedToFillPixels[croppedToFillPixelsIndex++] = 0;
-                        }
-                    }
-                }
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, croppedToFillPixels);
-            };
-            image.src = url;
-        }
-        */
-
-        function handleImageLoad(image) {
-            console.warn('handleImageLoad',{image})
-            gl.bindTexture(gl.TEXTURE_2D, imageTex);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-
-            handleImageLoadForBaseTex(image);
-
-            DID_COMPLETE_SORT_SINCE_RESET = false;
-        }
-
-        function handleImageLoadForBaseTex(image) {
-            console.warn('handleImageLoadForBaseTex',{image})
-            // ARE WE SURE the image loaded?
-            if(image.width === 0 || image.height === 0){
-                throw new Error("Image did not load");
-            }
-            console.warn('imgdata at this time:',{
-                w:image.width,
-                h:image.height,
-                imgW:image.width,
-                imgH:image.height,
-                blobURL: image.src,
-            })
-
-            baseTexWidth = fixedPixelsX;
-            baseTexHeight = fixedPixelsY;
-            // Calculate scale and translation
-            let scaleX = baseTexWidth / image.width;
-            let scaleY = baseTexHeight / image.height;
-            let scale = Math.min(scaleX, scaleY); // Choose the smaller scale to fit the image within baseTex
-            let translateX = (baseTexWidth - image.width * scale) / 2;
-            let translateY = (baseTexHeight - image.height * scale) / 2;
-
-            // Draw the image onto an off-screen canvas to get its pixel data
-            let offscreenCanvas = document.createElement('canvas');
-            offscreenCanvas.width = image.width;
-            offscreenCanvas.height = image.height;
-
-            window.debug_offscreenCanvas = offscreenCanvas;
-
-            console.warn('offscreenCanvas',{
-                w:offscreenCanvas.width,
-                h:offscreenCanvas.height,
-                imgW:image.width,
-                imgH:image.height,
-            });
-
-            let ctx = offscreenCanvas.getContext('2d');
-            ctx.drawImage(image, 0, 0);
-            let imageData = ctx.getImageData(0, 0, image.width, image.height);
-
-            // check if image data is all 0s...
-            let allZero = true;
-            for(let i = 0; i < imageData.data.length; i++){
-                if(imageData.data[i] !== 0){
-                    allZero = false;
-                    console.warn('non-zero pixel data @ i:v',i,imageData.data[i]);
-                    break;
-                }
-            }
-            if(allZero){
-                throw new Error("Image data is all 0s",{
-                    imageData,
-                    image,
-                });
-            }
-            let countNonzero = 0;
-            // jump in steps of four, ignore rgb if alpha is lower than 1
-            for(let i = 0; i < imageData.data.length; i+=4){
-                if(imageData.data[i+3] > 0){
-                    // only count if at least 1 component is non-zero
-                    if(imageData.data[i] > 0 || imageData.data[i+1] > 0 || imageData.data[i+2] > 0){
-                        countNonzero++;
-                    }
-                }
-            }
-            console.warn('% nonzero',countNonzero/(imageData.data.length/4));
-
-            // Create a new pixel array for baseTex
-            let baseTexPixels = new Uint8Array(baseTexWidth * baseTexHeight * 4); // Assuming RGBA
-
-            // Copy pixels with scaling and translation
-            for (let y = 0; y < baseTexHeight; y++) {
-                for (let x = 0; x < baseTexWidth; x++) {
-                    let sourceX = Math.floor((x - translateX) / scale);
-                    let sourceY = Math.floor((y - translateY) / scale);
-
-                    // invert y axis
-                    sourceY = image.height - sourceY;
-
-                    let baseIndex = (y * baseTexWidth + x) * 4;
-                    if (sourceX >= 0 && sourceX < image.width && sourceY >= 0 && sourceY < image.height) {
-                        let sourceIndex = (sourceY * image.width + sourceX) * 4;
-                        baseTexPixels[baseIndex] = imageData.data[sourceIndex];       // R
-                        baseTexPixels[baseIndex + 1] = imageData.data[sourceIndex + 1]; // G
-                        baseTexPixels[baseIndex + 2] = imageData.data[sourceIndex + 2]; // B
-                        baseTexPixels[baseIndex + 3] = imageData.data[sourceIndex + 3]; // A
-                    } else {
-                        // Fill with a default color or transparent
-                        baseTexPixels[baseIndex] = 0;     // R
-                        baseTexPixels[baseIndex + 1] = 0; // G
-                        baseTexPixels[baseIndex + 2] = 0; // B
-                        baseTexPixels[baseIndex + 3] = 0; // A
-                    }
-                }
-            }
-
-            //console.warn(baseTexPixels.length,baseTexPixels)
-
-            // overwrite pixelData array with baseTexPixels
-            pixelData = baseTexPixels;
-            // clone
-            originalPixelData = baseTexPixels.slice(0);
-
-            // Bind to baseTex and update its texture
-            gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, baseTexWidth, baseTexHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, baseTexPixels);
-
-            gl.bindTexture(gl.TEXTURE_2D, originalPixelDataTexture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, baseTexWidth, baseTexHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, originalPixelData);
-
-            //console.warn('loaded number of pixels',baseTexPixels.length/4, baseTexPixels);
-            
-            // dispose offscreenCanvas
-            offscreenCanvas = null;
-        }
-
-        document.getElementById('fileupload').addEventListener('change', handleImage2, false);
-
-        async function handleImage2(e) {
-            hideIntroText();
-            hideVideo();
-            console.warn("handleImage2",e);
-            var reader = new FileReader();
-            reader.onload = function(event) {
-                if(event.target.readyState != FileReader.DONE) return;
-                var img = new Image();
-                console.warn("handleImage2>reader.onload",event);
-                img.onload = function() {
-                    console.warn('handleImage2>img',img);
-                    //selectedImageTexture = gl.createTexture();
-                    gl.useProgram(programInfo.program);
-                    //gl.bindTexture(gl.TEXTURE_2D, selectedImageTexture);
-                    gl.bindTexture(gl.TEXTURE_2D, baseTexture);
-                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                    gl.bindTexture(gl.TEXTURE_2D, null);
-                    if(gl.getError() != gl.NO_ERROR) {
-                        console.error("handleImage2>img>gl error",gl.getError());
-                        debugger;
-                    }
-                }
-                img.src = event.target.result;
-            }
-            reader.readAsDataURL(e.target.files[0]);     
-        }
-
-
-        function onImageDrop(event) {
-            // Handle image drop, load the image into baseTexture
-            event.preventDefault();
-
-            hideIntroText();
-            try {
-                const file = event.dataTransfer.files[0];
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    loadImageAsTexture(event.target.result); // Use loadImageAsTexture function
-                    do_sort = true
-                    MODE = 1;
-                };
-                reader.readAsDataURL(file);
-            } catch (e) {
-                console.error('Error loading dropped image', e);
-            }
-        }
-
         
         document.addEventListener("DOMContentLoaded", onReady);
 

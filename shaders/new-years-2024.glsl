@@ -9,6 +9,7 @@
 uniform float iTime;
 uniform sampler2D iChannel0;
 uniform vec3 iResolution;
+uniform vec4 iMouse;
 
 // whether turn on the animation
 //#define phase_shift_on 
