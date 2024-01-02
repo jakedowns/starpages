@@ -255,7 +255,6 @@
         window.reverseSort = true;
         window.capturer = null;
         window.capturing = false;
-        window.capturedFrames = 0;    
         window.targetRecordingFPS = 120;
         Object.defineProperty(window, 'maxFrames', {
             get: function() { return this.targetRecordingFPS * 10; }
@@ -324,8 +323,6 @@
 
         let handling_slow_motion_advance = false;
 
-        
-
         function maybeAdvanceVideoOneFrame() {
             if(!window.videoIsVirtuallyPlaying || window.targetVideoPlaybackRate >= 0.1){
                 return;
@@ -347,7 +344,10 @@
                     // recordingVirtualTimeSinceStart
                     // currentVideoTime
                     // subframePlaybackCurrentFrame
-                    // capturedFrames
+
+                    // let nth = ((1/(window.targetRecordingFPS)) * (window?.targetVideoPlaybackRate ?? 1) * window.capturerSpeedReduction);
+                    // let adjustedFrame = Math.round(window.subframePlaybackCurrentFrame * nth);
+                    // let maxFrames = Math.round(window.maxFrames * nth) * window.targetRecordingFPS;
 
                     handling_slow_motion_advance = false;
                 }, playDuration * 1000);
@@ -387,7 +387,6 @@
             let currentClipboardBagValueHash = null;
             let previousClipboardBagValueHash = null;
             // let clipboardCheckInterval = setInterval(async()=>{
-
             //     if(didShowClipboardPrompt){
             //         // check if clipboard has changed
             //         let currentClipboardBagValueHash = null;
@@ -773,9 +772,7 @@
                 }
 
                 
-                // let nth = ((1/(window.targetRecordingFPS)) * (window?.targetVideoPlaybackRate ?? 1) * window.capturerSpeedReduction);
-                // let adjustedFrame = Math.round(window.capturedFrames * nth);
-                // let maxFrames = Math.round(window.maxFrames * nth) * window.targetRecordingFPS;
+                // sub-frame playback
                 maybeAdvanceVideoOneFrame();
                 
                 // or ... next frame
@@ -786,24 +783,13 @@
                     }
                     window.capturer.capture(canvas);
                     
-                    if(window.capturedFrames >= maxFrames){
+                    if(window.subframePlaybackCurrentFrame >= maxFrames){
                         window.stopCapture();
                     }else{
-                        
-                        
                         // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
                         setTimeout(() => {
-                            window.animate(time + (nth/1000));
+                            window.animate(time + window.currentFrameDelta);
                         }, 0);
-
-                        if(theVideoplayerElement){
-                            theVideoplayerElement.currentTime = theVideoplayerElement.currentTime + nth;
-                        }
-                        // play then pause to refresh the theVideoplayerElement frame
-                        // theVideoplayerElement.play();
-                        // setTimeout(()=>{
-                        //     theVideoplayerElement.pause();
-                        // },1000/60);
                     }
                 }else{
                     // next frame
@@ -1032,7 +1018,6 @@
             window.recordingVirtualTimeSinceStart = 0;
             window.subframePlaybackCurrentFrame = 0;
             window.capturing = true;
-            window.capturedFrames = 0;
             window.capturer.start();
             animate(0);
             theVideoplayerElement.pause();
