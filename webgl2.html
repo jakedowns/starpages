@@ -521,12 +521,8 @@
 
             function resizeRendererToDisplaySize(renderer) {
                 canvas = renderer.domElement;
-
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-
-                let width = canvas.clientWidth;
-                let height = canvas.clientHeight;
+                let width = window.innerWidth;
+                let height = window.innerHeight;
 
                 // force to even dimensions for ffmpeg compatibility
                 width = 2 * Math.floor(width / 2);
@@ -618,8 +614,7 @@
                     window.currentTexture = window.videoTexture;
                     console.warn('video should now be appearing on the canvas')
 
-                    // set playback rate to .01
-                    video.playbackRate = 0.01;
+                    video.playbackRate = 0.1;
                 }
                 document.body.appendChild(video);
             }
@@ -631,7 +626,7 @@
                     canvas.width = 2 * Math.floor(canvas.clientWidth / 2);
                     canvas.height = 2 * Math.floor(canvas.clientHeight / 2);
 
-                    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+                    camera.aspect = canvas.width / canvas.height;
                     camera.updateProjectionMatrix();
                 }
                 
@@ -659,8 +654,6 @@
 
                 renderer.render(scene, camera);
 
-                // next frame
-                requestAnimationFrame(animate);
                 // or ... next frame
                 if(window.capturing){
                     window.capturer.capture(canvas);
@@ -670,7 +663,15 @@
                     }
                     if(window.capturedFrames >= maxFrames){
                         window.stopCapture();
+                    }else{
+                        setTimeout(()=>{
+                            // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
+                            window.animate(window.capturedFrames * 1000 / 60);
+                        },0);
                     }
+                }else{
+                    // next frame
+                    requestAnimationFrame(animate);
                 }
             }
 
@@ -965,13 +966,13 @@
                     format: 'webm', 
                     motionBlurFrames,
                     verbose: false, 
-                    fps: 120 
+                    fps: 60 
                 } ) 
                 : new CCapture( { 
                     format: 'png', 
                     motionBlurFrames,
                     verbose: false, 
-                    framerate: 120 
+                    framerate: 60 
                 } );
             }catch(e){
                 console.error('failed to create capturer',e);
