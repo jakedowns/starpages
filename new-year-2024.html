@@ -63,8 +63,7 @@
 <body>
     <canvas id="canvas"></canvas>
     <div id="controls"> 
-        <input type="file" accept="image/*,video/*" id="fileupload" />
-        
+        <input type="file" accept="image/*,video/*,image/svg+xml" id="fileupload" />        
         <progress id="progress" value="0" max="100"></progress>
         <button id="record-video-button" onclick="window.startCapture()">record video</button>
     </div>
@@ -661,7 +660,6 @@
             });
             document.addEventListener("dblclick",()=>{
                 onuserinput();
-
                 pickOne();
             })
             document.addEventListener("resize",()=>{
