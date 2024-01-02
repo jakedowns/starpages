@@ -13,6 +13,9 @@
 -->
 <html>
 <head>
+    <script>
+        window.capturerSpeedReduction = 0.5;
+    </script>
     <title>WebGL Pixel Mixer - jakedowns</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
@@ -98,7 +101,7 @@
         h1 {
             font-family: sans-serif;
         }
-        .video-underlay {
+        .intro-underlay {
             background-color: rgba(.1,0,.1,.8);
             backdrop-filter: blur(10px);
             position: absolute;
@@ -109,11 +112,11 @@
             align-items: center;
             justify-content: center;
         }
-        .video-underlay.fade-out {
+        .intro-underlay.fade-out {
             opacity: 0;
             pointer-events: none;
         }
-        .hide-video-button {
+        .hide-intro-button {
             text-align: center;
             width: auto;
             margin: 0 auto;
@@ -133,7 +136,7 @@
         }
 
         /* here we use a rounded rectangle + a linear gradient to emulate gloss via psuedo element */
-        .hide-video-button .btn-inner::before {
+        .hide-intro-button .btn-inner::before {
             content: "";
             position: absolute;
             top: -2px;
@@ -146,14 +149,15 @@
         }
 
 
-        .hide-video-button:hover {
+        .hide-intro-button:hover {
             background-color: #663dff;
             animation: gradient-animation 2s ease infinite; /* Apply the animation */
         }
-        .hide-video-button .btn-text {
+        .hide-intro-button .btn-text {
             position: relative;
             font-size: 18px;
             z-index: 1;
+            cursor: pointer;
         }
         @keyframes gradient-animation {
             0%, 100% {
@@ -167,7 +171,7 @@
             } */
         }
 
-        .hide-video-button {
+        .hide-intro-button {
             background-size: 200% 200%; /* Extend the background size for the animation */
             background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
             animation: gradient-animation 3s ease infinite; /* Apply the animation */
@@ -201,7 +205,7 @@
 
         /* final z-indexes */
         .intro-card { z-index: 1002; position: absolute; }
-        .video-underlay { z-index: 1001; }
+        .intro-underlay { z-index: 1001; }
         #controls { z-index: 1000; }
         video { z-index: 1000; }
         canvas { z-index: 999; }
@@ -229,14 +233,14 @@
         <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
         <!-- <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe> -->
         
-        <button class="hide-video-button">
+        <button class="hide-intro-button">
             <span class="btn-inner">
                 <span  class="btn-text" onclick="window.hideWelcome()">Click to Continue ➡️</span>
             </span>
         </button>
     </div>
 
-    <div class="video-underlay" onclick="window.hideWelcome()"></div>
+    <div class="intro-underlay" onclick="window.hideWelcome()"></div>
 
     <div class="drop-here-text">webgl pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     
@@ -574,11 +578,15 @@
 
             window.onVideoPause = function(){
                 window.fixedTime = shaderMaterial.uniforms.u_time.value;
-                window.isPaused = true;
+                if(!window.capturing){
+                    window.isPaused = true;
+                }
             }
             window.onVideoResume = function(){
                 window.fixedTime = null;
-                window.isPaused = false;
+                if(!window.capturing){
+                    window.isPaused = false;
+                }
             }
             window.isPaused = false;
 
@@ -598,7 +606,17 @@
                     //video.muted = true;
 
                     video.playbackRate = 0.1;
+
+                    video.pictureInPictureEnabled = true;
+                    video.addEventListener('enterpictureinpicture', (event) => {
+                        console.warn('enterpictureinpicture',event)
+                    });
+                    video.addEventListener('leavepictureinpicture', (event) => {
+                        console.warn('leavepictureinpicture',event)
+                    });
+
                 }
+                theVideoplayerElement = video;
                 
                 video.src = videoURL;
                 video.autoplay = false; // true;
@@ -667,13 +685,21 @@
                     if(window.capturedFrames >= maxFrames){
                         window.stopCapture();
                     }else{
-                        setTimeout(()=>{
-                            // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
-                            // like requestAnimationFrame would
-                            // Q: is it absolute or delta?
-                            // A: it's absolute
-                            window.animate(window.capturedFrames * 1000 / 60);
-                        },1);
+                        
+                        let nth = ((1/(120)) * (theVideoplayerElement?.playbackRate ?? 1) * window.capturerSpeedReduction);
+                        // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
+                        setTimeout(() => {
+                            window.animate(time + (nth/1000));
+                        }, 0);
+
+                        if(theVideoplayerElement){
+                            theVideoplayerElement.currentTime = theVideoplayerElement.currentTime + nth;
+                        }
+                        // play then pause to refresh the theVideoplayerElement frame
+                        // theVideoplayerElement.play();
+                        // setTimeout(()=>{
+                        //     theVideoplayerElement.pause();
+                        // },1000/60);
                     }
                 }else{
                     // next frame
@@ -753,7 +779,7 @@
             // when a user drops an image on the canvas, load it to our texture
             window.addEventListener('drop', droppedOnAnything);
             window.addEventListener('dragover', (e) => {
-                console.warn('dragover',e)
+                //console.warn('dragover',e)
                 e.preventDefault();
                 e.stopPropagation();
             });
@@ -857,7 +883,7 @@
                 onuserinput();
             },false);
             document.addEventListener("mouseup",()=>{
-                window.isPaused = !window.isPaused;
+                
 
                 let vid;
                 if(vid = document.getElementById("video") && vid){
@@ -891,8 +917,9 @@
         
         window.hideWelcome = function(){
             document.querySelector(".intro-card").classList.toggle("fade-out",true);
-            document.querySelector(".video-underlay").classList.toggle("fade-out",true);
+            document.querySelector(".intro-underlay").classList.toggle("fade-out",true);
         }
+        window.currentVideoTime = null;
         window.startCapture = function(){
             if(!window.capturer){
                 console.warn("capturer not initialized");
@@ -901,7 +928,9 @@
             window.capturing = true;
             window.capturedFrames = 0;
             window.capturer.start();
-            
+            animate(1);
+            theVideoplayerElement.pause();
+            window.currentVideoTime = video.currentTime;
         }
         window.stopCapture = function(){
             if(!window.capturer){
@@ -966,19 +995,19 @@
             try{
                 // Create a capturer that exports a WebM video
                 var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
-                var motionBlurFrames = 0;//2;
+                window.motionBlurFrames = 0;
                 capturer = isWebMSupported 
                 ? new CCapture( { 
                     format: 'webm', 
                     motionBlurFrames,
                     verbose: false, 
-                    fps: 60 
+                    fps: 120 
                 } ) 
                 : new CCapture( { 
                     format: 'png', 
                     motionBlurFrames,
                     verbose: false, 
-                    framerate: 60 
+                    framerate: 120 
                 } );
             }catch(e){
                 console.error('failed to create capturer',e);
