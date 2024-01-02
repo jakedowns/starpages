@@ -11741,6 +11741,11 @@ const SO_DO_IT = ()=>{
 }
 // central command definitions
 const InvokableCommands = {
+
+    "./new-year-2024.html": RES,
+    "New Year's 2024!": "./new-year-2024.html",
+    "Happy Near Year's 2024!": "./new-year-2024.html",
+
     "Pilot Wave Visualization - Veratasium - Is This What Quantum Mechanics Looks Like?":"https://www.youtube.com/watch?v=WIyTZDHuarQ",
     "Test Driven Development"(){
         system.invoke("https://en.wikipedia.org/wiki/List_of_unit_testing_frameworks")
