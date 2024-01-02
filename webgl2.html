@@ -228,7 +228,6 @@
         <p>Drop images and video on this webpage to have them mixed and blended in unique ways</p>
         <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
         <!-- <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe> -->
-        <p>NOTE: this only works on Windows + Chrome. I have not tested Android, and it is broken on MacOS/iOS (i dont know why, if you think you do, please reach out)</p>
         
         <button class="hide-video-button">
             <span class="btn-inner">
@@ -583,7 +582,9 @@
             }
             window.isPaused = false;
 
+            window.theVideoplayerElement = null;
             window.setVideoAsChannel = function(videoURL){
+                console.warn('setVideoAsChannel',videoURL)
                 let video = document.getElementById("video");
                 if(!video){
                     video = document.createElement('video');
@@ -603,18 +604,20 @@
                 video.autoplay = false; // true;
                 video.controls = true;
                 video.play();
-                
+                let needs_on_can_play_update = true;
                 video.oncanplay = function() {
-                    window.videoTexture = new THREE.VideoTexture(video);
-                    window.videoTexture.minFilter = THREE.LinearFilter;
-                    window.videoTexture.magFilter = THREE.LinearFilter;
-                    window.videoTexture.format = THREE.RGBFormat;
-                    window.videoTexture.crossOrigin = 'anonymous';
-                    window.videoTexture.needsUpdate = true;
-                    window.currentTexture = window.videoTexture;
-                    console.warn('video should now be appearing on the canvas')
-
-                    video.playbackRate = 0.1;
+                    if(needs_on_can_play_update){
+                        needs_on_can_play_update = false;
+                        window.videoTexture = new THREE.VideoTexture(video);
+                        window.videoTexture.minFilter = THREE.LinearFilter;
+                        window.videoTexture.magFilter = THREE.LinearFilter;
+                        window.videoTexture.format = THREE.RGBFormat;
+                        window.videoTexture.crossOrigin = 'anonymous';
+                        window.videoTexture.needsUpdate = true;
+                        window.currentTexture = window.videoTexture;
+                        console.warn('video should now be appearing on the canvas')
+                        video.playbackRate = 0.1;
+                    }
                 }
                 document.body.appendChild(video);
             }
@@ -666,8 +669,11 @@
                     }else{
                         setTimeout(()=>{
                             // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
+                            // like requestAnimationFrame would
+                            // Q: is it absolute or delta?
+                            // A: it's absolute
                             window.animate(window.capturedFrames * 1000 / 60);
-                        },0);
+                        },1);
                     }
                 }else{
                     // next frame
