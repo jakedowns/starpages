@@ -1,6 +1,8 @@
 // Created by evilryu
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
 // via https://www.shadertoy.com/view/MdXSWn
+// Modified by jakedowns on 1/1/24 to add iChannel0 texture support
 
 // compatibility uniforms
 // iTime: { value: 1.0 },

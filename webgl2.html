@@ -16,6 +16,7 @@
     <title>WebGL Pixel Mixer - jakedowns</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
+    <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
         canvas {
@@ -66,7 +67,7 @@
         .drop-here-text .hint {
             font-size: 15px;
         }
-        .intro-video {
+        .intro-card {
             top: 50%;
             position: absolute;
             left: 50%;
@@ -77,8 +78,13 @@
             max-width: 100vw;
             padding: 20px;
             box-sizing: border-box;
+            opacity: 1;
         }
-        .intro-video iframe {
+        .intro-card.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .intro-card iframe {
             height: auto;
             width: 100%;
             min-width: 100px;
@@ -103,6 +109,10 @@
             align-items: center;
             justify-content: center;
         }
+        .video-underlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
         .hide-video-button {
             text-align: center;
             width: auto;
@@ -111,17 +121,39 @@
             display: block;
             border-radius: 100px;
             border: 2px solid black;
-            padding: 10px;
+            padding: 10px 20px;
+            box-sizing: border-box;
             font-size: 20px;
             color: white;
             cursor: pointer;
             transition: all 1s ease-in-out;
             background-color: #663dff;
-            
+            font-family: sans-serif;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
         }
+
+        /* here we use a rounded rectangle + a linear gradient to emulate gloss via psuedo element */
+        .hide-video-button .btn-inner::before {
+            content: "";
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            border-radius: 100px;
+            background-image: linear-gradient(319deg, #663dff 0%, #aa00ff 37%, #cc4499 100%);
+            z-index: -1;
+        }
+
+
         .hide-video-button:hover {
             background-color: #663dff;
             animation: gradient-animation 2s ease infinite; /* Apply the animation */
+        }
+        .hide-video-button .btn-text {
+            position: relative;
+            font-size: 18px;
+            z-index: 1;
         }
         @keyframes gradient-animation {
             0%, 100% {
@@ -168,7 +200,7 @@
         }
 
         /* final z-indexes */
-        .intro-video { z-index: 1002; position: absolute; }
+        .intro-card { z-index: 1002; position: absolute; }
         .video-underlay { z-index: 1001; }
         #controls { z-index: 1000; }
         video { z-index: 1000; }
@@ -189,7 +221,7 @@
         <button onclick="window.startCapture()">record video</button>
     </div>
 
-    <div class="intro-video">
+    <div class="intro-card transition-opacity">
         <h1>Pixel Mixer Demo</h1>
         <p>v24.01.01.01 - Major Release 001</p>
         <p>Shout out to acerola on youtube for his original "I tried sorting pixels" video which inspired me to dig back into this</p>
@@ -198,7 +230,11 @@
         <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
         <p>NOTE: this only works on Windows + Chrome. I have not tested Android, and it is broken on MacOS/iOS (i dont know why, if you think you do, please reach out)</p>
         
-        <span class="hide-video-button" onclick="window.hideVideo()">Click to Continue... &gt;</span>
+        <button class="hide-video-button">
+            <span class="btn-inner">
+                <span  class="btn-text" onclick="window.hideVideo()">Click to Continue ➡️</span>
+            </span>
+        </button>
     </div>
 
     <div class="video-underlay" onclick="window.hideVideo()"></div>
@@ -231,7 +267,7 @@
         window.shaderMaterial;
 
         window.setupThree = async function(){
-            window.fragmentShader = await (await fetch("./shaders/new-years-2024.glsl")).text();
+            window.fragmentShader = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
 
             const pasteFromClipboardPrompt = document.getElementById("pasteFromClipboardPrompt");
             function showPasteFromClipboardPrompt(){
@@ -816,8 +852,8 @@
 
         
         window.hideVideo = function(){
-            document.querySelector(".intro-video").style.display = "none";
-            document.querySelector(".video-underlay").style.display = "none";
+            document.querySelector(".intro-card").classList.toggle("fade-out",true);
+            document.querySelector(".video-underlay").classList.toggle("fade-out",false);
         }
         window.startCapture = function(){
             if(!window.capturer){
@@ -936,7 +972,7 @@
             //     return;
             // }
             //window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
-            window.fragmentShaderSource = await (await fetch("./shaders/new-years-2024.glsl")).text();
+            window.fragmentShaderSource = await (await fetch("./frosted-video-mandlebulb.glsl")).text();
             prepareCCapture();
             setupThree();
         }
