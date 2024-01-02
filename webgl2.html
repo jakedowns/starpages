@@ -582,6 +582,9 @@
             }
             window.isPaused = false;
 
+            // a poly-fill of sorts to support playback rates below 0.1 (limit of double param in html5 video element)
+            window.forceLowPlaybackRate = true;
+
             window.theVideoplayerElement = null;
             window.setVideoAsChannel = function(videoURL){
                 console.warn('setVideoAsChannel',videoURL)
@@ -657,13 +660,21 @@
 
                 renderer.render(scene, camera);
 
+                if(window.playing){
+                    if(video.targetPlaybackRate < 0.1){
+                        video.pause();
+                    }
+                }
+
+                window.capturedFrames++;
+                if(progress){
+                    progress.value = (window.capturedFrames / maxFrames) * 100;
+                }
+
                 // or ... next frame
                 if(window.capturing){
                     window.capturer.capture(canvas);
-                    window.capturedFrames++;
-                    if(progress){
-                        progress.value = (window.capturedFrames / maxFrames) * 100;
-                    }
+                    
                     if(window.capturedFrames >= maxFrames){
                         window.stopCapture();
                     }else{
