@@ -227,7 +227,7 @@
         <p>Shout out to acerola on youtube for his original "I tried sorting pixels" video which inspired me to dig back into this</p>
         <p>Drop images and video on this webpage to have them mixed and blended in unique ways</p>
         <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
-        <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <!-- <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe> -->
         <p>NOTE: this only works on Windows + Chrome. I have not tested Android, and it is broken on MacOS/iOS (i dont know why, if you think you do, please reach out)</p>
         
         <button class="hide-video-button">
@@ -251,6 +251,8 @@
         window.capturedFrames = 0;    
         window.maxFrames = 120 * 10;
 
+        window.baseTexture = null;
+
         // was: fsSource
         /*
             // bare bones debug
@@ -266,6 +268,24 @@
         
         window.selectedImageTexture;
         window.shaderMaterial;
+
+        window.onBaseTextureRefresh = function(){
+            // 1. reset Offset texture
+            // 2. clone base -> target (refresh)
+            // 3. clone base -> accumulator (refresh)
+            // 4. clone base -> lerped (refresh)?
+        }
+
+        // window.switchToImageTexture
+        
+        // may have changed pixel resolution
+        // TODO: maybe make sure we set three to just fill/crop whatever we're trying to display to fit our existing pixel resolution
+        window.reinitTexturesOnNewInput = function(){
+            // 1. reset Offset texture
+            // 2. clone base -> target (refresh)
+            // 3. clone base -> accumulator (refresh)
+            // 4. clone base -> lerped (refresh)?
+        }
 
         window.setupThree = async function(){
             window.fragmentShader = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
@@ -333,21 +353,21 @@
                         if (item.types.includes('image/png')) {
                             const blob = await item.getType('image/png');
                             const url = URL.createObjectURL(blob);
-                            texture.image.onload = function() {
+                            window.baseTexture.image.onload = function() {
                                 URL.revokeObjectURL(url);
-                                texture.needsUpdate = true;
+                                window.baseTexture.needsUpdate = true;
                             };
-                            texture.image.src = url;
+                            window.baseTexture.image.src = url;
                             break;
                         }
                         // or if ti's a base64 image in a text string, pass _that_ to image.src
                         if (item.types.includes('text/plain')) {
                             const text = await item.getType('text/plain');
-                            texture.image.onload = function() {
+                            window.baseTexture.image.onload = function() {
                                 URL.revokeObjectURL(url);
-                                texture.needsUpdate = true;
+                                window.baseTexture.needsUpdate = true;
                             };
-                            texture.image.src = text;
+                            window.baseTexture.image.src = text;
                             break;
                         }
                     }
@@ -382,8 +402,10 @@
                 else if (file.type.indexOf('image') === 0) {
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        texture.image.src = e.target.result;
-                        texture.needsUpdate = true;
+                        window.baseTexture.image.src = e.target.result;
+                        window.baseTexture.needsUpdate = true;
+
+                        onBaseTextureRefresh();
                     };
                     reader.readAsDataURL(file);
                 }
@@ -415,7 +437,7 @@
             //let url = `./res/bg_${rand_int_1_thru_17}.png`;
             //let url = "./res/download (3).png";
             let url = "./res/download (10).png";
-            window.texture = textureLoader.load(url);
+            window.baseTexture = textureLoader.load(url);
 
             // define our textures / buffers
             // 1. our starting values (provided by user image or video, etc)
@@ -453,12 +475,13 @@
             );
 
 
-            window.currentTexture = texture;
+            window.currentTexture = window.baseTexture; //window.lerpedColorTexture;
+            
             // Assuming you have a texture loaded into a variable named 'texture'
-            texture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
-            texture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
+            window.currentTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
+            window.currentTexture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
 
-            window.image_height = texture.height;
+            window.image_height = baseTexture.height;
 
             
 
@@ -467,7 +490,7 @@
             // texture.wrapT = THREE.RepeatWrapping;
 
             // Set how many times the texture should repeat
-            texture.repeat.set(2, 2); // Adjust as needed
+            //baseTexture.repeat.set(2, 2); // Adjust as needed
 
             /* Match ShaderToy uniforms for compatibility */
             // Custom Shader
@@ -478,7 +501,7 @@
                     
                     // compatibility uniforms
                     iTime: { value: 1.0 },
-                    iChannel0: { value: texture },
+                    iChannel0: { value: baseTexture },
                     iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                     iMouse: { value: new THREE.Vector4(0.0) },
                 },
@@ -623,7 +646,7 @@
                 //
                 // update ShaderToy compatibility uniforms
                 // iTime: { value: 1.0 },
-                // iChannel0: { value: texture },
+                // iChannel0: { value: baseTexture },
                 // iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                 //
                 shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
@@ -707,10 +730,12 @@
                     else if (file.type.indexOf('image') === 0) {
                         const reader = new FileReader();
                         reader.onload = (e) => {
-                            texture.image.src = e.target.result;
-                            texture.needsUpdate = true;
+                            baseTexture.image.src = e.target.result;
+                            baseTexture.needsUpdate = true;
                             // "setImageAsChannel"
-                            shaderMaterial.uniforms.iChannel0.value = texture;
+                            shaderMaterial.uniforms.iChannel0.value = baseTexture;
+
+                            onBaseTextureRefresh();
                         };
                         reader.readAsDataURL(file);
                     }
@@ -968,10 +993,9 @@
                 let img = new Image();
                 img.src = url;
                 img.onload = function(){
-                    window.texture.image.src = url;
-                    window.texture.needsUpdate = true;
                     // "setImageAsChannel"
-                    shaderMaterial.uniforms.iChannel0.value = texture;
+                    window.baseTexture.image.src = url;
+                    window.baseTexture.needsUpdate = true;
 
                     // update our originalPixelDataTexture (Three.js Texture)
                     window.originalPixelDataTexture.image.src = url;
@@ -1081,8 +1105,9 @@
                 }
 
                 // Bind the base texture to our initial pixel data ( a frozen snapshot of the initial state of the pixels for our lerping algo. to work with )
-                THREE.WebGLRenderer.setTexture2D(baseTexture, 0);
-                THREE.WebGLRenderer.setTexture2D(pixelData, 0, THREE.RGBAFormat, fixedPixelsX, fixedPixelsY, 0, THREE.RGBAFormat, THREE.UnsignedByteType);
+                // THREE.WebGLRenderer.setTexture2D(baseTexture, 0);
+                // THREE.WebGLRenderer.setTexture2D(pixelData, 0, THREE.RGBAFormat, fixedPixelsX, fixedPixelsY, 0, THREE.RGBAFormat, THREE.UnsignedByteType);
+
 
             }else{
                 // grow or shrink pixelData
@@ -1587,11 +1612,11 @@
                 showIntroText();
                 // update url
                 let uri = "https://jakedowns.com/media/0006.mp4";
-                videoTexture.image.src = uri;
-                videoTexture.needsUpdate = true;
+                window.videoTexture.image.src = uri;
+                window.videoTexture.needsUpdate = true;
 
                 // set the video to be the base texture
-                currentTexture = videoTexture;
+                currentTexture = window.videoTexture;
             } else {
                 doubleTapDetected = true;
                 doubleTapTimeout = setTimeout(() => {
