@@ -39,11 +39,13 @@ https://jakedowns.github.io/starpages
 > `three.js`, `WebGL`, `GLSL`, `ES6`
 > https://jakedowns.github.io/starpages/webgl.html
 
-### WebGL
+### Three.js Frosted Mandlebrot w/ internal video texture
 
-### Building Tetris with P5.js and ChatGPT
+> see: Happy New Year 2024
+
+<!-- ### Building Tetris with P5.js and ChatGPT
 🚦*Project Status* 🟢 Started, ❄️ Halted
-> https://jakedowns.github.io/starpages/tetris-with-p5js-and-chatgpt-tutorial.html
+> https://jakedowns.github.io/starpages/tetris-with-p5js-and-chatgpt-tutorial.html -->
 
 ---
 
