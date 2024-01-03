@@ -211,17 +211,19 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     // Determine the repeat factor based on mouse position
     float repeatFactorX, repeatFactorY;
 
-    if (iMouse.x > 0.5) {
-        repeatFactorX = remapMousePosition(iMouse.x, 0.5, 1.0, 0.0, 50.0);
-    } else {
-        repeatFactorX = remapMousePosition(iMouse.x, 0.0, 0.5, 50.0, 1e30);
-    }
+    float texScaleX_min = 0.0;
+    float texScaleX_stop_49 = 0.1;
+    float texScaleX_stop_50 = 0.11;
+    float texScaleX_stop_100 = 1e30;
 
-    if (iMouse.y > 0.5) {
-        repeatFactorY = remapMousePosition(iMouse.y, 0.5, 1.0, 0.0, 50.0);
-    } else {
-        repeatFactorY = remapMousePosition(iMouse.y, 0.0, 0.5, 50.0, 1e30);
-    }
+    float texScaleY_min = 0.0;
+    float texScaleY_stop_49 = 0.1;
+    float texScaleY_stop_50 = 0.11;
+    float texScaleY_stop_100 = 1e30;
+
+    repeatFactorX = iMouse.x > 0.5 ? remapMousePosition(iMouse.x, 0.5, 1.0, texScaleX_min, texScaleX_stop_49) : remapMousePosition(iMouse.x, 0.0, 0.5, texScaleX_stop_50, texScaleX_stop_100);
+
+    repeatFactorY = iMouse.y > 0.5 ? remapMousePosition(iMouse.y, 0.5, 1.0, texScaleY_min, texScaleY_stop_49) : remapMousePosition(iMouse.y, 0.0, 0.5, texScaleY_stop_50, texScaleY_stop_100);
 
     // Centering the UV coordinates
     vec2 centeredUV = point.xy / iResolution.xy - 0.5;
@@ -345,16 +347,18 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         float lightAmount = smoothstep(lightRadius, 0.0, lightDistance);
         col = mix(col, vec3(lightIntensity), lightAmount);
 
-        // random sample to create a grainy / bokeh effect based on distance to camera
-        float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
-        float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
-        grainAmount = mix(grainAmount, 1.0, 0.5);
+        // blur / diffusion
 
-        // use the grain to tweak the lookup coordinates
-        float maxOffset = 0.01;
-        vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
-        vec4 texColor2 = texture(iChannel0, newUV.xy + grainOffset);
-        col = mix(col, texColor2.rgb, grainAmount);
+        // random sample to create a grainy / bokeh effect based on distance to camera
+        // float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        // float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
+        // grainAmount = mix(grainAmount, 1.0, 0.5);
+
+        // // use the grain to tweak the lookup coordinates
+        // float maxOffset = 0.01;
+        // vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
+        // vec4 texColor2 = texture(iChannel0, newUV.xy + grainOffset);
+        // col = mix(col, texColor2.rgb, grainAmount);
     } 
 
     // Mix the luminance into the existing color

@@ -721,38 +721,38 @@
             }
             window.setVideoAsChannel = function(videoURL){
                 try{
-                //console.warn('setVideoAsChannel',videoURL)
-                
-                let video = window.theVideoplayerElement;
-                video.style.opacity = 1;
-                
-                video.src = videoURL;
-                video.autoplay = false; // true;
-                video.controls = true;
-                video.buffer = true;
-                video.play();
-                let needs_on_can_play_update = true;
-                video.oncanplay = function() {
-                    if(needs_on_can_play_update){
-                        needs_on_can_play_update = false;
-                        window.videoTexture = new THREE.VideoTexture(video);
-                        window.videoTexture.minFilter = THREE.LinearFilter;
-                        window.videoTexture.magFilter = THREE.LinearFilter;
-                        window.videoTexture.format = THREE.RGBFormat;
-                        window.videoTexture.crossOrigin = 'anonymous';
-                        window.videoTexture.needsUpdate = true;
-                        window.currentTexture = window.videoTexture;
+                    //console.warn('setVideoAsChannel',videoURL)
+                    
+                    let video = window.theVideoplayerElement;
+                    video.style.opacity = 1;
+                    
+                    video.src = videoURL;
+                    video.autoplay = false; // true;
+                    video.controls = true;
+                    video.buffer = true;
+                    video.play();
+                    let needs_on_can_play_update = true;
+                    video.oncanplay = function() {
+                        if(needs_on_can_play_update){
+                            needs_on_can_play_update = false;
+                            window.videoTexture = new THREE.VideoTexture(video);
+                            window.videoTexture.minFilter = THREE.LinearFilter;
+                            window.videoTexture.magFilter = THREE.LinearFilter;
+                            window.videoTexture.format = THREE.RGBFormat;
+                            window.videoTexture.crossOrigin = 'anonymous';
+                            window.videoTexture.needsUpdate = true;
+                            window.currentTexture = window.videoTexture;
 
-                        setTimeout(()=>{
-                            window.videoIsPlaying = true;
-                            window.videoIsVirtuallyPlaying = true;
-                        },1);
+                            setTimeout(()=>{
+                                window.videoIsPlaying = true;
+                                window.videoIsVirtuallyPlaying = true;
+                            },1);
+                        }
                     }
+                }catch(e){
+                    console.error(e);
                 }
-            }catch(e){
-                console.error(e);
-            }
-                
+
             }
 
             window.progressElement = document.getElementById("progress");
