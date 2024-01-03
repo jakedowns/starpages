@@ -255,20 +255,31 @@
         window.reverseSort = true;
         window.capturer = null;
         window.capturing = false;
-        window.targetRecordingFPS = 120;
+        window.targetRecordingFPS = 29.97; //120;
         Object.defineProperty(window, 'maxFrames', {
             get: function() { return this.targetRecordingFPS * 10; }
         });
+
+        // define fixedTime
+        // a wall time we can hold to pause the shader
+        Object.defineProperty(window, 'fixedTime', {
+            get() { 
+                return window.targetVideoPlaybackRate >= 0.1 ? null : this._fixedTime;
+             },
+            set(value) {
+                this._fixedTime = value;
+            }
+        });
+
         window.videoIsPlaying = false;
         // used to distinguish element's playback state from our virtual playback state(sub-0.1x playback rate)
         window.videoIsVirtuallyPlaying = false; 
-        window.recordingStartedAt = 0;
-        window.recordingVirtualTimeSinceStart = 0;
+        // window.recordingStartedAt = 0;
         window.subframePlaybackCurrentFrame = 0;
         window.currentVideoTime = null;
         window.baseTexture = null;
 
-        window.isPaused = false;
+        window.shaderTimeIsPaused = false;
         window.theVideoplayerElement = null;
         let _targetVideoPlaybackRate = 0.01;
         let _targetVideoPlaybackRateClamped = 0.1;
@@ -324,33 +335,38 @@
         let handling_slow_motion_advance = false;
 
         function maybeAdvanceVideoOneFrame() {
-            if(!window.videoIsVirtuallyPlaying || window.targetVideoPlaybackRate >= 0.1){
+            if(!window.targetVideoPlaybackRate >= 0.1){
+                handling_slow_motion_advance = false;
                 return;
             }
+            //theVideoplayerElement.pause();
+            handling_slow_motion_advance = false;
+
             let frameDuration = 1 / window.targetRecordingFPS; //framerate;
             let desiredSpeed = window.targetVideoPlaybackRate;// 0.05; // Replace with your desired speed
             let playDuration = frameDuration / desiredSpeed;
 
-            function playSlowMotion() {
-                handling_slow_motion_advance = true;
-                theVideoplayerElement.play();
-                // advance in the smallest possible increment
-                // kicking to next event loop to make sure play isn't suppressed
+            let do_advance_virtual_frame_this_literal_frame = window.subframePlaybackCurrentFrame % Math.floor(1 / desiredSpeed) == 0;
+            if(!do_advance_virtual_frame_this_literal_frame){
+                return;
+            }
+            subframePlaybackCurrentFrame++;
+            // currentTime is also not precise enough for sub-frame playback
+            // we will hit play then pause in a short manner
+            // the min time beyond the point where a "play was cancelled by pause" is ??ms ?
+            //theVideoplayerElement.currentTime += frameDuration;
+            window.playSlowMotion = function() {
+                // console.warn("onPlaySlowMotion",{
+                //     frameDuration,
+                //     targetFPS: window.targetRecordingFPS,
+                //     desiredSpeed,
+                //     playDuration,
+                // });
                 setTimeout(() => {
-                    theVideoplayerElement.pause();
-                    theVideoplayerElement.currentTime += frameDuration;
-
-                    // update window: 
-                    // recordingVirtualTimeSinceStart
-                    // currentVideoTime
-                    // subframePlaybackCurrentFrame
-
-                    // let nth = ((1/(window.targetRecordingFPS)) * (window?.targetVideoPlaybackRate ?? 1) * window.capturerSpeedReduction);
-                    // let adjustedFrame = Math.round(window.subframePlaybackCurrentFrame * nth);
-                    // let maxFrames = Math.round(window.maxFrames * nth) * window.targetRecordingFPS;
-
-                    handling_slow_motion_advance = false;
-                }, playDuration * 1000);
+                    handling_slow_motion_advance = true;
+                    theVideoplayerElement.play();
+                }, 32);
+                // onseek we call BACK to this function to pause and continue slow motion
             }
 
             theVideoplayerElement.addEventListener('seeked', () => {
@@ -365,9 +381,7 @@
                 }
             });
 
-            if (recordingVirtualTimeSinceStart >= window.subframePlaybackCurrentFrame * frameDuration) {
-                playSlowMotion();
-            }
+            
         }
 
         window.setupThree = async function(){
@@ -657,14 +671,14 @@
 
             window.onVideoPause = function(){
                 window.fixedTime = shaderMaterial.uniforms.u_time.value;
-                if(!window.capturing){
-                    window.isPaused = true;
+                if(!window.capturing && !handling_slow_motion_advance){
+                    window.videoIsPlaying = false;
                 }
             }
             window.onVideoResume = function(){
                 window.fixedTime = null;
-                if(!window.capturing){
-                    window.isPaused = false;
+                if(!window.capturing && !handling_slow_motion_advance){
+                    window.videoIsPlaying = true;
                 }
             }
 
@@ -694,6 +708,7 @@
                 // video.addEventListener('loadedmetadata', (event) => {
                 //     console.warn('loadedmetadata',event)
                 // });
+                document.body.appendChild(video);
                 window.theVideoplayerElement = video;
             }
             
@@ -702,6 +717,7 @@
                 createVideoElement();
             }
             window.setVideoAsChannel = function(videoURL){
+                try{
                 //console.warn('setVideoAsChannel',videoURL)
                 
                 let video = window.theVideoplayerElement;
@@ -709,6 +725,7 @@
                 video.src = videoURL;
                 video.autoplay = false; // true;
                 video.controls = true;
+                video.buffer = true;
                 video.play();
                 let needs_on_can_play_update = true;
                 video.oncanplay = function() {
@@ -721,12 +738,20 @@
                         window.videoTexture.crossOrigin = 'anonymous';
                         window.videoTexture.needsUpdate = true;
                         window.currentTexture = window.videoTexture;
-                        console.warn('video should now be appearing on the canvas')
-                        video.playbackRate = 0.1;
+
+                        setTimeout(()=>{
+                            window.videoIsPlaying = true;
+                            window.videoIsVirtuallyPlaying = true;
+                        },1);
                     }
                 }
-                document.body.appendChild(video);
+            }catch(e){
+                console.error(e);
             }
+                
+            }
+
+            window.progressElement = document.getElementById("progress");
 
             window.animate = function(time) {
                 if (resizeRendererToDisplaySize(renderer)) {
@@ -763,23 +788,14 @@
 
                 renderer.render(scene, camera);
 
-                if(window.videoIsPlaying){
-                    // custom frame-by-frame playback mode kicks in below 0.1 playback rate
-                    // due to DOM limitations
-                    if(window.targetVideoPlaybackRate < 0.1){
-                        video.pause();
-                    }
-                }
-
                 
                 // sub-frame playback
                 maybeAdvanceVideoOneFrame();
                 
-                // or ... next frame
                 if(window.capturing){
                     // update recording progress
-                    if(progress){
-                        progress.value = (window.subframePlaybackCurrentFrame / maxFrames) * 100;
+                    if(progressElement){
+                        progressElement.value = (window.subframePlaybackCurrentFrame / maxFrames) * 100;
                     }
                     window.capturer.capture(canvas);
                     
@@ -973,22 +989,14 @@
                 onuserinput();
             },false);
             document.addEventListener("mouseup",()=>{
-                
-
-                let vid;
-                if(vid = document.getElementById("video") && vid){
-                    vid.style.opacity = window.isPaused ? 0 : 0.1;
-                }
-
+                // let vid;
+                // if(vid = document.getElementById("video") && vid){
+                //     vid.style.opacity = window.videoIsPlaying ? 0 : 0.1;
+                // }
                 if(!did_react_to_first_user_input){
                     did_react_to_first_user_input = true;
                     pickOne();
                     return;
-                }
-                if(window.isPaused){
-                    document.getElementById("video")?.pause();
-                }else{
-                    document.getElementById("video")?.play();
                 }
             });
             document.addEventListener("dblclick",()=>{
@@ -1002,6 +1010,11 @@
                 const height = canvas.clientHeight;
                 renderer.setSize(width, height, false);
             })
+
+            // fast start
+            window.targetVideoPlaybackRate = 1.0; 
+            hideIntroText(); 
+            window.setVideoAsChannel("./res/0006.mp4");
         }
 
         
@@ -1015,12 +1028,12 @@
                 console.warn("capturer not initialized");
                 return;
             }
-            window.recordingVirtualTimeSinceStart = 0;
+            
             window.subframePlaybackCurrentFrame = 0;
             window.capturing = true;
             window.capturer.start();
             animate(0);
-            theVideoplayerElement.pause();
+            //theVideoplayerElement.pause();
             window.currentVideoTime = video.currentTime;
         }
         window.stopCapture = function(){
@@ -1809,14 +1822,22 @@
         document.addEventListener("DOMContentLoaded", onReady);
 
     </script>
-    <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-GYK2ZMX0M9"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
 
-  gtag('config', 'G-GYK2ZMX0M9');
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        setTimeout(function() {
+            var script = document.createElement('script');
+            script.src = "https://www.googletagmanager.com/gtag/js?id=G-GYK2ZMX0M9";
+            script.async = true;
+            document.body.appendChild(script);
+
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-GYK2ZMX0M9');
+        }, 3000);
+    });
 </script>
 </body>
 </html>
