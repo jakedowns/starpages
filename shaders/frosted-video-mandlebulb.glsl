@@ -140,10 +140,24 @@ vec3 intersect(in vec3 ro, in vec3 rd) {
         res_t = -1.0;
     return vec3(res_t, res_c.y, res_c.z);
 }
+float remapMousePosition(float mousePos, float in_min, float in_max, float out_min, float out_max) {
+    return (mousePos - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP) {
     // Determine the repeat factor based on mouse position
-    float repeatFactorX = 100. * iMouse.x / iResolution.x; // More repeats as mouse moves right
-    float repeatFactorY = 100. * iMouse.y / iResolution.y; // More repeats as mouse moves up
+    float repeatFactorX, repeatFactorY;
+
+    if (iMouse.x <= 0.1) {
+        repeatFactorX = remapMousePosition(iMouse.x, 0.0, 0.1, 0.0, 50.0);
+    } else {
+        repeatFactorX = remapMousePosition(iMouse.x, 0.1, 1.0, 50.0, 100.0);
+    }
+
+    if (iMouse.y <= 0.1) {
+        repeatFactorY = remapMousePosition(iMouse.y, 0.0, 0.1, 0.0, 50.0);
+    } else {
+        repeatFactorY = remapMousePosition(iMouse.y, 0.1, 1.0, 50.0, 100.0);
+    }
 
     // Centering the UV coordinates
     vec2 centeredUV = point.xy / iResolution.xy - 0.5;
