@@ -5,7 +5,7 @@
 // https://jakedowns.github.io/starpages/webgl2.html
 
 // whether turn on the animation
-//#define phase_shift_on 
+#define phase_shift_on 
 
 // Comment these out to past into shadertoy
 uniform float iTime;
@@ -55,7 +55,13 @@ vec3 mb(vec3 p) {
             continue;
         theta = atan(z.y / z.x);
         #ifdef phase_shift_on
-        phi = asin(z.z / r) + iTime * 0.1;
+        // Determine the mouse position and adjust the phase shift accordingly
+        float mouseX = iMouse.x;
+        // Create a smooth gradient using sin function
+        // Scale the sin wave such that 1 period matches screen width in our current coordinate context
+        float gradient = sin(mouseX / 2.0);
+        // Adjust the phase shift based on the gradient
+        phi = asin(z.z / r) + gradient * iTime * 0.1;
         #else
         phi = asin(z.z / r);
         #endif
@@ -209,24 +215,36 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     uv = uv * 0.5 + 0.5; // Map from -1..1 to 0..1 range
 
     // Determine the repeat factor based on mouse position
-    float repeatFactorX, repeatFactorY;
+    float repeatFactorX = 2.;
+    float repeatFactorY = 2.;
 
     float texScaleX_min = 0.0;
     float texScaleX_stop_49 = 0.1;
     float texScaleX_stop_50 = 0.11;
-    float texScaleX_stop_100 = 1e30;
+    float texScaleX_stop_100 = 1e3;
 
     float texScaleY_min = 0.0;
     float texScaleY_stop_49 = 0.1;
     float texScaleY_stop_50 = 0.11;
-    float texScaleY_stop_100 = 1e30;
+    float texScaleY_stop_100 = 1e3;
 
-    repeatFactorX = iMouse.x > 0.5 ? remapMousePosition(iMouse.x, 0.5, 1.0, texScaleX_min, texScaleX_stop_49) : remapMousePosition(iMouse.x, 0.0, 0.5, texScaleX_stop_50, texScaleX_stop_100);
+    // repeatFactorX = 
+    //     iMouse.x > 0.5
+    //     ? remapMousePosition(iMouse.x, 0.5, 1.0, texScaleX_min, texScaleX_stop_49)
+    //     : remapMousePosition(iMouse.x, 0.0, 0.5, texScaleX_stop_50, texScaleX_stop_100);
 
-    repeatFactorY = iMouse.y > 0.5 ? remapMousePosition(iMouse.y, 0.5, 1.0, texScaleY_min, texScaleY_stop_49) : remapMousePosition(iMouse.y, 0.0, 0.5, texScaleY_stop_50, texScaleY_stop_100);
+    // repeatFactorY = 
+    //     iMouse.y > 0.5
+    //     ? remapMousePosition(iMouse.y, 0.5, 1.0, texScaleY_min, texScaleY_stop_49) 
+    //     : remapMousePosition(iMouse.y, 0.0, 0.5, texScaleY_stop_50, texScaleY_stop_100);
+
+    
 
     // Centering the UV coordinates
     vec2 centeredUV = point.xy / iResolution.xy - 0.5;
+
+    // centeredUV.y += iMouse.x < 0.5 ? iMouse.x : 0.0;
+    // centeredUV.x += iMouse.y < 0.5 ? iMouse.y : 0.0;
 
     // Apply the repeating effect to the UV coordinates
     centeredUV *= vec2(repeatFactorX, repeatFactorY);
@@ -245,13 +263,15 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
 
     // Apply a non-linear transformation based on camera distance
     float camDist = length(camPos - point); // Calculate the distance from the camera to the point
-    float distFactor = smoothstep(0.0, 20.0, camDist); // Adjust range as needed
+    // this is how "deep" into the "ice" the image appears
+    float max_factor = iMouse.x * .1; //2.; //20.0;
+    float distFactor = smoothstep(0.0, max_factor, camDist); // Adjust range as needed
     uv += vec2(sin(uv.y * 3.14 * distFactor), cos(uv.x * 3.14 * distFactor)) * 0.02;
 
     // Add depth information as the third component
-    float depth = length(camToP); // Calculate depth based on the vector from camera to point
+    //float depth = length(camToP); // Calculate depth based on the vector from camera to point
 
-    return vec3(uv, depth);
+    return vec3(uv, camDist);
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) { 
@@ -325,40 +345,59 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         // Transform the 3D point to UV coordinates with depth, using the camera's orientation
         vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, camOrientation);
 
-
         // Sample from iChannel0 using the new UV coordinates
         vec4 texColor = texture(iChannel0, newUV.xy);
         col = texColor.rgb;
 
         // apply fog based on newUV.z
-        float fogAmount = smoothstep(0.0, 1.0, newUV.z / 10.0);
-        // col = mix(col, bg, fogAmount);
+        // make sure newUV.z is in the range 0.0 to 1.0
+        //newUV.z = clamp(newUV.z, 0.0, 1.0);
+        float fogAmount = smoothstep(0.5, 1.0, 1e30-newUV.z);
+        // col = mix(col, bg, fogAmount * 0.1);
 
-        // make the effect miniscule
-        float fresnel = pow(1.0 - dot(n, rd), 0.1);
-        vec3 adjustedCol = mix(col, bg, fresnel);
-        col = vec3(col.r, col.g, col.b);  // retain original hue
-        col = mix(col, adjustedCol, 0.05);  // Adjust the 0.5 as needed for mixing amount
+        // Apply fresnel effect to the mandlebulb
+        // The effect is more pronounced when iMouse.y is high
+        // 1.0 is the maximum value for the dot product of the normal and the ray direction
+        // 3.0 is the power to which the result is raised, controlling the intensity of the fresnel effect
+        float factor2 = iMouse.y * 30.0;
+        float fresnel = pow(1.0 - dot(n, rd), 3. * factor2);
+        //vec3 fresnelEffect = vec3(1.0, 1.0, 1.0) * fresnel;
+        //col += 1.0 - fresnelEffect ;  // Additively mix the fresnel effect
+
+        // Apply a flipped normal texel lookup for environment mapping
+        // Use the normal from before for the texture lookup
+        // Use "newUV" our reprojected vec3 and our normal to flip it to the other "side" of the "env" for texture lookup
+        vec4 texColor2 = texture(iChannel0, vec2(1.0 - n.x, newUV.y));
+
+        // crank the brightness based on iMouse.y
+        float brightness = (iMouse.y);// * 2.0;
+        texColor2.rgb *= brightness;
+
+        // Blend the colors based on the fresnel effect
+        // Only show the bright flipped reflections in the fresnel-shaded areas
+        // Do not apply to the non fresnel (sharp camera/surface angles) based on a smooth, continuous falloff
+        float fresnelBlend = 1.0 - fresnel; //smoothstep(0.0, 1.0, 1.0 - fresnel);
+        col += mix(vec4(0.), vec4(texColor2.rgb,1.0), fresnelBlend).rgb;
 
         // fake the appearance of a diffuse point light
-        float lightRadius = 0.5;
-        float lightIntensity = 0.5;
-        float lightDistance = length(p - ro);
-        float lightAmount = smoothstep(lightRadius, 0.0, lightDistance);
-        col = mix(col, vec3(lightIntensity), lightAmount);
+        // float lightRadius = 0.1;
+        // float lightIntensity = 0.999;
+        // float lightDistance = length(p - ro);
+        // float lightAmount = smoothstep(lightRadius, 0.0, lightDistance);
+        // col = mix(col, vec3(lightIntensity), lightAmount);
 
         // blur / diffusion
 
-        // random sample to create a grainy / bokeh effect based on distance to camera
+        //random sample to create a grainy / bokeh effect based on distance to camera
         // float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
         // float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
         // grainAmount = mix(grainAmount, 1.0, 0.5);
 
-        // // use the grain to tweak the lookup coordinates
+        // // // use the grain to tweak the lookup coordinates
         // float maxOffset = 0.01;
         // vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
-        // vec4 texColor2 = texture(iChannel0, newUV.xy + grainOffset);
-        // col = mix(col, texColor2.rgb, grainAmount);
+        // vec4 texColor3 = texture(iChannel0, newUV.xy + grainOffset);
+        // col += mix(col, texColor3.rgb, grainAmount);
     } 
 
     // Mix the luminance into the existing color

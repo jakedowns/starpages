@@ -197,7 +197,8 @@
             top: 0;
             left: 0;
             width: 160px;
-            opacity: 0.5;
+            opacity: 0;
+            transition: all 1s ease-in-out;
         }
         #record-video-button {
             position: absolute;
@@ -752,7 +753,6 @@
                 }catch(e){
                     console.error(e);
                 }
-
             }
 
             window.progressElement = document.getElementById("progress");
@@ -871,12 +871,15 @@
                         reader.readAsDataURL(file);
                     }
                     else if (file.type.indexOf('image') === 0) {
+                        theVideoplayerElement.style.opacity = 0;
+
                         const reader = new FileReader();
                         reader.onload = (e) => {
                             baseTexture.image.src = e.target.result;
                             baseTexture.needsUpdate = true;
                             // "setImageAsChannel"
-                            shaderMaterial.uniforms.iChannel0.value = baseTexture;
+                            currentTexture = baseTexture;
+
 
                             onBaseTextureRefresh();
                         };
