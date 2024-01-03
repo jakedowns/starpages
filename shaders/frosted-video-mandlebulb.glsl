@@ -1,21 +1,18 @@
-// Created by evilryu
+// Fork of "mandlebulb_" by evilryu: // via https://www.shadertoy.com/view/MdXSWn
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 
-// original: https://www.shadertoy.com/view/MdXSWn
-// Modified by jakedowns on 1/1/24 to add iChannel0 texture support
-// > https://www.shadertoy.com/view/4f2GDh
+// modified by jakedowns on 1/1/24 to add iChannel0 texture support
+// https://jakedowns.github.io/starpages/webgl2.html
 
-// compatibility uniforms
-// iTime: { value: 1.0 },
-// iChannel0: { value: texture },
-// iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
+// whether turn on the animation
+//#define phase_shift_on 
+
+// Comment these out to past into shadertoy
 uniform float iTime;
 uniform sampler2D iChannel0;
 uniform vec3 iResolution;
 uniform vec4 iMouse;
-
-// whether turn on the animation
-//#define phase_shift_on 
+// End shadertoy global uniforms
 
 float stime, ctime;
 void ry(inout vec3 p, float a) {
@@ -144,14 +141,27 @@ vec3 intersect(in vec3 ro, in vec3 rd) {
     return vec3(res_t, res_c.y, res_c.z);
 }
 vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP) {
-    // slide the point to the center of the screen
-    point.xy -= iResolution.xy * 0.5;
+    // Determine the repeat factor based on mouse position
+    float repeatFactorX = 100. * iMouse.x / iResolution.x; // More repeats as mouse moves right
+    float repeatFactorY = 100. * iMouse.y / iResolution.y; // More repeats as mouse moves up
+
+    // Centering the UV coordinates
+    vec2 centeredUV = point.xy / iResolution.xy - 0.5;
+
+    // Apply the repeating effect to the UV coordinates
+    centeredUV *= vec2(repeatFactorX, repeatFactorY);
+
+    // Use mod to create a repeating pattern and recenter it
+    //centeredUV = mod(centeredUV, 1.0);
+
+    // Recenter the UV coordinates after repeating
+    point.xy = (centeredUV + 0.5) * iResolution.xy;
 
     // Basic UV transformation
     vec2 uv = fract(vec2(point.x, point.y) * 0.1);
 
     // Apply distortion based on normal direction
-    uv += normal.xy * 0.005; // Adjust the factor as needed
+    uv += normal.xy * 0.1; // Adjust the factor as needed
 
     // Apply a non-linear transformation based on camera distance
     float camDist = length(camPos - point); // Calculate the distance from the camera to the point
@@ -163,7 +173,6 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
 
     return vec3(uv, depth);
 }
-
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) { 
      // Sample from iChannel0
@@ -264,9 +273,11 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     fragColor = vec4(col.xyz, smoothstep(0.55, .76, 1. - res.x / 5.));
 }
 
+// Comment this out on shadertoy
 void main() {
     vec4 fragColor = vec4(0.0);
     vec2 fragCoord = gl_FragCoord.xy;
     mainImage(fragColor, fragCoord);
     gl_FragColor = fragColor;
 }
+// End Comment block
