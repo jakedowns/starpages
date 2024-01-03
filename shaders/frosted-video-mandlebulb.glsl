@@ -143,7 +143,30 @@ vec3 intersect(in vec3 ro, in vec3 rd) {
 float remapMousePosition(float mousePos, float in_min, float in_max, float out_min, float out_max) {
     return (mousePos - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP) {
+mat3 quaternionToMat3(vec4 q) {
+    float qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+    float qx2 = qx + qx, qy2 = qy + qy, qz2 = qz + qz;
+    float qxqx2 = qx * qx2, qxqy2 = qx * qy2, qxqz2 = qx * qz2;
+    float qxqw2 = qw * qx2, qyqy2 = qy * qy2, qyqz2 = qy * qz2;
+    float qyqw2 = qw * qy2, qzqz2 = qz * qz2, qzqw2 = qw * qz2;
+    return mat3(
+        1.0 - (qyqy2 + qzqz2), qxqy2 - qzqw2, qxqz2 + qyqw2,
+        qxqy2 + qzqw2, 1.0 - (qxqx2 + qzqz2), qyqz2 - qxqw2,
+        qxqz2 - qyqw2, qyqz2 + qxqw2, 1.0 - (qxqx2 + qyqy2)
+    );
+}
+vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP, vec4 pole) {
+    // Convert pole quaternion to rotation matrix
+    mat3 poleRotation = quaternionToMat3(pole);
+
+    // Convert point to spherical coordinates
+    vec3 dir = normalize(point - camPos);
+    float u = 0.5 + atan(dir.z, dir.x) / (2.0 * PI);
+    float v = 0.5 - asin(dir.y) / PI;
+
+    // Rotate UV coordinates
+    vec2 uv = poleRotation * vec2(u, v);
+
     // Determine the repeat factor based on mouse position
     float repeatFactorX, repeatFactorY;
 
@@ -250,7 +273,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         float camDist = length(ro - p);
         // vector from camera to point
         vec3 camToP = p - ro;
-        vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP);
+        vec4 pole = vec4(0.0, 1.0, 0.0, 0.0);
+        vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, pole);
 
         // Sample from iChannel0 using the new UV coordinates
         vec4 texColor = texture(iChannel0, newUV.xy);
