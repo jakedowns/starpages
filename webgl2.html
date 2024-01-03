@@ -502,6 +502,9 @@
                         window.baseTexture.needsUpdate = true;
 
                         onBaseTextureRefresh();
+
+                        window.currentTexture = window.baseTexture;
+                        theVideoplayerElement.style.opacity = 0;
                     };
                     reader.readAsDataURL(file);
                 }
@@ -586,7 +589,7 @@
             // texture.wrapT = THREE.RepeatWrapping;
 
             // Set how many times the texture should repeat
-            //baseTexture.repeat.set(2, 2); // Adjust as needed
+            baseTexture.repeat.set(2, 2); // Adjust as needed
 
             /* Match ShaderToy uniforms for compatibility */
             // Custom Shader
@@ -721,6 +724,7 @@
                 //console.warn('setVideoAsChannel',videoURL)
                 
                 let video = window.theVideoplayerElement;
+                video.style.opacity = 1;
                 
                 video.src = videoURL;
                 video.autoplay = false; // true;

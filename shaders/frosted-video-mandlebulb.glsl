@@ -12,6 +12,8 @@ uniform float iTime;
 uniform sampler2D iChannel0;
 uniform vec3 iResolution;
 uniform vec4 iMouse;
+// define PI
+const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
 
 float stime, ctime;
@@ -155,31 +157,70 @@ mat3 quaternionToMat3(vec4 q) {
         qxqz2 - qyqw2, qyqz2 + qxqw2, 1.0 - (qxqx2 + qyqy2)
     );
 }
-vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP, vec4 pole) {
-    // Convert pole quaternion to rotation matrix
-    mat3 poleRotation = quaternionToMat3(pole);
+vec4 calculateCameraOrientationQuaternion(vec3 ro, vec3 ta, vec3 up) {
+    vec3 forward = normalize(ta - ro);
+    vec3 right = normalize(cross(forward, up));
+    vec3 newUp = cross(right, forward);
+
+    float t = forward.x + newUp.y - forward.z;
+    float w, x, y, z;
+    if (t > 0.0) {
+        t = sqrt(t + 1.0);
+        w = 0.5 * t;
+        t = 0.5 / t;
+        x = (newUp.z - right.y) * t;
+        y = (right.x - forward.y) * t;
+        z = (forward.z - newUp.x) * t;
+    } else if (forward.x > newUp.y && forward.x > -forward.z) {
+        t = sqrt(1.0 + forward.x - newUp.y - forward.z);
+        x = 0.5 * t;
+        t = 0.5 / t;
+        w = (newUp.z - right.y) * t;
+        y = (forward.y + right.x) * t;
+        z = (forward.z + newUp.x) * t;
+    } else if (newUp.y > -forward.z) {
+        t = sqrt(1.0 - forward.x + newUp.y - forward.z);
+        y = 0.5 * t;
+        t = 0.5 / t;
+        w = (right.x - forward.y) * t;
+        x = (forward.y + right.x) * t;
+        z = (newUp.z + right.y) * t;
+    } else {
+        t = sqrt(1.0 - forward.x - newUp.y + forward.z);
+        z = 0.5 * t;
+        t = 0.5 / t;
+        w = (forward.z - newUp.x) * t;
+        x = (forward.z + newUp.x) * t;
+        y = (newUp.z + right.y) * t;
+    }
+    return vec4(x, y, z, w);
+}
+vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP, vec4 camOrientation) {
+     // Convert camera orientation quaternion to rotation matrix
+    mat3 camRotation = quaternionToMat3(camOrientation);
 
     // Convert point to spherical coordinates
     vec3 dir = normalize(point - camPos);
     float u = 0.5 + atan(dir.z, dir.x) / (2.0 * PI);
     float v = 0.5 - asin(dir.y) / PI;
 
-    // Rotate UV coordinates
-    vec2 uv = poleRotation * vec2(u, v);
+    // Rotate UV coordinates to counteract the camera rotation
+    vec2 uv = (camRotation * dir).xy;
+    uv = uv * 0.5 + 0.5; // Map from -1..1 to 0..1 range
 
     // Determine the repeat factor based on mouse position
     float repeatFactorX, repeatFactorY;
 
-    if (iMouse.x <= 0.1) {
-        repeatFactorX = remapMousePosition(iMouse.x, 0.0, 0.1, 0.0, 50.0);
+    if (iMouse.x > 0.5) {
+        repeatFactorX = remapMousePosition(iMouse.x, 0.5, 1.0, 0.0, 50.0);
     } else {
-        repeatFactorX = remapMousePosition(iMouse.x, 0.1, 1.0, 50.0, 100.0);
+        repeatFactorX = remapMousePosition(iMouse.x, 0.0, 0.5, 50.0, 1e30);
     }
 
-    if (iMouse.y <= 0.1) {
-        repeatFactorY = remapMousePosition(iMouse.y, 0.0, 0.1, 0.0, 50.0);
+    if (iMouse.y > 0.5) {
+        repeatFactorY = remapMousePosition(iMouse.y, 0.5, 1.0, 0.0, 50.0);
     } else {
-        repeatFactorY = remapMousePosition(iMouse.y, 0.1, 1.0, 50.0, 100.0);
+        repeatFactorY = remapMousePosition(iMouse.y, 0.0, 0.5, 50.0, 1e30);
     }
 
     // Centering the UV coordinates
@@ -195,7 +236,7 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     point.xy = (centeredUV + 0.5) * iResolution.xy;
 
     // Basic UV transformation
-    vec2 uv = fract(vec2(point.x, point.y) * 0.1);
+    uv = fract(vec2(point.x, point.y) * 0.1);
 
     // Apply distortion based on normal direction
     uv += normal.xy * 0.1; // Adjust the factor as needed
@@ -212,6 +253,8 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) { 
+    // Define the up vector
+    vec3 up = vec3(0.0, 1.0, 0.0);
      // Sample from iChannel0
     vec4 texColor = texture(iChannel0, fragCoord / iResolution.xy);
 
@@ -239,7 +282,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     vec3 sundir = normalize(vec3(0.1, 0.8, 0.6));
     vec3 sun = vec3(1.64, 1.27, 0.99);
-    vec3 skycolor = vec3(0.6, 1.5, 1.0);
+    vec3 skycolor = vec3(0.29, 0.11, 0.41);
 
     vec3 bg = exp(uv.y - 2.0) * vec3(0.4, 1.6, 1.0);
 
@@ -248,6 +291,9 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     float t = 0.0;
     vec3 p = ro;
+
+    // Calculate the camera's orientation quaternion (inverse of camera rotation)
+    vec4 camOrientation = calculateCameraOrientationQuaternion(ro, ta, up);
 
     vec3 res = intersect(ro, rd);
     if(res.x > 0.0) {
@@ -273,16 +319,42 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         float camDist = length(ro - p);
         // vector from camera to point
         vec3 camToP = p - ro;
-        vec4 pole = vec4(0.0, 1.0, 0.0, 0.0);
-        vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, pole);
+        vec4 pole = vec4(0.0, 1.0, 0.0, 0.0); 
+        // Transform the 3D point to UV coordinates with depth, using the camera's orientation
+        vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, camOrientation);
+
 
         // Sample from iChannel0 using the new UV coordinates
         vec4 texColor = texture(iChannel0, newUV.xy);
         col = texColor.rgb;
 
         // apply fog based on newUV.z
-        // float fogAmount = smoothstep(0.0, 1.0, newUV.z);
+        float fogAmount = smoothstep(0.0, 1.0, newUV.z / 10.0);
         // col = mix(col, bg, fogAmount);
+
+        // make the effect miniscule
+        float fresnel = pow(1.0 - dot(n, rd), 0.1);
+        vec3 adjustedCol = mix(col, bg, fresnel);
+        col = vec3(col.r, col.g, col.b);  // retain original hue
+        col = mix(col, adjustedCol, 0.05);  // Adjust the 0.5 as needed for mixing amount
+
+        // fake the appearance of a diffuse point light
+        float lightRadius = 0.5;
+        float lightIntensity = 0.5;
+        float lightDistance = length(p - ro);
+        float lightAmount = smoothstep(lightRadius, 0.0, lightDistance);
+        col = mix(col, vec3(lightIntensity), lightAmount);
+
+        // random sample to create a grainy / bokeh effect based on distance to camera
+        float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
+        grainAmount = mix(grainAmount, 1.0, 0.5);
+
+        // use the grain to tweak the lookup coordinates
+        float maxOffset = 0.01;
+        vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
+        vec4 texColor2 = texture(iChannel0, newUV.xy + grainOffset);
+        col = mix(col, texColor2.rgb, grainAmount);
     } 
 
     // Mix the luminance into the existing color
