@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
 <!-- 
-    https://jakedowns.github.io/starpages/webgl2.html
+    https://jakedowns.github.io/starpages/webgl3.html
+    
     TODO:
+    
+    >> finish triple-buffering
     - bitonic sort
-
-    // finish back merging "video texture" / three.js bindings
-
-    // finish triple-buffering
     - lerping between colors using an intermediary accumulator texture which we display
+    - text display using: https://usegpu.live/demo/layout/display
+
         // backed by our current Original, and Target textures
 -->
 <html>
+
 <head>
     <script>
         window.capturerSpeedReduction = 0.5;
@@ -21,29 +23,50 @@
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
     <style>
-        html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+
         canvas {
             position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-    
-            
-            width: 100vw; 
-            min-Width: 100vw; 
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+
+
+            width: 100vw;
+            min-Width: 100vw;
             max-width: 100vw;
             height: 100vh;
             min-height: 100vh;
-            max-height: 100vh; 
+            max-height: 100vh;
 
-            filter: blur(100px); 
-            transition: filter 0.5s ease-in-out, opacity 0.5s ease-in-out; 
-            will-change: filter; 
+            filter: blur(100px);
+            transition: filter 0.5s ease-in-out, opacity 0.5s ease-in-out;
+            will-change: filter;
         }
-        canvas.unblur { filter: blur(0px); opacity: 1; }
-        canvas.undarken { opacity: 0.8; }
+
+        canvas.unblur {
+            filter: blur(0px);
+            opacity: 1;
+        }
+
+        canvas.undarken {
+            opacity: 0.8;
+        }
+
         .drop-here-text {
             pointer-events: none;
             position: absolute;
-            left: 0; right: 0; top: 0; bottom: 0;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
             z-index: 4000;
             font-size: 43px;
             font-weight: bold;
@@ -56,20 +79,25 @@
             transform: translateY(-50%);
             transition: all 1s ease-in-out;
         }
+
         .drop-here-text.fadeout {
             opacity: 0;
             pointer-events: none;
         }
+
         .drop-here-text span {
             display: block;
             font-size: 25px;
         }
+
         .drop-here-text.fadeout span {
             pointer-events: none;
         }
+
         .drop-here-text .hint {
             font-size: 15px;
         }
+
         .intro-card {
             top: 50%;
             position: absolute;
@@ -83,39 +111,49 @@
             box-sizing: border-box;
             opacity: 1;
         }
+
         .intro-card.fade-out {
             opacity: 0;
             pointer-events: none;
         }
+
         .intro-card iframe {
             height: auto;
             width: 100%;
             min-width: 100px;
             max-width: 100%;
         }
+
         p {
             color: white;
             font-size: 12px;
             font-family: serif;
         }
+
         h1 {
             font-family: sans-serif;
         }
+
         .intro-underlay {
-            background-color: rgba(.1,0,.1,.8);
+            background-color: rgba(.1, 0, .1, .8);
             backdrop-filter: blur(10px);
             position: absolute;
             z-index: 999;
-            top: 0; left: 0; right: 0; bottom: 0;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
         }
+
         .intro-underlay.fade-out {
             opacity: 0;
             pointer-events: none;
         }
+
         .hide-intro-button {
             text-align: center;
             width: auto;
@@ -132,7 +170,7 @@
             transition: all 1s ease-in-out;
             background-color: #663dff;
             font-family: sans-serif;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
             background-size: 200% auto;
             background-image: linear-gradient(90deg, #cc4499, #aa00ff, #663dff, #aa00ff, #cc4499);
             transition: all 1s ease-in-out;
@@ -151,20 +189,21 @@
             width: 100%;
             height: 100%;
             border-radius: 100px;
-            background-color: rgba(255,255,255,0.1);
+            background-color: rgba(255, 255, 255, 0.1);
             z-index: 1;
             backdrop-filter: blur(50px);
         }
 
 
-        .hide-intro-button:hover {
-        }
+        .hide-intro-button:hover {}
+
         .hide-intro-button .btn-text {
             position: relative;
             font-size: 18px;
             z-index: 2;
             color: white;
-            text-shadow:  1px 1px 10px rgba(255,255,255,1); /* 1px 1px 1px rgba(0,0,0,0.8), */
+            text-shadow: 1px 1px 10px rgba(255, 255, 255, 1);
+            /* 1px 1px 1px rgba(0,0,0,0.8), */
             cursor: pointer;
         }
 
@@ -176,9 +215,17 @@
             5. we stretch it to 2x the width of the button
         */
         @keyframes gradient-animation {
-            0% { background-position: 0% 50%; }
-            99.99% { background-position: -200% 50%; }
-            100% { background-position: 0% 50%; }
+            0% {
+                background-position: 0% 50%;
+            }
+
+            99.99% {
+                background-position: -200% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
         }
 
         #controls {
@@ -192,6 +239,7 @@
             justify-content: space-evenly;
             align-items: stretch;
         }
+
         video {
             position: absolute;
             top: 0;
@@ -200,6 +248,7 @@
             opacity: 0;
             transition: all 1s ease-in-out;
         }
+
         #record-video-button {
             position: absolute;
             bottom: 10px;
@@ -209,22 +258,54 @@
         }
 
         /* final z-indexes */
-        .intro-card { z-index: 1002; position: absolute; }
-        .intro-underlay { z-index: 1001; }
-        #controls { z-index: 1000; }
-        video { z-index: 1000; }
-        canvas { z-index: 999; }
+        .intro-card {
+            z-index: 1002;
+            position: absolute;
+        }
 
+        .intro-underlay {
+            z-index: 1001;
+        }
+
+        #controls {
+            z-index: 1000;
+        }
+
+        video {
+            z-index: 1000;
+        }
+
+        canvas {
+            z-index: 999;
+        }
+
+        .view-source-link {
+            position: absolute;
+            top: 0;
+            right: 0;
+            font-size: 10px;
+            font-family: sans-serif;
+            color: white;
+            text-decoration: none;
+            padding: 5px;
+            background-color: black;
+            opacity: 0.5;
+            z-index: 9999;
+        }
     </style>
 </head>
+
 <body>
     <!-- view source on github -->
-    <a href="https://github.com/jakedowns/starpages/blob/main/webgl2.html" target="_blank" style="position: absolute; top: 0; right: 0; z-index: 1000; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">view source on GitHub</a>
+    <a href="https://github.com/jakedowns/starpages/blob/main/webgl3.html" target="_blank" class="view-source-link">view
+        source on GitHub</a>
 
     <!-- buy me a coffee; ko-fi link -->
-    <a href="https://ko-fi.com/jakedowns" target="_blank" style="position: absolute; top: 0; left: 0; z-index: 1003; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰 Buy me a coffee</a>
+    <a href="https://ko-fi.com/jakedowns" target="_blank"
+        style="position: absolute; top: 0; left: 0; z-index: 1003; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰
+        Buy me a coffee</a>
 
-    <div id="controls"> 
+    <div id="controls">
         <input type="file" accept="image/*,video/*,image/svg+xml" id="fileupload" />
         <progress id="progress" value="0" max="100"></progress>
         <button onclick="window.startCapture()">record video</button>
@@ -233,22 +314,25 @@
     <div class="intro-card transition-opacity fade-out">
         <h1>Pixel Mixer Demo</h1>
         <p>v24.01.01.01 - Major Release 001</p>
-        <p>Shout out to acerola on youtube for his original "I tried sorting pixels" video which inspired me to dig back into this</p>
+        <p>Shout out to acerola on youtube for his original "I tried sorting pixels" video which inspired me to dig back
+            into this</p>
         <p>Drop images and video on this webpage to have them mixed and blended in unique ways</p>
-        <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
+        <p>⚠️ Flashing Light Warning ⚠️ <br />this app produces rapidly flashing light patterns. I'm working on a "safe"
+            comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
         <!-- <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe> -->
-        
+
         <button class="hide-intro-button">
             <span class="btn-inner">
-                <span  class="btn-text" onclick="window.hideWelcome()">Click to Continue ➡️</span>
+                <span class="btn-text" onclick="window.hideWelcome()">Click to Continue ➡️</span>
             </span>
         </button>
     </div>
 
     <div class="intro-underlay fade-out" onclick="window.hideWelcome()"></div>
 
-    <div class="drop-here-text">pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
-    
+    <div class="drop-here-text">pixel mixer<span>drop an image here<br />or<br />tap here to select an image <span
+                class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
+
     <canvas id="canvas" classname="undarken"></canvas>
     <script>
         window.canvas;
@@ -259,20 +343,20 @@
         window.targetRecordingFPS = 29.97; //120;
         window.targetRecordingDurationSeconds = 10;
         Object.defineProperty(window, 'maxFrames', {
-            get: function() { 
-                return this.targetRecordingFPS * 10; 
+            get: function () {
+                return this.targetRecordingFPS * 10;
             },
-            set: function(value) { 
-                
+            set: function (value) {
+
             }
         });
 
         // define fixedTime
         // a wall time we can hold to pause the shader
         Object.defineProperty(window, 'fixedTime', {
-            get() { 
+            get() {
                 return window.targetVideoPlaybackRate >= 0.1 ? null : this._fixedTime;
-             },
+            },
             set(value) {
                 this._fixedTime = value;
             }
@@ -280,7 +364,7 @@
 
         window.videoIsPlaying = false;
         // used to distinguish element's playback state from our virtual playback state(sub-0.1x playback rate)
-        window.videoIsVirtuallyPlaying = false; 
+        window.videoIsVirtuallyPlaying = false;
         // window.recordingStartedAt = 0;
         window.subframePlaybackCurrentFrame = 0;
         window.currentVideoTime = null;
@@ -291,15 +375,15 @@
         let _targetVideoPlaybackRate = 0.01;
         let _targetVideoPlaybackRateClamped = 0.1;
         Object.defineProperty(window, 'targetVideoPlaybackRate', {
-            get: function() {
+            get: function () {
                 return _targetVideoPlaybackRate;
             },
-            set: function(value) {
+            set: function (value) {
                 _targetVideoPlaybackRate = value;
                 _targetVideoPlaybackRateClamped = parseFloat(Math.min(Math.max(value, 0.1), 1.0).toFixed(1));
                 if (window.theVideoplayerElement) {
                     window.theVideoplayerElement.playbackRate = _targetVideoPlaybackRateClamped;
-                }else{
+                } else {
                     console.warn('no video element to set playback rate on')
                 }
             }
@@ -317,11 +401,11 @@
             // `
         */
         window.fragmentShaderSource = null;
-        
+
         window.selectedImageTexture;
         window.shaderMaterial;
 
-        window.onBaseTextureRefresh = function(){
+        window.onBaseTextureRefresh = function () {
             // 1. reset Offset texture
             // 2. clone base -> target (refresh)
             // 3. clone base -> accumulator (refresh)
@@ -329,10 +413,10 @@
         }
 
         // window.switchToImageTexture
-        
+
         // may have changed pixel resolution
         // TODO: maybe make sure we set three to just fill/crop whatever we're trying to display to fit our existing pixel resolution
-        window.reinitTexturesOnNewInput = function(){
+        window.reinitTexturesOnNewInput = function () {
             // 1. reset Offset texture
             // 2. clone base -> target (refresh)
             // 3. clone base -> accumulator (refresh)
@@ -349,7 +433,7 @@
             // // convert to seconds?
             // window.currentFrameDelta *= 1000;
             // window.prevFrameCalltime = now;
-            if(!window.targetVideoPlaybackRate >= 0.1){
+            if (!window.targetVideoPlaybackRate >= 0.1) {
                 // we STILL reference subframePlaybackCurrentFrame
                 // so we need to increment it here
                 subframePlaybackCurrentFrame++;
@@ -365,7 +449,7 @@
             let playDuration = frameDuration / desiredSpeed;
 
             let do_advance_virtual_frame_this_literal_frame = window.subframePlaybackCurrentFrame % Math.floor(1 / desiredSpeed) == 0;
-            if(!do_advance_virtual_frame_this_literal_frame){
+            if (!do_advance_virtual_frame_this_literal_frame) {
                 return;
             }
             subframePlaybackCurrentFrame++;
@@ -373,7 +457,7 @@
             // we will hit play then pause in a short manner
             // the min time beyond the point where a "play was cancelled by pause" is ??ms ?
             //theVideoplayerElement.currentTime += frameDuration;
-            window.playSlowMotion = function() {
+            window.playSlowMotion = function () {
                 // console.warn("onPlaySlowMotion",{
                 //     frameDuration,
                 //     targetFPS: window.targetRecordingFPS,
@@ -399,20 +483,20 @@
                 }
             });
 
-            
+
         }
 
-        window.setupThree = async function(){
+        window.setupThree = async function () {
             window.fragmentShader = await (await fetch("./shaders/fresh.glsl")).text();
 
             const pasteFromClipboardPrompt = document.getElementById("pasteFromClipboardPrompt");
-            function showPasteFromClipboardPrompt(){
+            function showPasteFromClipboardPrompt() {
                 pasteFromClipboardPrompt.classList.add("show");
-                setTimeout(()=>{
+                setTimeout(() => {
                     pasteFromClipboardPrompt.classList.remove("show");
-                },5000);
+                }, 5000);
             }
-            function hidePasteFromClipboardPrompt(){
+            function hidePasteFromClipboardPrompt() {
                 pasteFromClipboardPrompt.classList.remove("show");
             }
             let didShowClipboardPrompt = false;
@@ -457,17 +541,17 @@
             //         console.error(e);
             //     }
             // },1000);
-            
+
             /* adds paste support for Clipboard ImageBlob -> Three.js Texture */
-            window.doPasteFromClipboard = async function(){
-                try{
+            window.doPasteFromClipboard = async function () {
+                try {
                     const items = await navigator.clipboard.read();
-                    console.warn('items',items)
+                    console.warn('items', items)
                     for (const item of items) {
                         if (item.types.includes('image/png')) {
                             const blob = await item.getType('image/png');
                             const url = URL.createObjectURL(blob);
-                            window.baseTexture.image.onload = function() {
+                            window.baseTexture.image.onload = function () {
                                 URL.revokeObjectURL(url);
                                 window.baseTexture.needsUpdate = true;
                             };
@@ -477,7 +561,7 @@
                         // or if ti's a base64 image in a text string, pass _that_ to image.src
                         if (item.types.includes('text/plain')) {
                             const text = await item.getType('text/plain');
-                            window.baseTexture.image.onload = function() {
+                            window.baseTexture.image.onload = function () {
                                 URL.revokeObjectURL(url);
                                 window.baseTexture.needsUpdate = true;
                             };
@@ -485,20 +569,20 @@
                             break;
                         }
                     }
-                }catch(e){
+                } catch (e) {
                     console.error(e);
                 }
             }
 
-            document.addEventListener("keydown",(e)=>{
-                if(e.key == "v" && (e.ctrlKey || e.metaKey)){
-                    try{
+            document.addEventListener("keydown", (e) => {
+                if (e.key == "v" && (e.ctrlKey || e.metaKey)) {
+                    try {
                         window.doPasteFromClipboard();
-                    }catch(e){
+                    } catch (e) {
                         console.error(e);
                     }
                 }
-            },false);
+            }, false);
 
             document.getElementById("fileupload").addEventListener("change", (e) => {
                 hideIntroText();
@@ -528,17 +612,17 @@
                 }
             });
             canvas = document.getElementById("canvas");
-            const renderer = new THREE.WebGLRenderer({canvas});
+            const renderer = new THREE.WebGLRenderer({ canvas });
 
             // Orthographic camera setup
             const frustumSize = 1;
             const aspect = canvas.clientWidth / canvas.clientHeight;
             const camera = new THREE.OrthographicCamera(
-                frustumSize * aspect / -2, 
-                frustumSize * aspect / 2, 
-                frustumSize / 2, 
-                frustumSize / -2, 
-                1, 
+                frustumSize * aspect / -2,
+                frustumSize * aspect / 2,
+                frustumSize / 2,
+                frustumSize / -2,
+                1,
                 1000
             );
             camera.position.z = 2;
@@ -559,48 +643,48 @@
             // define our textures / buffers
             // 1. our starting values (provided by user image or video, etc)
             window.originalPixelDataTexture = new THREE.DataTexture(
-                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
-                fixedPixelsX, 
-                fixedPixelsY, 
-                THREE.RGBAFormat, 
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY),
+                fixedPixelsX,
+                fixedPixelsY,
+                THREE.RGBAFormat,
                 THREE.UnsignedByteType
             );
             // 2. our target values
             window.targetPixelDataTexture = new THREE.DataTexture(
-                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
-                fixedPixelsX, 
-                fixedPixelsY, 
-                THREE.RGBAFormat, 
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY),
+                fixedPixelsX,
+                fixedPixelsY,
+                THREE.RGBAFormat,
                 THREE.UnsignedByteType
             );
             // 3. our "accumulator" texture, which we use to lerp between the original and target textures
             // this is our output buffer for now, but we may add additional buffers later
             window.lerpedColorTexture = new THREE.DataTexture(
-                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
-                fixedPixelsX, 
-                fixedPixelsY, 
-                THREE.RGBAFormat, 
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY),
+                fixedPixelsX,
+                fixedPixelsY,
+                THREE.RGBAFormat,
                 THREE.UnsignedByteType
             );
             // 4. our "offset" buffer where we accumulate / calculate our offsets
             window.offsetTexture = new THREE.DataTexture(
-                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
-                fixedPixelsX, 
-                fixedPixelsY, 
-                THREE.RGBAFormat, 
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY),
+                fixedPixelsX,
+                fixedPixelsY,
+                THREE.RGBAFormat,
                 THREE.UnsignedByteType
             );
 
 
             window.currentTexture = window.baseTexture; //window.lerpedColorTexture;
-            
+
             // Assuming you have a texture loaded into a variable named 'texture'
             window.currentTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
             window.currentTexture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
 
             window.image_height = baseTexture.height;
 
-            
+
 
             // Alternatively, use RepeatWrapping for wrap-around effect
             // texture.wrapS = THREE.RepeatWrapping;
@@ -615,7 +699,7 @@
                 uniforms: {
                     u_time: { value: 1.0 },
                     u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-                    
+
                     // compatibility uniforms
                     iTime: { value: 1.0 },
                     iChannel0: { value: baseTexture },
@@ -630,7 +714,7 @@
                 fragmentShader: fragmentShader,
                 transparent: true, // Enable transparency
             });
-            
+
 
             // Creating and adding the plane to the scene
             window.plane = new THREE.Mesh(planeGeometry, shaderMaterial);
@@ -653,7 +737,7 @@
             }
 
             window.mouseX = window.mouseY = 0;
-            document.addEventListener('mousemove', (e)=>{
+            document.addEventListener('mousemove', (e) => {
                 window.mouseX = e.clientX;
                 window.mouseY = e.clientY;
             });
@@ -690,25 +774,25 @@
             // Global variable to store the last played video
             let lastPlayedVideo = null;
 
-            window.onVideoPause = function(){
+            window.onVideoPause = function () {
                 window.fixedTime = shaderMaterial.uniforms.u_time.value;
-                if(!window.capturing && !handling_slow_motion_advance){
+                if (!window.capturing && !handling_slow_motion_advance) {
                     window.videoIsPlaying = false;
                 }
             }
-            window.onVideoResume = function(){
+            window.onVideoResume = function () {
                 window.fixedTime = null;
-                if(!window.capturing && !handling_slow_motion_advance){
+                if (!window.capturing && !handling_slow_motion_advance) {
                     window.videoIsPlaying = true;
                 }
             }
 
-            window.createVideoElement = function(){
+            window.createVideoElement = function () {
                 let video = document.createElement('video');
                 video.setAttribute('id', 'video');
                 video.crossOrigin = 'anonymous';
                 video.loop = true;
-                
+
                 // Add an event listener for when the video ends
                 //video.onended = onVideoEnded; //pickOne;
                 video.onpause = onVideoPause;
@@ -718,14 +802,14 @@
                 // min of the html attribute is 0.1, 
                 // if we want to go lower, we need to simulate with pause and manual frame-stepping
                 // see: window.targetVideoPlaybackRate
-                video.playbackRate = 0.1; 
+                video.playbackRate = 0.1;
 
                 video.pictureInPictureEnabled = true;
                 video.addEventListener('enterpictureinpicture', (event) => {
-                    console.warn('enterpictureinpicture',event)
+                    console.warn('enterpictureinpicture', event)
                 });
                 video.addEventListener('leavepictureinpicture', (event) => {
-                    console.warn('leavepictureinpicture',event)
+                    console.warn('leavepictureinpicture', event)
                 });
                 // video.addEventListener('loadedmetadata', (event) => {
                 //     console.warn('loadedmetadata',event)
@@ -734,26 +818,26 @@
                 video.style.opacity = 0;
                 window.theVideoplayerElement = video;
             }
-            
+
             window.theVideoplayerElement = document.getElementById("video");
-            if(!window.theVideoplayerElement){
+            if (!window.theVideoplayerElement) {
                 createVideoElement();
             }
-            window.setVideoAsChannel = function(videoURL){
-                try{
+            window.setVideoAsChannel = function (videoURL) {
+                try {
                     //console.warn('setVideoAsChannel',videoURL)
-                    
+
                     let video = window.theVideoplayerElement;
                     video.style.opacity = 1;
-                    
+
                     video.src = videoURL;
                     video.autoplay = false; // true;
                     video.controls = true;
                     video.buffer = true;
                     video.play();
                     let needs_on_can_play_update = true;
-                    video.oncanplay = function() {
-                        if(needs_on_can_play_update){
+                    video.oncanplay = function () {
+                        if (needs_on_can_play_update) {
                             needs_on_can_play_update = false;
                             window.videoTexture = new THREE.VideoTexture(video);
                             window.videoTexture.minFilter = THREE.LinearFilter;
@@ -763,20 +847,20 @@
                             window.videoTexture.needsUpdate = true;
                             window.currentTexture = window.videoTexture;
 
-                            setTimeout(()=>{
+                            setTimeout(() => {
                                 window.videoIsPlaying = true;
                                 window.videoIsVirtuallyPlaying = true;
-                            },1);
+                            }, 1);
                         }
                     }
-                }catch(e){
+                } catch (e) {
                     console.error(e);
                 }
             }
 
             window.progressElement = document.getElementById("progress");
 
-            window.animate = function(time) {
+            window.animate = function (time) {
                 if (resizeRendererToDisplaySize(renderer)) {
                     canvas = renderer.domElement;
                     // enforce dimensions of 2 for ffmpeg compatibility
@@ -786,10 +870,10 @@
                     camera.aspect = canvas.width / canvas.height;
                     camera.updateProjectionMatrix();
                 }
-                
-                if(!window.fixedTime){
+
+                if (!window.fixedTime) {
                     shaderMaterial.uniforms.u_time.value = time * 0.001; // Convert time to seconds
-                }else{
+                } else {
                     shaderMaterial.uniforms.u_time.value = window.fixedTime;
                 }
                 shaderMaterial.uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
@@ -805,33 +889,33 @@
                 shaderMaterial.uniforms.iChannel0.value = currentTexture;
                 shaderMaterial.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight, 1.0);
 
-                if(window.do_clear_frame){
-                }else{
+                if (window.do_clear_frame) {
+                } else {
                 }
 
                 renderer.render(scene, camera);
 
-                
+
                 // sub-frame playback
                 maybeAdvanceVideoOneFrame();
-                
-                if(window.capturing){
+
+                if (window.capturing) {
                     // update recording progress
-                    if(progressElement){
+                    if (progressElement) {
                         // Calculate progress based on targetRecordingDurationSeconds
                         progressElement.value = (window.subframePlaybackCurrentFrame / (window.targetRecordingFPS * window.targetRecordingDurationSeconds)) * 100;
                     }
                     window.capturer.capture(canvas);
-                    
-                    if(window.subframePlaybackCurrentFrame >= maxFrames){
+
+                    if (window.subframePlaybackCurrentFrame >= maxFrames) {
                         window.stopCapture();
-                    }else{
+                    } else {
                         // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
                         setTimeout(() => {
                             window.animate(window.subframePlaybackCurrentFrame);
                         }, 0);
                     }
-                }else{
+                } else {
                     // next frame
                     requestAnimationFrame(animate);
                 }
@@ -866,19 +950,19 @@
             // }
 
             let did_react_to_first_user_input = false;
-            let onuserinput = ()=>{
-                if(!did_react_to_first_user_input){
+            let onuserinput = () => {
+                if (!did_react_to_first_user_input) {
                     did_react_to_first_user_input = true;
                     // onFirstUserInput...
                 }
             }
 
-            window.droppedOnAnything = function(e){
-                console.warn('dropped on anything',e)
+            window.droppedOnAnything = function (e) {
+                console.warn('dropped on anything', e)
                 did_react_to_first_user_input = true;
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 // ondrop
                 if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                     const file = e.dataTransfer.files[0];
@@ -905,7 +989,7 @@
                         };
                         reader.readAsDataURL(file);
                     }
-                    
+
                 }
             }
 
@@ -917,117 +1001,117 @@
                 e.stopPropagation();
             });
 
-            function imageBlobToBase64(imageBlob){
-                return new Promise((resolve,reject)=>{
+            function imageBlobToBase64(imageBlob) {
+                return new Promise((resolve, reject) => {
                     let reader = new FileReader();
-                    reader.onload = function(e){
+                    reader.onload = function (e) {
                         resolve(e.target.result);
                     }
                     reader.readAsDataURL(imageBlob);
                 });
             }
 
-            async function onPasteAttempt(){
+            async function onPasteAttempt() {
                 try {
-                        // Check if the Clipboard API is available
-                        if (!navigator.clipboard) {
-                            console.warn('Clipboard API not available.');
-                            throw new Error('Clipboard API not available');
-                        }
-
-                        // Attempt to read from the clipboard
-                        const clipboardItems = await navigator.clipboard.read();
-                        console.log('Clipboard items retrieved:', clipboardItems);
-
-                        let clipboardBag = {images:[]};
-
-                        // Find text content in clipboard items
-                        const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
-                        if (textItem) {
-                            const textBlob = await textItem.getType('text/plain');
-                            const text = await textBlob.text();
-                            console.log('Pasted text content: ', text);
-                            clipboardBag.text = text;
-                        }
-
-                        // Find HTML content in clipboard items
-                        const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
-                        if (htmlItem) {
-                            const htmlBlob = await htmlItem.getType('text/html');
-                            const html = await htmlBlob.text();
-                            console.log('Pasted HTML content: ', html);
-                            clipboardBag.html = html;
-                        }
-                        // Note: imageBlob is an instance of Blob
-                        // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
-                        // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
-                        // we need to do the slow, full conversion of a Blob to a base64 encoded string
-                        // then we can use that base64 encoded string to load the image as a texture
-                        
-
-
-                        // Find any "image" items:
-                        const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
-                        // Alert if there's multiple, we only support one for now
-                        if (imageItems.length > 1) {
-                            alert('Multiple images found. Using the last image.');
-                        }
-                        for (const imageItem of imageItems) {
-                            const imageBlob = await imageItem.getType('image/png');
-                            //console.log('Pasted image: ', image);
-                            clipboardBag.imageBlob = imageBlob;
-
-                            //loadImageBlobAsTexture(imageBlob);
-                            
-                            let b64 = await imageBlobToBase64(imageBlob);
-                            //console.log('Pasted image: ', b64);
-
-                            await loadBase64AsTexture(b64);
-                            clipboardBag.images.push(b64);
-                        }
-
-                        hideIntroText()
-
-                        // Process clipboardBag as needed
-                        console.warn({clipboardBag});
-
-                    } catch (error) {
-                        console.error('Error accessing clipboard:', error);
-                        // Handle error appropriately
+                    // Check if the Clipboard API is available
+                    if (!navigator.clipboard) {
+                        console.warn('Clipboard API not available.');
+                        throw new Error('Clipboard API not available');
                     }
+
+                    // Attempt to read from the clipboard
+                    const clipboardItems = await navigator.clipboard.read();
+                    console.log('Clipboard items retrieved:', clipboardItems);
+
+                    let clipboardBag = { images: [] };
+
+                    // Find text content in clipboard items
+                    const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
+                    if (textItem) {
+                        const textBlob = await textItem.getType('text/plain');
+                        const text = await textBlob.text();
+                        console.log('Pasted text content: ', text);
+                        clipboardBag.text = text;
+                    }
+
+                    // Find HTML content in clipboard items
+                    const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
+                    if (htmlItem) {
+                        const htmlBlob = await htmlItem.getType('text/html');
+                        const html = await htmlBlob.text();
+                        console.log('Pasted HTML content: ', html);
+                        clipboardBag.html = html;
+                    }
+                    // Note: imageBlob is an instance of Blob
+                    // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
+                    // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
+                    // we need to do the slow, full conversion of a Blob to a base64 encoded string
+                    // then we can use that base64 encoded string to load the image as a texture
+
+
+
+                    // Find any "image" items:
+                    const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
+                    // Alert if there's multiple, we only support one for now
+                    if (imageItems.length > 1) {
+                        alert('Multiple images found. Using the last image.');
+                    }
+                    for (const imageItem of imageItems) {
+                        const imageBlob = await imageItem.getType('image/png');
+                        //console.log('Pasted image: ', image);
+                        clipboardBag.imageBlob = imageBlob;
+
+                        //loadImageBlobAsTexture(imageBlob);
+
+                        let b64 = await imageBlobToBase64(imageBlob);
+                        //console.log('Pasted image: ', b64);
+
+                        await loadBase64AsTexture(b64);
+                        clipboardBag.images.push(b64);
+                    }
+
+                    hideIntroText()
+
+                    // Process clipboardBag as needed
+                    console.warn({ clipboardBag });
+
+                } catch (error) {
+                    console.error('Error accessing clipboard:', error);
+                    // Handle error appropriately
+                }
             }
 
-            document.addEventListener("keydown",async(e)=>{
-                if(e.key == "Escape"){
+            document.addEventListener("keydown", async (e) => {
+                if (e.key == "Escape") {
                     hidePasteFromClipboardPrompt();
                 }
 
                 // if command v on mac,
                 // or control v on other,
                 // paste image from clipboard
-                if ( 
+                if (
                     (e.keyCode === 22 || e.keyCode === 86)
                     && (e.metaKey || e.ctrlKey)
-                ){
+                ) {
                     await onPasteAttempt();
                     e.preventDefault();
                 }
 
                 onuserinput();
-            },false);
-            document.addEventListener("mouseup",()=>{
+            }, false);
+            document.addEventListener("mouseup", () => {
                 // let vid;
                 // if(vid = document.getElementById("video") && vid){
                 //     vid.style.opacity = window.videoIsPlaying ? 0 : 0.1;
                 // }
                 //maybeFirstInput()
             });
-            document.addEventListener("dblclick",()=>{
+            document.addEventListener("dblclick", () => {
                 //maybeFirstInput();
             })
-            document.addEventListener("resize",()=>{
+            document.addEventListener("resize", () => {
                 canvas = document.getElementById("canvas");
-                const renderer = new THREE.WebGLRenderer({canvas,alpha:true});
+                const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
                 const width = canvas.clientWidth;
                 const height = canvas.clientHeight;
                 renderer.setSize(width, height, false);
@@ -1037,23 +1121,23 @@
             })
 
             // fast start
-            window.targetVideoPlaybackRate = 1.0; 
-            hideIntroText(); 
+            window.targetVideoPlaybackRate = 1.0;
+            hideIntroText();
             // window.setVideoAsChannel("./res/0006.mp4");
         }
 
-        
-        window.hideWelcome = function(){
-            document.querySelector(".intro-card").classList.toggle("fade-out",true);
-            document.querySelector(".intro-underlay").classList.toggle("fade-out",true);
+
+        window.hideWelcome = function () {
+            document.querySelector(".intro-card").classList.toggle("fade-out", true);
+            document.querySelector(".intro-underlay").classList.toggle("fade-out", true);
         }
-        
-        window.startCapture = function(){
-            if(!window.capturer){
+
+        window.startCapture = function () {
+            if (!window.capturer) {
                 console.warn("capturer not initialized");
                 return;
             }
-            
+
             window.subframePlaybackCurrentFrame = 0;
             window.capturing = true;
             window.capturer.start();
@@ -1061,8 +1145,8 @@
             //theVideoplayerElement.pause();
             window.currentVideoTime = video.currentTime;
         }
-        window.stopCapture = function(){
-            if(!window.capturer){
+        window.stopCapture = function () {
+            if (!window.capturer) {
                 console.warn("capturer not initialized");
                 return;
             }
@@ -1072,11 +1156,11 @@
         }
         // fsshader fragment shader source frag shader here fshader
 
-        
 
 
 
-        
+
+
         // note: we've bound the outputSurfacePositionBuffer to the vertex shader's "aVertexPosition" attribute
         // we've bound the offset texture to the fragment shader's "uOffsetTexture" uniform
         // and, critically, we've bound the offset texture to texture unit 0 (gl.TEXTURE0)
@@ -1090,19 +1174,19 @@
         let _pixel_density = 8; //4; 
         let _max_step_sort_size = 1e5 * 2;
         Object.defineProperty(window, "pixel_density", {
-            get: function(){
+            get: function () {
                 return _pixel_density;
             },
-            set: function(value){
+            set: function (value) {
                 _pixel_density = value;
                 resizeCanvas();
             }
         });
         Object.defineProperty(window, "MAX_SORT_STEP_SIZE", {
-            get: function(){
+            get: function () {
                 return _max_step_sort_size; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
             },
-            set: function(value){
+            set: function (value) {
                 _max_step_sort_size = value;
                 current_sortStepSize = value;
                 sortStepSize = value;
@@ -1111,53 +1195,53 @@
 
         //let then = 0;
         let uSwirlAmp = 1.0, uSwirlTurns = 3.0;
-        
+
         let pixel_positions = [];
         let pixelData, originalPixelData, latestPixelDataSnapshot;
         const bytesPerPixel = 4; // For RGBA format
 
-        window.recenterMouseRefValue = function(){
-            mouseX=window.innerWidth/2;mouseY=window.innerHeight/2
+        window.recenterMouseRefValue = function () {
+            mouseX = window.innerWidth / 2; mouseY = window.innerHeight / 2
         }
 
-        window.prepareCCapture = function(){
-            try{
+        window.prepareCCapture = function () {
+            try {
                 // Create a capturer that exports a WebM video
                 var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
                 window.motionBlurFrames = 0;
-                capturer = isWebMSupported 
-                ? new CCapture( { 
-                    format: 'webm', 
-                    motionBlurFrames,
-                    verbose: false, 
-                    fps: window.targetRecordingFPS 
-                } ) 
-                : new CCapture( { 
-                    format: 'png', 
-                    motionBlurFrames,
-                    verbose: false, 
-                    framerate: window.targetRecordingFPS 
-                } );
-            }catch(e){
-                console.error('failed to create capturer',e);
+                capturer = isWebMSupported
+                    ? new CCapture({
+                        format: 'webm',
+                        motionBlurFrames,
+                        verbose: false,
+                        fps: window.targetRecordingFPS
+                    })
+                    : new CCapture({
+                        format: 'png',
+                        motionBlurFrames,
+                        verbose: false,
+                        framerate: window.targetRecordingFPS
+                    });
+            } catch (e) {
+                console.error('failed to create capturer', e);
             }
         }
 
-        let handleFileInputChange = async(e)=>{
+        let handleFileInputChange = async (e) => {
             let file = e.target.files[0];
             console.warn(file);
 
-            if(file.type.includes('video')){
+            if (file.type.includes('video')) {
                 window.setVideoAsChannel(URL.createObjectURL(file));
                 return;
             }
 
-            if(file.type.includes('image')){
+            if (file.type.includes('image')) {
                 // load the file into our Three.js baseTexture and reflect into our originalPixelDataTexture
                 let url = URL.createObjectURL(file);
                 let img = new Image();
                 img.src = url;
-                img.onload = function(){
+                img.onload = function () {
                     // "setImageAsChannel"
                     window.baseTexture.image.src = url;
                     window.baseTexture.needsUpdate = true;
@@ -1170,7 +1254,7 @@
         }
 
         // domready
-        async function onReady(){
+        async function onReady() {
             // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
             //     return;
             // }
@@ -1180,7 +1264,7 @@
             setupThree();
         }
 
-        window.addEventListener("resize", ()=>{
+        window.addEventListener("resize", () => {
             // onResize
             resizeCanvas();
             // todo: they sould grow and shrink dynamically...
@@ -1190,8 +1274,8 @@
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            fixedPixelsX = Math.floor(canvas.width/pixel_density);
-            fixedPixelsY = Math.floor(canvas.height/pixel_density);
+            fixedPixelsX = Math.floor(canvas.width / pixel_density);
+            fixedPixelsY = Math.floor(canvas.height / pixel_density);
             window.DID_BIND_BASE_SINCE_RESIZE = false;
             // update our iResolution uniform
             shaderMaterial.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight, 1.0);
@@ -1218,28 +1302,28 @@
         // we artificially delay the sorting algo. to help visualize the sorting process
         // we then show how parallelism can be used to speed up the sorting process (bitonic sort) + realtime "accumulation" of the sorted values (similar to Raytracing stochastic accumulation)
         let numPixels = 0;
-        let fixedPixelsX,fixedPixelsY;
+        let fixedPixelsX, fixedPixelsY;
         function initializePositionsAndOffsetData(keepPixelData = true) {
             numPixels = canvas.width * canvas.height;
             numPixels = Math.floor(numPixels / pixel_density);
 
-            if(!keepPixelData){
+            if (!keepPixelData) {
                 pixel_positions = [];
                 pixelData = undefined;
             }
 
             // if `pixel_positions` is empty or undefined, we need to initialize it
             // otherwise, we need to determine to grow or shrink it
-            if(typeof pixel_positions === "undefined" || !pixel_positions.length){
+            if (typeof pixel_positions === "undefined" || !pixel_positions.length) {
                 pixel_positions = new Float32Array(numPixels * 2); // x, y for each pixel
-            }else{
+            } else {
                 // shrink || grow
                 // if we're shrinking, we need to truncate the array
                 // if we're growing, we need to pad the array
-                if(pixel_positions.length > numPixels * 2){
+                if (pixel_positions.length > numPixels * 2) {
                     // truncate
-                    pixel_positions = pixel_positions.slice(0,numPixels * 2);
-                }else if(pixel_positions.length < numPixels * 2){
+                    pixel_positions = pixel_positions.slice(0, numPixels * 2);
+                } else if (pixel_positions.length < numPixels * 2) {
                     // pad
                     let new_pixel_positions = new Float32Array(numPixels * 2);
                     new_pixel_positions.set(pixel_positions);
@@ -1248,7 +1332,7 @@
             }
 
             resetOffsetTexture();
-            if(typeof pixelData === "undefined" || !pixelData.length){
+            if (typeof pixelData === "undefined" || !pixelData.length) {
                 pixelData = new Uint8Array(numPixels * bytesPerPixel); // RGBA for each pixel
 
                 // Initialize position and pixel data
@@ -1274,12 +1358,12 @@
                 // THREE.WebGLRenderer.setTexture2D(pixelData, 0, THREE.RGBAFormat, fixedPixelsX, fixedPixelsY, 0, THREE.RGBAFormat, THREE.UnsignedByteType);
 
 
-            }else{
+            } else {
                 // grow or shrink pixelData
-                if(pixelData.length > numPixels * bytesPerPixel){
+                if (pixelData.length > numPixels * bytesPerPixel) {
                     // truncate
-                    pixelData = pixelData.slice(0,numPixels * bytesPerPixel);
-                }else if(pixelData.length < numPixels * bytesPerPixel){
+                    pixelData = pixelData.slice(0, numPixels * bytesPerPixel);
+                } else if (pixelData.length < numPixels * bytesPerPixel) {
                     // pad
                     let new_pixelData = new Uint8Array(numPixels * bytesPerPixel);
                     new_pixelData.set(pixelData);
@@ -1288,16 +1372,16 @@
             }
         }
 
-        function rgbToHsv(color){
+        function rgbToHsv(color) {
             let r = color[0] / 255;
             let g = color[1] / 255;
             let b = color[2] / 255;
             let max = Math.max(r, g, b), min = Math.min(r, g, b);
             let h, s, v = max;
-        
+
             let d = max - min;
             s = max == 0 ? 0 : d / max;
-        
+
             if (max == min) {
                 h = 0; // achromatic
             } else {
@@ -1306,11 +1390,11 @@
                     case g: h = (b - r) / d + 2; break;
                     case b: h = (r - g) / d + 4; break;
                 }
-        
+
                 h /= 6;
             }
-        
-            return [ h, s, v ];
+
+            return [h, s, v];
         }
 
         let swapped = false;
@@ -1323,7 +1407,7 @@
         window.sortStepSize = 10e5; //-1; //10e3; // Number of elements to sort per call, adjust as needed
         window.current_sortStepSize = window.sortStepSize;
 
-        window.resetOffsetTexture = function(erasePixelData = false){
+        window.resetOffsetTexture = function (erasePixelData = false) {
             // reset offset texture to all 0s with 255 for alpha channel
             let zeros = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
             zeros = zeros.map((value, index) => {
@@ -1337,13 +1421,13 @@
             // gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
             // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, zeros);
 
-            if(erasePixelData){
+            if (erasePixelData) {
                 // reset pixel data to all 0s
                 pixelData = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
             }
         }
 
-        function newCheck(inner_i, currentColor, currentHSV, nextColor, nextHSV){
+        function newCheck(inner_i, currentColor, currentHSV, nextColor, nextHSV) {
             let swapped = 0;
             let rankA = 0; // should we swap?
             let rankB = 0;
@@ -1356,8 +1440,8 @@
             rankA += currentHSV[2] > nextHSV[2] ? 1 : 0;
             rankB += currentHSV[2] < nextHSV[2] ? 1 : 0;
 
-            rankA *= currentColor[3]/255; // account for alpha
-            rankB *= nextColor[3]/255; // account for alpha
+            rankA *= currentColor[3] / 255; // account for alpha
+            rankB *= nextColor[3] / 255; // account for alpha
 
             //console.warn({rankA,rankB})
 
@@ -1365,7 +1449,7 @@
             //if(rankA > rankB){
 
             // new: epsilon-based approach
-            if(rankA > rankB + Math.random()*0.001){
+            if (rankA > rankB + Math.random() * 0.001) {
                 // Swap colors in pixel data
                 [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
                 [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
@@ -1409,7 +1493,7 @@
             // Implement logic to check for consistently overlooked pixels
             // This could be a heuristic based on tracking which pixels haven't moved in several passes
             // or it could be a heuristic based on the number of pixels that have moved in the last pass
-            
+
             return false; // Placeholder return
         }
 
@@ -1438,7 +1522,7 @@
                 _sortStepSize = numPixels * scale; // Adjusting for pixel density
             }
             window.current_sortStepSize = _sortStepSize;
-            
+
             // if _sortStepSize is > than the size of threads on our GPU, we need to break it up into multiple passes
 
             // Calculate the end of the current sorting window
@@ -1459,7 +1543,7 @@
                 // wrap around
                 sortOffset = sortOffset % numPixels;
                 // if we didnt swap this pass, 
-                if(!prevDidSwap && !swapped){
+                if (!prevDidSwap && !swapped) {
                     // note we attribute multiple passes without swaps to the same cycle
                     noSwapStreak += Math.floor(((sortOffset % numPixels) / numPixels));
                 }
@@ -1468,23 +1552,23 @@
             for (let i = sortOffset; i < windowEnd - 1; i++) {
                 let inner_i = i
                 // if inner_i has gone out of bounds, we need to wrap it around
-                if(inner_i >= numPixels){
+                if (inner_i >= numPixels) {
                     inner_i = inner_i % numPixels;
                 }
                 const currentColor = pixelData.subarray(inner_i * bytesPerPixel, (inner_i + 1) * bytesPerPixel);
                 const nextColor = pixelData.subarray((inner_i + 1) * bytesPerPixel, (inner_i + 2) * bytesPerPixel);
 
                 let a_larger = (
-                    currentColor[0] 
-                    + currentColor[1] 
-                    + currentColor[2] 
-                    > 
-                    nextColor[0] 
-                    + nextColor[1] 
+                    currentColor[0]
+                    + currentColor[1]
+                    + currentColor[2]
+                    >
+                    nextColor[0]
+                    + nextColor[1]
                     + nextColor[2]
                 ) ? 1 : 0;
 
-                if(window.reverseSort){
+                if (window.reverseSort) {
                     a_larger = !a_larger;
                 }
 
@@ -1507,8 +1591,8 @@
                 // }
             }
 
-            
-            
+
+
             if (swapped) {
                 // If a swap occurred, update the texture
                 window.baseTexture.needsUpdate = true;
@@ -1519,7 +1603,7 @@
             }
 
             // if we've somehow gone negative, flip positive and clamp to 0
-            if(sortOffset < 0){
+            if (sortOffset < 0) {
                 throw new Error("sortOffset is negative");
             }
 
@@ -1586,47 +1670,47 @@
 
         window.bigSweepActive = false, window.bigSweepInterval = 0;
         window.sweepFactor = 0.1;
-        window.tickBigSweep = function() {
+        window.tickBigSweep = function () {
             if (window.bigSweepActive) {
                 window.mouseX = (Math.sin(Date.now() * 0.001) + 1) * ((window.innerWidth / 2) * window.sweepFactor);
                 window.mouseY = (Math.cos(Date.now() * 0.001) + 1) * ((window.innerHeight / 2) * window.sweepFactor);
             }
         }
-        window.toggleBigSweep = function(){
+        window.toggleBigSweep = function () {
             window.bigSweepActive = !window.bigSweepActive;
-            console.warn("window.bigSweepActive",window.bigSweepActive);   
+            console.warn("window.bigSweepActive", window.bigSweepActive);
         }
 
         window.jiggleSwirl = false;
         window.swirlFreq = 1;
         window.swirlMax = 1;
-        window.toggleJiggleSwirl = function(){
+        window.toggleJiggleSwirl = function () {
             window.jiggleSwirl = !window.jiggleSwirl;
-            console.warn("window.jiggleSwirl",window.jiggleSwirl);
+            console.warn("window.jiggleSwirl", window.jiggleSwirl);
 
-            clearInterval(window.mouseJiggler); 
-            if(window.jiggleSwirl){
+            clearInterval(window.mouseJiggler);
+            if (window.jiggleSwirl) {
                 window.mouseJiggler = setInterval(
-                    ()=>{
-                        window.mouseX = (Math.sin(Date.now()*window.swirlFreq*0.0015) * window.swirlMax*256)
-                    },16)
+                    () => {
+                        window.mouseX = (Math.sin(Date.now() * window.swirlFreq * 0.0015) * window.swirlMax * 256)
+                    }, 16)
             }
         }
-        
+
         document.addEventListener('DOMContentLoaded', async () => {
             let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
             // create if not exist
-            if(!imageElement){
+            if (!imageElement) {
                 imageElement = document.createElement('img');
                 imageElement.id = 'image';
                 imageElement.style.display = 'none';
                 document.body.appendChild(imageElement);
             }
 
-            
+
         });
-        function createImageBitmap(imageBlob){
-            return new Promise((resolve,reject)=>{
+        function createImageBitmap(imageBlob) {
+            return new Promise((resolve, reject) => {
                 // let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
                 // // create if not exist
                 // if(!imageElement){
@@ -1640,83 +1724,83 @@
                 //     resolve(imageElement);
                 // }
                 let _image = new Image();
-                _image.onload = function(e){
+                _image.onload = function (e) {
                     // once we can read the image, we can forward it to our shader...
                     resolve(_image);
                 }
                 imageElement.src = URL.createObjectURL(imageBlob);
             });
         }
-        async function onPasteAttempt(){
+        async function onPasteAttempt() {
             try {
-                    // Check if the Clipboard API is available
-                    if (!navigator.clipboard) {
-                        console.warn('Clipboard API not available.');
-                        throw new Error('Clipboard API not available');
-                    }
-
-                    // Attempt to read from the clipboard
-                    const clipboardItems = await navigator.clipboard.read();
-                    console.log('Clipboard items retrieved:', clipboardItems);
-
-                    let clipboardBag = {images:[]};
-
-                    // Find text content in clipboard items
-                    const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
-                    if (textItem) {
-                        const textBlob = await textItem.getType('text/plain');
-                        const text = await textBlob.text();
-                        console.log('Pasted text content: ', text);
-                        clipboardBag.text = text;
-                    }
-
-                    // Find HTML content in clipboard items
-                    const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
-                    if (htmlItem) {
-                        const htmlBlob = await htmlItem.getType('text/html');
-                        const html = await htmlBlob.text();
-                        console.log('Pasted HTML content: ', html);
-                        clipboardBag.html = html;
-                    }
-                    // Note: imageBlob is an instance of Blob
-                    // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
-                    // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
-                    // we need to do the slow, full conversion of a Blob to a base64 encoded string
-                    // then we can use that base64 encoded string to load the image as a texture
-                    
-
-
-                    // Find any "image" items:
-                    const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
-                    // Alert if there's multiple, we only support one for now
-                    if (imageItems.length > 1) {
-                        alert('Multiple images found. Using the last image.');
-                    }
-                    for (const imageItem of imageItems) {
-                        const imageBlob = await imageItem.getType('image/png');
-                        //console.log('Pasted image: ', image);
-                        clipboardBag.imageBlob = imageBlob;
-
-                        //loadImageBlobAsTexture(imageBlob);
-                        
-                        let b64 = await imageBlobToBase64(imageBlob);
-                        //console.log('Pasted image: ', b64);
-
-                        await loadBase64AsTexture(b64);
-                        clipboardBag.images.push(b64);
-                    }
-
-                    hideIntroText()
-
-                    // Process clipboardBag as needed
-                    console.warn({clipboardBag});
-
-                } catch (error) {
-                    console.error('Error accessing clipboard:', error);
-                    // Handle error appropriately
+                // Check if the Clipboard API is available
+                if (!navigator.clipboard) {
+                    console.warn('Clipboard API not available.');
+                    throw new Error('Clipboard API not available');
                 }
+
+                // Attempt to read from the clipboard
+                const clipboardItems = await navigator.clipboard.read();
+                console.log('Clipboard items retrieved:', clipboardItems);
+
+                let clipboardBag = { images: [] };
+
+                // Find text content in clipboard items
+                const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
+                if (textItem) {
+                    const textBlob = await textItem.getType('text/plain');
+                    const text = await textBlob.text();
+                    console.log('Pasted text content: ', text);
+                    clipboardBag.text = text;
+                }
+
+                // Find HTML content in clipboard items
+                const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
+                if (htmlItem) {
+                    const htmlBlob = await htmlItem.getType('text/html');
+                    const html = await htmlBlob.text();
+                    console.log('Pasted HTML content: ', html);
+                    clipboardBag.html = html;
+                }
+                // Note: imageBlob is an instance of Blob
+                // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
+                // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
+                // we need to do the slow, full conversion of a Blob to a base64 encoded string
+                // then we can use that base64 encoded string to load the image as a texture
+
+
+
+                // Find any "image" items:
+                const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
+                // Alert if there's multiple, we only support one for now
+                if (imageItems.length > 1) {
+                    alert('Multiple images found. Using the last image.');
+                }
+                for (const imageItem of imageItems) {
+                    const imageBlob = await imageItem.getType('image/png');
+                    //console.log('Pasted image: ', image);
+                    clipboardBag.imageBlob = imageBlob;
+
+                    //loadImageBlobAsTexture(imageBlob);
+
+                    let b64 = await imageBlobToBase64(imageBlob);
+                    //console.log('Pasted image: ', b64);
+
+                    await loadBase64AsTexture(b64);
+                    clipboardBag.images.push(b64);
+                }
+
+                hideIntroText()
+
+                // Process clipboardBag as needed
+                console.warn({ clipboardBag });
+
+            } catch (error) {
+                console.error('Error accessing clipboard:', error);
+                // Handle error appropriately
+            }
         }
-        function hideIntroText(){
+        function hideIntroText() {
             canvas.classList.add('unblur');
             let match = document.getElementsByClassName('drop-here-text');
             if (match.length > 0) {
@@ -1725,8 +1809,8 @@
                 });
             }
         }
-        function showIntroText(skipBlur=false){
-            if(!skipBlur){
+        function showIntroText(skipBlur = false) {
+            if (!skipBlur) {
                 canvas.classList.remove('unblur');
             }
             let match = document.getElementsByClassName('drop-here-text');
@@ -1736,24 +1820,24 @@
                 });
             }
         }
-        document.addEventListener('keydown',async(e)=>{
+        document.addEventListener('keydown', async (e) => {
             // if command v on mac,
             // or control v on other,
             // paste image from clipboard
-            if ( 
+            if (
                 (e.keyCode === 22 || e.keyCode === 86)
                 && (e.metaKey || e.ctrlKey)
-            ){
+            ) {
                 await onPasteAttempt();
             }
-        },false)
+        }, false)
 
 
-        document.addEventListener('touchmove',async(e)=>{
+        document.addEventListener('touchmove', async (e) => {
             mouseX = e.touches[0].clientX;
             mouseY = e.touches[0].clientY;
         })
-        document.addEventListener('touchstart',async(e)=>{
+        document.addEventListener('touchstart', async (e) => {
             mouseX = e.touches[0].clientX;
             mouseY = e.touches[0].clientY;
         })
@@ -1767,13 +1851,13 @@
 
         // uniform "double-tap"/double-click detection
 
-        function checkDoubleTapDetected(){
+        function checkDoubleTapDetected() {
             if (doubleTapDetected) {
                 // Reset
                 doubleTapDetected = false;
                 clearTimeout(doubleTapTimeout);
                 doubleTapTimeout = null;
-                
+
                 showIntroText();
                 // update url
                 let uri = "https://jakedowns.com/media/0006.mp4";
@@ -1803,23 +1887,23 @@
             checkDoubleTapDetected();
         }, false);
         var num_modes = 5;
-        document.addEventListener('click', (e)=>{
+        document.addEventListener('click', (e) => {
             MODE = (MODE + 1) % num_modes;
-            console.log("MODE",MODE);
+            console.log("MODE", MODE);
 
             checkDoubleTapDetected();
 
-            if(!window.do_sort){
+            if (!window.do_sort) {
                 window.do_sort = true;
-                console.log("do_sort",window.do_sort);
+                console.log("do_sort", window.do_sort);
             }
         });
         window.mouseX = window.mouseY = 0;
-        document.addEventListener('mousemove', (e)=>{
+        document.addEventListener('mousemove', (e) => {
             window.mouseX = e.clientX;
             window.mouseY = e.clientY;
         });
-        document.addEventListener('mousedown', (e)=>{
+        document.addEventListener('mousedown', (e) => {
             window.leftMouseDown = e.button === 0;
             window.middleMouseDown = e.button === 1;
             window.rightMouseDown = e.button === 2;
@@ -1828,41 +1912,42 @@
             // window.mouse_btn_5 = e.button === 5;
             window.anyMouseDown = true;
         });
-        document.addEventListener('mouseup', (e)=>{
+        document.addEventListener('mouseup', (e) => {
             window.anyMouseDown = false;
             window.leftMouseDown = false;
             window.middleMouseDown = false;
             window.rightMouseDown = false;
         });
-        function imageBlobToBase64(imageBlob){
-            return new Promise((resolve,reject)=>{
+        function imageBlobToBase64(imageBlob) {
+            return new Promise((resolve, reject) => {
                 let reader = new FileReader();
-                reader.onload = function(e){
+                reader.onload = function (e) {
                     resolve(e.target.result);
                 }
                 reader.readAsDataURL(imageBlob);
             });
         }
-        
+
         document.addEventListener("DOMContentLoaded", onReady);
 
     </script>
 
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        setTimeout(function() {
-            var script = document.createElement('script');
-            script.src = "https://www.googletagmanager.com/gtag/js?id=G-GYK2ZMX0M9";
-            script.async = true;
-            document.body.appendChild(script);
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            setTimeout(function () {
+                var script = document.createElement('script');
+                script.src = "https://www.googletagmanager.com/gtag/js?id=G-GYK2ZMX0M9";
+                script.async = true;
+                document.body.appendChild(script);
 
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
+                window.dataLayer = window.dataLayer || [];
+                function gtag() { dataLayer.push(arguments); }
+                gtag('js', new Date());
 
-            gtag('config', 'G-GYK2ZMX0M9');
-        }, 3000);
-    });
-</script>
+                gtag('config', 'G-GYK2ZMX0M9');
+            }, 3000);
+        });
+    </script>
 </body>
+
 </html>
