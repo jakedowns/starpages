@@ -1,3 +1,6 @@
+// Frosted Video Mandlebulb
+// https://www.shadertoy.com/view/4f2GDh
+
 // Fork of "mandlebulb_" by evilryu: // via https://www.shadertoy.com/view/MdXSWn
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 
