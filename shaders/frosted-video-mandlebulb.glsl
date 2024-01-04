@@ -61,7 +61,8 @@ vec3 mb(vec3 p, float time) {
         #ifdef phase_shift_on
         // Simplified phase shift calculation
         // The phase shift is now directly proportional to the y position of the mouse
-        phi = asin(z.z / r) + (iMouse.y - 0.5) * time;
+        float chill_out = 0.01;
+        phi = asin(z.z / r) + ((iMouse.y - 0.5) * time * chill_out);
         #else
         phi = asin(z.z / r);
         #endif
@@ -325,11 +326,20 @@ float SHADOW_ATTENUATION = 0.5;
 
 void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) { 
 
-    // if we're within a 30px radius of iMouseRaw, return full red
-    if (length(fragCoord - vec2(iMouseRaw.x/iResolution.x,-iMouseRaw.y/iResolution.y)) < 30.0) {
-        fragColor = vec4(1.0, 0.0, 0.0, 1.0);
-        return;
+    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    
+    if (length(fragCoord - iMouse.xy) < 30.0) {
+        fragColor += vec4(0.0, 1.0, 0.0, 0.5);
+        //return;
     }
+
+    // if we're within a 30px radius of iMouseRaw, return full red
+    if (length(fragCoord - iMouseRaw.xy) < 20.0) {
+        fragColor += vec4(1.0, 0.0, 0.0, 0.5);
+        //return;
+    }
+
+    
 
     // Define the up vector
     vec3 up = vec3(0.0, 1.0, 0.0);
@@ -349,14 +359,14 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     // The time variable is interpolated between iTime and -iTime based on the x position of the mouse.
     // This allows for a dynamic change in the scene based on user input.
     // Remap iMouse.x from [0, 1] to [-10, 10] with 0.5 mapping to 0
-    float mouseXScaled = iMouse.x;// / iResolution.x;
+    float mouseXScaled = iMouse.x / iResolution.x;
     float remappedMouseX = mouseXScaled; // mix(-100.0, 100.0, mouseXScaled);
     // Add the remapped mouse position to iTime to control the time offset
     float time = iTime * remappedMouseX;
     // Define constants for time modulation
-    float baseValue = 0.7;
-    float amplitude = 0.3;
-    float frequency = 0.4;
+    float baseValue = 0.7 * .9;
+    float amplitude = 0.3 * .1;
+    float frequency = 0.4 * .1;
     
     // Apply sinusoidal modulation to stime and ctime
     stime = baseValue + amplitude * sin(time * frequency);
@@ -500,7 +510,9 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     col = col * 0.6 + 0.4 * col * col * (3.0 - 2.0 * col);  // contrast
     col = mix(col, vec3(dot(col, vec3(0.33))), -0.5);  // satuation
     col *= 0.5 + 0.5 * pow(16.0 * q.x * q.y * (1.0 - q.x) * (1.0 - q.y), 0.7);  // vigneting
-    fragColor = vec4(col.xyz, smoothstep(0.55, .76, 1. - res.x / 5.));
+    vec4 nextCol = vec4(col.xyz, smoothstep(0.55, .76, 1. - res.x / 5.));
+    fragColor += nextCol;
+    //fragColor = mix(nextCol, fragColor, 0.5);
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {

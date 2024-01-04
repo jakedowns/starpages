@@ -682,14 +682,14 @@
                 
                 window.mouseRaw.set(
                     window.mouseX, 
-                    window.mouseY, 
+                    window.innerHeight - window.mouseY, 
                     window.leftMouseDown ? 1 : -1, 
                     0
                 );
-                window.mouseLerping.lerp(window.mouseRaw, .001);
+                window.mouseLerping.lerp(window.mouseRaw, .1);
                 shaderMaterial.uniforms.iMouse.value.set(
                     window.mouseLerping.x, 
-                    window.mouseLerping.y, 
+                    window.mouseLerping.y,
                     window.leftMouseDown ? 1 : -1, 
                     0
                 );
