@@ -2,14 +2,14 @@
 <html>
 <head>
     <title>Gherkin Feature File Manager</title>
-    <script src="https://unpkg.com/vue@next"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <!-- Tailwind CSS CDN -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.2/dist/tailwind.min.css" rel="stylesheet">
     <!-- Add any other required scripts or CSS here -->    
 </head>
 <body>
     <div id="app">
-        <search-bar v-model="searchQuery"></search-bar>
+        <search-bar v-model="searchQuery"></search-bar> 
         <feature-list :features="filteredFeatures" @select="selectFeature"></feature-list>
         <feature-viewer v-if="selectedFeature" :content="selectedFeature.content"></feature-viewer>
         <feature-editor v-if="selectedFeature" :content="selectedFeature.content" @update="updateFeature"></feature-editor>
@@ -130,48 +130,77 @@
     And the user accepts the billing address as the shipping address by clicking "YES"
     Then the addresses should be on file under My Account in the Account Information section
 `;
-        window.data = {
+        window.testData = {
             "col_names": ["fid", "Entity", "Flow Group", "Flow Name", "Importance", "Smoke Test Status"],
             "row_data": [
-                ["AF_ARF", "User", "Account Flows", "Account Registration Flow", "🔴", "❌"],
-                ["AF_LLF", "User", "Account Flows", "Login/Logout Flow", "🔴", "❌"],
-                ["AF_PRF", "User", "Account Flows", "Password Recovery Flow", "🔴", "❌"],
-                ["AF_PCF", "User", "Account Flows", "Password Change Flow (Logged In)", "🔵", "❌"],
-                ["AF_CAEAF", "User", "Account Flows", "Change Account Email Address (Logged In)", "🔵", "❌"],
-                ["AF_VEF", "User", "Account Flows", "Verify Email Address", "🔴", "❌"],
-                ["AF_CSF", "User", "Account Flows", "Configure SMS (Logged In)", "🔵", "❌"],
-                ["WL_WLF", "User", "Watched Lots", "Watch Lot Flow (Logged In/Out)", "🟢", "❌"],
-                ["BA_SRF", "User", "Bid Activity", "Sale Registration Flow (Logged Out)", "🔴", "❌"],
-                ["BA_BPF", "User", "Bid Activity", "Bid Placement Flow (Logged Out)", "🔴", "❌"],
-                ["BA_UEF", "User", "Bid Activity", "User is outbid (Email notification)", "🔵", "❌"],
-                ["CM_UMPF", "User", "Communication", "Update Mailing Preferences Flow (Logged In)", "🟢", "❌"],
-                ["CM_MLSF", "User", "Communication", "Mailing List Sign-Up Flow", "🔵", "❌"],
-                ["CM_UMLF", "User", "Communication", "Unsubscribe from Mailing List Flow", "🟢", "❌"],
-                ["SA_SF", "User", "Search / Artists", "Site Search Flow", "🔴", "❌"],
-                ["SA_BAP", "User", "Search / Artists", "Browse Artist Pages", "🔵", "❌"],
-                ["DOS_TODO", "User", "Day of Sale", "[TODO: Define Smoke-Testable DOS Flows]", "🔴", "❌"],
-                ["MC_VMCM", "User", "Modular Content", "View All Modular Content Module Types without Error", "🔵", "❌"],
-                ["HC_VHT", "User", "Homepage Content", "View All Homepage Types without Error", "🔵", "❌"],
-                ["AMS_TODO", "User", "AMS Flows", "TODO: define desirable automated smoke-testable flows", "🔴", "❌"],
-                ["CAS_TODO", "User", "CAS Flows", "TODO: define desirable automated smoke-testable flows", "🔴", "❌"]
+                ["AF_ARF", "User", "Account Flows", "Account Registration Flow", "HIGH", "❌"],
+                ["AF_LLF", "User", "Account Flows", "Login/Logout Flow", "HIGH", "❌"],
+                ["AF_PRF", "User", "Account Flows", "Password Recovery Flow", "HIGH", "❌"],
+                ["AF_PCF", "User", "Account Flows", "Password Change Flow (Logged In)", "MED", "❌"],
+                ["AF_CAEAF", "User", "Account Flows", "Change Account Email Address (Logged In)", "MED", "❌"],
+                ["AF_VEF", "User", "Account Flows", "Verify Email Address", "HIGH", "❌"],
+                ["AF_CSF", "User", "Account Flows", "Configure SMS (Logged In)", "MED", "❌"],
+
+                ["WL_WLF", "User", "Watched Lots", "Watch Lot Flow (Logged In/Out)", "LOW", "❌"],
+                
+                ["BA_SRF", "User", "Bid Activity", "Sale Registration Flow (Logged Out)", "HIGH", "❌"],
+                ["BA_BPF", "User", "Bid Activity", "Bid Placement Flow (Logged Out)", "HIGH", "❌"],
+                ["BA_UEF", "User", "Bid Activity", "User is outbid (Email notification)", "MED", "❌"],
+
+                ["SMS_1", "User", "SMS", "Display SmsOptInModal on Modal", "LOW", "❌"],
+                ["SMS_2", "User", "SMS", "Opt-In Button Request Handling", "LOW", "❌"],
+                ["SMS_3", "User", "SMS", "Format Phone Number for E.164", "LOW", "❌"],
+                ["SMS_4", "User", "SMS", "Twilio Phone Number Verification", "LOW", "❌"],
+                ["SMS_5", "User", "SMS", "User Status Update on Opt-In", "LOW", "❌"],
+                ["SMS_6", "User", "SMS", "Load Data in SmsPreferences.vue", "LOW", "❌"],
+                ["SMS_7", "User", "SMS", "Update Local Cache in SmsPreferences", "LOW", "❌"],
+                ["SMS_8", "User", "SMS", "Sms Form Submission and Handling", "LOW", "❌"],
+                ["SMS_9", "User", "SMS", "Opt-In/Out Processing in UpdateSmsController", "LOW", "❌"],
+                
+                ["CM_UMPF", "User", "Communication", "Update Mailing Preferences Flow (Logged In)", "LOW", "❌"],
+                ["CM_MLSF", "User", "Communication", "Mailing List Sign-Up Flow", "MED", "❌"],
+                ["CM_UMLF", "User", "Communication", "Unsubscribe from Mailing List Flow", "LOW", "❌"],
+                
+                ["DOS_TODO", "User", "Day of Sale", "[TODO: Define Smoke-Testable DOS Flows]", "HIGH", "❌"],
+                ["SA_SF", "User", "Search / Artists", "Site Search Flow", "MED", "❌"],
+                ["SA_BAP", "User", "Search / Artists", "Browse Artist Pages", "MED", "❌"],
+                ["MC_VMCM", "User", "Modular Content", "View All Modular Content Module Types without Error", "MED", "❌"],
+                ["HC_VHT", "User", "Homepage Content", "View All Homepage Types without Error", "MED", "❌"],
+                
+                ["AMS_TODO", "User", "AMS Flows", "TODO: define desirable automated smoke-testable flows", "HIGH", "❌"],
+                ["CAS_TODO", "User", "CAS Flows", "TODO: define desirable automated smoke-testable flows", "HIGH", "❌"],
+
+                
             ]
+        }
+
+        window.dump_as_csv = function(){
+            // Include row headings in the CSV output
+            const csv = [window.testData.col_names.join(",")].concat(window.testData.row_data.map(row => row.join(","))).join("\n");
+            console.log(csv);
         }
 
         window.get_data_as_object_map = function(){
             // Convert the row_data into an array of objects
-            const formattedData = data.row_data.map(row => {
-            return row.reduce((obj, val, index) => {
-                obj[data.col_names[index]] = val;
-                return obj;
-            }, {});
+            const formattedData = window.testData.row_data.map(row => {
+                return row.reduce((obj, val, index) => {
+                    obj[window.testData.col_names[index]] = val;
+                    return obj;
+                }, {});
             });
+            return formattedData;
         }
-        console.table(get_data_as_object_map())
+        window.dump_data = function(){
+            console.log("Data:", window.testData);
+            console.table(get_data_as_object_map());
+        }
+        window.dump_data();
 
-        Vue.createApp({
+        document.addEventListener("DOMContentLoaded", function(event) {
+            Vue.createApp({
             data() {
                 return {
-                    features: [/* Array of feature file objects */],
+                    features: [/* Array o   f feature file objects */],
                     searchQuery: '',
                     selectedFeature: null
                 };
@@ -191,6 +220,7 @@
             },
             // Define components here
         }).mount('#app');
+        });
     </script>
 </body>
 </html>

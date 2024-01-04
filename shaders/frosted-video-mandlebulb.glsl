@@ -61,8 +61,8 @@ vec3 mb(vec3 p, float time) {
         #ifdef phase_shift_on
         // Simplified phase shift calculation
         // The phase shift is now directly proportional to the y position of the mouse
-        float chill_out = 0.01;
-        phi = asin(z.z / r) + ((iMouse.y - 0.5) * time * chill_out);
+        float chill_out = 0.001;
+        phi = asin(z.z / r) * ((iMouse.y) * time * chill_out);
         #else
         phi = asin(z.z / r);
         #endif
@@ -276,23 +276,23 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     float texScaleY_stop_50 = 0.11;
     float texScaleY_stop_100 = 1e3;
 
-    // repeatFactorX = 
-    //     iMouse.x > 0.5
-    //     ? remapMousePosition(iMouse.x, 0.5, 1.0, texScaleX_min, texScaleX_stop_49)
-    //     : remapMousePosition(iMouse.x, 0.0, 0.5, texScaleX_stop_50, texScaleX_stop_100);
+    repeatFactorX = 
+        iMouse.x > 0.5
+        ? remapMousePosition(iMouse.x, 0.5, 1.0, texScaleX_min, texScaleX_stop_49)
+        : remapMousePosition(iMouse.x, 0.0, 0.5, texScaleX_stop_50, texScaleX_stop_100);
 
-    // repeatFactorY = 
-    //     iMouse.y > 0.5
-    //     ? remapMousePosition(iMouse.y, 0.5, 1.0, texScaleY_min, texScaleY_stop_49) 
-    //     : remapMousePosition(iMouse.y, 0.0, 0.5, texScaleY_stop_50, texScaleY_stop_100);
+    repeatFactorY = 
+        iMouse.y > 0.5
+        ? remapMousePosition(iMouse.y, 0.5, 1.0, texScaleY_min, texScaleY_stop_49) 
+        : remapMousePosition(iMouse.y, 0.0, 0.5, texScaleY_stop_50, texScaleY_stop_100);
 
     
 
     // Centering the UV coordinates
     vec2 centeredUV = point.xy / iResolution.xy - 0.5;
 
-    // centeredUV.y += iMouse.x < 0.5 ? iMouse.x : 0.0;
-    // centeredUV.x += iMouse.y < 0.5 ? iMouse.y : 0.0;
+    centeredUV.y += iMouse.x < 0.5 ? iMouse.x : 0.0;
+    centeredUV.x += iMouse.y < 0.5 ? iMouse.y : 0.0;
 
     // Apply the repeating effect to the UV coordinates
     centeredUV *= vec2(repeatFactorX, repeatFactorY);
