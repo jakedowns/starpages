@@ -17646,15 +17646,15 @@ let cursor, MainCanvasContextThing = function(p){
         // needed to defer until rendering was ready for some pre-cache drawing
         rootSystem.boot();
 
-        // note the reduced volume!
         // stat.js
         (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
-
+        
         system.grandfatherClockAudioPlayer = mctx.createAudio('res/onlymp3.to - Household Grandfather Clock Tick Tock Sound Effect-SBSuIA0TxK0-192k-1701988301.mp3');
-
+        
         // system.widgetOpenAudioPlayer = mctx.createAudio('');
-
+        
         system.plopAudioPlayer = mctx.createAudio('res/Water Plop - Sound Effect (HD) [TubeRipper.com].mp3');
+        // note the reduced volume!
         system.plopAudioPlayer.volume(0.1);
         
         console.info("booted");

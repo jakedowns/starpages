@@ -20,9 +20,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
+    <script src="./res/import/dat.gui.min.js"></script>
+    <script>
+        // stat.js
+        (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
+    </script>
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
-        canvas {
+        canvas#canvas {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
     
@@ -34,7 +39,8 @@
             min-height: 100vh;
             max-height: 100vh; 
 
-            filter: blur(100px); 
+            /* filter: blur(100px);  */
+            opacity: 1;
             transition: filter 0.5s ease-in-out, opacity 0.5s ease-in-out; 
             will-change: filter; 
         }
@@ -340,6 +346,9 @@
                 handling_slow_motion_advance = false;
                 return;
             }
+            if(handling_slow_motion_advance){
+                return;
+            }
             //theVideoplayerElement.pause();
             handling_slow_motion_advance = false;
 
@@ -376,11 +385,11 @@
                 }
             });
 
-            theVideoplayerElement.addEventListener('pause', () => {
-                if (handling_slow_motion_advance && theVideoplayerElement.currentTime < theVideoplayerElement.duration) {
-                    theVideoplayerElement.currentTime += frameDuration;
-                }
-            });
+            // theVideoplayerElement.addEventListener('pause', () => {
+            //     if (handling_slow_motion_advance && theVideoplayerElement.currentTime < theVideoplayerElement.duration) {
+            //         theVideoplayerElement.currentTime += frameDuration;
+            //     }
+            // });
 
             
         }
@@ -594,6 +603,8 @@
 
             /* Match ShaderToy uniforms for compatibility */
             // Custom Shader
+            window.mouseRaw = new THREE.Vector4();
+            window.mouseLerping = new THREE.Vector4();
             window.shaderMaterial = new THREE.ShaderMaterial({
                 uniforms: {
                     u_time: { value: 1.0 },
@@ -603,7 +614,8 @@
                     iTime: { value: 1.0 },
                     iChannel0: { value: baseTexture },
                     iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
-                    iMouse: { value: new THREE.Vector4(0.0) },
+                    iMouse: { value: window.mouseLerping },
+                    iMouseRaw: { value: window.mouseRaw }
                 },
                 vertexShader: `
                     void main() {
@@ -667,7 +679,20 @@
                 //  abs(mouse.zw) = mouse position during last button click
                 // sign(mouse.z)  = button is down
                 // sign(mouse.w)  = button is clicked
-                shaderMaterial.uniforms.iMouse.value.set(normalizedX, normalizedY, window.leftMouseDown ? 1 : -1, 0);
+                
+                window.mouseRaw.set(
+                    window.mouseX, 
+                    window.mouseY, 
+                    window.leftMouseDown ? 1 : -1, 
+                    0
+                );
+                window.mouseLerping.lerp(window.mouseRaw, .001);
+                shaderMaterial.uniforms.iMouse.value.set(
+                    window.mouseLerping.x, 
+                    window.mouseLerping.y, 
+                    window.leftMouseDown ? 1 : -1, 
+                    0
+                );
             }
 
             // Global variable to store the last played video

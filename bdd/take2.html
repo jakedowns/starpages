@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gherkin Feature File Manager</title>
+    <script src="https://unpkg.com/vue@next"></script>
+    <!-- Tailwind CSS CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.2/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Add any other required scripts or CSS here -->    
+</head>
+<body>
+    <div id="app">
+        <search-bar v-model="searchQuery"></search-bar>
+        <feature-list :features="filteredFeatures" @select="selectFeature"></feature-list>
+        <feature-viewer v-if="selectedFeature" :content="selectedFeature.content"></feature-viewer>
+        <feature-editor v-if="selectedFeature" :content="selectedFeature.content" @update="updateFeature"></feature-editor>
+    </div>
+
+    <script>
+        /*
+            Vue.js Gherkin .feature File Viewer/Editor Requirements Summary:
+
+            1. Single HTML File Implementation: Entire app contained within one HTML file using Vue 3.
+            
+            2. Vue 3 Usage: Build the application with Vue 3, leveraging its reactivity and component system.
+
+            3. Gherkin Feature File Management: Enable viewing, searching, and editing Gherkin .feature files.
+
+            4. Component-Based Design: 
+                - FeatureViewer: Displays .feature file content.
+                - FeatureEditor: Edits .feature file with Gherkin syntax highlighting.
+                - SearchBar: Searches through feature files or their contents.
+                - FeatureList: Lists feature files for selection and navigation.
+
+            5. Data Structure: Represent .feature files in a structured format like JSON, including file name and content.
+
+            6. Editable Content: Allow editing of feature file content and update the data structure accordingly.
+
+            7. Search Functionality: Implement feature to search and filter specific feature files or contents.
+
+            8. Scoped Styling: Use scoped CSS within Vue components for styling.
+
+            9. Assumptions and Additional Features: 
+                - Initial .feature files are hardcoded or pre-loaded.
+                - Optional: Add new feature files, version control, history tracking.
+
+            10. Responsive and User-Friendly UI: Ensure intuitive use, clear layout, and navigation.
+
+            11. Assumed Knowledge: Familiarity with Vue.js, component architecture, and Gherkin syntax.
+
+            12. No Backend Integration Assumed: Frontend-only solution without data persistence across sessions.
+
+            This comment block outlines the intended functionality and design for the Vue.js Gherkin .feature file viewer/editor.
+
+            ---
+
+            Sample Input is in ["SAMPLE_INPUT.feature"]
+
+            ===
+
+            Actionable Next Steps:
+            - [ ] Parser: Parse .feature files into a structured format like JSON.
+            - [ ] Define our "structured" format (similar to an AST) for .feature files and define TypeScript types for it.
+            - [ ] (Later) Exporter that can export JSON OR convert back into common .feature files.
+            - [ ] (Later) Add a "New Feature" button that creates a new feature file and adds it to the list.
+                - [ ] (Later) Add a "Delete Feature" button that deletes a feature file from the list.
+                - [ ] (Later) Ability to Edit a Feature's Properties (Name, Description, Tags, etc.)
+            - [ ] (Later) Add a "New Scenario" button that creates a new scenario in the selected feature file.
+                - [ ] (Later) Add a "Delete Scenario" button that deletes a scenario from the selected feature file.
+                - [ ] (Later) Ability to Edit a Scenario's Properties (Name, Description, Tags, etc.)
+            - [ ] (Later) Add a "New Step" button that creates a new step in the selected scenario.
+                - [ ] (Later) Add a "Delete Step" button that deletes a step from the selected scenario.
+                - [ ] (Later) Ability to Edit a Step's Properties (Name, Description, Tags, etc.)
+        */
+
+        window["SAMPLE_INPUT.feature"] = `
+        Feature: User Account Address Management
+    As a user, when I am logged in,
+    I should be able to view and update my default billing and shipping addresses from the My Account page
+
+    As a user, when registering for a sale,
+    I should be able to view and update my default billing and shipping addresses from the Address Selection modal
+
+  Background: 
+    Given the system is initialized
+
+  @AddressManagement @MyAccount
+  Scenario: User does not have an address on file in My Account
+    Given the user is on the My Account page
+    Then the Default Billing Address should display "No Address Entered"
+    When the user clicks the "Add" button below Default Billing Address
+    Then a modal should display fields: Name, Last Name, Company, street address
+    And Name, Last Name and Company should be auto completed according to the account registration record
+    When the user begins by entering a valid street address into the street address field
+    Then a list of addresses that match the user's input should be displayed
+    When the user selects an address from the address recommendation list
+    Then the following fields should be displayed and filled with the address information: country, street address, city, state and zipcode
+    When the user clicks "CONTINUE"
+    And the user accepts the billing address as the shipping address by clicking "YES"
+    Then the addresses should be saved under the Account Information section
+
+  @AddressManagement @MyAccount
+  Scenario: User has address on file in My Account
+    Given the user is on the My Account page and has a default billing address on file
+    When the user clicks the "update" button below Default Billing Address
+    Then a modal should display fields: name, last name, Company, country, street address, address 2, city, state and zipcode filled according to the billing address on file
+    When the user clicks "CONTINUE"
+    And the user accepts the billing address as the shipping address by clicking "YES"
+    Then the addresses should be saved under the Account Information section
+
+  @AddressManagement @Registration
+  Scenario: User does not have an address on file during registration
+    When the user clicks the "REGISTER TO BID" button
+    And the user accepts the Terms of Sale and clicks "CONTINUE"
+    Then a modal should display fields: Name, Last Name, Company, street address
+    And Name, Last Name and Company should be auto completed according to the account registration record
+    When the user begins by entering a valid street address into the street address field
+    Then a list of addresses that match the user's input should be displayed
+    When the user selects an address from the address recommendation list
+    Then the following fields should be displayed and filled with the address information: country, street address, city, state and zipcode
+    When the user clicks "CONTINUE"
+    And the user accepts the billing address as the shipping address by clicking "YES"
+    Then the addresses should be on file under My Account in the Billing and Shipping Addresses section
+
+  @AddressManagement @Registration
+  Scenario: User has address on file during registration
+    When the user clicks the "REGISTER TO BID" button
+    And the user accepts the Terms of Sale and clicks "CONTINUE"
+    Then a modal should display fields: name, last name, Company, country, street address, address 2, city, state and zipcode filled according to the billing address on file
+    When the user clicks "CONTINUE"
+    And the user accepts the billing address as the shipping address by clicking "YES"
+    Then the addresses should be on file under My Account in the Account Information section
+`;
+        window.data = {
+            "col_names": ["fid", "Entity", "Flow Group", "Flow Name", "Importance", "Smoke Test Status"],
+            "row_data": [
+                ["AF_ARF", "User", "Account Flows", "Account Registration Flow", "🔴", "❌"],
+                ["AF_LLF", "User", "Account Flows", "Login/Logout Flow", "🔴", "❌"],
+                ["AF_PRF", "User", "Account Flows", "Password Recovery Flow", "🔴", "❌"],
+                ["AF_PCF", "User", "Account Flows", "Password Change Flow (Logged In)", "🔵", "❌"],
+                ["AF_CAEAF", "User", "Account Flows", "Change Account Email Address (Logged In)", "🔵", "❌"],
+                ["AF_VEF", "User", "Account Flows", "Verify Email Address", "🔴", "❌"],
+                ["AF_CSF", "User", "Account Flows", "Configure SMS (Logged In)", "🔵", "❌"],
+                ["WL_WLF", "User", "Watched Lots", "Watch Lot Flow (Logged In/Out)", "🟢", "❌"],
+                ["BA_SRF", "User", "Bid Activity", "Sale Registration Flow (Logged Out)", "🔴", "❌"],
+                ["BA_BPF", "User", "Bid Activity", "Bid Placement Flow (Logged Out)", "🔴", "❌"],
+                ["BA_UEF", "User", "Bid Activity", "User is outbid (Email notification)", "🔵", "❌"],
+                ["CM_UMPF", "User", "Communication", "Update Mailing Preferences Flow (Logged In)", "🟢", "❌"],
+                ["CM_MLSF", "User", "Communication", "Mailing List Sign-Up Flow", "🔵", "❌"],
+                ["CM_UMLF", "User", "Communication", "Unsubscribe from Mailing List Flow", "🟢", "❌"],
+                ["SA_SF", "User", "Search / Artists", "Site Search Flow", "🔴", "❌"],
+                ["SA_BAP", "User", "Search / Artists", "Browse Artist Pages", "🔵", "❌"],
+                ["DOS_TODO", "User", "Day of Sale", "[TODO: Define Smoke-Testable DOS Flows]", "🔴", "❌"],
+                ["MC_VMCM", "User", "Modular Content", "View All Modular Content Module Types without Error", "🔵", "❌"],
+                ["HC_VHT", "User", "Homepage Content", "View All Homepage Types without Error", "🔵", "❌"],
+                ["AMS_TODO", "User", "AMS Flows", "TODO: define desirable automated smoke-testable flows", "🔴", "❌"],
+                ["CAS_TODO", "User", "CAS Flows", "TODO: define desirable automated smoke-testable flows", "🔴", "❌"]
+            ]
+        }
+
+        window.get_data_as_object_map = function(){
+            // Convert the row_data into an array of objects
+            const formattedData = data.row_data.map(row => {
+            return row.reduce((obj, val, index) => {
+                obj[data.col_names[index]] = val;
+                return obj;
+            }, {});
+            });
+        }
+        console.table(get_data_as_object_map())
+
+        Vue.createApp({
+            data() {
+                return {
+                    features: [/* Array of feature file objects */],
+                    searchQuery: '',
+                    selectedFeature: null
+                };
+            },
+            computed: {
+                filteredFeatures() {
+                    // Logic to filter features based on searchQuery
+                }
+            },
+            methods: {
+                selectFeature(feature) {
+                    this.selectedFeature = feature;
+                },
+                updateFeature(newContent) {
+                    // Logic to update the content of the selected feature
+                }
+            },
+            // Define components here
+        }).mount('#app');
+    </script>
+</body>
+</html>

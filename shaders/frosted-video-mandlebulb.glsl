@@ -15,6 +15,7 @@ uniform float iTime;
 uniform sampler2D iChannel0;
 uniform vec3 iResolution;
 uniform vec4 iMouse;
+uniform vec4 iMouseRaw;
 // define PI
 const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
@@ -43,7 +44,7 @@ zn+1' = 8 * zn^7 * zn' + 1
 
 */
 
-vec3 mb(vec3 p) {
+vec3 mb(vec3 p, float time) {
     p.xyz = p.xzy;
     vec3 z = p;
     vec3 dz = vec3(0.0);
@@ -58,13 +59,9 @@ vec3 mb(vec3 p) {
             continue;
         theta = atan(z.y / z.x);
         #ifdef phase_shift_on
-        // Determine the mouse position and adjust the phase shift accordingly
-        float mouseX = iMouse.x;
-        // Create a smooth gradient using sin function
-        // Scale the sin wave such that 1 period matches screen width in our current coordinate context
-        float gradient = -1.; //sin(mouseX / 2.0);
-        // Adjust the phase shift based on the gradient
-        phi = asin(z.z / r) + gradient * iTime * (.9 * sin(iMouse.x/2.0));
+        // Simplified phase shift calculation
+        // The phase shift is now directly proportional to the y position of the mouse
+        phi = asin(z.z / r) + (iMouse.y - 0.5) * time;
         #else
         phi = asin(z.z / r);
         #endif
@@ -82,16 +79,29 @@ vec3 mb(vec3 p) {
     return vec3(0.5 * log(r) * r / dr, t0, 0.0);
 }
 
-vec3 f(vec3 p) {
-    ry(p, iTime * 0.2);
-    return mb(p);
+/*
+* This block of code defines the function `f`, which takes a 3D vector `p` and a time variable as inputs.
+* The function first rotates the vector `p` around the y-axis by `time * 0.2` radians.
+* Then, it calls the function `mb` with `p` and `time` as arguments and returns the result.
+* The function `mb` is responsible for generating the Mandelbulb fractal.
+*/
+vec3 f(vec3 p, float time) {
+    ry(p, time * 0.2);
+    return mb(p, time);
 }
 
-float softshadow(vec3 ro, vec3 rd, float k) {
+/*
+    this function is used to calculate the soft shadow
+    ro: ray origin
+    rd: ray direction
+    k:  attenuation factor
+    time: time
+*/
+float softshadow(vec3 ro, vec3 rd, float k, float time) {
     float akuma = 1.0, h = 0.0;
     float t = 0.01;
     for(int i = 0; i < 50; ++i) {
-        h = f(ro + rd * t).x;
+        h = f(ro + rd * t, time).x;
         if(h < 0.001)
             return 0.02;
         akuma = min(akuma, k * h / t);
@@ -100,12 +110,35 @@ float softshadow(vec3 ro, vec3 rd, float k) {
     return akuma;
 }
 
-vec3 nor(in vec3 pos) {
+/*
+* This function calculates the normal of a 3D position in the Mandelbulb fractal.
+* It uses the central difference method to approximate the gradient at the given position.
+* The gradient is then normalized to get the normal.
+* pos: the 3D position in the fractal
+* time: the time variable
+*/
+vec3 nor(in vec3 pos, float time) {
+    // Define a small value for calculating the derivative
     vec3 eps = vec3(0.001, 0.0, 0.0);
-    return normalize(vec3(f(pos + eps.xyy).x - f(pos - eps.xyy).x, f(pos + eps.yxy).x - f(pos - eps.yxy).x, f(pos + eps.yyx).x - f(pos - eps.yyx).x));
+    
+    // Calculate the gradient using the central difference method
+    vec3 gradient = vec3(
+        f(pos + eps.xyy, time).x - f(pos - eps.xyy, time).x,
+        f(pos + eps.yxy, time).x - f(pos - eps.yxy, time).x,
+        f(pos + eps.yyx, time).x - f(pos - eps.yyx, time).x
+    );
+    
+    // Normalize the gradient to get the normal
+    return normalize(gradient);
 }
 
-vec3 intersect(in vec3 ro, in vec3 rd) {
+/*
+* This function calculates the intersection of a ray with the Mandelbulb fractal.
+* ro: ray origin
+* rd: ray direction
+* time: time variable
+*/
+vec3 intersect(in vec3 ro, in vec3 rd, float time) {
     float t = 1.0;
     float res_t = 0.0;
     float res_d = 1000.0;
@@ -117,38 +150,49 @@ vec3 intersect(in vec3 ro, in vec3 rd) {
     float step = 0.0;
     float error = 1000.0;
 
+    // Iterate to find the intersection
     for(int i = 0; i < 48; i++) {
+        // If the error is less than half the pixel size or the ray has traveled too far, stop iterating
         if(error < pixel_size * 0.5 || t > 20.0) {
+            break;
         } else {  // avoid broken shader on windows
-
-            c = f(ro + rd * t);
+            // Calculate the distance to the fractal at the current ray position
+            c = f(ro + rd * t, time);
             d = c.x;
 
+            // If the distance is increasing, adjust the step size
             if(d > os) {
                 os = 0.4 * d * d / pd;
                 step = d + os;
                 pd = d;
             } else {
+                // If the distance is decreasing, reset the step size and overshoot
                 step = -os;
                 os = 0.0;
                 pd = 100.0;
                 d = 1.0;
             }
 
+            // Calculate the error
             error = d / t;
 
+            // If the error is less than the maximum error, update the result
             if(error < max_error) {
                 max_error = error;
                 res_t = t;
                 res_c = c;
             }
 
+            // Move the ray forward
             t += step;
         }
-
     }
+
+    // If the ray has traveled too far or the error is too large, set the result to -1
     if(t > 20.0/* || max_error > pixel_size*/ )
         res_t = -1.0;
+
+    // Return the result
     return vec3(res_t, res_c.y, res_c.z);
 }
 float remapMousePosition(float mousePos, float in_min, float in_max, float out_min, float out_max) {
@@ -204,7 +248,7 @@ vec4 calculateCameraOrientationQuaternion(vec3 ro, vec3 ta, vec3 up) {
     }
     return vec4(x, y, z, w);
 }
-vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP, vec4 camOrientation) {
+vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP, vec4 camOrientation, float time) {
      // Convert camera orientation quaternion to rotation matrix
     mat3 camRotation = quaternionToMat3(camOrientation);
 
@@ -277,7 +321,16 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     return vec3(uv, camDist);
 }
 
+float SHADOW_ATTENUATION = 0.5;
+
 void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) { 
+
+    // if we're within a 30px radius of iMouseRaw, return full red
+    if (length(fragCoord - vec2(iMouseRaw.x/iResolution.x,-iMouseRaw.y/iResolution.y)) < 30.0) {
+        fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
     // Define the up vector
     vec3 up = vec3(0.0, 1.0, 0.0);
      // Sample from iChannel0
@@ -291,40 +344,61 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     uv.x *= iResolution.x / iResolution.y;
 
     pixel_size = 1.0 / (iResolution.x * 3.0);
-	// camera, stime = sin(time), ctime = cos(time)
-    stime = 0.7 + 0.3 * sin(iTime * 0.4);
-    ctime = 0.7 + 0.3 * cos(iTime * 0.4); 
 
-    // ta = target, ro = camera position
+    // Camera control is achieved by manipulating the time variable and the camera's position and orientation.
+    // The time variable is interpolated between iTime and -iTime based on the x position of the mouse.
+    // This allows for a dynamic change in the scene based on user input.
+    // Remap iMouse.x from [0, 1] to [-10, 10] with 0.5 mapping to 0
+    float mouseXScaled = iMouse.x;// / iResolution.x;
+    float remappedMouseX = mouseXScaled; // mix(-100.0, 100.0, mouseXScaled);
+    // Add the remapped mouse position to iTime to control the time offset
+    float time = iTime * remappedMouseX;
+    // Define constants for time modulation
+    float baseValue = 0.7;
+    float amplitude = 0.3;
+    float frequency = 0.4;
+    
+    // Apply sinusoidal modulation to stime and ctime
+    stime = baseValue + amplitude * sin(time * frequency);
+    ctime = baseValue + amplitude * cos(time * frequency);
+
+    // The target (ta) is set to the origin, and the camera position (ro) is calculated based on the sin and cos of time.
+    // This creates a circular motion around the target.
     vec3 ta = vec3(0.0, 0.0, 0.0);
     vec3 ro = vec3(0.0, 3. * stime * ctime, 3. * (1. - stime * ctime));
 
-    // cf = forward, cs = right, cu = up, rd = ray direction
+    // The forward (cf), right (cs), and up (cu) vectors are calculated based on the camera position and target.
+    // These vectors are used to transform the view coordinates to world coordinates.
     vec3 cf = normalize(ta - ro);
     vec3 cs = normalize(cross(cf, vec3(0.0, 1.0, 0.0)));
     vec3 cu = normalize(cross(cs, cf));
     vec3 rd = normalize(uv.x * cs + uv.y * cu + 3.0 * cf);  // transform from view to world
 
+    // The direction of the sun and its color are defined.
     vec3 sundir = normalize(vec3(0.1, 0.8, 0.6));
     vec3 sun = vec3(1.64, 1.27, 0.99);
     vec3 skycolor = vec3(0.29, 0.11, 0.41);
 
+    // The background color is calculated based on the y coordinate of the view.
     vec3 bg = exp(uv.y - 2.0) * vec3(0.4, 1.6, 1.0);
 
+    // The halo effect is calculated based on the dot product of the normalized vectors from the camera to the origin and the ray direction.
     float halo = clamp(dot(normalize(vec3(-ro.x, -ro.y, -ro.z)), rd), 0.0, 1.0);
     vec3 col = bg + vec3(1.0, 0.8, 0.4) * pow(halo, 17.0);
 
+    // Initialize the ray marching distance (t) and the current position (p) along the ray.
     float t = 0.0;
     vec3 p = ro;
 
     // Calculate the camera's orientation quaternion (inverse of camera rotation)
+    // This is used later for transforming 3D points to UV coordinates with depth.
     vec4 camOrientation = calculateCameraOrientationQuaternion(ro, ta, up);
 
-    vec3 res = intersect(ro, rd);
+    vec3 res = intersect(ro, rd, time);
     if(res.x > 0.0) {
         p = ro + res.x * rd;
-        vec3 n = nor(p);
-        float shadow = softshadow(p, sundir, 10.0);
+        vec3 n = nor(p, time);
+        float shadow = softshadow(p, sundir, SHADOW_ATTENUATION, time);
 
         float dif = max(0.0, dot(n, sundir));
         float sky = 0.6 + 0.4 * max(0.0, dot(n, vec3(0.0, 1.0, 0.0)));
@@ -346,7 +420,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         vec3 camToP = p - ro;
         vec4 pole = vec4(0.0, 1.0, 0.0, 0.0); 
         // Transform the 3D point to UV coordinates with depth, using the camera's orientation
-        vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, camOrientation);
+        vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, camOrientation, time);
 
         // Sample from iChannel0 using the new UV coordinates
         vec4 texColor = texture(iChannel0, newUV.xy);
