@@ -20,6 +20,9 @@ uniform vec4 iMouseRaw;
 const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
 
+uniform vec4 iMouseWheel; // special, non-shader-toy uniform
+// xy = lerped, uv = raw
+
 float stime, ctime;
 void ry(inout vec3 p, float a) {
     float c, s;
@@ -62,7 +65,9 @@ vec3 mb(vec3 p, float time) {
         // Simplified phase shift calculation
         // The phase shift is now directly proportional to the y position of the mouse
         float chill_out = 0.001;
-        phi = asin(z.z / r) * ((iMouse.y) * time * chill_out);
+        phi = asin(z.z / r) + ((iMouse.y + 0.5) * time * chill_out);
+        // multiply instead for some REAL fun
+        //phi = asin(z.z / r) * ((iMouse.y) * time * chill_out);
         #else
         phi = asin(z.z / r);
         #endif
@@ -327,14 +332,17 @@ float SHADOW_ATTENUATION = 0.5;
 void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) { 
 
     fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    // Mod wrap around if taller than iResolution.y
+    float mws = mod(iMouseWheel.y, iResolution.y*2.) / iResolution.y;
+    mws += .1;
     
-    if (length(fragCoord - iMouse.xy) < 30.0) {
+    if (length(fragCoord - iMouse.xy) < 30.0 * mws) {
         fragColor += vec4(0.0, 1.0, 0.0, 0.5);
         //return;
     }
 
     // if we're within a 30px radius of iMouseRaw, return full red
-    if (length(fragCoord - iMouseRaw.xy) < 20.0) {
+    if (length(fragCoord - iMouseRaw.xy) < 20.0 * mws) {
         fragColor += vec4(1.0, 0.0, 0.0, 0.5);
         //return;
     }

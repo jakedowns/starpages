@@ -394,6 +394,13 @@
             
         }
 
+        document.addEventListener('wheel', (e) => {
+            vec2MouseWheelRaw.set(
+                vec2MouseWheelRaw.x + e.deltaX, 
+                vec2MouseWheelRaw.y + e.deltaY
+            );
+        });
+
         window.setupThree = async function(){
             window.fragmentShader = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
 
@@ -605,6 +612,7 @@
             // Custom Shader
             window.mouseRaw = new THREE.Vector4();
             window.mouseLerping = new THREE.Vector4();
+            window.iMouseWheel = new THREE.Vector4();
             window.shaderMaterial = new THREE.ShaderMaterial({
                 uniforms: {
                     u_time: { value: 1.0 },
@@ -615,7 +623,8 @@
                     iChannel0: { value: baseTexture },
                     iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                     iMouse: { value: window.mouseLerping },
-                    iMouseRaw: { value: window.mouseRaw }
+                    iMouseRaw: { value: window.mouseRaw },
+                    iMouseWheel: { value: window.iMouseWheel }
                 },
                 vertexShader: `
                     void main() {
@@ -652,7 +661,8 @@
                 window.mouseX = e.clientX;
                 window.mouseY = e.clientY;
             });
-
+            window.vec2MouseWheelRaw = new THREE.Vector2();
+            window.vec2MouseWheelLerped = new THREE.Vector2();
             function updateMouseUniform() {
                 // Normalize coordinates (0 to 1)
                 let normalizedX = window.mouseX / window.innerWidth;
@@ -687,11 +697,28 @@
                     0
                 );
                 window.mouseLerping.lerp(window.mouseRaw, .1);
+                shaderMaterial.uniforms.iMouseRaw.value.set(
+                    window.mouseRaw.x, 
+                    window.mouseRaw.y, 
+                    window.mouseRaw.z, 
+                    0
+                );
                 shaderMaterial.uniforms.iMouse.value.set(
                     window.mouseLerping.x, 
                     window.mouseLerping.y,
                     window.leftMouseDown ? 1 : -1, 
                     0
+                );
+
+                vec2MouseWheelLerped.lerp(vec2MouseWheelRaw, .1);
+
+                // Set the shader uniform for the mouse wheel
+                // it's a vec4, first two are lerped, second two are raw
+                shaderMaterial.uniforms.iMouseWheel.value.set(
+                    vec2MouseWheelLerped.x, 
+                    vec2MouseWheelLerped.y, 
+                    vec2MouseWheelRaw.x,
+                    vec2MouseWheelRaw.y
                 );
             }
 
