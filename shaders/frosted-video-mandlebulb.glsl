@@ -62,9 +62,9 @@ vec3 mb(vec3 p) {
         float mouseX = iMouse.x;
         // Create a smooth gradient using sin function
         // Scale the sin wave such that 1 period matches screen width in our current coordinate context
-        float gradient = sin(mouseX / 2.0);
+        float gradient = -1.; //sin(mouseX / 2.0);
         // Adjust the phase shift based on the gradient
-        phi = asin(z.z / r) + gradient * iTime * 0.1;
+        phi = asin(z.z / r) + gradient * iTime * (.9 * sin(iMouse.x/2.0));
         #else
         phi = asin(z.z / r);
         #endif
@@ -277,7 +277,7 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     return vec3(uv, camDist);
 }
 
-void mainImage(out vec4 fragColor, in vec2 fragCoord) { 
+void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) { 
     // Define the up vector
     vec3 up = vec3(0.0, 1.0, 0.0);
      // Sample from iChannel0
@@ -427,6 +427,33 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     col = mix(col, vec3(dot(col, vec3(0.33))), -0.5);  // satuation
     col *= 0.5 + 0.5 * pow(16.0 * q.x * q.y * (1.0 - q.x) * (1.0 - q.y), 0.7);  // vigneting
     fragColor = vec4(col.xyz, smoothstep(0.55, .76, 1. - res.x / 5.));
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    // Define the number of samples per pixel
+    const int numSamples = 4;
+
+    // Initialize color accumulator
+    vec4 accumColor = vec4(0.0);
+
+    // Loop over each sample
+    for (int i = 0; i < numSamples; ++i) {
+        // Generate a random offset within the pixel
+        vec2 offset = vec2(float(i) / float(numSamples)) - 0.5;
+
+        // Add the offset to the fragment coordinates
+        vec2 sampleCoord = fragCoord + offset;
+
+        // Calculate the color for this sample
+        vec4 sampleColor;
+        mainImageSuperSampled(sampleColor, sampleCoord);
+
+        // Accumulate the color
+        accumColor += sampleColor;
+    }
+
+    // Average the accumulated color
+    fragColor = accumColor / float(numSamples);
 }
 
 // Comment this out on shadertoy
