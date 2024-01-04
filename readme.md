@@ -62,3 +62,15 @@ https://jakedowns.github.io/starpages
 | 🌐 URL |  https://jakedowns.github.io/starpages/{PROJECT_INDEX_FILENAME} |
 | 👨‍💻 Source | https://github.com/jakedowns/starpages/blob/main/{PROJECT_INDEX_FILENAME} | 
 ```
+
+---
+
+# Using this Project
+
+```
+nvm i v16; 
+nvm alias default v16; 
+npm i -g http-server concurrently; 
+npm i; 
+npm run both;
+```
