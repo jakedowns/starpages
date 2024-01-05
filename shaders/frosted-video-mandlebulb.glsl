@@ -267,29 +267,30 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     vec2 uv = (camRotation * dir).xy;
     uv = uv * 0.5 + 0.5; // Map from -1..1 to 0..1 range
 
-    // Determine the repeat factor based on mouse position
     float repeatFactorX = 2.;
     float repeatFactorY = 2.;
 
-    float texScaleX_min = 0.0;
-    float texScaleX_stop_49 = 0.1;
-    float texScaleX_stop_50 = 0.11;
-    float texScaleX_stop_100 = 1e3;
+    // Define the range for the texture scale
+    float texScale_min = 0.0;
+    float texScale_max = .1;
 
-    float texScaleY_min = 0.0;
-    float texScaleY_stop_49 = 0.1;
-    float texScaleY_stop_50 = 0.11;
-    float texScaleY_stop_100 = 1e3;
-
-    repeatFactorX = 
-        iMouse.x > 0.5
-        ? remapMousePosition(iMouse.x, 0.5, 1.0, texScaleX_min, texScaleX_stop_49)
-        : remapMousePosition(iMouse.x, 0.0, 0.5, texScaleX_stop_50, texScaleX_stop_100);
-
-    repeatFactorY = 
-        iMouse.y > 0.5
-        ? remapMousePosition(iMouse.y, 0.5, 1.0, texScaleY_min, texScaleY_stop_49) 
-        : remapMousePosition(iMouse.y, 0.0, 0.5, texScaleY_stop_50, texScaleY_stop_100);
+    // Map iMouse coordinates to the texture scale range
+    repeatFactorX = remapMousePosition(
+        (iMouse.x / iResolution.x)*2.,
+         -1.,
+          1., 
+          texScale_min, 
+          texScale_max
+    );
+    repeatFactorY = remapMousePosition(
+        (iMouse.y / iResolution.y)*2. + 1.,
+         -1.,
+          1., 
+          texScale_min, 
+          texScale_max
+    );
+    // repeatFactorX *= 100.
+    // repeatFactorY *= 100.
 
     
 
@@ -327,23 +328,29 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     return vec3(uv, camDist);
 }
 
-float SHADOW_ATTENUATION = 0.5;
+float SHADOW_ATTENUATION = .5;
 
 void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) { 
 
     fragColor = vec4(0.0, 0.0, 0.0, 1.0);
     // Mod wrap around if taller than iResolution.y
-    float mws = mod(iMouseWheel.y, iResolution.y*2.) / iResolution.y;
-    mws += .1;
+    // Instead of hard mod wrap, do a reflective wrap that begins scaling inversely back to the inflection point
+    float mws = iMouseWheel.y / iResolution.y;
+    mws = mws - 2.0 * floor((mws + 1.0) / 2.0);
+    mws = abs(mws);
+    //mws += .1;
+
+    float debug_element_alpha = .2;
+    float debug_element_prescale = .01;
     
     if (length(fragCoord - iMouse.xy) < 30.0 * mws) {
-        fragColor += vec4(0.0, 1.0, 0.0, 0.5);
+        fragColor += vec4(0.0, 1.0, 0.0, debug_element_alpha);
         //return;
     }
 
     // if we're within a 30px radius of iMouseRaw, return full red
     if (length(fragCoord - iMouseRaw.xy) < 20.0 * mws) {
-        fragColor += vec4(1.0, 0.0, 0.0, 0.5);
+        fragColor += vec4(1.0, 0.0, 0.0, debug_element_alpha);
         //return;
     }
 
@@ -373,7 +380,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     float time = iTime * remappedMouseX;
     // Define constants for time modulation
     float baseValue = 0.7 * .9;
-    float amplitude = 0.3 * .1;
+    float amplitude = 2. * mws;
     float frequency = 0.4 * .1;
     
     // Apply sinusoidal modulation to stime and ctime
@@ -391,6 +398,14 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     vec3 cs = normalize(cross(cf, vec3(0.0, 1.0, 0.0)));
     vec3 cu = normalize(cross(cs, cf));
     vec3 rd = normalize(uv.x * cs + uv.y * cu + 3.0 * cf);  // transform from view to world
+
+    // The zoom effect isn't working as expected. 
+    // Instead of scaling the current coordinate system, we will adjust the camera's position and direction.
+    // This will create a zoom effect by moving the camera closer to or further from the scene.
+    // Adjust the multiplication factor to control the zoom level and prevent the camera from getting too close.
+    ro += rd * mws * 2.;
+    rd = normalize(rd);
+    
 
     // The direction of the sun and its color are defined.
     vec3 sundir = normalize(vec3(0.1, 0.8, 0.6));
@@ -447,26 +462,36 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         // apply fog based on newUV.z
         // make sure newUV.z is in the range 0.0 to 1.0
         //newUV.z = clamp(newUV.z, 0.0, 1.0);
-        float fogAmount = smoothstep(0.5, 1.0, 1e30-newUV.z);
-        // col = mix(col, bg, fogAmount * 0.1);
+        // float fogAmount = smoothstep(0.5, 1.0, 1e30-newUV.z);
+        //col = mix(col, bg, fogAmount * 0.1);
 
+        
+        
+        
+        
+        
         // Apply fresnel effect to the mandlebulb
         // The effect is more pronounced when iMouse.y is high
         // 1.0 is the maximum value for the dot product of the normal and the ray direction
         // 3.0 is the power to which the result is raised, controlling the intensity of the fresnel effect
-        float factor2 = iMouse.y * 30.0;
+        float factor2 = (iMouse.w/iResolution.y);
         float fresnel = pow(1.0 - dot(n, rd), 3. * factor2);
-        //vec3 fresnelEffect = vec3(1.0, 1.0, 1.0) * fresnel;
-        //col += 1.0 - fresnelEffect ;  // Additively mix the fresnel effect
+        vec3 fresnelEffect = vec3(1.0, 1.0, 1.0) * fresnel;
+        col += 1.0 - fresnelEffect;  // Additively mix the fresnel effect
 
+        
+        
+        
+        
+        
         // Apply a flipped normal texel lookup for environment mapping
         // Use the normal from before for the texture lookup
         // Use "newUV" our reprojected vec3 and our normal to flip it to the other "side" of the "env" for texture lookup
         vec4 texColor2 = texture(iChannel0, vec2(1.0 - n.x, newUV.y));
 
         // crank the brightness based on iMouse.y
-        float brightness = (iMouse.y);// * 2.0;
-        texColor2.rgb *= brightness;
+        // float brightness = (iMouse.y);// * 2.0;
+        // texColor2.rgb *= brightness;
 
         // Blend the colors based on the fresnel effect
         // Only show the bright flipped reflections in the fresnel-shaded areas
@@ -484,15 +509,15 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         // blur / diffusion
 
         //random sample to create a grainy / bokeh effect based on distance to camera
-        // float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
-        // float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
-        // grainAmount = mix(grainAmount, 1.0, 0.5);
+        float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
+        grainAmount = mix(grainAmount, 1.0, 0.5);
 
-        // // // use the grain to tweak the lookup coordinates
-        // float maxOffset = 0.01;
-        // vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
-        // vec4 texColor3 = texture(iChannel0, newUV.xy + grainOffset);
-        // col += mix(col, texColor3.rgb, grainAmount);
+        // use the grain to tweak the lookup coordinates
+        float maxOffset = 0.01;
+        vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
+        vec4 texColor3 = texture(iChannel0, newUV.xy + grainOffset);
+        col += mix(col, texColor3.rgb, grainAmount);
     } 
 
     // Mix the luminance into the existing color
@@ -520,7 +545,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     col *= 0.5 + 0.5 * pow(16.0 * q.x * q.y * (1.0 - q.x) * (1.0 - q.y), 0.7);  // vigneting
     vec4 nextCol = vec4(col.xyz, smoothstep(0.55, .76, 1. - res.x / 5.));
     fragColor += nextCol;
-    //fragColor = mix(nextCol, fragColor, 0.5);
+    // fragColor = mix(nextCol, fragColor, luminance);
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {

@@ -689,6 +689,9 @@
                 //  abs(mouse.zw) = mouse position during last button click
                 // sign(mouse.z)  = button is down
                 // sign(mouse.w)  = button is clicked
+
+                let dist = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+                let magnitude = Math.min(dist, 1.0);
                 
                 window.mouseRaw.set(
                     window.mouseX, 
@@ -696,7 +699,8 @@
                     window.leftMouseDown ? 1 : -1, 
                     0
                 );
-                window.mouseLerping.lerp(window.mouseRaw, .1);
+                
+                window.mouseLerping.lerp(window.mouseRaw, .01 * magnitude);
                 shaderMaterial.uniforms.iMouseRaw.value.set(
                     window.mouseRaw.x, 
                     window.mouseRaw.y, 
