@@ -1077,7 +1077,8 @@
             // fast start
             window.targetVideoPlaybackRate = 1.0; 
             hideIntroText(); 
-            window.setVideoAsChannel("./res/0006.mp4");
+            //window.setVideoAsChannel("./res/0006.mp4");
+            window.setImageAsChannel("./res/test/Sketchfab_UV_Checker.png");
         }
 
         
@@ -1196,15 +1197,18 @@
                 let img = new Image();
                 img.src = url;
                 img.onload = function(){
-                    // "setImageAsChannel"
-                    window.baseTexture.image.src = url;
-                    window.baseTexture.needsUpdate = true;
-
-                    // update our originalPixelDataTexture (Three.js Texture)
-                    window.originalPixelDataTexture.image.src = url;
-                    window.originalPixelDataTexture.needsUpdate = true;
+                    setImageAsChannel(url);
                 }
             }
+        }
+
+        window.setImageAsChannel = function(url){
+            window.baseTexture.image.src = url;
+            window.baseTexture.needsUpdate = true;
+
+            // update our originalPixelDataTexture (Three.js Texture)
+            window.originalPixelDataTexture.image.src = url;
+            window.originalPixelDataTexture.needsUpdate = true;
         }
 
         // domready

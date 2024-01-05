@@ -100,10 +100,13 @@ vec3 f(vec3 p, float time) {
     this function is used to calculate the soft shadow
     ro: ray origin
     rd: ray direction
-    k:  attenuation factor
+    k:  attenuation factor, typically in the range [0.0, 1.0] where 0 means no shadow and 1 means full shadow
     time: time
 */
 float softshadow(vec3 ro, vec3 rd, float k, float time) {
+    // Attenuation factor 'k' controls the rate at which the shadow fades with distance.
+    // A value of 0.0 means no shadow, while 1.0 means full shadow.
+    // Valid range for 'k' is [0.0, 1.0].
     float akuma = 1.0, h = 0.0;
     float t = 0.01;
     for(int i = 0; i < 50; ++i) {
@@ -201,8 +204,8 @@ vec3 intersect(in vec3 ro, in vec3 rd, float time) {
     // Return the result
     return vec3(res_t, res_c.y, res_c.z);
 }
-float remapMousePosition(float mousePos, float in_min, float in_max, float out_min, float out_max) {
-    return (mousePos - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+float map(float v, float a, float b, float c, float d) {
+    return (v - a) * (d - c) / (b - a) + c;
 }
 mat3 quaternionToMat3(vec4 q) {
     float qx = q.x, qy = q.y, qz = q.z, qw = q.w;
@@ -267,30 +270,15 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     vec2 uv = (camRotation * dir).xy;
     uv = uv * 0.5 + 0.5; // Map from -1..1 to 0..1 range
 
-    float repeatFactorX = 2.;
-    float repeatFactorY = 2.;
+    float repeatFactorX,repeatFactorY;
 
     // Define the range for the texture scale
     float texScale_min = 0.0;
-    float texScale_max = .1;
+    float texScale_max = .2;
 
     // Map iMouse coordinates to the texture scale range
-    repeatFactorX = remapMousePosition(
-        (iMouse.x / iResolution.x)*2.,
-         -1.,
-          1., 
-          texScale_min, 
-          texScale_max
-    );
-    repeatFactorY = remapMousePosition(
-        (iMouse.y / iResolution.y)*2. + 1.,
-         -1.,
-          1., 
-          texScale_min, 
-          texScale_max
-    );
-    // repeatFactorX *= 100.
-    // repeatFactorY *= 100.
+    repeatFactorX = map(iMouseRaw.x - .5, 0.0, 1.0, texScale_min, texScale_max);
+    repeatFactorY = map(iMouseRaw.y - .5, 0.0, 1.0, texScale_min, texScale_max);
 
     
 
@@ -327,8 +315,6 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
 
     return vec3(uv, camDist);
 }
-
-float SHADOW_ATTENUATION = .5;
 
 void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) { 
 
@@ -427,37 +413,64 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     // This is used later for transforming 3D points to UV coordinates with depth.
     vec4 camOrientation = calculateCameraOrientationQuaternion(ro, ta, up);
 
+    // result
     vec3 res = intersect(ro, rd, time);
     if(res.x > 0.0) {
+        float SHADOW_ATTENUATION = 1.;
         p = ro + res.x * rd;
         vec3 n = nor(p, time);
         float shadow = softshadow(p, sundir, SHADOW_ATTENUATION, time);
 
+        // Define base colors for the lighting components
+        vec3 sunColor = vec3(1.64, 1.27, 0.99);
+        vec3 skyColor = vec3(0.29, 0.11, 0.41);
+        vec3 backgroundColor = vec3(0.4, 1.6, 1.0);
+
+        // Diffuse lighting component based on the dot product of the normal and the sun direction
         float dif = max(0.0, dot(n, sundir));
+        vec3 diffuseColor = sunColor * dif;
+
+        // Sky light component based on the dot product of the normal and the up vector
         float sky = 0.6 + 0.4 * max(0.0, dot(n, vec3(0.0, 1.0, 0.0)));
+        vec3 skyLightColor = skyColor * sky;
+
+        // Backlight component based on the dot product of the inverse sun direction and the normal
         float bac = max(0.3 + 0.7 * dot(vec3(-sundir.x, -1.0, -sundir.z), n), 0.0);
+        vec3 backlightColor = sunColor * bac;
+
+        // Specular lighting component based on the dot product of the sun direction and the reflection direction
         float spe = max(0.0, pow(clamp(dot(sundir, reflect(rd, n)), 0.0, 1.0), 10.0));
+        vec3 specularColor = sunColor * spe;
 
-        vec3 lin = 4.5 * sun * dif * shadow;
-        lin += 0.8 * bac * sun;
-        lin += 0.6 * sky * skycolor * shadow;
-        lin += 3.0 * spe * shadow;
+        float shadow_increaser = 10.;
+        // // double the shadow's effect on the brightness
+        // dif *= shadow_increaser;
+        // shadow *= shadow_increaser;
 
+        vec3 lin = 4.5 * diffuseColor * shadow;
+        lin += 0.8 * backlightColor;
+        lin += 0.6 * skyLightColor * shadow;
+        lin += 3.0 * specularColor * shadow;
+
+        // Adjust the y component of the result and create a color gradient based on the adjusted value
         res.y = pow(clamp(res.y, 0.0, 1.0), 0.55);
+        // Create a color gradient by applying a sine function to the adjusted y component
         vec3 tc0 = 0.5 + 0.5 * sin(3.0 + 4.2 * res.y + vec3(0.0, 0.5, 1.0));
+        // Apply the lighting and the color gradient to the final color
         col = lin * vec3(0.9, 0.8, 0.6) * 0.2 * tc0;
-        col = mix(col, bg, 1.0 - exp(-0.001 * res.x * res.x));
+        // Mix the computed color with the background color based on the distance
+        col = mix(col, backgroundColor, 1.0 - exp(-0.001 * res.x * res.x));
 
         float camDist = length(ro - p);
         // vector from camera to point
         vec3 camToP = p - ro;
         vec4 pole = vec4(0.0, 1.0, 0.0, 0.0); 
         // Transform the 3D point to UV coordinates with depth, using the camera's orientation
-        vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, camOrientation, time);
+        // vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, camOrientation, time);
 
         // Sample from iChannel0 using the new UV coordinates
-        vec4 texColor = texture(iChannel0, newUV.xy);
-        col = texColor.rgb;
+        // vec4 texColor = texture(iChannel0, newUV.xy);
+        //col = texColor.rgb;
 
         // apply fog based on newUV.z
         // make sure newUV.z is in the range 0.0 to 1.0
@@ -474,10 +487,10 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         // The effect is more pronounced when iMouse.y is high
         // 1.0 is the maximum value for the dot product of the normal and the ray direction
         // 3.0 is the power to which the result is raised, controlling the intensity of the fresnel effect
-        float factor2 = (iMouse.w/iResolution.y);
-        float fresnel = pow(1.0 - dot(n, rd), 3. * factor2);
-        vec3 fresnelEffect = vec3(1.0, 1.0, 1.0) * fresnel;
-        col += 1.0 - fresnelEffect;  // Additively mix the fresnel effect
+        // float factor2 = (iMouseRaw.y/iResolution.y);
+        // float fresnel = pow(1.0 - dot(n, rd), 3. * factor2);
+        // vec3 fresnelEffect = vec3(1.0, 1.0, 1.0) * fresnel;
+        // col += 1.0 - fresnelEffect;  // Additively mix the fresnel effect
 
         
         
@@ -487,7 +500,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         // Apply a flipped normal texel lookup for environment mapping
         // Use the normal from before for the texture lookup
         // Use "newUV" our reprojected vec3 and our normal to flip it to the other "side" of the "env" for texture lookup
-        vec4 texColor2 = texture(iChannel0, vec2(1.0 - n.x, newUV.y));
+        // vec4 texColor2 = texture(iChannel0, vec2(1.0 - n.x, newUV.y));
 
         // crank the brightness based on iMouse.y
         // float brightness = (iMouse.y);// * 2.0;
@@ -496,8 +509,9 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         // Blend the colors based on the fresnel effect
         // Only show the bright flipped reflections in the fresnel-shaded areas
         // Do not apply to the non fresnel (sharp camera/surface angles) based on a smooth, continuous falloff
-        float fresnelBlend = 1.0 - fresnel; //smoothstep(0.0, 1.0, 1.0 - fresnel);
-        col += mix(vec4(0.), vec4(texColor2.rgb,1.0), fresnelBlend).rgb;
+        // float fresnelBlend = 1.0 - fresnel;
+        // float fresnelBlend2 = smoothstep(0.0, 1.0, fresnelBlend);
+        // col += mix(vec4(0.), vec4(texColor2.rgb,1.0), fresnelBlend2).rgb;
 
         // fake the appearance of a diffuse point light
         // float lightRadius = 0.1;
@@ -508,16 +522,16 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
 
         // blur / diffusion
 
-        //random sample to create a grainy / bokeh effect based on distance to camera
-        float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
-        float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
-        grainAmount = mix(grainAmount, 1.0, 0.5);
+        // //random sample to create a grainy / bokeh effect based on distance to camera
+        // float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        // float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
+        // grainAmount = mix(grainAmount, 1.0, 0.3);
 
-        // use the grain to tweak the lookup coordinates
-        float maxOffset = 0.01;
-        vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
-        vec4 texColor3 = texture(iChannel0, newUV.xy + grainOffset);
-        col += mix(col, texColor3.rgb, grainAmount);
+        // // use the grain to tweak the lookup coordinates
+        // float maxOffset = 0.01;
+        // vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
+        // vec4 texColor3 = texture(iChannel0, newUV.xy + grainOffset);
+        // col = mix(col, texColor3.rgb, grainAmount);
     } 
 
     // Mix the luminance into the existing color
@@ -529,14 +543,14 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     // vec4 texColor2 = texture(iChannel0, fragCoord/iResolution.xy + offsetLookup);
     // col = mix(col, texColor2.rgb, 0.5);
 
-    // show a Picture-in-Picture in the top left of the original iChannel0
-    // make sure to make it appear scaled down in the top left corner
-    vec2 PIP_TOP_LEFT_RANGE = vec2(0.0, 0.2);
-    vec2 PIP_SIZE = vec2(0.2, 0.2);
-    vec2 PIP_OFFSET = vec2(0.0, 0.0);
-    vec2 PIP_UV = (fragCoord.xy - iResolution.xy * PIP_TOP_LEFT_RANGE) / (iResolution.xy * PIP_SIZE);
-    float mask = step(0.0, PIP_UV.x) * step(0.0, PIP_UV.y) * step(PIP_UV.x, 1.0) * step(PIP_UV.y, 1.0);
-    col = mix(col, texture(iChannel0, PIP_UV + PIP_OFFSET).rgb, mask * 0.5);
+    // // show a Picture-in-Picture in the top left of the original iChannel0
+    // // make sure to make it appear scaled down in the top left corner
+    // vec2 PIP_TOP_LEFT_RANGE = vec2(0.0, 0.2);
+    // vec2 PIP_SIZE = vec2(0.2, 0.2);
+    // vec2 PIP_OFFSET = vec2(0.0, 0.0);
+    // vec2 PIP_UV = (fragCoord.xy - iResolution.xy * PIP_TOP_LEFT_RANGE) / (iResolution.xy * PIP_SIZE);
+    // float mask = step(0.0, PIP_UV.x) * step(0.0, PIP_UV.y) * step(PIP_UV.x, 1.0) * step(PIP_UV.y, 1.0);
+    // col = mix(col, texture(iChannel0, PIP_UV + PIP_OFFSET).rgb, mask * 0.5);
 
     // post
     col = pow(clamp(col, 0.0, 1.0), vec3(0.45));
@@ -550,7 +564,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // Define the number of samples per pixel
-    const int numSamples = 4;
+    const int numSamples = 1;//4;
 
     // Initialize color accumulator
     vec4 accumColor = vec4(0.0);
