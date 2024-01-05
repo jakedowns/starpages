@@ -1812,14 +1812,14 @@
                 clearTimeout(doubleTapTimeout);
                 doubleTapTimeout = null;
                 
-                showIntroText();
-                // update url
-                let uri = "https://jakedowns.com/media/0006.mp4";
-                window.videoTexture.image.src = uri;
-                window.videoTexture.needsUpdate = true;
+                // showIntroText();
+                // // update url
+                // let uri = "https://jakedowns.com/media/0006.mp4";
+                // window.videoTexture.image.src = uri;
+                // window.videoTexture.needsUpdate = true;
 
                 // set the video to be the base texture
-                currentTexture = window.videoTexture;
+                // currentTexture = window.videoTexture;
             } else {
                 doubleTapDetected = true;
                 doubleTapTimeout = setTimeout(() => {
@@ -1843,14 +1843,28 @@
         var num_modes = 5;
         document.addEventListener('click', (e)=>{
             MODE = (MODE + 1) % num_modes;
-            console.log("MODE",MODE);
-
+            // console.log("MODE",MODE);
+            
             checkDoubleTapDetected();
 
-            if(!window.do_sort){
-                window.do_sort = true;
-                console.log("do_sort",window.do_sort);
-            }
+            window.mouseRaw.set(
+                window.mouseX, 
+                window.innerHeight - window.mouseY, 
+                window.leftMouseDown ? 1 : -1, 
+                0
+            );
+            window.mouseLerping.set(
+                window.mouseX, 
+                window.innerHeight - window.mouseY, 
+                window.leftMouseDown ? 1 : -1, 
+                0
+            );
+            
+
+            // if(!window.do_sort){
+            //     window.do_sort = true;
+            //     console.log("do_sort",window.do_sort);
+            // }
         });
         window.mouseX = window.mouseY = 0;
         document.addEventListener('mousemove', (e)=>{
