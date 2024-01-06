@@ -44,6 +44,18 @@
             camera.setPosition(new BABYLON.Vector3(0, 0, -10));
             camera.attachControl(canvas, true);
 
+            // Add Grid
+            var gridMaterial = new BABYLON.GridMaterial("grid", scene);
+            gridMaterial.majorUnitFrequency = 5; // every 5 units there's a major grid line
+            gridMaterial.minorUnitVisibility = 0.45; // visibility of minor grid lines is 45%
+            gridMaterial.gridRatio = 2; // every 2 units a minor line is drawn
+            gridMaterial.backFaceCulling = false; // show grid lines in the back
+            gridMaterial.mainColor = BABYLON.Color3.White(); // main color of the grid
+            gridMaterial.lineColor = BABYLON.Color3.Black(); // color of the grid lines
+
+            var ground = BABYLON.Mesh.CreateGround("ground", 100, 100, 2, scene);
+            ground.material = gridMaterial;
+
             // Create a basic light
             var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
             // increase brightness
@@ -230,15 +242,16 @@
                         assignedPosition
                     */
                     console.warn('client connected', data)
+                    var client = data.client;
 
                     // add a new circle
                     var circle = BABYLON.MeshBuilder.CreateDisc("disc", {radius:0.5, tessellation: 64}, scene);
-                    circle.position.y = data.assignedPosition.y;
-                    circle.position.x = data.assignedPosition.x;
+                    circle.position.y = client.assignedPosition.y;
+                    circle.position.x = client.assignedPosition.x;
                     circle.material = new BABYLON.StandardMaterial("mat", scene);
-                    circle.material.diffuseColor = new BABYLON.Color3.FromHexString(data.assignedColor);
-                    data.circle = circle;
-                    otherClients.push(data)
+                    circle.material.diffuseColor = new BABYLON.Color3.FromHexString(client.assignedColor);
+                    client.circle = circle;
+                    otherClients.push(client)
                 }
                 else if(data.type === "heartbeat"){
                     // update the client count

@@ -69,8 +69,8 @@ io.on('connection', (socket) => {
 
     // assign a random position some random distance from the center contrained to a unit circle
     socket.data.assignedPosition = {
-        x: Math.random() * 2 - 1,
-        y: Math.random() * 2 - 1
+        x: Math.random() * 200 - 100,
+        y: Math.random() * 200 - 100
     }
 
     
@@ -131,10 +131,12 @@ io.on('connection', (socket) => {
     io.emit('message', JSON.stringify({
         type: "clientConnected",
         clientCount: io.engine.clientsCount,
-        clientId: socket.id,
-        assignedColor: socket.data.assignedColor,
-        assignedPosition: socket.data.assignedPosition,
-        shape: socket.data.shape
+        client: {
+            clientId: socket.id,
+            assignedColor: socket.data.assignedColor,
+            assignedPosition: socket.data.assignedPosition,
+            shape: socket.data.shape
+        }
     }));
 
     // Event listener for incoming messages on the Socket.IO server

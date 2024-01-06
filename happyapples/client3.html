@@ -182,9 +182,18 @@
                     p.fill(255,0,255,100);
                     p.ellipse(p.width/2, p.height/2, 50, 50);
 
-                    // Define a scaling constant for position data
-                    const scale = 100;
                     p.translate(p.width/2, p.height/2);
+                    p.scale(.2);
+                    p.fill(0,255,0,100);
+                    p.ellipse(0, 0, 50, 50);
+
+                    p.scale(2.)
+                    p.fill(0,0,255,100);
+                    p.ellipse(0, 0, 50, 50);
+
+                    p.scale(20.)
+                    p.fill(255,0,0,100);
+                    p.ellipse(0, 0, 50, 50);
 
                     // Combine all clients into one array for drawing
                     let allClients = [window.myClientData, ...otherClients];
@@ -211,9 +220,9 @@
                         }
                         // Draw the shape at the client's assigned position
                         drawShape(
-                            client.assignedPosition.x * scale, 
-                            client.assignedPosition.y * scale, 
-                            client.assignedPosition.r * scale * 2);
+                            client.assignedPosition.x, 
+                            client.assignedPosition.y, 
+                            client.assignedPosition.r * 2);
                     })
                 }
 
@@ -296,7 +305,7 @@
                     })
                 }
                 else if(data.type === "clientConnected"){                    
-                    otherClients.push(data)
+                    otherClients.push(data.client)
                 }
                 else if(data.type === "otherClients"){
                     console.warn('otherClients', data)
