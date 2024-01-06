@@ -96,47 +96,93 @@
         
         // Initialize p5.js
         new p5(p => {
-            let currentColorIndex = 0;
             
             let otherClients = []
 
             p.setup = function() {
                 p.createCanvas(p.windowWidth, p.windowHeight);
-                window.myClientData.circle = {x: p.width/2, y: p.height/2, r: 50};
             }
 
             p.draw = function() {
-                p.background(0);
-                p.fill(window.data.colors[currentColorIndex]);
+                p.background(10);
+
+                p.fill(255,0,255,100);
+                p.ellipse(p.width/2, p.height/2, 50, 50);
+
+                p.fill(window.myClientData.assignedColor ?? p.color(255,0,0));
+
+                
+                // Define a scaling constant for position data
+                const scale = 100;
+                //p.translate(p.width/2, p.height/2);
+
+                let pos = window.myClientData.assignedPosition;
 
                 // switch based on shape
+                // Assume 50 as default radius if pos.r is undefined
+                let radius = pos.r ?? 50;
+
                 if(window.myClientData.shape === "circle"){
-                    p.ellipse(circle.x, circle.y, circle.r*2, circle.r*2);
+                    p.ellipse(pos.x * scale, pos.y * scale, radius*2, radius*2);
                 }
                 else if(window.myClientData.shape === "square"){
-                    p.rect(circle.x, circle.y, circle.r*2, circle.r*2);
+                    p.rect(pos.x * scale, pos.y * scale, radius*2, radius*2);
                 }
                 else if(window.myClientData.shape === "triangle"){
-                    p.triangle(circle.x, circle.y, circle.x + circle.r, circle.y + circle.r, circle.x - circle.r, circle.y + circle.r);
+                    p.triangle(pos.x * scale, pos.y * scale, pos.x * scale + radius, pos.y * scale + radius, pos.x * scale - radius, pos.y * scale + radius);
+                }else{
+                    console.warn('no shape assigned', window.myClientData)
+                }
+
+                if(otherClients.length === 0){
+                    return;
                 }
 
                 // draw all other client shape / colors at their own positions
                 otherClients.forEach((client) => {
-                    p.fill(client.assignedColor);
-                    if(client.shape === "circle"){
-                        p.ellipse(client.circle.x, client.circle.y, client.circle.r*2, client.circle.r*2);
+                    if(!client?.assignedColor){
+                        console.warn('no assigned color', client)
+                        return;
                     }
-                    else if(client.shape === "square"){
-                        p.rect(client.circle.x, client.circle.y, client.circle.r*2, client.circle.r*2);
+                    if(!client?.assignedPosition){
+                        console.warn('no assigned position', client)
+                        return;
                     }
-                    else if(client.shape === "triangle"){
-                        p.triangle(client.circle.x, client.circle.y, client.circle.x + client.circle.r, client.circle.y + client.circle.r, client.circle.x - client.circle.r, client.circle.y + client.circle.r);
+                    if(!client?.shape){
+                        console.warn('no assigned shape', client)
+                        return;
                     }
+                    p.fill(client.assignedColor ?? "red");
+                    // Define the shape drawing function based on the client's shape
+                    let drawShape;
+                    switch(client.shape) {
+                        case "circle":
+                            drawShape = (x, y, r) => p.ellipse(x, y, r, r);
+                            break;
+                        case "square":
+                            drawShape = (x, y, r) => p.rect(x, y, r, r);
+                            break;
+                        case "triangle":
+                            drawShape = (x, y, r) => p.triangle(x, y, x + r, y + r, x - r, y + r);
+                            break;
+                        default:
+                            console.warn('Invalid shape', client.shape);
+                            return;
+                    }
+                    if(!drawShape){
+                        console.warn('no drawShape', client)
+                        return;
+                    }
+                    // Draw the shape at the client's assigned position
+                    drawShape(
+                        client.assignedPosition.x * scale, 
+                        client.assignedPosition.y * scale, 
+                        client.assignedPosition.r * scale * 2);
                 })
             }
 
             p.mousePressed = function() {
-                let circle = window.myClientData.circle;
+                let circle = window.myClientData.assignedPosition;
                 let d = p.dist(p.mouseX, p.mouseY, circle.x, circle.y);
                 if (d < circle.r) {
                     currentColorIndex = (currentColorIndex + 1) % window.data.colors.length;
@@ -177,6 +223,9 @@
                 }
             })
 
+            var resizeEvent = new Event('resize');
+            window.dispatchEvent(resizeEvent);
+
             socket.on('connect', () => {
                 console.log('Connected to the server');
             });
@@ -200,13 +249,12 @@
                             myId: data.id,
                             assignedColor: data.assignedColor,
                             assignedPosition: data.assignedPosition,
-                            assignedShape: data.assignedShape
+                            shape: data.shape
                         }
                     }
                     try{
                         // move to assigned position
-                        window.myClientData.circle.x = data.assignedPosition.x;
-                        window.myClientData.circle.y = data.assignedPosition.y;
+                        window.myClientData.assignedPosition = data?.assignedPosition ?? window.myClientData.assignedPosition;
 
                         // set to assigned color
                         currentColorIndex = window.data.colors.indexOf(data.assignedColor);
@@ -222,11 +270,17 @@
                     otherClients.forEach((client) => {
                         if(client.clientId === data.clientId){
                             found = true;
-                            console.warn('found a match', client)
-                            client.circle.x = data.assignedPosition.x;
-                            client.circle.y = data.assignedPosition.y;
+                            //console.warn('found a match', client)
+                            client.assignedColor = data.assignedColor;
+                            client.shape = data.shape;
+                            client.assignedPosition = data.assignedPosition;
                         }
                     })
+                    // insert if not found
+                    if(!found && data.clientId !== window.myClientData.myId){
+                        //console.warn('did not find a match', data)
+                        otherClients.push(data)
+                    }
                 }
                 else if(data.type === "clientDisconnected"){
                     // remove it from "otherClients"
@@ -234,28 +288,13 @@
                         return client.clientId !== data.clientId
                     })
                 }
-                else if(data.type === "clientConnected"){
-                    /*
-                        type: "clientConnected",
-                        clientCount: io.engine.clientsCount,
-                        clientId: socket.id,
-                        assignedColor,
-                        assignedPosition
-                    */
-                    //console.warn('client connected', data)
-
-                    // add a new circle
-                    data.circle = {
-                        x: data.assignedPosition.x, 
-                        y: data.assignedPosition.y, 
-                        r: 50
-                    };
-                    
+                else if(data.type === "clientConnected"){                    
                     otherClients.push(data)
                 }
                 else if(data.type === "otherClients"){
                     console.warn('otherClients', data)
-                    // otherClients = data.otherClients;
+                    // Merge the existing otherClients array with the new data from the server
+                    otherClients = [...otherClients, ...(data?.otherClients ?? [])];
                 }
                 else if(data.type === "heartbeat"){
                     // update the client count

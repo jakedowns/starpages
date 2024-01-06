@@ -57,6 +57,8 @@ io.on('connection', (socket) => {
 
     nextIndex = (nextIndex + 1) % ColorsPool.length;
     nextShapeIndex = (nextShapeIndex + 1) % ShapesPool.length;
+    // assign a shape
+    socket.data.shape = ShapesPool[nextShapeIndex];
 
     // assign a color
     // Wrap the client count to stay within the bounds of the ColorsPool array
@@ -71,13 +73,15 @@ io.on('connection', (socket) => {
         y: Math.random() * 2 - 1
     }
 
+    
+
     // tell them their id
     socket.emit('message', JSON.stringify({
         type: "id",
         clientId: socket.id,
         assignedColor: socket.data.assignedColor,
         assignedPosition: socket.data.assignedPosition,
-        assignedShape: socket.data.assignedShape
+        shape: socket.data.shape
     }));
 
     // tell them about the other clients
@@ -96,7 +100,7 @@ io.on('connection', (socket) => {
     //             clientId: s.id,
     //             assignedColor: s.data.assignedColor,
     //             assignedPosition: s.data.assignedPosition,
-    //             assignedShape: s.data.assignedShape
+    //             shape: s.data.shape
     //         });
     //     }
     //     return acc;
@@ -110,7 +114,7 @@ io.on('connection', (socket) => {
                 clientId: s.id,
                 assignedColor: s.data.assignedColor,
                 assignedPosition: s.data.assignedPosition,
-                assignedShape: s.data.assignedShape
+                shape: s.data.shape
             });
         }
         return acc;
@@ -130,7 +134,7 @@ io.on('connection', (socket) => {
         clientId: socket.id,
         assignedColor: socket.data.assignedColor,
         assignedPosition: socket.data.assignedPosition,
-        assignedShape: socket.data.assignedShape
+        shape: socket.data.shape
     }));
 
     // Event listener for incoming messages on the Socket.IO server
@@ -139,14 +143,16 @@ io.on('connection', (socket) => {
         if (typeof message === "string") {
             message = JSON.parse(message);
         }
+
         console.log('Received message on Socket.IO: ' + JSON.stringify(message));
+
         // Function to emit client update message
         const emitClientUpdate = () => {
             io.emit('message', JSON.stringify({
                 type: "clientUpdated",
                 assignedColor: socket.data.assignedColor,
                 assignedPosition: socket.data.assignedPosition,
-                assignedShape: socket.data.assignedShape,
+                shape: socket.data.shape,
                 clientId: socket.id
             }));
         }
@@ -157,7 +163,7 @@ io.on('connection', (socket) => {
         }
         // pickShape
         else if(message.type === "pickShape") {
-            socket.data.assignedShape = ShapesPool[nextShapeIndex];
+            socket.data.shape = message.shape;
             emitClientUpdate();
         }
         else if(message.type === "pickColor") {
