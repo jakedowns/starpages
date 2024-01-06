@@ -5,16 +5,31 @@
     <title>Guessing Game</title>
     <!-- BabylonJS -->
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
+
+    <!-- Import shared data -->
+    <script src="./shared/data.js"></script>
+
     <!-- Socket.io -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
     <style>
         html,body {
             background-color: #000;
             color: white;
+            font-family: sans-serif;
+        }
+        .client-count {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 10px;
+            background-color: #000;
+            font-size: 20px;
+            
         }
     </style>
 </head>
 <body>
+    <span class="client-count"></span>
     <canvas id="gameContainer" style="width:100%; height:100vh;"></canvas>
     <script>
         document.addEventListener("DOMContentLoaded",function(){
@@ -35,18 +50,79 @@
             light.intensity = 1.5;
 
             // Create a 2D circle
-            var circle = BABYLON.MeshBuilder.CreateDisc("disc", {radius:0.5, tessellation: 64}, scene);
+            window.data.circle = BABYLON.MeshBuilder.CreateDisc("disc", {radius:0.5, tessellation: 64}, scene);
+
+            let circle = window.data.circle;
             circle.position.y = 0;
             circle.position.x = 0;
+            // and further back
+            circle.position.z = 1;
 
-            // Define an array of colors
-            // Define an array of colors in hexadecimal format
-            var colors = ["#FF0000", "#008000", "#0000FF", "#FFFF00"];
+            // make your _own_ circle larger
+            circle.scaling.x = 2;
+            circle.scaling.y = 2;
+
+            
             var currentColorIndex = 0;
 
             // Set initial color of the circle
             circle.material = new BABYLON.StandardMaterial("mat", scene);
-            circle.material.diffuseColor = new BABYLON.Color3.FromHexString(colors[currentColorIndex]);
+            circle.material.diffuseColor = new BABYLON.Color3.FromHexString(window.data.colors[currentColorIndex]);
+
+            // Add WASD controls to move the camera and the circle on the XY plane
+            scene.actionManager = new BABYLON.ActionManager(scene);
+            scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                { trigger: BABYLON.ActionManager.OnKeyDownTrigger, parameter: 'w' },
+                function () { 
+                    camera.position.y += 1; 
+                    circle.position.y += 1; 
+                    // Broadcast position changes to socket
+                    socket.emit('message', {
+                        type: "positionChanged",
+                        position: circle.position,
+                        clientId: myClientData.myId
+                    });
+                }
+            ));
+            scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                { trigger: BABYLON.ActionManager.OnKeyDownTrigger, parameter: 's' },
+                function () { 
+                    camera.position.y -= 1; 
+                    circle.position.y -= 1; 
+                    // Broadcast position changes to socket
+                    socket.emit('message', {
+                        type: "positionChanged",
+                        position: circle.position,
+                        clientId: myClientData.myId
+                    });
+                }
+            ));
+            scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                { trigger: BABYLON.ActionManager.OnKeyDownTrigger, parameter: 'a' },
+                function () { 
+                    camera.position.x -= 1; 
+                    circle.position.x -= 1; 
+                    // Broadcast position changes to socket
+                    socket.emit('message', {
+                        type: "positionChanged",
+                        position: circle.position,
+                        clientId: myClientData.myId
+                    });
+                }
+            ));
+            scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+                { trigger: BABYLON.ActionManager.OnKeyDownTrigger, parameter: 'd' },
+                function () { 
+                    camera.position.x += 1; 
+                    circle.position.x += 1; 
+                    // Broadcast position changes to socket
+                    socket.emit('message', {
+                        type: "positionChanged",
+                        position: circle.position,
+                        clientId: myClientData.myId
+                    });
+                }
+            ));
 
             // Add touch event listener to the canvas
             canvas.addEventListener("pointerdown", function (evt) {
@@ -54,14 +130,15 @@
                 var pickResult = scene.pick(evt.clientX, evt.clientY);
                 if (pickResult.hit && pickResult.pickedMesh === circle) {
                     // Cycle the color of the circle
-                    currentColorIndex = (currentColorIndex + 1) % colors.length;
-                    circle.material.diffuseColor = new BABYLON.Color3.FromHexString(colors[currentColorIndex]);
+                    currentColorIndex = (currentColorIndex + 1) % window.data.colors.length;
+                    window.data.circle.material.diffuseColor = new BABYLON.Color3.FromHexString(window.data.colors[currentColorIndex]);
                     // Debug logging
                     console.log("Circle was clicked. New color index: " + currentColorIndex);
                     // Tell the server, in a message format, that the circle was clicked
                     socket.emit('message', {
                         type: "circleClicked",
-                        colorIndex: currentColorIndex
+                        colorIndex: currentColorIndex,
+                        clientId: myClientData.myId
                     });                    
                 } else {
                     // Debug logging
@@ -86,28 +163,102 @@
                 console.log('Connected to the server');
             });
 
-            let myId = null;
+            let myClientData = {
+                myId: null,
+                assignedColor: null,
+            }
+            let otherClients = []
 
             socket.on('message', (event) => {
                 // Handle messages from the server
 
                 // Parse the incoming message as JSON
                 let data = JSON.parse(event);
-                console.warn(data);
+                //console.warn(data);
                 // If the message has an "id" field, store it as our assigned id
                 if (data.type === "id") {
-                    myId = data.clientId;
-                    console.log("My id is " + myId);
+                    console.warn('my original starting data was', data);
+                    myClientData = { 
+                        ...myClientData, 
+                        ...{
+                            myId: data.id,
+                            assignedColor: data.assignedColor,
+                            assignedPosition: data.assignedPosition
+                        }
+                    }
+                    try{
+                        // move to assigned position
+                        window.data.circle.position.x = data.assignedPosition.x;
+                        window.data.circle.position.y = data.assignedPosition.y;
+
+                        // set to assigned color
+                        window.data.circle.material.diffuseColor = 
+                            new BABYLON.Color3.FromHexString(data.assignedColor);
+                    }
+                    catch(e){
+                        console.error('error setting initial color and position', e)
+                    }
                 }
-                else if(data.type === "circleClickedRemote"){
-                    // If the message has a "colorIndex" field, update the color of the circle
-                    currentColorIndex = data.colorIndex;
-                    console.warn('setting to remote color', currentColorIndex)
-                    circle.material.diffuseColor = new BABYLON.Color3.FromHexString(colors[currentColorIndex]);
-                }else{
+                else if(data.type === "circleUpdated"){
+                    // loop over otherClients and if we find a clientId match,
+                    // update the circle's color and position
+                    let found = false;
+                    otherClients.forEach((client) => {
+                        if(client.clientId === data.clientId){
+                            found = true;
+                            console.warn('found a match', client)
+                            client.circle.material.diffuseColor = new BABYLON.Color3.FromHexString(data.assignedColor);
+                            client.circle.position.x = data.assignedPosition.x;
+                            client.circle.position.y = data.assignedPosition.y;
+                            // move _other_ circles further back
+                            client.circle.position.z = -1;
+                        }
+                    })
+                }
+                else if(data.type === "clientDisconnected"){
+                    // remove it from "otherClients"
+                    otherClients = otherClients.filter((client) => {
+                        return client.clientId !== data.clientId
+                    })
+                }
+                else if(data.type === "clientConnected"){
+                    /*
+                        type: "clientConnected",
+                        clientCount: io.engine.clientsCount,
+                        clientId: socket.id,
+                        assignedColor,
+                        assignedPosition
+                    */
+                    console.warn('client connected', data)
+
+                    // add a new circle
+                    var circle = BABYLON.MeshBuilder.CreateDisc("disc", {radius:0.5, tessellation: 64}, scene);
+                    circle.position.y = data.assignedPosition.y;
+                    circle.position.x = data.assignedPosition.x;
+                    circle.material = new BABYLON.StandardMaterial("mat", scene);
+                    circle.material.diffuseColor = new BABYLON.Color3.FromHexString(data.assignedColor);
+                    data.circle = circle;
+                    otherClients.push(data)
+                }
+                else if(data.type === "heartbeat"){
+                    // update the client count
+                    document.querySelector('.client-count').innerHTML = data.clientCount;
+                }
+                else if(data.type === "reload"){
+                    // reload the page
+                    window.location.reload();
+                }
+                else{
                     console.warn('unhandled message')
                 }
             });
+
+            window.requestReloadAll = function(){
+                socket.emit('message', {
+                    type: "requestReloadAll",
+                    clientId: myClientData.myId
+                });
+            }
 
             socket.on('disconnect', () => {
                 console.log('Disconnected from the server');

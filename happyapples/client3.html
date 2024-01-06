@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Guessing Game</title>
+    <!-- p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+
+    <!-- Import shared data -->
+    <script src="./shared/data.js"></script>
+
+    <!-- Socket.io -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        html,body {
+            background-color: #000;
+            color: white;
+            font-family: sans-serif;
+        }
+        .client-count {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 10px;
+            background-color: #000;
+            font-size: 20px;
+            
+        }
+        #ui {
+            position: absolute;
+            left: 0;
+            top: 0;
+            padding: 10px;
+            background-color: #000;
+            border-radius: 100px;
+            display: flex;
+            flex-direction: column;
+        }
+        #ui button {
+            background-color: #fff;
+            border: 0;
+            border-radius: 100px;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        #ui .shape-selector {
+            background-color: #fff;
+            border: 0;
+            border-radius: 100px;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        #ui .color-selector {
+            background-color: #fff;
+            border: 0;
+            border-radius: 100px;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .gamestate {
+            position: absolute;
+            top: 100px;
+            width: 100%;
+            text-align: center;
+            font-size: 30px;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="gamestate"></div>
+    <div id="ui">
+        <p>Pick a Shape:</p>
+        <button class="shape-selector circle" onclick="pickShape('circle')">Circle</button>
+        <button class="shape-selector square" onclick="pickShape('square')">Square</button>
+        <button class="shape-selector triangle" onclick="pickShape('triangle')">Triangle</button>
+
+        <p>Pick a Color:</p>
+        <button class="color-selector red" onclick="pickColor('red')">Red</button>
+        <button class="color-selector green" onclick="pickColor('green')">Green</button>
+        <button class="color-selector blue" onclick="pickColor('blue')">Blue</button>
+        <button class="color-selector yellow" onclick="pickColor('yellow')">Yellow</button>
+    </div>
+    <span class="client-count"></span>
+    <div id="gameContainer"></div>
+    <script>
+        window.myClientData = {
+                myId: null,
+                assignedColor: null,
+                shape: null,
+            }
+        
+        // Initialize p5.js
+        new p5(p => {
+            let currentColorIndex = 0;
+            
+            let otherClients = []
+
+            p.setup = function() {
+                p.createCanvas(p.windowWidth, p.windowHeight);
+                window.myClientData.circle = {x: p.width/2, y: p.height/2, r: 50};
+            }
+
+            p.draw = function() {
+                p.background(0);
+                p.fill(window.data.colors[currentColorIndex]);
+
+                // switch based on shape
+                if(window.myClientData.shape === "circle"){
+                    p.ellipse(circle.x, circle.y, circle.r*2, circle.r*2);
+                }
+                else if(window.myClientData.shape === "square"){
+                    p.rect(circle.x, circle.y, circle.r*2, circle.r*2);
+                }
+                else if(window.myClientData.shape === "triangle"){
+                    p.triangle(circle.x, circle.y, circle.x + circle.r, circle.y + circle.r, circle.x - circle.r, circle.y + circle.r);
+                }
+
+                // draw all other client shape / colors at their own positions
+                otherClients.forEach((client) => {
+                    p.fill(client.assignedColor);
+                    if(client.shape === "circle"){
+                        p.ellipse(client.circle.x, client.circle.y, client.circle.r*2, client.circle.r*2);
+                    }
+                    else if(client.shape === "square"){
+                        p.rect(client.circle.x, client.circle.y, client.circle.r*2, client.circle.r*2);
+                    }
+                    else if(client.shape === "triangle"){
+                        p.triangle(client.circle.x, client.circle.y, client.circle.x + client.circle.r, client.circle.y + client.circle.r, client.circle.x - client.circle.r, client.circle.y + client.circle.r);
+                    }
+                })
+            }
+
+            p.mousePressed = function() {
+                let circle = window.myClientData.circle;
+                let d = p.dist(p.mouseX, p.mouseY, circle.x, circle.y);
+                if (d < circle.r) {
+                    currentColorIndex = (currentColorIndex + 1) % window.data.colors.length;
+                    console.log("Circle was clicked. New color index: " + currentColorIndex);
+                    socket.emit('message', {
+                        type: "circleClicked",
+                        colorIndex: currentColorIndex,
+                        clientId: window.myClientData.myId
+                    });
+                } else {
+                    console.log("Circle was not clicked.");
+                }
+            }
+
+            p.windowResized = function() {
+                p.resizeCanvas(p.windowWidth, p.windowHeight);
+            }
+
+            // Socket.IO connection to the server
+            const socket = io('wss://172.27.118.25:8999');
+
+            document.addEventListener('DOMContentLoaded', () => {
+                window.pickColor = function(color){
+                    console.warn('pickColor', color)
+                    socket.emit('message', {
+                        type: "pickColor",
+                        color,
+                        clientId: window.myClientData.myId
+                    });
+                }
+                window.pickShape = function(shape){
+                    console.warn('pickShape', shape)
+                    socket.emit('message', {
+                        type: "pickShape",
+                        shape,
+                        clientId: window.myClientData.myId
+                    });
+                }
+            })
+
+            socket.on('connect', () => {
+                console.log('Connected to the server');
+            });
+
+            socket.on('message', (event) => {
+                // Handle messages from the server
+
+                // Parse the incoming message as JSON
+                let data = JSON.parse(event);
+                //console.warn(data);
+                // If the message has an "id" field, store it as our assigned id
+                if (data.type === "id") {
+                    console.warn('my original starting data was', data);
+                    window.myClientData = { 
+                        ...window.myClientData, 
+                        ...{
+                            myId: data.id,
+                            assignedColor: data.assignedColor,
+                            assignedPosition: data.assignedPosition,
+                            assignedShape: data.assignedShape
+                        }
+                    }
+                    try{
+                        // move to assigned position
+                        window.myClientData.circle.x = data.assignedPosition.x;
+                        window.myClientData.circle.y = data.assignedPosition.y;
+
+                        // set to assigned color
+                        currentColorIndex = window.data.colors.indexOf(data.assignedColor);
+                    }
+                    catch(e){
+                        console.error('error setting initial color and position', e)
+                    }
+                }
+                else if(data.type === "clientUpdated"){
+                    // loop over otherClients and if we find a clientId match,
+                    // update the circle's color and position
+                    let found = false;
+                    otherClients.forEach((client) => {
+                        if(client.clientId === data.clientId){
+                            found = true;
+                            console.warn('found a match', client)
+                            client.circle.x = data.assignedPosition.x;
+                            client.circle.y = data.assignedPosition.y;
+                        }
+                    })
+                }
+                else if(data.type === "clientDisconnected"){
+                    // remove it from "otherClients"
+                    otherClients = otherClients.filter((client) => {
+                        return client.clientId !== data.clientId
+                    })
+                }
+                else if(data.type === "clientConnected"){
+                    /*
+                        type: "clientConnected",
+                        clientCount: io.engine.clientsCount,
+                        clientId: socket.id,
+                        assignedColor,
+                        assignedPosition
+                    */
+                    //console.warn('client connected', data)
+
+                    // add a new circle
+                    data.circle = {
+                        x: data.assignedPosition.x, 
+                        y: data.assignedPosition.y, 
+                        r: 50
+                    };
+                    
+                    otherClients.push(data)
+                }
+                else if(data.type === "otherClients"){
+                    console.warn('otherClients', data)
+                    // otherClients = data.otherClients;
+                }
+                else if(data.type === "heartbeat"){
+                    // update the client count
+                    document.querySelector('.client-count').innerHTML = data.clientCount;
+                }
+                else if(data.type === "reload"){
+                    // reload the page
+                    window.location.reload();
+                }
+                else{
+                    console.warn('unhandled message', data)
+                }
+            });
+
+            window.requestReloadAll = function(){
+                socket.emit('message', {
+                    type: "requestReloadAll",
+                    clientId: window.myClientData.myId
+                });
+            }
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from the server');
+            });
+
+            socket.on('error', (error) => {
+                console.log('Socket.IO Error: ', error);
+            });
+
+            // Add your game logic here
+        }, 'gameContainer');
+    </script>
+</body>
+</html>
