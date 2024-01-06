@@ -40,9 +40,10 @@
             background-color: #fff;
             border: 0;
             border-radius: 100px;
-            padding: 10px;
-            margin: 5px;
+            padding: 3px;
+            margin: 2px;
             cursor: pointer;
+            font-size: 9px;
         }
         #ui .shape-selector {
             background-color: #fff;
@@ -51,6 +52,7 @@
             padding: 10px;
             margin: 5px;
             cursor: pointer;
+            
         }
         #ui .color-selector {
             background-color: #fff;
@@ -69,159 +71,174 @@
             color: white;
             background-color: rgba(0,0,0,0.5);
         }
+        #ui .shape-selector.selected {
+            background-color: #000;
+            border:1px solid #aaa;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
     <div class="gamestate"></div>
     <div id="ui">
         <p>Pick a Shape:</p>
-        <button class="shape-selector circle" onclick="pickShape('circle')">Circle</button>
+        <button class="shape-selector selected circle" onclick="pickShape('circle')">Circle</button>
         <button class="shape-selector square" onclick="pickShape('square')">Square</button>
         <button class="shape-selector triangle" onclick="pickShape('triangle')">Triangle</button>
+        <button class="shape-selector star" onclick="pickShape('star')">Star</button>
 
         <p>Pick a Color:</p>
         <button class="color-selector red" onclick="pickColor('red')">Red</button>
         <button class="color-selector green" onclick="pickColor('green')">Green</button>
         <button class="color-selector blue" onclick="pickColor('blue')">Blue</button>
         <button class="color-selector yellow" onclick="pickColor('yellow')">Yellow</button>
+
+        <button class="color-selector" onclick="requestReloadAll()">Reload All</button>
     </div>
     <span class="client-count"></span>
     <div id="gameContainer"></div>
     <script>
         window.myClientData = {
-                myId: null,
-                assignedColor: null,
-                shape: null,
-            }
+            myId: null,
+            assignedPosition: {
+                x: 0,
+                y: 0,
+                r: 50
+            },
+            assignedColor: null,
+            shape: null,
+        }
+        window.otherClients = []
         
-        // Initialize p5.js
-        new p5(p => {
-            
-            let otherClients = []
-
-            p.setup = function() {
-                p.createCanvas(p.windowWidth, p.windowHeight);
-            }
-
-            p.draw = function() {
-                p.background(10);
-
-                p.fill(255,0,255,100);
-                p.ellipse(p.width/2, p.height/2, 50, 50);
-
-                p.fill(window.myClientData.assignedColor ?? p.color(255,0,0));
-
-                
-                // Define a scaling constant for position data
-                const scale = 100;
-                //p.translate(p.width/2, p.height/2);
-
-                let pos = window.myClientData.assignedPosition;
-
-                // switch based on shape
-                // Assume 50 as default radius if pos.r is undefined
-                let radius = pos.r ?? 50;
-
-                if(window.myClientData.shape === "circle"){
-                    p.ellipse(pos.x * scale, pos.y * scale, radius*2, radius*2);
-                }
-                else if(window.myClientData.shape === "square"){
-                    p.rect(pos.x * scale, pos.y * scale, radius*2, radius*2);
-                }
-                else if(window.myClientData.shape === "triangle"){
-                    p.triangle(pos.x * scale, pos.y * scale, pos.x * scale + radius, pos.y * scale + radius, pos.x * scale - radius, pos.y * scale + radius);
-                }else{
-                    console.warn('no shape assigned', window.myClientData)
-                }
-
-                if(otherClients.length === 0){
-                    return;
-                }
-
-                // draw all other client shape / colors at their own positions
-                otherClients.forEach((client) => {
-                    if(!client?.assignedColor){
-                        console.warn('no assigned color', client)
-                        return;
-                    }
-                    if(!client?.assignedPosition){
-                        console.warn('no assigned position', client)
-                        return;
-                    }
-                    if(!client?.shape){
-                        console.warn('no assigned shape', client)
-                        return;
-                    }
-                    p.fill(client.assignedColor ?? "red");
-                    // Define the shape drawing function based on the client's shape
-                    let drawShape;
-                    switch(client.shape) {
-                        case "circle":
-                            drawShape = (x, y, r) => p.ellipse(x, y, r, r);
-                            break;
-                        case "square":
-                            drawShape = (x, y, r) => p.rect(x, y, r, r);
-                            break;
-                        case "triangle":
-                            drawShape = (x, y, r) => p.triangle(x, y, x + r, y + r, x - r, y + r);
-                            break;
-                        default:
-                            console.warn('Invalid shape', client.shape);
-                            return;
-                    }
-                    if(!drawShape){
-                        console.warn('no drawShape', client)
-                        return;
-                    }
-                    // Draw the shape at the client's assigned position
-                    drawShape(
-                        client.assignedPosition.x * scale, 
-                        client.assignedPosition.y * scale, 
-                        client.assignedPosition.r * scale * 2);
-                })
-            }
-
-            p.mousePressed = function() {
-                let circle = window.myClientData.assignedPosition;
-                let d = p.dist(p.mouseX, p.mouseY, circle.x, circle.y);
-                if (d < circle.r) {
-                    currentColorIndex = (currentColorIndex + 1) % window.data.colors.length;
-                    console.log("Circle was clicked. New color index: " + currentColorIndex);
-                    socket.emit('message', {
-                        type: "circleClicked",
-                        colorIndex: currentColorIndex,
-                        clientId: window.myClientData.myId
-                    });
-                } else {
-                    console.log("Circle was not clicked.");
-                }
-            }
-
-            p.windowResized = function() {
-                p.resizeCanvas(p.windowWidth, p.windowHeight);
-            }
-
+        document.addEventListener('DOMContentLoaded', () => {
             // Socket.IO connection to the server
             const socket = io('wss://172.27.118.25:8999');
+            window.pickColor = function(color){
+                console.warn('pickColor', color)
+                window.myClientData.assignedColor = color;
+                socket.emit('message', {
+                    type: "pickColor",
+                    color,
+                    clientId: window.myClientData.myId
+                });
+            }
+            window.pickShape = function(shape){
+                console.warn('pickShape', shape)
+                window.myClientData.shape = shape;
+                document.querySelectorAll('.shape-selector').forEach((el) => {
+                    el.classList.remove('selected')
+                })
+                document.querySelector(`.shape-selector.${shape}`).classList.add('selected')
+                socket.emit('message', {
+                    type: "pickShape",
+                    shape,
+                    clientId: window.myClientData.myId
+                });
+            }
+            function myDrawClientShape(client,p){
+                let drawShape;
+                switch(client.shape) {
+                    case "circle":
+                        drawShape = (x, y, r) => p.ellipse(x, y, r, r);
+                        break;
+                    case "square":
+                        drawShape = (x, y, r) => p.rect(x, y, r, r);
+                        break;
+                    case "triangle":
+                        drawShape = (x, y, r) => p.triangle(x, y, x + r, y + r, x - r, y + r);
+                        break;
+                    case "star":
+                        drawShape = (x, y, r) => {
+                            p.beginShape();
+                            p.vertex(x, y - r);
+                            p.vertex(x + r * 0.3, y - r * 0.3);
+                            p.vertex(x + r, y);
+                            p.vertex(x + r * 0.3, y + r * 0.3);
+                            p.vertex(x, y + r);
+                            p.vertex(x - r * 0.3, y + r * 0.3);
+                            p.vertex(x - r, y);
+                            p.vertex(x - r * 0.3, y - r * 0.3);
+                            p.endShape(p.CLOSE);
+                        }
+                        break;
+                    default:
+                        console.warn('Invalid shape', client.shape);
+                        return;
+                }
+                return drawShape;
+            }
+            // Initialize p5.js
+            new p5(p => {
+                
+                let otherClients = []
 
-            document.addEventListener('DOMContentLoaded', () => {
-                window.pickColor = function(color){
-                    console.warn('pickColor', color)
-                    socket.emit('message', {
-                        type: "pickColor",
-                        color,
-                        clientId: window.myClientData.myId
-                    });
+                p.setup = function() {
+                    p.createCanvas(p.windowWidth, p.windowHeight);
                 }
-                window.pickShape = function(shape){
-                    console.warn('pickShape', shape)
-                    socket.emit('message', {
-                        type: "pickShape",
-                        shape,
-                        clientId: window.myClientData.myId
-                    });
+
+                p.draw = function() {
+                    p.background(10);
+
+                    p.fill(255,0,255,100);
+                    p.ellipse(p.width/2, p.height/2, 50, 50);
+
+                    // Define a scaling constant for position data
+                    const scale = 100;
+                    p.translate(p.width/2, p.height/2);
+
+                    // Combine all clients into one array for drawing
+                    let allClients = [window.myClientData, ...otherClients];
+
+                    allClients.forEach((client) => {
+                        if(!client?.assignedColor){
+                            console.warn('no assigned color', client)
+                            return;
+                        }
+                        if(!client?.assignedPosition){
+                            console.warn('no assigned position', client)
+                            return;
+                        }
+                        if(!client?.shape){
+                            console.warn('no assigned shape', client)
+                            return;
+                        }
+                        p.fill(client.assignedColor ?? "red");
+                        // Define the shape drawing function based on the client's shape
+                        let drawShape = myDrawClientShape(client,p);
+                        if(!drawShape){
+                            console.warn('no drawShape', client)
+                            return;
+                        }
+                        // Draw the shape at the client's assigned position
+                        drawShape(
+                            client.assignedPosition.x * scale, 
+                            client.assignedPosition.y * scale, 
+                            client.assignedPosition.r * scale * 2);
+                    })
                 }
-            })
+
+                p.mousePressed = function() {
+                    let circle = window.myClientData.assignedPosition;
+                    let d = p.dist(p.mouseX, p.mouseY, circle.x, circle.y);
+                    if (d < circle.r) {
+                        //currentColorIndex = (currentColorIndex + 1) % window.data.colors.length;
+                        //console.log("Circle was clicked. New color index: " + currentColorIndex);
+                        console.log("Circle was clicked");
+                        // socket.emit('message', {
+                        //     type: "circleClicked",
+                        //     colorIndex: currentColorIndex,
+                        //     clientId: window.myClientData.myId
+                        // });
+                    } else {
+                        console.log("Circle was not clicked.");
+                    }
+                }
+
+                p.windowResized = function() {
+                    p.resizeCanvas(p.windowWidth, p.windowHeight);
+                }
+
+            }, 'gameContainer');
 
             var resizeEvent = new Event('resize');
             window.dispatchEvent(resizeEvent);
@@ -252,16 +269,6 @@
                             shape: data.shape
                         }
                     }
-                    try{
-                        // move to assigned position
-                        window.myClientData.assignedPosition = data?.assignedPosition ?? window.myClientData.assignedPosition;
-
-                        // set to assigned color
-                        currentColorIndex = window.data.colors.indexOf(data.assignedColor);
-                    }
-                    catch(e){
-                        console.error('error setting initial color and position', e)
-                    }
                 }
                 else if(data.type === "clientUpdated"){
                     // loop over otherClients and if we find a clientId match,
@@ -277,8 +284,8 @@
                         }
                     })
                     // insert if not found
-                    if(!found && data.clientId !== window.myClientData.myId){
-                        //console.warn('did not find a match', data)
+                    if(!found){
+                        console.warn('did not find a match', data)
                         otherClients.push(data)
                     }
                 }
@@ -323,9 +330,7 @@
             socket.on('error', (error) => {
                 console.log('Socket.IO Error: ', error);
             });
-
-            // Add your game logic here
-        }, 'gameContainer');
+        });
     </script>
 </body>
 </html>

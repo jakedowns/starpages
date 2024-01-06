@@ -8,7 +8,8 @@ let data = {
     shapes: [
         "circle",
         "square",
-        "triangle"
+        "triangle",
+        "star"
     ]
 }
 
