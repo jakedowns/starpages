@@ -49,6 +49,8 @@ let nextShapeIndex = 0;
  * socket.data = {};
  */
 
+let clients = [];
+
 // Event listener for new connections on the Socket.IO server
 io.on('connection', (socket) => {
     console.log('New client connected on Socket.IO');
@@ -60,6 +62,8 @@ io.on('connection', (socket) => {
     // Wrap the client count to stay within the bounds of the ColorsPool array
     // Pick a random color from the ColorsPool array
     socket.data.assignedColor = ColorsPool[nextIndex];
+
+    clients.push(socket);
 
     // assign a random position some random distance from the center contrained to a unit circle
     socket.data.assignedPosition = {
@@ -81,11 +85,26 @@ io.on('connection', (socket) => {
 
     // Log the length of the sockets object for debugging purposes
     console.log('sockets length:', {
-        socketsLength: Object.keys(io.sockets.sockets).length,
+        //socketsLength: Object.keys(io.sockets.sockets).length,
+        clients_length: clients.length
     });
 
     // Create an array of other clients excluding the current socket
-    let otherClients = Object.values(io.sockets.sockets).reduce((acc, s) => {
+    // let otherClients = Object.values(io.sockets.sockets).reduce((acc, s) => {
+    //     if (s.id !== socket.id) {
+    //         acc.push({
+    //             clientId: s.id,
+    //             assignedColor: s.data.assignedColor,
+    //             assignedPosition: s.data.assignedPosition,
+    //             assignedShape: s.data.assignedShape
+    //         });
+    //     }
+    //     return acc;
+    // }, []);
+    // // Log the number of other clients for debugging purposes
+    // console.log('otherClients: ' + otherClients.length);
+
+    let otherClients = clients.reduce((acc, s) => {
         if (s.id !== socket.id) {
             acc.push({
                 clientId: s.id,
@@ -95,9 +114,8 @@ io.on('connection', (socket) => {
             });
         }
         return acc;
-    }, []);
-    // Log the number of other clients for debugging purposes
-    console.log('otherClients: ' + otherClients.length);
+    }
+    , []);
 
     // Emit a message with the other clients' data
     socket.emit('message', JSON.stringify({
@@ -122,32 +140,29 @@ io.on('connection', (socket) => {
             message = JSON.parse(message);
         }
         console.log('Received message on Socket.IO: ' + JSON.stringify(message));
-        if (message.type === "circleClicked") {
-            // re-throw to _all_ clients (note io.emit not socket.emit) when a circleClicked event is received
-            // server
+        // Function to emit client update message
+        const emitClientUpdate = () => {
             io.emit('message', JSON.stringify({
                 type: "clientUpdated",
-                assignedColor: ColorsPool[message.colorIndex],
-                assignedPosition,
-                clientId: socket.id
-            }));
-        }
-        // pickShape
-        else if(message.type === "pickShape") {
-            socket.data.assignedShape = ShapesPool[nextShapeIndex];
-            io.emit('message', JSON.stringify({
-                type: "clientUpdated",
+                assignedColor: socket.data.assignedColor,
+                assignedPosition: socket.data.assignedPosition,
                 assignedShape: socket.data.assignedShape,
                 clientId: socket.id
             }));
         }
+
+        if (message.type === "circleClicked") {
+            // re-throw to _all_ clients (note io.emit not socket.emit) when a circleClicked event is received
+            emitClientUpdate();
+        }
+        // pickShape
+        else if(message.type === "pickShape") {
+            socket.data.assignedShape = ShapesPool[nextShapeIndex];
+            emitClientUpdate();
+        }
         else if(message.type === "pickColor") {
             socket.data.assignedColor = ColorsPool[nextIndex];
-            io.emit('message', JSON.stringify({
-                type: "clientUpdated",
-                assignedColor: socket.data.assignedColor,
-                clientId: socket.id
-            }));
+            emitClientUpdate();
         }
         else if(message.type === "requestReloadAll") {
             triggerReloadOnAllClients();
@@ -167,6 +182,9 @@ io.on('connection', (socket) => {
             clientCount: io.engine.clientsCount,
             clientId: socket.id
         }));
+
+        // remove from clients array
+        clients = clients.filter(c => c.id !== socket.id);
     });
 });
 

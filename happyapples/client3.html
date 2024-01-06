@@ -186,7 +186,11 @@
 
                 // Parse the incoming message as JSON
                 let data = JSON.parse(event);
-                //console.warn(data);
+
+                if(data.type !== "heartbeat"){
+                    console.warn(data);
+                }
+
                 // If the message has an "id" field, store it as our assigned id
                 if (data.type === "id") {
                     console.warn('my original starting data was', data);
