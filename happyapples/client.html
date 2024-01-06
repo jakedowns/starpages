@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Guessing Game</title>
+    <!-- BabylonJS -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <!-- Socket.io -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        html,body {
+            background-color: #000;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameContainer" style="width:100%; height:100vh;"></canvas>
+    <script>
+        document.addEventListener("DOMContentLoaded",function(){
+            // Initialize BabylonJS Scene, Camera, etc.
+            // Create BabylonJS engine and scene
+            var canvas = document.getElementById("gameContainer");
+            var engine = new BABYLON.Engine(canvas, true);
+            var scene = new BABYLON.Scene(engine);
+
+            // camera
+            var camera = new BABYLON.ArcRotateCamera("Camera", 0, 0, 0, new BABYLON.Vector3(0, 0, 0), scene);
+            camera.setPosition(new BABYLON.Vector3(0, 0, -10));
+            camera.attachControl(canvas, true);
+
+            // Create a basic light
+            var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
+            // increase brightness
+            light.intensity = 1.5;
+
+            // Create a 2D circle
+            var circle = BABYLON.MeshBuilder.CreateDisc("disc", {radius:0.5, tessellation: 64}, scene);
+            circle.position.y = 0;
+            circle.position.x = 0;
+
+            // Define an array of colors
+            // Define an array of colors in hexadecimal format
+            var colors = ["#FF0000", "#008000", "#0000FF", "#FFFF00"];
+            var currentColorIndex = 0;
+
+            // Set initial color of the circle
+            circle.material = new BABYLON.StandardMaterial("mat", scene);
+            circle.material.diffuseColor = new BABYLON.Color3.FromHexString(colors[currentColorIndex]);
+
+            // Add touch event listener to the canvas
+            canvas.addEventListener("pointerdown", function (evt) {
+                // Check if the circle was clicked
+                var pickResult = scene.pick(evt.clientX, evt.clientY);
+                if (pickResult.hit && pickResult.pickedMesh === circle) {
+                    // Cycle the color of the circle
+                    currentColorIndex = (currentColorIndex + 1) % colors.length;
+                    circle.material.diffuseColor = new BABYLON.Color3.FromHexString(colors[currentColorIndex]);
+                    // Debug logging
+                    console.log("Circle was clicked. New color index: " + currentColorIndex);
+                    // Tell the server, in a message format, that the circle was clicked
+                    socket.emit('message', {
+                        type: "circleClicked",
+                        colorIndex: currentColorIndex
+                    });                    
+                } else {
+                    // Debug logging
+                    console.log("Circle was not clicked.");
+                }
+            });
+
+            // Render loop
+            engine.runRenderLoop(function () {
+                scene.render();
+            });
+
+            // Resize the engine when the window is resized
+            window.addEventListener("resize", function () {
+                engine.resize();
+            });
+
+            // Socket.IO connection to the server
+            const socket = io('wss://172.27.118.25:8999');
+
+            socket.on('connect', () => {
+                console.log('Connected to the server');
+            });
+
+            let myId = null;
+
+            socket.on('message', (event) => {
+                // Handle messages from the server
+
+                // Parse the incoming message as JSON
+                let data = JSON.parse(event);
+                console.warn(data);
+                // If the message has an "id" field, store it as our assigned id
+                if (data.type === "id") {
+                    myId = data.clientId;
+                    console.log("My id is " + myId);
+                }
+                else if(data.type === "circleClickedRemote"){
+                    // If the message has a "colorIndex" field, update the color of the circle
+                    currentColorIndex = data.colorIndex;
+                    console.warn('setting to remote color', currentColorIndex)
+                    circle.material.diffuseColor = new BABYLON.Color3.FromHexString(colors[currentColorIndex]);
+                }else{
+                    console.warn('unhandled message')
+                }
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from the server');
+            });
+
+            socket.on('error', (error) => {
+                console.log('Socket.IO Error: ', error);
+            });
+
+            // Add your game logic here
+        })
+    </script>
+</body>
+</html>

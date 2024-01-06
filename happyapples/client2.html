@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Include Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.2/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Include Socket.io -->
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <!-- Include p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.3.1/p5.js"></script>
+</head>
+<body>
+    <script>
+        // Create a new socket connection
+        const socket = io('http://172.27.118.25:9999');
+
+        // Handle connection
+        socket.on('connect', () => {
+            console.warn('Successfully connected to the server');
+        });
+
+        // Handle message
+        socket.on('message', (data) => {
+            console.warn('Message received: ', data);
+        });
+
+        // p5.js setup
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+        }
+
+        // p5.js draw
+        function draw() {
+            background(220);
+            fill(255, 0, 0);
+            ellipse(windowWidth / 2, windowHeight / 2, 50, 50);
+        }
+
+        // p5.js windowResized
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+    </script>
+</body>
+</html>
