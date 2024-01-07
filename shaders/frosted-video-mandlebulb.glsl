@@ -321,13 +321,14 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     fragColor = vec4(0.0, 0.0, 0.0, 1.0);
     // Mod wrap around if taller than iResolution.y
     // Instead of hard mod wrap, do a reflective wrap that begins scaling inversely back to the inflection point
+    // mouse wheel scaler
     float mws = iMouseWheel.y / iResolution.y;
-    mws = mws - 2.0 * floor((mws + 1.0) / 2.0);
+    mws = mws - 4.0 * floor((mws + 1.0) / 4.0);
     mws = abs(mws);
     //mws += .1;
 
     float debug_element_alpha = .2;
-    float debug_element_prescale = .01;
+    //float debug_element_prescale = .01;
     
     if (length(fragCoord - iMouse.xy) < 30.0 * mws) {
         fragColor += vec4(0.0, 1.0, 0.0, debug_element_alpha);
@@ -395,11 +396,13 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
 
     // The direction of the sun and its color are defined.
     vec3 sundir = normalize(vec3(0.1, 0.8, 0.6));
-    vec3 sun = vec3(1.64, 1.27, 0.99);
-    vec3 skycolor = vec3(0.29, 0.11, 0.41);
+    vec3 suncolor = vec3(0.26, 0.34, 0.54);
+    vec3 skycolor = vec3(0.55, 0.29, 0.72);
 
     // The background color is calculated based on the y coordinate of the view.
     vec3 bg = exp(uv.y - 2.0) * vec3(0.4, 1.6, 1.0);
+    // // hue-shift the bg 90 degrees
+    // bg = mix(bg, vec3(0.4, 1.6, 1.0), 0.5);
 
     // The halo effect is calculated based on the dot product of the normalized vectors from the camera to the origin and the ray direction.
     float halo = clamp(dot(normalize(vec3(-ro.x, -ro.y, -ro.z)), rd), 0.0, 1.0);
@@ -416,15 +419,15 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     // result
     vec3 res = intersect(ro, rd, time);
     if(res.x > 0.0) {
-        float SHADOW_ATTENUATION = 1.;
+        float SHADOW_ATTENUATION = -2.;
         p = ro + res.x * rd;
         vec3 n = nor(p, time);
         float shadow = softshadow(p, sundir, SHADOW_ATTENUATION, time);
 
         // Define base colors for the lighting components
-        vec3 sunColor = vec3(1.64, 1.27, 0.99);
+        vec3 sunColor = vec3(0.4, 1.0, 1.0);
         vec3 skyColor = vec3(0.29, 0.11, 0.41);
-        vec3 backgroundColor = vec3(0.4, 1.6, 1.0);
+        vec3 backgroundColor = vec3(0.93, 0.06, 0.89);
 
         // Diffuse lighting component based on the dot product of the normal and the sun direction
         float dif = max(0.0, dot(n, sundir));
@@ -442,7 +445,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         float spe = max(0.0, pow(clamp(dot(sundir, reflect(rd, n)), 0.0, 1.0), 10.0));
         vec3 specularColor = sunColor * spe;
 
-        float shadow_increaser = 10.;
+        // float shadow_increaser = (iMouseRaw.x / iResolution.x) * 1.;
         // // double the shadow's effect on the brightness
         // dif *= shadow_increaser;
         // shadow *= shadow_increaser;

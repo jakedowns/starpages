@@ -700,7 +700,7 @@
                     0
                 );
                 
-                window.mouseLerping.lerp(window.mouseRaw, .01 * magnitude);
+                window.mouseLerping.lerp(window.mouseRaw, .005 * magnitude);
                 shaderMaterial.uniforms.iMouseRaw.value.set(
                     window.mouseRaw.x, 
                     window.mouseRaw.y, 
@@ -714,7 +714,7 @@
                     0
                 );
 
-                vec2MouseWheelLerped.lerp(vec2MouseWheelRaw, .1);
+                vec2MouseWheelLerped.lerp(vec2MouseWheelRaw, .08);
 
                 // Set the shader uniform for the mouse wheel
                 // it's a vec4, first two are lerped, second two are raw
