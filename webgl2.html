@@ -20,7 +20,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
-    <script src="./res/import/dat.gui.min.js"></script>
+    <!-- <script type="module">
+        import { GUI } from './import/threejs/examples/jsm/libs/lil-gui.module.min.js';
+        const panel = new GUI( );
+			
+				panel.add( settings, 'res', 1, 6, 1 ).name( 'Res' ).onFinishChange( compile );
+				panel.add( settings, 'bounds', 1, 10, 1 ).name( 'Bounds' ).onFinishChange( compile );
+				panel.add( settings, 'material', [ 'depth', 'normal' ] ).name( 'Material' ).onChange( setMaterial );
+				panel.add( settings, 'wireframe' ).name( 'Wireframe' ).onChange( setMaterial );
+				panel.add( settings, 'autoRotate' ).name( 'Auto Rotate' );
+				panel.add( settings, 'vertexCount' ).name( 'Vertex count' ).listen().disable();
+    </script> -->
     <script>
         // stat.js
         (function(){
@@ -209,9 +219,13 @@
         video {
             position: absolute;
             left: 0;
-            opacity: 0;
+            opacity: 0.1;
             transition: all 1s ease-in-out;
             bottom: 100px;
+            width: 100px;
+        }
+        video:hover {
+            opacity: 1;
             width: 300px;
         }
         #record-video-button {
@@ -548,7 +562,6 @@
                         onBaseTextureRefresh();
 
                         window.currentTexture = window.baseTexture;
-                        theVideoplayerElement.style.opacity = 0;
                     };
                     reader.readAsDataURL(file);
                 }
@@ -808,7 +821,6 @@
                     //console.warn('setVideoAsChannel',videoURL)
                     
                     let video = window.theVideoplayerElement;
-                    video.style.opacity = 0.1;
                     
                     video.src = videoURL;
                     video.autoplay = false; // true;
@@ -954,7 +966,6 @@
                         reader.readAsDataURL(file);
                     }
                     else if (file.type.indexOf('image') === 0) {
-                        theVideoplayerElement.style.opacity = 0;
 
                         const reader = new FileReader();
                         reader.onload = (e) => {
