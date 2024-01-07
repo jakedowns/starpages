@@ -23,7 +23,15 @@
     <script src="./res/import/dat.gui.min.js"></script>
     <script>
         // stat.js
-        (function(){var script=document.createElement('script');script.onload=function(){var stats=new Stats();document.body.appendChild(stats.dom);requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
+        (function(){
+            var script=document.createElement('script');script.onload=function(){
+                var stats=new Stats();
+                document.body.appendChild(stats.dom);
+                stats.dom.style.position = 'absolute';
+                stats.dom.style.bottom = '0px';
+                stats.dom.style.top = 'auto';
+                requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
+        
     </script>
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
@@ -200,11 +208,11 @@
         }
         video {
             position: absolute;
-            top: 0;
             left: 0;
-            width: 160px;
             opacity: 0;
             transition: all 1s ease-in-out;
+            bottom: 100px;
+            width: 300px;
         }
         #record-video-button {
             position: absolute;
@@ -221,11 +229,30 @@
         video { z-index: 1000; }
         canvas { z-index: 999; }
 
+        .view-source-link {
+            position: absolute; 
+            top: 0; 
+            right: 0; 
+            z-index: 9999; 
+            font-size: 10px; 
+            font-family: sans-serif; 
+            color: white; 
+            text-decoration: none; 
+            padding: 5px; 
+            background-color: black; 
+            opacity: 0.5;
+            transition: all 1s ease-in-out;
+            &:hover {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- todo: gif support -->
     <!-- view source on github -->
-    <a href="https://github.com/jakedowns/starpages/blob/main/webgl2.html" target="_blank" style="position: absolute; top: 0; right: 0; z-index: 1000; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">view source on GitHub</a>
+    <a href="https://github.com/jakedowns/starpages/blob/main/webgl2.html" 
+    class="view-source-link" target="_blank">view source on GitHub</a>
 
     <!-- buy me a coffee; ko-fi link -->
     <a href="https://ko-fi.com/jakedowns" target="_blank" style="position: absolute; top: 0; left: 0; z-index: 1003; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰 Buy me a coffee</a>
@@ -781,7 +808,7 @@
                     //console.warn('setVideoAsChannel',videoURL)
                     
                     let video = window.theVideoplayerElement;
-                    video.style.opacity = 1;
+                    video.style.opacity = 0.1;
                     
                     video.src = videoURL;
                     video.autoplay = false; // true;

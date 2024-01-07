@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Guessing Game</title>
+    <!-- p5.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+
+    <!-- Import shared data -->
+    <script src="./shared/data.js"></script>
+
+    <!-- Socket.io -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        html,body {
+            background-color: #000;
+            color: white;
+            font-family: sans-serif;
+        }
+        .client-count {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 10px;
+            background-color: #000;
+            font-size: 20px;
+            
+        }
+        #ui {
+            position: absolute;
+            left: 0;
+            top: 0;
+            padding: 10px;
+            background-color: #000;
+            border-radius: 100px;
+            display: flex;
+            flex-direction: column;
+        }
+        #ui button {
+            background-color: #fff;
+            border: 0;
+            border-radius: 100px;
+            padding: 3px;
+            margin: 2px;
+            cursor: pointer;
+            font-size: 9px;
+        }
+        #ui .shape-selector {
+            background-color: #fff;
+            border: 0;
+            border-radius: 100px;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+            
+        }
+        #ui .color-selector {
+            background-color: #fff;
+            border: 0;
+            border-radius: 100px;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .gamestate {
+            position: absolute;
+            top: 100px;
+            width: 100%;
+            text-align: center;
+            font-size: 30px;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+        }
+        #ui .shape-selector.selected {
+            background-color: #000;
+            border:1px solid #aaa;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="gamestate"></div>
+    <div id="ui">
+        <p>Pick a Shape:</p>
+        <button class="shape-selector selected circle" onclick="pickShape('circle')">Circle</button>
+        <button class="shape-selector square" onclick="pickShape('square')">Square</button>
+        <button class="shape-selector triangle" onclick="pickShape('triangle')">Triangle</button>
+        <button class="shape-selector star" onclick="pickShape('star')">Star</button>
+
+        <p>Pick a Color:</p>
+        <button class="color-selector red" onclick="pickColor('red')">Red</button>
+        <button class="color-selector green" onclick="pickColor('green')">Green</button>
+        <button class="color-selector blue" onclick="pickColor('blue')">Blue</button>
+        <button class="color-selector yellow" onclick="pickColor('yellow')">Yellow</button>
+
+        <button class="color-selector" onclick="requestReloadAll()">Reload All</button>
+    </div>
+    <span class="client-count"></span>
+    <div id="gameContainer"></div>
+    <script>
+        window.myClientData = {
+            myId: null,
+            assignedPosition: {
+                x: 0,
+                y: 0,
+                r: 50
+            },
+            assignedColor: null,
+            shape: null,
+        }
+        window.otherClients = []
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            // Socket.IO connection to the server
+            const socket = io('wss://172.27.118.25:8999');
+            window.pickColor = function(color){
+                console.warn('pickColor', color)
+                window.myClientData.assignedColor = color;
+                socket.emit('message', {
+                    type: "pickColor",
+                    color,
+                    clientId: window.myClientData.myId
+                });
+            }
+            window.pickShape = function(shape){
+                console.warn('pickShape', shape)
+                window.myClientData.shape = shape;
+                document.querySelectorAll('.shape-selector').forEach((el) => {
+                    el.classList.remove('selected')
+                })
+                document.querySelector(`.shape-selector.${shape}`).classList.add('selected')
+                socket.emit('message', {
+                    type: "pickShape",
+                    shape,
+                    clientId: window.myClientData.myId
+                });
+            }
+            function myDrawClientShape(client,p){
+                let drawShape;
+                switch(client.shape) {
+                    case "circle":
+                        drawShape = (x, y, r) => p.ellipse(x, y, r, r);
+                        break;
+                    case "square":
+                        drawShape = (x, y, r) => p.rect(x, y, r, r);
+                        break;
+                    case "triangle":
+                        drawShape = (x, y, r) => p.triangle(x, y, x + r, y + r, x - r, y + r);
+                        break;
+                    case "star":
+                        drawShape = (x, y, r) => {
+                            p.beginShape();
+                            p.vertex(x, y - r);
+                            p.vertex(x + r * 0.3, y - r * 0.3);
+                            p.vertex(x + r, y);
+                            p.vertex(x + r * 0.3, y + r * 0.3);
+                            p.vertex(x, y + r);
+                            p.vertex(x - r * 0.3, y + r * 0.3);
+                            p.vertex(x - r, y);
+                            p.vertex(x - r * 0.3, y - r * 0.3);
+                            p.endShape(p.CLOSE);
+                        }
+                        break;
+                    default:
+                        console.warn('Invalid shape', client.shape);
+                        return;
+                }
+                return drawShape;
+            }
+            // Initialize p5.js
+            new p5(p => {
+                
+                let otherClients = []
+
+                p.setup = function() {
+                    p.createCanvas(p.windowWidth, p.windowHeight);
+                }
+
+                p.draw = function() {
+                    p.background(10);
+
+                    p.fill(255,0,255,100);
+                    p.ellipse(p.width/2, p.height/2, 50, 50);
+
+                    p.translate(p.width/2, p.height/2);
+                    p.scale(.2);
+                    p.fill(0,255,0,100);
+                    p.ellipse(0, 0, 50, 50);
+
+                    p.scale(2.)
+                    p.fill(0,0,255,100);
+                    p.ellipse(0, 0, 50, 50);
+
+                    p.scale(20.)
+                    p.fill(255,0,0,100);
+                    p.ellipse(0, 0, 50, 50);
+
+                    // Combine all clients into one array for drawing
+                    let allClients = [window.myClientData, ...otherClients];
+
+                    allClients.forEach((client) => {
+                        if(!client?.assignedColor){
+                            console.warn('no assigned color', client)
+                            return;
+                        }
+                        if(!client?.assignedPosition){
+                            console.warn('no assigned position', client)
+                            return;
+                        }
+                        if(!client?.shape){
+                            console.warn('no assigned shape', client)
+                            return;
+                        }
+                        p.fill(client.assignedColor ?? "red");
+                        // Define the shape drawing function based on the client's shape
+                        let drawShape = myDrawClientShape(client,p);
+                        if(!drawShape){
+                            console.warn('no drawShape', client)
+                            return;
+                        }
+                        // Draw the shape at the client's assigned position
+                        drawShape(
+                            client.assignedPosition.x, 
+                            client.assignedPosition.y, 
+                            client.assignedPosition.r * 2);
+                    })
+                }
+
+                p.mousePressed = function() {
+                    let circle = window.myClientData.assignedPosition;
+                    let d = p.dist(p.mouseX, p.mouseY, circle.x, circle.y);
+                    if (d < circle.r) {
+                        //currentColorIndex = (currentColorIndex + 1) % window.data.colors.length;
+                        //console.log("Circle was clicked. New color index: " + currentColorIndex);
+                        console.log("Circle was clicked");
+                        // socket.emit('message', {
+                        //     type: "circleClicked",
+                        //     colorIndex: currentColorIndex,
+                        //     clientId: window.myClientData.myId
+                        // });
+                    } else {
+                        console.log("Circle was not clicked.");
+                    }
+                }
+
+                p.windowResized = function() {
+                    p.resizeCanvas(p.windowWidth, p.windowHeight);
+                }
+
+            }, 'gameContainer');
+
+            var resizeEvent = new Event('resize');
+            window.dispatchEvent(resizeEvent);
+
+            socket.on('connect', () => {
+                console.log('Connected to the server');
+            });
+
+            socket.on('message', (event) => {
+                // Handle messages from the server
+
+                // Parse the incoming message as JSON
+                let data = JSON.parse(event);
+
+                if(data.type !== "heartbeat"){
+                    console.warn(data);
+                }
+
+                // If the message has an "id" field, store it as our assigned id
+                if (data.type === "id") {
+                    console.warn('my original starting data was', data);
+                    window.myClientData = { 
+                        ...window.myClientData, 
+                        ...{
+                            myId: data.id,
+                            assignedColor: data.assignedColor,
+                            assignedPosition: data.assignedPosition,
+                            shape: data.shape
+                        }
+                    }
+                }
+                else if(data.type === "clientUpdated"){
+                    // loop over otherClients and if we find a clientId match,
+                    // update the circle's color and position
+                    let found = false;
+                    otherClients.forEach((client) => {
+                        if(client.clientId === data.clientId){
+                            found = true;
+                            //console.warn('found a match', client)
+                            client.assignedColor = data.assignedColor;
+                            client.shape = data.shape;
+                            client.assignedPosition = data.assignedPosition;
+                        }
+                    })
+                    // insert if not found
+                    if(!found){
+                        console.warn('did not find a match', data)
+                        otherClients.push(data)
+                    }
+                }
+                else if(data.type === "clientDisconnected"){
+                    // remove it from "otherClients"
+                    otherClients = otherClients.filter((client) => {
+                        return client.clientId !== data.clientId
+                    })
+                }
+                else if(data.type === "clientConnected"){                    
+                    otherClients.push(data.client)
+                }
+                else if(data.type === "otherClients"){
+                    console.warn('otherClients', data)
+                    // Merge the existing otherClients array with the new data from the server
+                    otherClients = [...otherClients, ...(data?.otherClients ?? [])];
+                }
+                else if(data.type === "heartbeat"){
+                    // update the client count
+                    document.querySelector('.client-count').innerHTML = data.clientCount;
+                }
+                else if(data.type === "reload"){
+                    // reload the page
+                    window.location.reload();
+                }
+                else{
+                    console.warn('unhandled message', data)
+                }
+            });
+
+            window.requestReloadAll = function(){
+                socket.emit('message', {
+                    type: "requestReloadAll",
+                    clientId: window.myClientData.myId
+                });
+            }
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from the server');
+            });
+
+            socket.on('error', (error) => {
+                console.log('Socket.IO Error: ', error);
+            });
+        });
+    </script>
+</body>
+</html>
