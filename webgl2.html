@@ -298,8 +298,8 @@
     
     <canvas id="canvas" classname="undarken"></canvas>
     <script>
-        const pixelWidth = window.innerWidth / 4.0;
-        const pixelHeight = window.innerHeight / 4.0;
+        window.pixelWidth = window.innerWidth / 2.0;
+        window.pixelHeight = window.innerHeight / 2.0;
         window.canvas;
         window.uReflectionY = 0.5; // 0.5 = no reflection, 0 = full reflection, 1 = no reflection
         window.reverseSort = true;
@@ -328,7 +328,11 @@
         // window.recordingStartedAt = 0;
         window.subframePlaybackCurrentFrame = 0;
         window.currentVideoTime = null;
-        window.baseTexture = null;
+        window.baseTexture = null; 
+        // this is one of the base textures for the screen, it's part of a double-buffering ping-pong scheme
+        // where we swap reading/writing to baseTexture or accumulationTexture
+        // so, we need a NEW texture that's meant specifically the mandlebulb
+        window.mandlebulbTexture = null;
 
         window.shaderTimeIsPaused = false;
         window.theVideoplayerElement = null;
@@ -440,8 +444,8 @@
 
         document.addEventListener('wheel', (e) => {
             vec2MouseWheelRaw.set(
-                vec2MouseWheelRaw.x + e.deltaX, 
-                vec2MouseWheelRaw.y + e.deltaY
+                vec2MouseWheelRaw.x + e.deltaX * 0.1, 
+                vec2MouseWheelRaw.y + e.deltaY * 0.1
             );
         });
 
@@ -550,31 +554,7 @@
 
             document.getElementById("fileupload").addEventListener("change", (e) => {
                 hideIntroText();
-
-                //console.warn('fileupload change',e);
-                const file = e.target.files[0];
-                //console.warn('filetype',file.type)
-                if (file.type.indexOf('video') === 0) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        window.setVideoAsChannel(e.target.result);
-                    };
-                    reader.readAsDataURL(file);
-                }
-                else if (file.type.indexOf('image') === 0) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        if(window.baseTexture?.image){
-                            window.baseTexture.image.src = e.target.result;
-                            window.baseTexture.needsUpdate = true;
-                        }
-
-                        onBaseTextureRefresh();
-
-                        window.currentTexture = window.baseTexture;
-                    };
-                    reader.readAsDataURL(file);
-                }
+                handleFileInput(e);
             });
             canvas = document.getElementById("canvas");
             const renderer = new THREE.WebGLRenderer({canvas});
@@ -587,6 +567,9 @@
             canvas.style.height = '100vh';
             canvas.style.imageRendering = 'pixelated'; // This ensures nearest neighbor scaling in browsers that support it
             //canvas.style.imageRendering = 'crisp-edges'; // This ensures nearest neighbor scaling in browsers that support it
+
+            //object-fit: contain;
+            canvas.style.objectFit = 'contain';
 
             // Orthographic camera setup
             const frustumSize = 1;
@@ -611,8 +594,10 @@
             let rand_int_1_thru_17 = Math.floor(Math.random() * 17) + 1;
             //let url = `./res/bg_${rand_int_1_thru_17}.png`;
             //let url = "./res/download (3).png";
-            let url = "./res/download (10).png";
+            let url = "./res/inspiration/Bsodwindows10.png";
             window.baseTexture = textureLoader.load(url);
+
+            window.mandlebulbTexture = textureLoader.load(url);
 
             // define our textures / buffers
             // 1. our starting values (provided by user image or video, etc)
@@ -655,27 +640,41 @@
             window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
             window.accumulationTexture.needsUpdate = true;
 
-
-            window.currentTexture = window.baseTexture; //window.lerpedColorTexture;
             
             // Assuming you have a texture loaded into a variable named 'texture'
-            window.currentTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
-            window.currentTexture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
+            window.baseTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
+            window.baseTexture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
+
+            // do the same for mandlebulbTexture
+            window.mandlebulbTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
+            window.mandlebulbTexture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
 
             window.image_height = baseTexture.height;
 
-            // Alternatively, use RepeatWrapping for wrap-around effect
-            // texture.wrapS = THREE.RepeatWrapping;
-            // texture.wrapT = THREE.RepeatWrapping;
-
             // Set how many times the texture should repeat
             baseTexture.repeat.set(2, 2); // Adjust as needed
+            mandlebulbTexture.repeat.set(2, 2); // Adjust as needed
 
             /* Match ShaderToy uniforms for compatibility */
             // Custom Shader
             window.mouseRaw = new THREE.Vector4();
             window.mouseLerping = new THREE.Vector4();
             window.iMouseWheel = new THREE.Vector4();
+
+            // window.mandleBulbMaterial = new THREE.ShaderMaterial({
+            //     uniforms: {
+            //         iChannel0: { value: window.mandlebulbTexture },
+            //         iResolution: { value: new THREE.Vector3(pixelWidth, pixelHeight, 1.0) },
+            //         iMouse: { value: window.mouseLerping },
+            //         iMouseRaw: { value: window.mouseRaw },
+            //         iMouseWheel: { value: window.iMouseWheel },
+            //         iTime: { value: 1.0 },
+            //     },
+            //     vertexShader: `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            //     fragmentShader: window.fragmentShaderSource,
+            //     transparent: true, // Enable transparency
+            // });
+
             window.shaderMaterial = new THREE.ShaderMaterial({
                 uniforms: {
                     u_time: { value: 1.0 },
@@ -683,7 +682,7 @@
                     
                     // compatibility uniforms
                     iTime: { value: 1.0 },
-                    iChannel0: { value: baseTexture },
+                    iChannel0: { value: mandlebulbTexture },
                     iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                     iMouse: { value: window.mouseLerping },
                     iMouseRaw: { value: window.mouseRaw },
@@ -702,7 +701,7 @@
             // tied to combineTexturesShaderSource
             window.shaderAccumulationMaterial = new THREE.ShaderMaterial({
                 uniforms: {
-                    iChannel0: { value: baseTexture },
+                    iChannel0: { value: window.mandlebulbTexture },
                     iChannel1: { value: window.accumulationTexture.texture },
                     iResolution: { value: new THREE.Vector3(pixelWidth, pixelHeight, 1.0) },
                     iMouse: { value: window.mouseLerping },
@@ -904,7 +903,6 @@
                             window.videoTexture.format = THREE.RGBFormat;
                             window.videoTexture.crossOrigin = 'anonymous';
                             window.videoTexture.needsUpdate = true;
-                            window.currentTexture = window.videoTexture;
 
                             setTimeout(()=>{
                                 window.videoIsPlaying = true;
@@ -930,18 +928,18 @@
                     camera.updateProjectionMatrix();
                 }
 
-                let _time = window.fixedTime ? window.fixedTime : time * 0.1;
+                let _time = window.fixedTime ? window.fixedTime : time * 0.001;
 
                 // Use a custom shader material that combines the textures
-                window.shaderMaterial.uniforms.iChannel0.value = currentTexture;
+                window.shaderMaterial.uniforms.iChannel0.value = window.mandlebulbTexture;
 
 
-                window.shaderAccumulationMaterial.uniforms.iChannel0.value = currentTexture;
+                window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture;
                 window.shaderAccumulationMaterial.uniforms.iChannel1.value = accumulationTexture;
                 window.shaderAccumulationMaterial.uniforms.iTime.value = _time;
 
                 shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
-                shaderMaterial.uniforms.iChannel0.value = accumulationTexture; //currentTexture;
+                shaderMaterial.uniforms.iChannel0.value = accumulationTexture;
                 shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
 
                 window.accumulationTexture.needsUpdate = true;
@@ -1035,31 +1033,7 @@
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // ondrop
-                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    const file = e.dataTransfer.files[0];
-                    // check if video first
-                    if (file.type.indexOf('video') === 0) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            window.setVideoAsChannel(e.target.result);
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                    else if (file.type.indexOf('image') === 0) {
-
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            setImageAsChannel(e.target.result);
-                            currentTexture = baseTexture;
-
-
-                            onBaseTextureRefresh();
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                    
-                }
+                handleFileInput(e);
             }
 
             // when a user drops an image on the canvas, load it to our texture
@@ -1194,7 +1168,7 @@
             // fast start
             window.targetVideoPlaybackRate = 1.0; 
             hideIntroText(); 
-            window.setVideoAsChannel("./res/0006.mp4");
+            //window.setVideoAsChannel("./res/0006.mp4");
             // window.setImageAsChannel("./res/test/Sketchfab_UV_Checker.png");
 
             
@@ -1301,37 +1275,113 @@
             }
         }
 
-        let handleFileInputChange = async(e)=>{
-            let file = e.target.files[0];
-            console.warn(file);
+        /** 
+         * TODO: extend this with some of the functionality that was 
+         * previously only in the onpasteattempt function:
+        
+                    // Check if the Clipboard API is available
+                    if (!navigator.clipboard) {
+                        console.warn('Clipboard API not available.');
+                        throw new Error('Clipboard API not available');
+                    }
 
-            if(file.type.includes('video')){
-                window.setVideoAsChannel(URL.createObjectURL(file));
-                return;
+                    // Attempt to read from the clipboard
+                    const clipboardItems = await navigator.clipboard.read();
+                    console.log('Clipboard items retrieved:', clipboardItems);
+
+                    let clipboardBag = {images:[]};
+
+                    // Find text content in clipboard items
+                    const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
+                    if (textItem) {
+                        const textBlob = await textItem.getType('text/plain');
+                        const text = await textBlob.text();
+                        console.log('Pasted text content: ', text);
+                        clipboardBag.text = text;
+                    }
+
+                    // Find HTML content in clipboard items
+                    const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
+                    if (htmlItem) {
+                        const htmlBlob = await htmlItem.getType('text/html');
+                        const html = await htmlBlob.text();
+                        console.log('Pasted HTML content: ', html);
+                        clipboardBag.html = html;
+                    }
+                    // Note: imageBlob is an instance of Blob
+                    // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
+                    // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
+                    // we need to do the slow, full conversion of a Blob to a base64 encoded string
+                    // then we can use that base64 encoded string to load the image as a texture
+                    
+
+
+                    // Find any "image" items:
+                    const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
+                    // Alert if there's multiple, we only support one for now
+                    if (imageItems.length > 1) {
+                        alert('Multiple images found. Using the last image.');
+                    }
+                    for (const imageItem of imageItems) {
+                        const imageBlob = await imageItem.getType('image/png');
+                        //console.log('Pasted image: ', image);
+                        clipboardBag.imageBlob = imageBlob;
+
+                        //loadImageBlobAsTexture(imageBlob);
+                        
+                        let b64 = await imageBlobToBase64(imageBlob);
+                        //console.log('Pasted image: ', b64);
+
+                        await loadBase64AsTexture(b64);
+                        clipboardBag.images.push(b64);
+                    }
+        */
+        async function handleFileInput(e) {
+            let file;
+            if (e.dataTransfer) { // Handle file drop event
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    file = e.dataTransfer.files[0];
+                }
+            } else if (e.target.files) { // Handle file input change event
+                file = e.target.files[0];
+            }  else if (e.clipboardData) { // Handle paste event
+                const clipboardItems = await navigator.clipboard.read();
+                const imageItem = clipboardItems.find(item => item.types.includes('image/png'));
+                if (imageItem) {
+                    file = await imageItem.getType('image/png');
+                }
             }
 
-            if(file.type.includes('image')){
-                // load the file into our Three.js baseTexture and reflect into our originalPixelDataTexture
-                let url = URL.createObjectURL(file);
-                let img = new Image();
-                img.src = url;
-                img.onload = function(){
-                    setImageAsChannel(url);
+            if (file) {
+                if (file.type.includes('video')) {
+                    window.setVideoAsChannel(URL.createObjectURL(file));
+                } else if (file.type.includes('image')) {
+                    let url = URL.createObjectURL(file);
+                    let img = new Image();
+                    img.src = url;
+                    img.onload = function() {
+                        setImageAsChannel(url);
+                    }
+                } else if (file.type.includes('gif')) { // Added support for gif files
+                    let url = URL.createObjectURL(file);
+                    let img = new Image();
+                    img.src = url;
+                    img.onload = function() {
+                        setImageAsChannel(url);
+                    }
                 }
             }
         }
 
-        window.resetAccumulationTexture = function(){
-            // clear out our accumulator texture
-            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.currentFrameTexture.needsUpdate = true;
-            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
-            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
-            window.accumulationTexture.needsUpdate = true;
-        }
-
         window.setImageAsChannel = function(url){
+            // if(url.includes('.gif')){
+            //     window.setVideoAsChannel(url);
+            //     return;
+            // }
+
+
             // baseTexture.image.src = e.target.result;
             // baseTexture.needsUpdate = true;
             // "setImageAsChannel"
@@ -1346,8 +1396,24 @@
             window.originalPixelDataTexture.image.src = url;
             window.originalPixelDataTexture.needsUpdate = true;
 
+            window.mandlebulbTexture.image.src = url;
+            window.mandlebulbTexture.needsUpdate = true;
+
             // clear out our accumulator texture
-            resetAccumulationTexture();
+            // clear out our textures
+            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.currentFrameTexture.needsUpdate = true;
+            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTexture.needsUpdate = true;
+
+            // set shaderMaterial and accumulationMaterial to use the new, clean, textures
+            window.shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+            window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+            // needs update
+            window.shaderMaterial.uniforms.iChannel0.value.needsUpdate = true;
+            window.shaderAccumulationMaterial.uniforms.iChannel0.value.needsUpdate = true;
         }
 
         // domready
@@ -1373,11 +1439,11 @@
                 vec4 currentColor = texture2D(iChannel0, uv.xy);
                 vec4 previousColor = texture2D(iChannel1, uv.xy);
                 // decay
-                previousColor = previousColor * 0.9999;
+                previousColor = previousColor * 0.99999;
                 // apply a "smear" effect between the two
-                float smearFactor = max(0.01, 1.0 - iTime);
+                float smearFactor = max(0.1, 1.0 - iTime);
                 vec4 smearColor = mix(previousColor, currentColor, smearFactor);
-                gl_FragColor = iMouse.x > 0.5 ? smearColor : currentColor;
+                gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
                 
             }
             `;
@@ -1400,6 +1466,7 @@
             window.DID_BIND_BASE_SINCE_RESIZE = false;
             // update our iResolution uniform
             shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
+            shaderAccumulationMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
         }
 
         // two triangles that cover the entire screen
@@ -1852,74 +1919,15 @@
                 imageElement.src = URL.createObjectURL(imageBlob);
             });
         }
-        async function onPasteAttempt(){
+        async function onPasteAttempt(e){
             try {
-                    // Check if the Clipboard API is available
-                    if (!navigator.clipboard) {
-                        console.warn('Clipboard API not available.');
-                        throw new Error('Clipboard API not available');
-                    }
+                handleFileInput(e);
+                hideIntroText()
 
-                    // Attempt to read from the clipboard
-                    const clipboardItems = await navigator.clipboard.read();
-                    console.log('Clipboard items retrieved:', clipboardItems);
-
-                    let clipboardBag = {images:[]};
-
-                    // Find text content in clipboard items
-                    const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
-                    if (textItem) {
-                        const textBlob = await textItem.getType('text/plain');
-                        const text = await textBlob.text();
-                        console.log('Pasted text content: ', text);
-                        clipboardBag.text = text;
-                    }
-
-                    // Find HTML content in clipboard items
-                    const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
-                    if (htmlItem) {
-                        const htmlBlob = await htmlItem.getType('text/html');
-                        const html = await htmlBlob.text();
-                        console.log('Pasted HTML content: ', html);
-                        clipboardBag.html = html;
-                    }
-                    // Note: imageBlob is an instance of Blob
-                    // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
-                    // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
-                    // we need to do the slow, full conversion of a Blob to a base64 encoded string
-                    // then we can use that base64 encoded string to load the image as a texture
-                    
-
-
-                    // Find any "image" items:
-                    const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
-                    // Alert if there's multiple, we only support one for now
-                    if (imageItems.length > 1) {
-                        alert('Multiple images found. Using the last image.');
-                    }
-                    for (const imageItem of imageItems) {
-                        const imageBlob = await imageItem.getType('image/png');
-                        //console.log('Pasted image: ', image);
-                        clipboardBag.imageBlob = imageBlob;
-
-                        //loadImageBlobAsTexture(imageBlob);
-                        
-                        let b64 = await imageBlobToBase64(imageBlob);
-                        //console.log('Pasted image: ', b64);
-
-                        await loadBase64AsTexture(b64);
-                        clipboardBag.images.push(b64);
-                    }
-
-                    hideIntroText()
-
-                    // Process clipboardBag as needed
-                    console.warn({clipboardBag});
-
-                } catch (error) {
-                    console.error('Error accessing clipboard:', error);
-                    // Handle error appropriately
-                }
+            } catch (error) {
+                console.error('Error accessing clipboard:', error);
+                // Handle error appropriately
+            }
         }
         function hideIntroText(){
             canvas.classList.add('unblur');
@@ -1949,7 +1957,7 @@
                 (e.keyCode === 22 || e.keyCode === 86)
                 && (e.metaKey || e.ctrlKey)
             ){
-                await onPasteAttempt();
+                await onPasteAttempt(e);
             }
         },false)
 
@@ -1985,8 +1993,7 @@
                 // window.videoTexture.image.src = uri;
                 // window.videoTexture.needsUpdate = true;
 
-                // set the video to be the base texture
-                // currentTexture = window.videoTexture;
+                mandlebulbTexture = window.videoTexture;
             } else {
                 doubleTapDetected = true;
                 doubleTapTimeout = setTimeout(() => {
