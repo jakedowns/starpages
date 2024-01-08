@@ -209,6 +209,18 @@ setInterval(() => {
     }));
 }, 1000);
 
+// get the _real_ remote ip address of the server so we can print it
+const ifaces = require('os').networkInterfaces();
+const ip = Object.values(ifaces).reduce((acc, ifaces) => {
+    ifaces.forEach(iface => {
+        if (iface.family === 'IPv4' && !iface.internal) {
+            acc = iface.address;
+        }
+    });
+    return acc;
+}, '');
+console.warn("remote ips found: " + ip);
+
 // Start the HTTP server on port 8000
 httpServer.listen(8000, () => {
     console.log('HTTP Server is running on http://172.27.118.25:8000');

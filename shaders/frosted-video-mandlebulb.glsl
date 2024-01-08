@@ -276,17 +276,20 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     float texScale_min = 0.0;
     float texScale_max = .2;
 
-    // Map iMouse coordinates to the texture scale range
-    repeatFactorX = map(iMouseRaw.x - .5, 0.0, 1.0, texScale_min, texScale_max);
-    repeatFactorY = map(iMouseRaw.y - .5, 0.0, 1.0, texScale_min, texScale_max);
+    
 
     
 
+    // determine repeatFactorX,Y as a proportion of the mouses distance from the center of the screen:
+    // mouse near center: sets repeatFactor < 1.0
+    // midway from center to edge: repeatFactor = 1
+    // near edges of screen: repeatFactor = somewhere between 1 and 1000 (gradient)
+    
     // Centering the UV coordinates
-    vec2 centeredUV = point.xy / iResolution.xy - 0.5;
+    vec2 centeredUV = point.xy / iResolution.xy;
 
-    centeredUV.y += iMouse.x < 0.5 ? iMouse.x : 0.0;
-    centeredUV.x += iMouse.y < 0.5 ? iMouse.y : 0.0;
+    repeatFactorX = map(iMouse.x, 0.0, iResolution.x, texScale_min, texScale_max);
+    repeatFactorY = map(iMouse.y, 0.0, iResolution.y, texScale_min, texScale_max);
 
     // Apply the repeating effect to the UV coordinates
     centeredUV *= vec2(repeatFactorX, repeatFactorY);
@@ -490,10 +493,11 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         // The effect is more pronounced when iMouse.y is high
         // 1.0 is the maximum value for the dot product of the normal and the ray direction
         // 3.0 is the power to which the result is raised, controlling the intensity of the fresnel effect
-        // float factor2 = (iMouseRaw.y/iResolution.y);
-        // float fresnel = pow(1.0 - dot(n, rd), 3. * factor2);
-        // vec3 fresnelEffect = vec3(1.0, 1.0, 1.0) * fresnel;
-        // col += 1.0 - fresnelEffect;  // Additively mix the fresnel effect
+        // ===
+        float factor2 = (iMouseRaw.y/iResolution.y);
+        float fresnel = pow(1.0 - dot(n, rd), 3. * factor2);
+        vec3 fresnelEffect = vec3(1.0, 1.0, 1.0) * fresnel;
+        col += 1.0 - fresnelEffect;  // Additively mix the fresnel effect
 
         
         
@@ -503,38 +507,44 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         // Apply a flipped normal texel lookup for environment mapping
         // Use the normal from before for the texture lookup
         // Use "newUV" our reprojected vec3 and our normal to flip it to the other "side" of the "env" for texture lookup
-        // vec4 texColor2 = texture(iChannel0, vec2(1.0 - n.x, newUV.y));
+        // ===
+        vec4 texColor2 = texture(iChannel0, vec2(1.0 - n.x, newUV.y));
 
         // crank the brightness based on iMouse.y
+        // ===
         // float brightness = (iMouse.y);// * 2.0;
         // texColor2.rgb *= brightness;
 
         // Blend the colors based on the fresnel effect
         // Only show the bright flipped reflections in the fresnel-shaded areas
         // Do not apply to the non fresnel (sharp camera/surface angles) based on a smooth, continuous falloff
+        // ===
         // float fresnelBlend = 1.0 - fresnel;
         // float fresnelBlend2 = smoothstep(0.0, 1.0, fresnelBlend);
         // col += mix(vec4(0.), vec4(texColor2.rgb,1.0), fresnelBlend2).rgb;
 
         // fake the appearance of a diffuse point light
-        // float lightRadius = 0.1;
-        // float lightIntensity = 0.999;
-        // float lightDistance = length(p - ro);
-        // float lightAmount = smoothstep(lightRadius, 0.0, lightDistance);
-        // col = mix(col, vec3(lightIntensity), lightAmount);
+        // ===
+        float lightRadius = 0.1;
+        float lightIntensity = 0.999;
+        float lightDistance = length(p - ro);
+        float lightAmount = smoothstep(lightRadius, 0.0, lightDistance);
+        // set the color to magenta in a variable
+        vec3 magentaColor = vec3(1.0, 0.0, 1.0);
+        col = mix(col, magentaColor, lightAmount);
 
         // blur / diffusion
 
-        // //random sample to create a grainy / bokeh effect based on distance to camera
-        // float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
-        // float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
-        // grainAmount = mix(grainAmount, 1.0, 0.3);
+        //random sample to create a grainy / bokeh effect based on distance to camera
+        float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
+        grainAmount = mix(grainAmount, 1.0, 0.3);
 
-        // // use the grain to tweak the lookup coordinates
-        // float maxOffset = 0.01;
-        // vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
-        // vec4 texColor3 = texture(iChannel0, newUV.xy + grainOffset);
-        // col = mix(col, texColor3.rgb, grainAmount);
+        // use the grain to tweak the lookup coordinates
+        float maxOffset = 0.01;
+        vec2 grainOffset = vec2(randomSample * maxOffset, randomSample * maxOffset);
+        vec4 texColor3 = texture(iChannel0, newUV.xy + grainOffset);
+        col = mix(col, texColor3.rgb, grainAmount);
     } 
 
     // Mix the luminance into the existing color

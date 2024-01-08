@@ -11742,6 +11742,11 @@ const SO_DO_IT = ()=>{
 // central command definitions
 const InvokableCommands = {
 
+    "pixel mixer": "./webgl2.html",
+    "interactive 3d webgl video mandlebulb": "./webgl2.html",
+    "webgl2": "./webgl2.html",
+    "frosty": "./webgl2.html",
+
     "./new-year-2024.html": RES,
     "New Year's 2024!": "./new-year-2024.html",
     "Happy Near Year's 2024!": "./new-year-2024.html",
@@ -16964,15 +16969,24 @@ function setupDefaults(){
         baseCmds.push(new Config({
             name: `${cmdName}`,
             execute(){
+                const val = InvokableCommands?.[machineizedCmdName]
                 // how do we see if base cmd needs to call "tryInvokeHandlerForUri" on cmdName?
                 console.log("base cmd execute: ",{
                     cmdName,
                     machineizedCmdName,
-                    val: InvokableCommands[machineizedCmdName],
+                    val,
                     argz: arguments
                 })
 
-                const val = InvokableCommands?.[machineizedCmdName]
+                if(machineizedCmdName.includes(".html")){
+                    // try and open it
+                    window.open(cmdName);
+                }
+                if(val.includes(".html")){
+                    window.open(val)
+                }
+
+                
                 if(val === RES || val === RESOURCE){
                     // if the KEY reflects a .mp4, we should spawn a video player widget
                     if(machineizedCmdName?.includes?.('.mp4')){
