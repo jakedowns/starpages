@@ -306,7 +306,7 @@
         window.capturer = null;
         window.capturing = false;
         window.targetRecordingFPS = 29.97; //120;
-        window.targetRecordingDurationSeconds = 10;
+        window.targetRecordingDurationSeconds = 30;
         Object.defineProperty(window, 'maxFrames', {
             get: function() { return this.targetRecordingFPS * 10; }
         });
@@ -975,7 +975,7 @@
                     // update recording progress
                     if (progressElement) {
                         // Calculate progress based on targetRecordingDurationSeconds
-                        progressElement.value = (window.subframePlaybackCurrentFrame / (window.targetRecordingFPS * window.targetRecordingDurationSeconds)) * 100;
+                        progressElement.value = (window.subframePlaybackCurrentFrame / maxFrames) * 100;
                     }
                     window.capturer.capture(canvas);
                     
