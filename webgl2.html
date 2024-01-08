@@ -298,12 +298,15 @@
     
     <canvas id="canvas" classname="undarken"></canvas>
     <script>
+        const pixelWidth = window.innerWidth / 4.0;
+        const pixelHeight = window.innerHeight / 4.0;
         window.canvas;
         window.uReflectionY = 0.5; // 0.5 = no reflection, 0 = full reflection, 1 = no reflection
         window.reverseSort = true;
         window.capturer = null;
         window.capturing = false;
         window.targetRecordingFPS = 29.97; //120;
+        window.targetRecordingDurationSeconds = 10;
         Object.defineProperty(window, 'maxFrames', {
             get: function() { return this.targetRecordingFPS * 10; }
         });
@@ -357,7 +360,7 @@
             // }
             // `
         */
-        window.fragmentShaderSource = null;
+        //window.fragmentShaderSource = null;
         
         window.selectedImageTexture;
         window.shaderMaterial;
@@ -443,7 +446,6 @@
         });
 
         window.setupThree = async function(){
-            window.fragmentShader = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
 
             const pasteFromClipboardPrompt = document.getElementById("pasteFromClipboardPrompt");
             function showPasteFromClipboardPrompt(){
@@ -507,6 +509,9 @@
                         if (item.types.includes('image/png')) {
                             const blob = await item.getType('image/png');
                             const url = URL.createObjectURL(blob);
+                            if(window?.baseTexture?.image){
+                                return;
+                            }
                             window.baseTexture.image.onload = function() {
                                 URL.revokeObjectURL(url);
                                 window.baseTexture.needsUpdate = true;
@@ -517,6 +522,9 @@
                         // or if ti's a base64 image in a text string, pass _that_ to image.src
                         if (item.types.includes('text/plain')) {
                             const text = await item.getType('text/plain');
+                            if(window?.baseTexture?.image){
+                                return;
+                            }
                             window.baseTexture.image.onload = function() {
                                 URL.revokeObjectURL(url);
                                 window.baseTexture.needsUpdate = true;
@@ -556,8 +564,10 @@
                 else if (file.type.indexOf('image') === 0) {
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        window.baseTexture.image.src = e.target.result;
-                        window.baseTexture.needsUpdate = true;
+                        if(window.baseTexture?.image){
+                            window.baseTexture.image.src = e.target.result;
+                            window.baseTexture.needsUpdate = true;
+                        }
 
                         onBaseTextureRefresh();
 
@@ -569,9 +579,18 @@
             canvas = document.getElementById("canvas");
             const renderer = new THREE.WebGLRenderer({canvas});
 
+            
+            canvas.width = pixelWidth;
+            canvas.height = pixelHeight;
+            // Scale up the canvas using CSS
+            canvas.style.width = '100vw';
+            canvas.style.height = '100vh';
+            canvas.style.imageRendering = 'pixelated'; // This ensures nearest neighbor scaling in browsers that support it
+            //canvas.style.imageRendering = 'crisp-edges'; // This ensures nearest neighbor scaling in browsers that support it
+
             // Orthographic camera setup
             const frustumSize = 1;
-            const aspect = canvas.clientWidth / canvas.clientHeight;
+            const aspect = pixelWidth / pixelHeight; //canvas.clientWidth / canvas.clientHeight;
             const camera = new THREE.OrthographicCamera(
                 frustumSize * aspect / -2, 
                 frustumSize * aspect / 2, 
@@ -630,6 +649,12 @@
                 THREE.UnsignedByteType
             );
 
+            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTexture.needsUpdate = true;
+
 
             window.currentTexture = window.baseTexture; //window.lerpedColorTexture;
             
@@ -638,8 +663,6 @@
             window.currentTexture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
 
             window.image_height = baseTexture.height;
-
-            
 
             // Alternatively, use RepeatWrapping for wrap-around effect
             // texture.wrapS = THREE.RepeatWrapping;
@@ -671,19 +694,43 @@
                         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
                     }
                 `,
-                fragmentShader: fragmentShader,
+                fragmentShader: window.fragmentShaderSource,
                 transparent: true, // Enable transparency
             });
+
+            // do a SECOND material
+            // tied to combineTexturesShaderSource
+            window.shaderAccumulationMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    iChannel0: { value: baseTexture },
+                    iChannel1: { value: window.accumulationTexture.texture },
+                    iResolution: { value: new THREE.Vector3(pixelWidth, pixelHeight, 1.0) },
+                    iMouse: { value: window.mouseLerping },
+                    iMouseRaw: { value: window.mouseRaw },
+                    iMouseWheel: { value: window.iMouseWheel },
+                    iTime: { value: 1.0 },
+                },
+                vertexShader: `
+                    void main() {
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: combineTexturesShaderSource,
+                transparent: true, // Enable transparency
+            });
+
+            window.backPlane = new THREE.Mesh(planeGeometry, window.shaderMaterial);
+            scene.add(backPlane);
             
 
             // Creating and adding the plane to the scene
-            window.plane = new THREE.Mesh(planeGeometry, shaderMaterial);
+            window.plane = new THREE.Mesh(planeGeometry, window.shaderAccumulationMaterial);
             scene.add(plane);
 
             function resizeRendererToDisplaySize(renderer) {
                 canvas = renderer.domElement;
-                let width = window.innerWidth;
-                let height = window.innerHeight;
+                let width = pixelWidth ?? window.innerWidth;
+                let height = pixelHeight ?? window.innerHeight;
 
                 // force to even dimensions for ffmpeg compatibility
                 width = 2 * Math.floor(width / 2);
@@ -705,8 +752,8 @@
             window.vec2MouseWheelLerped = new THREE.Vector2();
             function updateMouseUniform() {
                 // Normalize coordinates (0 to 1)
-                let normalizedX = window.mouseX / window.innerWidth;
-                let normalizedY = window.mouseY / window.innerHeight;
+                let normalizedX = window.mouseX / pixelWidth; //window.innerWidth;
+                let normalizedY = window.mouseY / pixelHeight; //window.innerHeight;
 
                 // Adjust for aspect ratio
                 const aspect = window.innerWidth / window.innerHeight;
@@ -759,6 +806,26 @@
                 // Set the shader uniform for the mouse wheel
                 // it's a vec4, first two are lerped, second two are raw
                 shaderMaterial.uniforms.iMouseWheel.value.set(
+                    vec2MouseWheelLerped.x, 
+                    vec2MouseWheelLerped.y, 
+                    vec2MouseWheelRaw.x,
+                    vec2MouseWheelRaw.y
+                );
+
+                // update our other shader
+                shaderAccumulationMaterial.uniforms.iMouseRaw.value.set(
+                    window.mouseRaw.x, 
+                    window.mouseRaw.y, 
+                    window.mouseRaw.z, 
+                    0
+                );
+                shaderAccumulationMaterial.uniforms.iMouse.value.set(
+                    window.mouseLerping.x, 
+                    window.mouseLerping.y,
+                    window.leftMouseDown ? 1 : -1, 
+                    0
+                );
+                shaderAccumulationMaterial.uniforms.iMouseWheel.value.set(
                     vec2MouseWheelLerped.x, 
                     vec2MouseWheelLerped.y, 
                     vec2MouseWheelRaw.x,
@@ -862,30 +929,43 @@
                     camera.aspect = canvas.width / canvas.height;
                     camera.updateProjectionMatrix();
                 }
-                
-                if(!window.fixedTime){
-                    shaderMaterial.uniforms.u_time.value = time * 0.001; // Convert time to seconds
-                }else{
-                    shaderMaterial.uniforms.u_time.value = window.fixedTime;
-                }
-                shaderMaterial.uniforms.u_resolution.value.set(window.innerWidth, window.innerHeight);
+
+                let _time = window.fixedTime ? window.fixedTime : time * 0.1;
+
+                // Use a custom shader material that combines the textures
+                window.shaderMaterial.uniforms.iChannel0.value = currentTexture;
+
+
+                window.shaderAccumulationMaterial.uniforms.iChannel0.value = currentTexture;
+                window.shaderAccumulationMaterial.uniforms.iChannel1.value = accumulationTexture;
+                window.shaderAccumulationMaterial.uniforms.iTime.value = _time;
+
+                shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
+                shaderMaterial.uniforms.iChannel0.value = accumulationTexture; //currentTexture;
+                shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
+
+                window.accumulationTexture.needsUpdate = true;
+
+                // Update uniforms
+                shaderMaterial.uniforms.u_time.value = _time;
+                shaderMaterial.uniforms.u_resolution.value.set(pixelWidth, pixelHeight);
                 updateMouseUniform();
 
-                //
-                // update ShaderToy compatibility uniforms
-                // iTime: { value: 1.0 },
-                // iChannel0: { value: baseTexture },
-                // iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
-                //
-                shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
-                shaderMaterial.uniforms.iChannel0.value = currentTexture;
-                shaderMaterial.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight, 1.0);
-
-                if(window.do_clear_frame){
-                }else{
-                }
-
+                // Render the scene into the currentFrameTexture
+                renderer.setRenderTarget(window.currentFrameTexture);
                 renderer.render(scene, camera);
+
+                // Use the rendered texture as input for the next pass
+                shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+
+                // Render the accumulation pass to the screen
+                renderer.setRenderTarget(null);
+                renderer.render(scene, camera);
+
+                // Swap the textures
+                let temp = window.currentFrameTexture;
+                window.currentFrameTexture = window.accumulationTexture;
+                window.accumulationTexture = temp;
 
                 
                 // sub-frame playback
@@ -893,8 +973,9 @@
                 
                 if(window.capturing){
                     // update recording progress
-                    if(progressElement){
-                        progressElement.value = (window.subframePlaybackCurrentFrame / maxFrames) * 100;
+                    if (progressElement) {
+                        // Calculate progress based on targetRecordingDurationSeconds
+                        progressElement.value = (window.subframePlaybackCurrentFrame / (window.targetRecordingFPS * window.targetRecordingDurationSeconds)) * 100;
                     }
                     window.capturer.capture(canvas);
                     
@@ -969,9 +1050,7 @@
 
                         const reader = new FileReader();
                         reader.onload = (e) => {
-                            baseTexture.image.src = e.target.result;
-                            baseTexture.needsUpdate = true;
-                            // "setImageAsChannel"
+                            setImageAsChannel(e.target.result);
                             currentTexture = baseTexture;
 
 
@@ -1115,8 +1194,10 @@
             // fast start
             window.targetVideoPlaybackRate = 1.0; 
             hideIntroText(); 
-            //window.setVideoAsChannel("./res/0006.mp4");
-            window.setImageAsChannel("./res/test/Sketchfab_UV_Checker.png");
+            window.setVideoAsChannel("./res/0006.mp4");
+            // window.setImageAsChannel("./res/test/Sketchfab_UV_Checker.png");
+
+            
         }
 
         
@@ -1240,13 +1321,33 @@
             }
         }
 
+        window.resetAccumulationTexture = function(){
+            // clear out our accumulator texture
+            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.currentFrameTexture.needsUpdate = true;
+            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTexture.needsUpdate = true;
+        }
+
         window.setImageAsChannel = function(url){
-            window.baseTexture.image.src = url;
-            window.baseTexture.needsUpdate = true;
+            // baseTexture.image.src = e.target.result;
+            // baseTexture.needsUpdate = true;
+            // "setImageAsChannel"
+            if(window.baseTexture?.image){
+                window.baseTexture.image.src = url;
+                window.baseTexture.needsUpdate = true;
+            }else{
+                console.warn('no baseTexture.image')
+            }
 
             // update our originalPixelDataTexture (Three.js Texture)
             window.originalPixelDataTexture.image.src = url;
             window.originalPixelDataTexture.needsUpdate = true;
+
+            // clear out our accumulator texture
+            resetAccumulationTexture();
         }
 
         // domready
@@ -1254,8 +1355,32 @@
             // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
             //     return;
             // }
-            //window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
+            // window.fragmentShaderSource = await (await fetch("./shaders/fresh.glsl")).text();
+            // window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
             window.fragmentShaderSource = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
+            window.combineTexturesShaderSource = `
+            // Fragment shader
+            uniform sampler2D iChannel0;
+            uniform sampler2D iChannel1;
+            uniform vec3 iResolution;
+            uniform float iTime;
+            uniform vec4 iMouse;
+            uniform vec4 iMouseRaw;
+            uniform vec4 iMouseWheel;
+
+            void main() {
+                vec2 uv = gl_FragCoord.xy / iResolution.xy;
+                vec4 currentColor = texture2D(iChannel0, uv.xy);
+                vec4 previousColor = texture2D(iChannel1, uv.xy);
+                // decay
+                previousColor = previousColor * 0.9999;
+                // apply a "smear" effect between the two
+                float smearFactor = max(0.01, 1.0 - iTime);
+                vec4 smearColor = mix(previousColor, currentColor, smearFactor);
+                gl_FragColor = iMouse.x > 0.5 ? smearColor : currentColor;
+                
+            }
+            `;
             prepareCCapture();
             setupThree();
         }
@@ -1268,13 +1393,13 @@
         });
 
         function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = pixelWidth;
+            canvas.height = pixelHeight;
             fixedPixelsX = Math.floor(canvas.width/pixel_density);
             fixedPixelsY = Math.floor(canvas.height/pixel_density);
             window.DID_BIND_BASE_SINCE_RESIZE = false;
             // update our iResolution uniform
-            shaderMaterial.uniforms.iResolution.value.set(window.innerWidth, window.innerHeight, 1.0);
+            shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
         }
 
         // two triangles that cover the entire screen

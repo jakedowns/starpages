@@ -288,8 +288,8 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     // Centering the UV coordinates
     vec2 centeredUV = point.xy / iResolution.xy;
 
-    repeatFactorX = map(iMouse.x, 0.0, iResolution.x, texScale_min, texScale_max);
-    repeatFactorY = map(iMouse.y, 0.0, iResolution.y, texScale_min, texScale_max);
+    repeatFactorX = map(iMouse.x, -1., 1., texScale_min, texScale_max);
+    repeatFactorY = map(iMouse.y, -1., 1., texScale_min, texScale_max);
 
     // Apply the repeating effect to the UV coordinates
     centeredUV *= vec2(repeatFactorX, repeatFactorY);
@@ -422,7 +422,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     // result
     vec3 res = intersect(ro, rd, time);
     if(res.x > 0.0) {
-        float SHADOW_ATTENUATION = 1.; //-2.;
+        float SHADOW_ATTENUATION = .1; //-2.;
         p = ro + res.x * rd;
         vec3 n = nor(p, time);
         float shadow = softshadow(p, sundir, SHADOW_ATTENUATION, time);

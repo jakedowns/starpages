@@ -37,6 +37,8 @@
             right: 0;
             bottom: 0;
 
+            background: red;
+
 
             width: 100vw;
             min-Width: 100vw;
@@ -486,7 +488,9 @@
         }
 
         window.setupThree = async function () {
-            window.fragmentShader = await (await fetch("./shaders/fresh.glsl")).text();
+            console.warn('hello');
+            //window.fragmentShader = await (await fetch("./shaders/fresh.glsl")).text();
+            window.fragmentShader = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
 
             const pasteFromClipboardPrompt = document.getElementById("pasteFromClipboardPrompt");
             function showPasteFromClipboardPrompt() {
@@ -604,7 +608,8 @@
 
                         onBaseTextureRefresh();
 
-                        window.currentTexture = window.baseTexture;
+                        //window.currentTexture = window.baseTexture;
+                        window.currentTexture = window.lerpedColorTexture;//
                         theVideoplayerElement.style.opacity = 0;
                     };
                     reader.readAsDataURL(file);
@@ -612,6 +617,16 @@
             });
             canvas = document.getElementById("canvas");
             const renderer = new THREE.WebGLRenderer({ canvas });
+
+            const pixelWidth = 256;
+            const pixelHeight = 256;
+            canvas.width = pixelWidth;
+            canvas.height = pixelHeight;
+            // Scale up the canvas using CSS
+            canvas.style.width = '100vw';
+            canvas.style.height = '100vh';
+            canvas.style.imageRendering = 'pixelated'; // This ensures nearest neighbor scaling in browsers that support it
+
 
             // Orthographic camera setup
             const frustumSize = 1;
@@ -621,8 +636,8 @@
                 frustumSize * aspect / 2,
                 frustumSize / 2,
                 frustumSize / -2,
-                1,
-                1000
+                .01,
+                10000
             );
             camera.position.z = 2;
 
@@ -638,6 +653,8 @@
             //let url = "./res/download (3).png";
             let url = "./res/download (10).png";
             window.baseTexture = textureLoader.load(url);
+
+            
 
             // define our textures / buffers
             // 1. our starting values (provided by user image or video, etc)
@@ -666,6 +683,7 @@
                 THREE.UnsignedByteType
             );
             // 4. our "offset" buffer where we accumulate / calculate our offsets
+            // this is for pixel sorting
             window.offsetTexture = new THREE.DataTexture(
                 new Uint8Array(4 * fixedPixelsX * fixedPixelsY),
                 fixedPixelsX,
@@ -674,8 +692,16 @@
                 THREE.UnsignedByteType
             );
 
+            
+            // Add these near your other texture definitions
+            window.currentFrameTexture = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
+            window.accumulationTexture = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
+            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTexture.needsUpdate = true;
 
             window.currentTexture = window.baseTexture; //window.lerpedColorTexture;
+            // window.currentTexture = window.lerpedColorTexture;
 
             // Assuming you have a texture loaded into a variable named 'texture'
             window.currentTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
@@ -714,15 +740,37 @@
                 transparent: true, // Enable transparency
             });
 
+            // do a SECOND material
+            // tied to combineTexturesShaderSource
+            window.shaderAccumulationMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    // u_time: { value: 1.0 },
+                    // u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+
+                    // compatibility uniforms
+                    // iTime: { value: 1.0 },
+                    iChannel0: { value: baseTexture },
+                    iChannel1: { value: window.accumulationTexture.texture },
+                    iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
+                    iMouse: { value: new THREE.Vector4(0.0) },
+                },
+                vertexShader: `
+                    void main() {
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: combineTexturesShaderSource,
+                transparent: true, // Enable transparency
+            });
 
             // Creating and adding the plane to the scene
-            window.plane = new THREE.Mesh(planeGeometry, shaderMaterial);
+            window.plane = new THREE.Mesh(planeGeometry, shaderAccumulationMaterial);
             scene.add(plane);
 
             function resizeRendererToDisplaySize(renderer) {
                 canvas = renderer.domElement;
-                let width = window.innerWidth;
-                let height = window.innerHeight;
+                let width = pixelWidth ?? window.innerWidth;
+                let height = pixelHeight ?? window.innerHeight;
 
                 // force to even dimensions for ffmpeg compatibility
                 width = 2 * Math.floor(width / 2);
@@ -868,6 +916,8 @@
 
                     camera.aspect = canvas.width / canvas.height;
                     camera.updateProjectionMatrix();
+                }else{
+                    
                 }
 
                 if (!window.fixedTime) {
@@ -892,7 +942,21 @@
                 } else {
                 }
 
+                // Render the current scene into the currentFrameTexture
+                renderer.setRenderTarget(window.currentFrameTexture);
                 renderer.render(scene, camera);
+
+                // Combine currentFrameTexture and accumulationTexture
+                combineTextures(window.currentFrameTexture.texture, window.accumulationTexture.texture);
+
+                // Render the accumulationTexture to the screen
+                renderer.setRenderTarget(null); // Render to the canvas
+                renderer.render(scene, camera);
+
+                // Swap the textures: the current frame becomes the previous frame (accumulation buffer)
+                let temp = window.accumulationTexture;
+                window.accumulationTexture = window.currentFrameTexture;
+                window.currentFrameTexture = temp;
 
 
                 // sub-frame playback
@@ -1123,6 +1187,16 @@
             window.targetVideoPlaybackRate = 1.0;
             hideIntroText();
             // window.setVideoAsChannel("./res/0006.mp4");
+
+            window.combineTextures = function (currentFrameTexture, accumulationTexture) {
+                // Use a custom shader material that combines the textures
+                window.shaderMaterial.uniforms.iChannel0.value = currentTexture;
+                window.shaderAccumulationMaterial.uniforms.iChannel1.value = accumulationTexture;
+
+                // You might need to update your fragment shader to use iChannel1
+                // and combine it with iChannel0 to produce the accumulated result
+
+            }
         }
 
 
@@ -1259,6 +1333,26 @@
             // }
             //window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
             window.fragmentShaderSource = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
+
+
+            window.combineTexturesShaderSource = `
+// Fragment shader
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
+uniform vec3 iResolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    vec4 currentColor = texture2D(iChannel0, uv.xy);
+    vec4 previousColor = texture2D(iChannel1, uv.xy);
+
+    // Screen blend mode: lighter colors are applied more, dark colors become transparent
+    gl_FragColor = 1.0 - ((1.0 - currentColor) * (1.0 - previousColor));
+
+    //gl_FragColor = vec4(1.,0.,0.,1.);
+}
+`;
+
             prepareCCapture();
             setupThree();
         }
