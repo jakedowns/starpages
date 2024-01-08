@@ -401,8 +401,8 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
 
     // The background color is calculated based on the y coordinate of the view.
     vec3 bg = exp(uv.y - 2.0) * vec3(0.4, 1.6, 1.0);
-    // // hue-shift the bg 90 degrees
-    // bg = mix(bg, vec3(0.4, 1.6, 1.0), 0.5);
+    // hue-shift the bg
+    bg = mix(bg, vec3(0.4, 1.6, 1.0), 0.5);
 
     // The halo effect is calculated based on the dot product of the normalized vectors from the camera to the origin and the ray direction.
     float halo = clamp(dot(normalize(vec3(-ro.x, -ro.y, -ro.z)), rd), 0.0, 1.0);
@@ -419,7 +419,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     // result
     vec3 res = intersect(ro, rd, time);
     if(res.x > 0.0) {
-        float SHADOW_ATTENUATION = -2.;
+        float SHADOW_ATTENUATION = 1.; //-2.;
         p = ro + res.x * rd;
         vec3 n = nor(p, time);
         float shadow = softshadow(p, sundir, SHADOW_ATTENUATION, time);
@@ -469,11 +469,11 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         vec3 camToP = p - ro;
         vec4 pole = vec4(0.0, 1.0, 0.0, 0.0); 
         // Transform the 3D point to UV coordinates with depth, using the camera's orientation
-        // vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, camOrientation, time);
+        vec3 newUV = transform3DPointToUVDepth(p, n, ro, camToP, camOrientation, time);
 
         // Sample from iChannel0 using the new UV coordinates
-        // vec4 texColor = texture(iChannel0, newUV.xy);
-        //col = texColor.rgb;
+        vec4 texColor = texture(iChannel0, newUV.xy);
+        col = mix(col, texColor.rgb, n * 0.5 + 0.5);
 
         // apply fog based on newUV.z
         // make sure newUV.z is in the range 0.0 to 1.0
