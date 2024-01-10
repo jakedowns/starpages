@@ -1,9 +1,2099 @@
 <!DOCTYPE html>
+<meta charset="utf-8">
+<!-- 
+    https://jakedowns.github.io/starpages/webgl2.html
+    TODO:
+    - bitonic sort
+
+    // finish back merging "video texture" / three.js bindings
+
+    // finish triple-buffering
+    - lerping between colors using an intermediary accumulator texture which we display
+        // backed by our current Original, and Target textures
+-->
 <html>
 <head>
-    <title>Pixel Mixer</title>
+    <script>
+        window.capturerSpeedReduction = 0.5;
+    </script>
+    <title>🎨 pixel mixer 🧪</title>
+    
+    <meta property="og:title" content="🎨 pixel mixer 🧪" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://jakedowns.github.io/starpages/public/pixel-mixer.html" />
+    <meta property="og:image" content="https://jakedowns.github.io/starpages/res/pixel-mixer.png" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
+    <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
+    <!-- <script type="module">
+        import { GUI } from './import/threejs/examples/jsm/libs/lil-gui.module.min.js';
+        const panel = new GUI( );
+			
+				panel.add( settings, 'res', 1, 6, 1 ).name( 'Res' ).onFinishChange( compile );
+				panel.add( settings, 'bounds', 1, 10, 1 ).name( 'Bounds' ).onFinishChange( compile );
+				panel.add( settings, 'material', [ 'depth', 'normal' ] ).name( 'Material' ).onChange( setMaterial );
+				panel.add( settings, 'wireframe' ).name( 'Wireframe' ).onChange( setMaterial );
+				panel.add( settings, 'autoRotate' ).name( 'Auto Rotate' );
+				panel.add( settings, 'vertexCount' ).name( 'Vertex count' ).listen().disable();
+    </script> -->
+    <script>
+        // stat.js
+        (function(){
+            var script=document.createElement('script');script.onload=function(){
+                var stats=new Stats();
+                document.body.appendChild(stats.dom);
+                stats.dom.style.position = 'absolute';
+                stats.dom.style.bottom = '0px';
+                stats.dom.style.top = 'auto';
+                requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
+        
+    </script>
+    <style>
+        html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
+        canvas#canvas {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+    
+            
+            width: 100vw; 
+            min-Width: 100vw; 
+            max-width: 100vw;
+            height: 100vh;
+            min-height: 100vh;
+            max-height: 100vh; 
+
+            /* filter: blur(100px);  */
+            opacity: 1;
+            transition: filter 0.5s ease-in-out, opacity 0.5s ease-in-out; 
+            will-change: filter; 
+        }
+        canvas.unblur { filter: blur(0px); opacity: 1; }
+        canvas.undarken { opacity: 0.8; }
+        .drop-here-text {
+            pointer-events: none;
+            position: absolute;
+            left: 0; right: 0; top: 0; bottom: 0;
+            z-index: 4000;
+            font-size: 43px;
+            font-weight: bold;
+            text-align: center;
+            color: white;
+            font-family: sans-serif;
+            text-shadow: 4px 4px 5px black, 5px 5px 5px blue;
+            -webkit-text-strokes: 1px black;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: all 1s ease-in-out;
+        }
+        .drop-here-text.fadeout {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .drop-here-text span {
+            display: block;
+            font-size: 25px;
+        }
+        .drop-here-text.fadeout span {
+            pointer-events: none;
+        }
+        .drop-here-text .hint {
+            font-size: 15px;
+        }
+        .intro-card {
+            top: 50%;
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            display: block;
+            width: 100%;
+            max-width: 100vw;
+            padding: 20px;
+            box-sizing: border-box;
+            opacity: 1;
+        }
+        .intro-card.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .intro-card iframe {
+            height: auto;
+            width: 100%;
+            min-width: 100px;
+            max-width: 100%;
+        }
+        p {
+            color: white;
+            font-size: 12px;
+            font-family: serif;
+        }
+        h1 {
+            font-family: sans-serif;
+        }
+        .intro-underlay {
+            background-color: rgba(.1,0,.1,.8);
+            backdrop-filter: blur(10px);
+            position: absolute;
+            z-index: 999;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .intro-underlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .hide-intro-button {
+            text-align: center;
+            width: auto;
+            margin: 0 auto;
+            position: relative;
+            display: block;
+            border-radius: 100px;
+            border: 2px solid black;
+            padding: 10px 20px;
+            box-sizing: border-box;
+            font-size: 20px;
+            color: white;
+            cursor: pointer;
+            transition: all 1s ease-in-out;
+            background-color: #663dff;
+            font-family: sans-serif;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+            background-size: 200% auto;
+            background-image: linear-gradient(90deg, #cc4499, #aa00ff, #663dff, #aa00ff, #cc4499);
+            transition: all 1s ease-in-out;
+            /* Apply the animation */
+            animation: gradient-animation 2s linear infinite;
+        }
+
+        /* here we use a rounded rectangle + a linear gradient to emulate gloss via psuedo element */
+        .hide-intro-button .btn-inner::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 100px;
+            background-color: rgba(255,255,255,0.1);
+            z-index: 1;
+            backdrop-filter: blur(50px);
+        }
+
+
+        .hide-intro-button:hover {
+        }
+        .hide-intro-button .btn-text {
+            position: relative;
+            font-size: 18px;
+            z-index: 2;
+            color: white;
+            text-shadow:  1px 1px 10px rgba(255,255,255,1); /* 1px 1px 1px rgba(0,0,0,0.8), */
+            cursor: pointer;
+        }
+
+        /*
+            1. we reflect the gradient over the Y axis
+            2. we animate the gradient over time from left to right infinitely
+            3. [#cc4499, #aa00ff, #663dff, #aa00ff, #cc4499]
+            4. we use a linear gradient to emulate gloss
+            5. we stretch it to 2x the width of the button
+        */
+        @keyframes gradient-animation {
+            0% { background-position: 0% 50%; }
+            99.99% { background-position: -200% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #controls {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 100px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            align-items: stretch;
+        }
+        video {
+            position: absolute;
+            left: 0;
+            opacity: 0.1;
+            transition: all 1s ease-in-out;
+            bottom: 100px;
+            width: 100px;
+        }
+        video:hover {
+            opacity: 1;
+            width: 300px;
+        }
+        #record-video-button {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 100px;
+            z-index: 1000;
+        }
+
+        /* final z-indexes */
+        .intro-card { z-index: 1002; position: absolute; }
+        .intro-underlay { z-index: 1001; }
+        #controls { z-index: 1000; }
+        video { z-index: 1000; }
+        canvas { z-index: 999; }
+
+        .view-source-link {
+            position: absolute; 
+            top: 0; 
+            right: 0; 
+            z-index: 9999; 
+            font-size: 10px; 
+            font-family: sans-serif; 
+            color: white; 
+            text-decoration: none; 
+            padding: 5px; 
+            background-color: black; 
+            opacity: 0.5;
+            transition: all 1s ease-in-out;
+            &:hover {
+                opacity: 1;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to Pixel Mixer!</h1>
+    <!-- todo: gif support -->
+    <!-- view source on github -->
+    <a href="https://github.com/jakedowns/starpages/blob/main/webgl2.html" 
+    class="view-source-link" target="_blank">view source on GitHub</a>
+
+    <!-- buy me a coffee; ko-fi link -->
+    <a href="https://ko-fi.com/jakedowns" target="_blank" style="position: absolute; top: 0; left: 0; z-index: 1003; font-size: 10px; font-family: sans-serif; color: white; text-decoration: none; padding: 5px; background-color: black; opacity: 0.5;">☕🥰 Buy me a coffee</a>
+
+    <div id="controls"> 
+        <input type="file" accept="image/*,video/*,image/svg+xml" id="fileupload" />
+        <progress id="progress" value="0" max="100"></progress>
+        <button onclick="window.startCapture()">record video</button>
+    </div>
+
+    <div class="intro-card transition-opacity fade-out">
+        <h1>Pixel Mixer Demo</h1>
+        <p>v24.01.01.01 - Major Release 001</p>
+        <p>Shout out to acerola on youtube for his original "I tried sorting pixels" video which inspired me to dig back into this</p>
+        <p>Drop images and video on this webpage to have them mixed and blended in unique ways</p>
+        <p>⚠️ Flashing Light Warning ⚠️ <br/>this app produces rapidly flashing light patterns. I'm working on a "safe" comfort mode - but for now, do not use it if you are photo-sensitive. 🙇🏻‍♂️🙏🏻</p>
+        <!-- <iframe width="560" height="315" src="https://www.youtube.com/embed/NGA-Sc-2XTg?si=YxW01ggV4KRXI-U4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe> -->
+        
+        <button class="hide-intro-button">
+            <span class="btn-inner">
+                <span  class="btn-text" onclick="window.hideWelcome()">Click to Continue ➡️</span>
+            </span>
+        </button>
+    </div>
+
+    <div class="intro-underlay fade-out" onclick="window.hideWelcome()"></div>
+
+    <div class="drop-here-text">pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
+    
+    <canvas id="canvas" classname="undarken"></canvas>
+    <script>
+        window.pixelWidth = window.innerWidth / 2.0;
+        window.pixelHeight = window.innerHeight / 2.0;
+        window.canvas;
+        window.uReflectionY = 0.5; // 0.5 = no reflection, 0 = full reflection, 1 = no reflection
+        window.reverseSort = true;
+        window.capturer = null;
+        window.capturing = false;
+        window.targetRecordingFPS = 29.97; //120;
+        window.targetRecordingDurationSeconds = 30;
+        Object.defineProperty(window, 'maxFrames', {
+            get: function() { return this.targetRecordingFPS * 10; }
+        });
+
+        // define fixedTime
+        // a wall time we can hold to pause the shader
+        Object.defineProperty(window, 'fixedTime', {
+            get() { 
+                return window.targetVideoPlaybackRate >= 0.1 ? null : this._fixedTime;
+             },
+            set(value) {
+                this._fixedTime = value;
+            }
+        });
+
+        window.videoIsPlaying = false;
+        // used to distinguish element's playback state from our virtual playback state(sub-0.1x playback rate)
+        window.videoIsVirtuallyPlaying = false; 
+        // window.recordingStartedAt = 0;
+        window.subframePlaybackCurrentFrame = 0;
+        window.currentVideoTime = null;
+        window.baseTexture = null; 
+        // this is one of the base textures for the screen, it's part of a double-buffering ping-pong scheme
+        // where we swap reading/writing to baseTexture or accumulationTexture
+        // so, we need a NEW texture that's meant specifically the mandlebulb
+        window.mandlebulbTexture = null;
+
+        window.shaderTimeIsPaused = false;
+        window.theVideoplayerElement = null;
+        let _targetVideoPlaybackRate = 0.01;
+        let _targetVideoPlaybackRateClamped = 0.1;
+        Object.defineProperty(window, 'targetVideoPlaybackRate', {
+            get: function() {
+                return _targetVideoPlaybackRate;
+            },
+            set: function(value) {
+                _targetVideoPlaybackRate = value;
+                _targetVideoPlaybackRateClamped = parseFloat(Math.min(Math.max(value, 0.1), 1.0).toFixed(1));
+                if (window.theVideoplayerElement) {
+                    window.theVideoplayerElement.playbackRate = _targetVideoPlaybackRateClamped;
+                }else{
+                    console.warn('no video element to set playback rate on')
+                }
+            }
+        });
+
+        // was: fsSource
+        /*
+            // bare bones debug
+            // make sure we set, otherwise safari won't work
+            //     fsSource = `
+            // precision mediump float;
+            // void main() {
+            //     gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+            // }
+            // `
+        */
+        //window.fragmentShaderSource = null;
+        
+        window.selectedImageTexture;
+        window.shaderMaterial;
+
+        window.onBaseTextureRefresh = function(){
+            // 1. reset Offset texture
+            // 2. clone base -> target (refresh)
+            // 3. clone base -> accumulator (refresh)
+            // 4. clone base -> lerped (refresh)?
+        }
+
+        // window.switchToImageTexture
+        
+        // may have changed pixel resolution
+        // TODO: maybe make sure we set three to just fill/crop whatever we're trying to display to fit our existing pixel resolution
+        window.reinitTexturesOnNewInput = function(){
+            // 1. reset Offset texture
+            // 2. clone base -> target (refresh)
+            // 3. clone base -> accumulator (refresh)
+            // 4. clone base -> lerped (refresh)?
+        }
+
+        let handling_slow_motion_advance = false;
+
+        function maybeAdvanceVideoOneFrame() {
+            if(!window.targetVideoPlaybackRate >= 0.1){
+                handling_slow_motion_advance = false;
+                return;
+            }
+            if(handling_slow_motion_advance){
+                return;
+            }
+            //theVideoplayerElement.pause();
+            handling_slow_motion_advance = false;
+
+            let frameDuration = 1 / window.targetRecordingFPS; //framerate;
+            let desiredSpeed = window.targetVideoPlaybackRate;// 0.05; // Replace with your desired speed
+            let playDuration = frameDuration / desiredSpeed;
+
+            let do_advance_virtual_frame_this_literal_frame = window.subframePlaybackCurrentFrame % Math.floor(1 / desiredSpeed) == 0;
+            if(!do_advance_virtual_frame_this_literal_frame){
+                return;
+            }
+            subframePlaybackCurrentFrame++;
+            // currentTime is also not precise enough for sub-frame playback
+            // we will hit play then pause in a short manner
+            // the min time beyond the point where a "play was cancelled by pause" is ??ms ?
+            //theVideoplayerElement.currentTime += frameDuration;
+            window.playSlowMotion = function() {
+                // console.warn("onPlaySlowMotion",{
+                //     frameDuration,
+                //     targetFPS: window.targetRecordingFPS,
+                //     desiredSpeed,
+                //     playDuration,
+                // });
+                setTimeout(() => {
+                    handling_slow_motion_advance = true;
+                    theVideoplayerElement.play();
+                }, 32);
+                // onseek we call BACK to this function to pause and continue slow motion
+            }
+
+            theVideoplayerElement.addEventListener('seeked', () => {
+                if (handling_slow_motion_advance) {
+                    playSlowMotion();
+                }
+            });
+
+            // theVideoplayerElement.addEventListener('pause', () => {
+            //     if (handling_slow_motion_advance && theVideoplayerElement.currentTime < theVideoplayerElement.duration) {
+            //         theVideoplayerElement.currentTime += frameDuration;
+            //     }
+            // });
+
+            
+        }
+
+        document.addEventListener('wheel', (e) => {
+            vec2MouseWheelRaw.set(
+                vec2MouseWheelRaw.x + e.deltaX * 0.1, 
+                vec2MouseWheelRaw.y + e.deltaY * 0.1
+            );
+        });
+
+        window.setupThree = async function(){
+
+            const pasteFromClipboardPrompt = document.getElementById("pasteFromClipboardPrompt");
+            function showPasteFromClipboardPrompt(){
+                pasteFromClipboardPrompt.classList.add("show");
+                setTimeout(()=>{
+                    pasteFromClipboardPrompt.classList.remove("show");
+                },5000);
+            }
+            function hidePasteFromClipboardPrompt(){
+                pasteFromClipboardPrompt.classList.remove("show");
+            }
+            let didShowClipboardPrompt = false;
+            let currentClipboardBagValueHash = null;
+            let previousClipboardBagValueHash = null;
+            // let clipboardCheckInterval = setInterval(async()=>{
+            //     if(didShowClipboardPrompt){
+            //         // check if clipboard has changed
+            //         let currentClipboardBagValueHash = null;
+            //         try{
+            //             const items = await navigator.clipboard.read();
+            //             let hash_string = '';
+            //             for (const item of items) {
+            //                 let types_concat = item.types.join('');
+            //                 hash_string += types_concat;
+            //                 hash_string += item.size ?? 0;
+            //                 hash_string += item.lastModified ?? 0;
+            //             }
+            //             console.warn({hash_string})
+            //             currentClipboardBagValueHash = hash_string;
+            //         }catch(e){
+            //             console.error(e);
+            //         }
+            //         if(currentClipboardBagValueHash != previousClipboardBagValueHash){
+            //             didShowClipboardPrompt = false;
+            //         }
+            //     }
+
+            //     if(didShowClipboardPrompt){
+            //         return;
+            //     }
+            //     didShowClipboardPrompt = true;
+            //     try{
+            //         const text = await navigator.clipboard.readText();
+            //         if(text){
+            //             showPasteFromClipboardPrompt();
+            //         }else{
+            //             hidePasteFromClipboardPrompt();
+            //             console.warn('nothing in clipboard')
+            //         }
+            //     }catch(e){
+            //         console.error(e);
+            //     }
+            // },1000);
+            
+            /* adds paste support for Clipboard ImageBlob -> Three.js Texture */
+            window.doPasteFromClipboard = async function(){
+                try{
+                    const items = await navigator.clipboard.read();
+                    console.warn('items',items)
+                    for (const item of items) {
+                        if (item.types.includes('image/png')) {
+                            const blob = await item.getType('image/png');
+                            const url = URL.createObjectURL(blob);
+                            if(window?.baseTexture?.image){
+                                return;
+                            }
+                            window.baseTexture.image.onload = function() {
+                                URL.revokeObjectURL(url);
+                                window.baseTexture.needsUpdate = true;
+                            };
+                            window.baseTexture.image.src = url;
+                            break;
+                        }
+                        // or if ti's a base64 image in a text string, pass _that_ to image.src
+                        if (item.types.includes('text/plain')) {
+                            const text = await item.getType('text/plain');
+                            if(window?.baseTexture?.image){
+                                return;
+                            }
+                            window.baseTexture.image.onload = function() {
+                                URL.revokeObjectURL(url);
+                                window.baseTexture.needsUpdate = true;
+                            };
+                            window.baseTexture.image.src = text;
+                            break;
+                        }
+                    }
+                }catch(e){
+                    console.error(e);
+                }
+            }
+
+            document.addEventListener("keydown",(e)=>{
+                if(e.key == "v" && (e.ctrlKey || e.metaKey)){
+                    try{
+                        window.doPasteFromClipboard();
+                    }catch(e){
+                        console.error(e);
+                    }
+                }
+            },false);
+
+            document.getElementById("fileupload").addEventListener("change", (e) => {
+                hideIntroText();
+                handleFileInput(e);
+            });
+            canvas = document.getElementById("canvas");
+            const renderer = new THREE.WebGLRenderer({canvas});
+
+            
+            canvas.width = pixelWidth;
+            canvas.height = pixelHeight;
+            // Scale up the canvas using CSS
+            canvas.style.width = '100vw';
+            canvas.style.height = '100vh';
+            canvas.style.imageRendering = 'pixelated'; // This ensures nearest neighbor scaling in browsers that support it
+            //canvas.style.imageRendering = 'crisp-edges'; // This ensures nearest neighbor scaling in browsers that support it
+
+            //object-fit: contain;
+            canvas.style.objectFit = 'contain';
+
+            // Orthographic camera setup
+            const frustumSize = 1;
+            const aspect = pixelWidth / pixelHeight; //canvas.clientWidth / canvas.clientHeight;
+            const camera = new THREE.OrthographicCamera(
+                frustumSize * aspect / -2, 
+                frustumSize * aspect / 2, 
+                frustumSize / 2, 
+                frustumSize / -2, 
+                1, 
+                1000
+            );
+            camera.position.z = 2;
+
+            const scene = new THREE.Scene();
+
+            // Full-screen plane geometry
+            const planeGeometry = new THREE.PlaneGeometry(2 * aspect, 2);
+
+            window.textureLoader = new THREE.TextureLoader();
+
+            let rand_int_1_thru_17 = Math.floor(Math.random() * 17) + 1;
+            //let url = `./res/bg_${rand_int_1_thru_17}.png`;
+            //let url = "./res/download (3).png";
+            let url = "./res/inspiration/Bsodwindows10.png";
+            window.baseTexture = textureLoader.load(url);
+
+            window.mandlebulbTexture = textureLoader.load(url);
+
+            // define our textures / buffers
+            // 1. our starting values (provided by user image or video, etc)
+            window.originalPixelDataTexture = new THREE.DataTexture(
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
+                fixedPixelsX, 
+                fixedPixelsY, 
+                THREE.RGBAFormat, 
+                THREE.UnsignedByteType
+            );
+            // 2. our target values
+            window.targetPixelDataTexture = new THREE.DataTexture(
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
+                fixedPixelsX, 
+                fixedPixelsY, 
+                THREE.RGBAFormat, 
+                THREE.UnsignedByteType
+            );
+            // 3. our "accumulator" texture, which we use to lerp between the original and target textures
+            // this is our output buffer for now, but we may add additional buffers later
+            window.lerpedColorTexture = new THREE.DataTexture(
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
+                fixedPixelsX, 
+                fixedPixelsY, 
+                THREE.RGBAFormat, 
+                THREE.UnsignedByteType
+            );
+            // 4. our "offset" buffer where we accumulate / calculate our offsets
+            window.offsetTexture = new THREE.DataTexture(
+                new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
+                fixedPixelsX, 
+                fixedPixelsY, 
+                THREE.RGBAFormat, 
+                THREE.UnsignedByteType
+            );
+
+            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTexture.needsUpdate = true;
+
+            
+            // Assuming you have a texture loaded into a variable named 'texture'
+            window.baseTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
+            window.baseTexture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
+
+            // do the same for mandlebulbTexture
+            window.mandlebulbTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
+            window.mandlebulbTexture.wrapT = THREE.MirroredRepeatWrapping; // For vertical mirroring
+
+            window.image_height = baseTexture.height;
+
+            // Set how many times the texture should repeat
+            baseTexture.repeat.set(2, 2); // Adjust as needed
+            mandlebulbTexture.repeat.set(2, 2); // Adjust as needed
+
+            /* Match ShaderToy uniforms for compatibility */
+            // Custom Shader
+            window.mouseRaw = new THREE.Vector4();
+            window.mouseLerping = new THREE.Vector4();
+            window.iMouseWheel = new THREE.Vector4();
+
+            // window.mandleBulbMaterial = new THREE.ShaderMaterial({
+            //     uniforms: {
+            //         iChannel0: { value: window.mandlebulbTexture },
+            //         iResolution: { value: new THREE.Vector3(pixelWidth, pixelHeight, 1.0) },
+            //         iMouse: { value: window.mouseLerping },
+            //         iMouseRaw: { value: window.mouseRaw },
+            //         iMouseWheel: { value: window.iMouseWheel },
+            //         iTime: { value: 1.0 },
+            //     },
+            //     vertexShader: `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            //     fragmentShader: window.fragmentShaderSource,
+            //     transparent: true, // Enable transparency
+            // });
+
+            window.shaderMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    u_time: { value: 1.0 },
+                    u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                    
+                    // compatibility uniforms
+                    iTime: { value: 1.0 },
+                    iChannel0: { value: mandlebulbTexture },
+                    iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
+                    iMouse: { value: window.mouseLerping },
+                    iMouseRaw: { value: window.mouseRaw },
+                    iMouseWheel: { value: window.iMouseWheel }
+                },
+                vertexShader: `
+                    void main() {
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: window.fragmentShaderSource,
+                transparent: true, // Enable transparency
+            });
+
+            // do a SECOND material
+            // tied to combineTexturesShaderSource
+            window.shaderAccumulationMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    iChannel0: { value: window.mandlebulbTexture },
+                    iChannel1: { value: window.accumulationTexture.texture },
+                    iResolution: { value: new THREE.Vector3(pixelWidth, pixelHeight, 1.0) },
+                    iMouse: { value: window.mouseLerping },
+                    iMouseRaw: { value: window.mouseRaw },
+                    iMouseWheel: { value: window.iMouseWheel },
+                    iTime: { value: 1.0 },
+                },
+                vertexShader: `
+                    void main() {
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: combineTexturesShaderSource,
+                transparent: true, // Enable transparency
+            });
+
+            window.backPlane = new THREE.Mesh(planeGeometry, window.shaderMaterial);
+            scene.add(backPlane);
+            
+
+            // Creating and adding the plane to the scene
+            window.plane = new THREE.Mesh(planeGeometry, window.shaderAccumulationMaterial);
+            scene.add(plane);
+
+            function resizeRendererToDisplaySize(renderer) {
+                canvas = renderer.domElement;
+                let width = pixelWidth ?? window.innerWidth;
+                let height = pixelHeight ?? window.innerHeight;
+
+                // force to even dimensions for ffmpeg compatibility
+                width = 2 * Math.floor(width / 2);
+                height = 2 * Math.floor(height / 2);
+
+                const needResize = canvas.width !== width || canvas.height !== height;
+                if (needResize) {
+                    renderer.setSize(width, height, false);
+                }
+                return needResize;
+            }
+
+            window.mouseX = window.mouseY = 0;
+            document.addEventListener('mousemove', (e)=>{
+                window.mouseX = e.clientX;
+                window.mouseY = e.clientY;
+            });
+            window.vec2MouseWheelRaw = new THREE.Vector2();
+            window.vec2MouseWheelLerped = new THREE.Vector2();
+            function updateMouseUniform() {
+                // Normalize coordinates (0 to 1)
+                let normalizedX = window.mouseX / pixelWidth; //window.innerWidth;
+                let normalizedY = window.mouseY / pixelHeight; //window.innerHeight;
+
+                // Adjust for aspect ratio
+                const aspect = window.innerWidth / window.innerHeight;
+                if (aspect > 1) {
+                    // Wider than tall
+                    normalizedX = (normalizedX - 0.5) * aspect + 0.5;
+                } else {
+                    // Taller than wide
+                    normalizedY = (normalizedY - 0.5) / aspect + 0.5;
+                }
+
+                // offset to center of "quad"
+                normalizedX = normalizedX * 2 - 1;
+                normalizedY = normalizedY * 2 - 1;
+
+                // Set the shader uniform
+                // Implement ShaderToy compatibility:
+                // Shows how to use the mouse input (only left button supported):
+                //      mouse.xy  = mouse position during last button down
+                //  abs(mouse.zw) = mouse position during last button click
+                // sign(mouse.z)  = button is down
+                // sign(mouse.w)  = button is clicked
+
+                let dist = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+                let magnitude = Math.min(dist, 1.0);
+                
+                window.mouseRaw.set(
+                    window.mouseX, 
+                    window.innerHeight - window.mouseY, 
+                    window.leftMouseDown ? 1 : -1, 
+                    0
+                );
+                
+                window.mouseLerping.lerp(window.mouseRaw, .005 * magnitude);
+                shaderMaterial.uniforms.iMouseRaw.value.set(
+                    window.mouseRaw.x, 
+                    window.mouseRaw.y, 
+                    window.mouseRaw.z, 
+                    0
+                );
+                shaderMaterial.uniforms.iMouse.value.set(
+                    window.mouseLerping.x, 
+                    window.mouseLerping.y,
+                    window.leftMouseDown ? 1 : -1, 
+                    0
+                );
+
+                vec2MouseWheelLerped.lerp(vec2MouseWheelRaw, .08);
+
+                // Set the shader uniform for the mouse wheel
+                // it's a vec4, first two are lerped, second two are raw
+                shaderMaterial.uniforms.iMouseWheel.value.set(
+                    vec2MouseWheelLerped.x, 
+                    vec2MouseWheelLerped.y, 
+                    vec2MouseWheelRaw.x,
+                    vec2MouseWheelRaw.y
+                );
+
+                // update our other shader
+                shaderAccumulationMaterial.uniforms.iMouseRaw.value.set(
+                    window.mouseRaw.x, 
+                    window.mouseRaw.y, 
+                    window.mouseRaw.z, 
+                    0
+                );
+                shaderAccumulationMaterial.uniforms.iMouse.value.set(
+                    window.mouseLerping.x, 
+                    window.mouseLerping.y,
+                    window.leftMouseDown ? 1 : -1, 
+                    0
+                );
+                shaderAccumulationMaterial.uniforms.iMouseWheel.value.set(
+                    vec2MouseWheelLerped.x, 
+                    vec2MouseWheelLerped.y, 
+                    vec2MouseWheelRaw.x,
+                    vec2MouseWheelRaw.y
+                );
+            }
+
+            // Global variable to store the last played video
+            let lastPlayedVideo = null;
+
+            window.onVideoPause = function(){
+                window.fixedTime = shaderMaterial.uniforms.u_time.value;
+                if(!window.capturing && !handling_slow_motion_advance){
+                    window.videoIsPlaying = false;
+                }
+            }
+            window.onVideoResume = function(){
+                window.fixedTime = null;
+                if(!window.capturing && !handling_slow_motion_advance){
+                    window.videoIsPlaying = true;
+                }
+            }
+
+            window.createVideoElement = function(){
+                let video = document.createElement('video');
+                video.setAttribute('id', 'video');
+                video.crossOrigin = 'anonymous';
+                video.loop = true;
+                // Add an event listener for when the video ends
+                video.onended = pickOne;
+                video.onpause = onVideoPause;
+                video.onplay = onVideoResume;
+                //video.muted = true;
+
+                // min of the html attribute is 0.1, 
+                // if we want to go lower, we need to simulate with pause and manual frame-stepping
+                // see: window.targetVideoPlaybackRate
+                video.playbackRate = 0.1; 
+
+                video.pictureInPictureEnabled = true;
+                video.addEventListener('enterpictureinpicture', (event) => {
+                    console.warn('enterpictureinpicture',event)
+                });
+                video.addEventListener('leavepictureinpicture', (event) => {
+                    console.warn('leavepictureinpicture',event)
+                });
+                // video.addEventListener('loadedmetadata', (event) => {
+                //     console.warn('loadedmetadata',event)
+                // });
+                document.body.appendChild(video);
+                window.theVideoplayerElement = video;
+            }
+            
+            window.theVideoplayerElement = document.getElementById("video");
+            if(!window.theVideoplayerElement){
+                createVideoElement();
+            }
+            window.setVideoAsChannel = function(videoURL){
+                try{
+                    //console.warn('setVideoAsChannel',videoURL)
+                    
+                    let video = window.theVideoplayerElement;
+                    
+                    video.src = videoURL;
+                    video.autoplay = false; // true;
+                    video.controls = true;
+                    video.buffer = true;
+                    video.play();
+                    let needs_on_can_play_update = true;
+                    video.oncanplay = function() {
+                        if(needs_on_can_play_update){
+                            needs_on_can_play_update = false;
+                            window.videoTexture = new THREE.VideoTexture(video);
+                            window.videoTexture.minFilter = THREE.LinearFilter;
+                            window.videoTexture.magFilter = THREE.LinearFilter;
+                            window.videoTexture.format = THREE.RGBFormat;
+                            window.videoTexture.crossOrigin = 'anonymous';
+                            window.videoTexture.needsUpdate = true;
+
+                            setTimeout(()=>{
+                                window.videoIsPlaying = true;
+                                window.videoIsVirtuallyPlaying = true;
+                            },1);
+                        }
+                    }
+                }catch(e){
+                    console.error(e);
+                }
+            }
+
+            window.progressElement = document.getElementById("progress");
+
+            window.animate = function(time) {
+                if (resizeRendererToDisplaySize(renderer)) {
+                    canvas = renderer.domElement;
+                    // enforce dimensions of 2 for ffmpeg compatibility
+                    canvas.width = 2 * Math.floor(canvas.clientWidth / 2);
+                    canvas.height = 2 * Math.floor(canvas.clientHeight / 2);
+
+                    camera.aspect = canvas.width / canvas.height;
+                    camera.updateProjectionMatrix();
+                }
+
+                let _time = window.fixedTime ? window.fixedTime : time * 0.001;
+
+                // Use a custom shader material that combines the textures
+                window.shaderMaterial.uniforms.iChannel0.value = window.mandlebulbTexture;
+
+
+                window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture;
+                window.shaderAccumulationMaterial.uniforms.iChannel1.value = accumulationTexture;
+                window.shaderAccumulationMaterial.uniforms.iTime.value = _time;
+
+                shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
+                shaderMaterial.uniforms.iChannel0.value = accumulationTexture;
+                shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
+
+                window.accumulationTexture.needsUpdate = true;
+
+                // Update uniforms
+                shaderMaterial.uniforms.u_time.value = _time;
+                shaderMaterial.uniforms.u_resolution.value.set(pixelWidth, pixelHeight);
+                updateMouseUniform();
+
+                // Render the scene into the currentFrameTexture
+                renderer.setRenderTarget(window.currentFrameTexture);
+                renderer.render(scene, camera);
+
+                // Use the rendered texture as input for the next pass
+                shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+
+                // Render the accumulation pass to the screen
+                renderer.setRenderTarget(null);
+                renderer.render(scene, camera);
+
+                // Swap the textures
+                let temp = window.currentFrameTexture;
+                window.currentFrameTexture = window.accumulationTexture;
+                window.accumulationTexture = temp;
+
+                
+                // sub-frame playback
+                maybeAdvanceVideoOneFrame();
+                
+                if(window.capturing){
+                    // update recording progress
+                    if (progressElement) {
+                        // Calculate progress based on targetRecordingDurationSeconds
+                        progressElement.value = (window.subframePlaybackCurrentFrame / maxFrames) * 100;
+                    }
+                    window.capturer.capture(canvas);
+                    
+                    if(window.subframePlaybackCurrentFrame >= maxFrames){
+                        window.stopCapture();
+                    }else{
+                        // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
+                        setTimeout(() => {
+                            window.animate(time + window.currentFrameDelta);
+                        }, 0);
+                    }
+                }else{
+                    // next frame
+                    requestAnimationFrame(animate);
+                }
+            }
+
+            resizeRendererToDisplaySize(renderer);
+
+            // first frame...
+            requestAnimationFrame(animate);
+
+            // make sure we don't pick the same one back to back
+            // also make sure we auto switch to the next one after the end of the video
+            function pickOne(){
+                console.warn("pick one called");
+                // video time
+                let much = [
+                    // "Katy Perry - California Gurls (Official Music Video) ft. Snoop Dogg.mp4",
+                    // "Katy Perry - Dark Horse ft. Juicy J.mp4",
+                    // "Katy Perry - Firework (Official Music Video).mp4"
+                ]
+                return;
+                // Filter out the last played video
+                let filteredMuch = much.filter(v => v !== lastPlayedVideo);
+
+                // Randomly select a video from the filtered list
+                let one = filteredMuch[Math.floor(Math.random() * filteredMuch.length)];
+
+                // Update the last played video
+                lastPlayedVideo = one;
+
+                setVideoAsChannel("https://jakedowns.com/media/"+one);
+            }
+
+            let did_react_to_first_user_input = false;
+            let onuserinput = ()=>{
+                if(!did_react_to_first_user_input){
+                    did_react_to_first_user_input = true;
+                    pickOne();
+                }
+            }
+
+            window.droppedOnAnything = function(e){
+                console.warn('dropped on anything',e)
+                did_react_to_first_user_input = true;
+                e.preventDefault();
+                e.stopPropagation();
+                
+                handleFileInput(e);
+            }
+
+            // when a user drops an image on the canvas, load it to our texture
+            window.addEventListener('drop', droppedOnAnything);
+            window.addEventListener('dragover', (e) => {
+                //console.warn('dragover',e)
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            function imageBlobToBase64(imageBlob){
+                return new Promise((resolve,reject)=>{
+                    let reader = new FileReader();
+                    reader.onload = function(e){
+                        resolve(e.target.result);
+                    }
+                    reader.readAsDataURL(imageBlob);
+                });
+            }
+
+            async function onPasteAttempt(){
+                try {
+                        // Check if the Clipboard API is available
+                        if (!navigator.clipboard) {
+                            console.warn('Clipboard API not available.');
+                            throw new Error('Clipboard API not available');
+                        }
+
+                        // Attempt to read from the clipboard
+                        const clipboardItems = await navigator.clipboard.read();
+                        console.log('Clipboard items retrieved:', clipboardItems);
+
+                        let clipboardBag = {images:[]};
+
+                        // Find text content in clipboard items
+                        const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
+                        if (textItem) {
+                            const textBlob = await textItem.getType('text/plain');
+                            const text = await textBlob.text();
+                            console.log('Pasted text content: ', text);
+                            clipboardBag.text = text;
+                        }
+
+                        // Find HTML content in clipboard items
+                        const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
+                        if (htmlItem) {
+                            const htmlBlob = await htmlItem.getType('text/html');
+                            const html = await htmlBlob.text();
+                            console.log('Pasted HTML content: ', html);
+                            clipboardBag.html = html;
+                        }
+                        // Note: imageBlob is an instance of Blob
+                        // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
+                        // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
+                        // we need to do the slow, full conversion of a Blob to a base64 encoded string
+                        // then we can use that base64 encoded string to load the image as a texture
+                        
+
+
+                        // Find any "image" items:
+                        const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
+                        // Alert if there's multiple, we only support one for now
+                        if (imageItems.length > 1) {
+                            alert('Multiple images found. Using the last image.');
+                        }
+                        for (const imageItem of imageItems) {
+                            const imageBlob = await imageItem.getType('image/png');
+                            //console.log('Pasted image: ', image);
+                            clipboardBag.imageBlob = imageBlob;
+
+                            //loadImageBlobAsTexture(imageBlob);
+                            
+                            let b64 = await imageBlobToBase64(imageBlob);
+                            //console.log('Pasted image: ', b64);
+
+                            await loadBase64AsTexture(b64);
+                            clipboardBag.images.push(b64);
+                        }
+
+                        hideIntroText()
+
+                        // Process clipboardBag as needed
+                        console.warn({clipboardBag});
+
+                    } catch (error) {
+                        console.error('Error accessing clipboard:', error);
+                        // Handle error appropriately
+                    }
+            }
+
+            document.addEventListener("keydown",async(e)=>{
+                if(e.key == "Escape"){
+                    hidePasteFromClipboardPrompt();
+                }
+
+                // if command v on mac,
+                // or control v on other,
+                // paste image from clipboard
+                if ( 
+                    (e.keyCode === 22 || e.keyCode === 86)
+                    && (e.metaKey || e.ctrlKey)
+                ){
+                    await onPasteAttempt();
+                    e.preventDefault();
+                }
+
+                onuserinput();
+            },false);
+            document.addEventListener("mouseup",()=>{
+                // let vid;
+                // if(vid = document.getElementById("video") && vid){
+                //     vid.style.opacity = window.videoIsPlaying ? 0 : 0.1;
+                // }
+                if(!did_react_to_first_user_input){
+                    did_react_to_first_user_input = true;
+                    pickOne();
+                    return;
+                }
+            });
+            document.addEventListener("dblclick",()=>{
+                onuserinput();
+                pickOne();
+            })
+            document.addEventListener("resize",()=>{
+                canvas = document.getElementById("canvas");
+                const renderer = new THREE.WebGLRenderer({canvas,alpha:true});
+                const width = canvas.clientWidth;
+                const height = canvas.clientHeight;
+                renderer.setSize(width, height, false);
+            })
+
+            // fast start
+            window.targetVideoPlaybackRate = 1.0; 
+            hideIntroText(); 
+            //window.setVideoAsChannel("./res/0006.mp4");
+            // window.setImageAsChannel("./res/test/Sketchfab_UV_Checker.png");
+
+            
+        }
+
+        
+        window.hideWelcome = function(){
+            document.querySelector(".intro-card").classList.toggle("fade-out",true);
+            document.querySelector(".intro-underlay").classList.toggle("fade-out",true);
+        }
+        
+        window.startCapture = function(){
+            if(!window.capturer){
+                console.warn("capturer not initialized");
+                return;
+            }
+            
+            window.subframePlaybackCurrentFrame = 0;
+            window.capturing = true;
+            window.capturer.start();
+            animate(0);
+            //theVideoplayerElement.pause();
+            window.currentVideoTime = video.currentTime;
+        }
+        window.stopCapture = function(){
+            if(!window.capturer){
+                console.warn("capturer not initialized");
+                return;
+            }
+            window.capturing = false;
+            window.capturer.stop();
+            window.capturer.save();
+        }
+        // fsshader fragment shader source frag shader here fshader
+
+        
+
+
+
+        
+        // note: we've bound the outputSurfacePositionBuffer to the vertex shader's "aVertexPosition" attribute
+        // we've bound the offset texture to the fragment shader's "uOffsetTexture" uniform
+        // and, critically, we've bound the offset texture to texture unit 0 (gl.TEXTURE0)
+        // currently, the vertex shader does nothing, since we need a highly subdivided mesh to see the effect of the offset texture
+        // so for now, we're using a simple "pass-through" vertex shader, which simply passes the vertex position to the fragment shader
+
+        let frameCount = 0;
+        let seed = 0;
+        let MODE = 1;
+        // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
+        let _pixel_density = 8; //4; 
+        let _max_step_sort_size = 1e5 * 2;
+        Object.defineProperty(window, "pixel_density", {
+            get: function(){
+                return _pixel_density;
+            },
+            set: function(value){
+                _pixel_density = value;
+                resizeCanvas();
+            }
+        });
+        Object.defineProperty(window, "MAX_SORT_STEP_SIZE", {
+            get: function(){
+                return _max_step_sort_size; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
+            },
+            set: function(value){
+                _max_step_sort_size = value;
+                current_sortStepSize = value;
+                sortStepSize = value;
+            }
+        })
+
+        //let then = 0;
+        let uSwirlAmp = 1.0, uSwirlTurns = 3.0;
+        
+        let pixel_positions = [];
+        let pixelData, originalPixelData, latestPixelDataSnapshot;
+        const bytesPerPixel = 4; // For RGBA format
+
+        window.recenterMouseRefValue = function(){
+            mouseX=window.innerWidth/2;mouseY=window.innerHeight/2
+        }
+
+        window.prepareCCapture = function(){
+            try{
+                // Create a capturer that exports a WebM video
+                var isWebMSupported = document.createElement('video').canPlayType('video/webm; codecs="vp8, vorbis"');
+                window.motionBlurFrames = 0;
+                capturer = isWebMSupported 
+                ? new CCapture( { 
+                    format: 'webm', 
+                    motionBlurFrames,
+                    verbose: false, 
+                    fps: window.targetRecordingFPS 
+                } ) 
+                : new CCapture( { 
+                    format: 'png', 
+                    motionBlurFrames,
+                    verbose: false, 
+                    framerate: window.targetRecordingFPS 
+                } );
+            }catch(e){
+                console.error('failed to create capturer',e);
+            }
+        }
+
+        /** 
+         * TODO: extend this with some of the functionality that was 
+         * previously only in the onpasteattempt function:
+        
+                    // Check if the Clipboard API is available
+                    if (!navigator.clipboard) {
+                        console.warn('Clipboard API not available.');
+                        throw new Error('Clipboard API not available');
+                    }
+
+                    // Attempt to read from the clipboard
+                    const clipboardItems = await navigator.clipboard.read();
+                    console.log('Clipboard items retrieved:', clipboardItems);
+
+                    let clipboardBag = {images:[]};
+
+                    // Find text content in clipboard items
+                    const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
+                    if (textItem) {
+                        const textBlob = await textItem.getType('text/plain');
+                        const text = await textBlob.text();
+                        console.log('Pasted text content: ', text);
+                        clipboardBag.text = text;
+                    }
+
+                    // Find HTML content in clipboard items
+                    const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
+                    if (htmlItem) {
+                        const htmlBlob = await htmlItem.getType('text/html');
+                        const html = await htmlBlob.text();
+                        console.log('Pasted HTML content: ', html);
+                        clipboardBag.html = html;
+                    }
+                    // Note: imageBlob is an instance of Blob
+                    // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
+                    // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
+                    // we need to do the slow, full conversion of a Blob to a base64 encoded string
+                    // then we can use that base64 encoded string to load the image as a texture
+                    
+
+
+                    // Find any "image" items:
+                    const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
+                    // Alert if there's multiple, we only support one for now
+                    if (imageItems.length > 1) {
+                        alert('Multiple images found. Using the last image.');
+                    }
+                    for (const imageItem of imageItems) {
+                        const imageBlob = await imageItem.getType('image/png');
+                        //console.log('Pasted image: ', image);
+                        clipboardBag.imageBlob = imageBlob;
+
+                        //loadImageBlobAsTexture(imageBlob);
+                        
+                        let b64 = await imageBlobToBase64(imageBlob);
+                        //console.log('Pasted image: ', b64);
+
+                        await loadBase64AsTexture(b64);
+                        clipboardBag.images.push(b64);
+                    }
+        */
+        async function handleFileInput(e) {
+            let file;
+            if (e.dataTransfer) { // Handle file drop event
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    file = e.dataTransfer.files[0];
+                }
+            } else if (e.target.files) { // Handle file input change event
+                file = e.target.files[0];
+            }  else if (e.clipboardData) { // Handle paste event
+                const clipboardItems = await navigator.clipboard.read();
+                const imageItem = clipboardItems.find(item => item.types.includes('image/png'));
+                if (imageItem) {
+                    file = await imageItem.getType('image/png');
+                }
+            }
+
+            if (file) {
+                if (file.type.includes('video')) {
+                    window.setVideoAsChannel(URL.createObjectURL(file));
+                } else if (file.type.includes('image')) {
+                    let url = URL.createObjectURL(file);
+                    let img = new Image();
+                    img.src = url;
+                    img.onload = function() {
+                        setImageAsChannel(url);
+                    }
+                } else if (file.type.includes('gif')) { // Added support for gif files
+                    let url = URL.createObjectURL(file);
+                    let img = new Image();
+                    img.src = url;
+                    img.onload = function() {
+                        setImageAsChannel(url);
+                    }
+                }
+            }
+        }
+
+        window.setImageAsChannel = function(url){
+            // if(url.includes('.gif')){
+            //     window.setVideoAsChannel(url);
+            //     return;
+            // }
+
+
+            // baseTexture.image.src = e.target.result;
+            // baseTexture.needsUpdate = true;
+            // "setImageAsChannel"
+            if(window.baseTexture?.image){
+                window.baseTexture.image.src = url;
+                window.baseTexture.needsUpdate = true;
+            }else{
+                console.warn('no baseTexture.image')
+            }
+
+            // update our originalPixelDataTexture (Three.js Texture)
+            window.originalPixelDataTexture.image.src = url;
+            window.originalPixelDataTexture.needsUpdate = true;
+
+            window.mandlebulbTexture.image.src = url;
+            window.mandlebulbTexture.needsUpdate = true;
+
+            // clear out our accumulator texture
+            // clear out our textures
+            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.currentFrameTexture.needsUpdate = true;
+            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTexture.needsUpdate = true;
+
+            // set shaderMaterial and accumulationMaterial to use the new, clean, textures
+            window.shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+            window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+            // needs update
+            window.shaderMaterial.uniforms.iChannel0.value.needsUpdate = true;
+            window.shaderAccumulationMaterial.uniforms.iChannel0.value.needsUpdate = true;
+        }
+
+        // domready
+        async function onReady(){
+            // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
+            //     return;
+            // }
+            // window.fragmentShaderSource = await (await fetch("./shaders/fresh.glsl")).text();
+            // window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
+            window.fragmentShaderSource = await (await fetch("./shaders/frosted-video-mandlebulb.glsl")).text();
+            window.combineTexturesShaderSource = `
+            // Fragment shader
+            uniform sampler2D iChannel0;
+            uniform sampler2D iChannel1;
+            uniform vec3 iResolution;
+            uniform float iTime;
+            uniform vec4 iMouse;
+            uniform vec4 iMouseRaw;
+            uniform vec4 iMouseWheel;
+
+            void main() {
+                vec2 uv = gl_FragCoord.xy / iResolution.xy;
+                vec4 currentColor = texture2D(iChannel0, uv.xy);
+                vec4 previousColor = texture2D(iChannel1, uv.xy);
+                // decay
+                previousColor = previousColor * 0.99999;
+                // apply a "smear" effect between the two
+                float smearFactor = max(0.1, 1.0 - iTime);
+                vec4 smearColor = mix(previousColor, currentColor, smearFactor);
+                gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
+                
+            }
+            `;
+            prepareCCapture();
+            setupThree();
+        }
+
+        window.addEventListener("resize", ()=>{
+            // onResize
+            resizeCanvas();
+            // todo: they sould grow and shrink dynamically...
+            initializePositionsAndOffsetData(keepPixelData = true);
+        });
+
+        function resizeCanvas() {
+            canvas.width = pixelWidth;
+            canvas.height = pixelHeight;
+            fixedPixelsX = Math.floor(canvas.width/pixel_density);
+            fixedPixelsY = Math.floor(canvas.height/pixel_density);
+            window.DID_BIND_BASE_SINCE_RESIZE = false;
+            // update our iResolution uniform
+            shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
+            shaderAccumulationMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
+        }
+
+        // two triangles that cover the entire screen
+        // our display surface positions, not our inner "pixel" positions
+        const output_surface_positions = [
+            -1, -1,
+            1, -1,
+            -1, 1,
+            -1, 1,
+            1, -1,
+            1, 1,
+        ];
+
+        // CPU outputSurfacePositionBuffer (output_surface_positions) mirrors to the GPU "offset texture":
+        // these "positional" offsets are used as "Target" x, y values
+        // and the fragment shader uses these "target" values, 
+        // and lerps the "current" value _towards_ 
+        // the "target" value over a parameterized duration of time
+        // offsetTexture: [screenWidth x screenHeight] (rgba); where r = x offset, and g = y offset | b,a are unused for now
+
+        // we artificially delay the sorting algo. to help visualize the sorting process
+        // we then show how parallelism can be used to speed up the sorting process (bitonic sort) + realtime "accumulation" of the sorted values (similar to Raytracing stochastic accumulation)
+        let numPixels = 0;
+        let fixedPixelsX,fixedPixelsY;
+        function initializePositionsAndOffsetData(keepPixelData = true) {
+            numPixels = canvas.width * canvas.height;
+            numPixels = Math.floor(numPixels / pixel_density);
+
+            if(!keepPixelData){
+                pixel_positions = [];
+                pixelData = undefined;
+            }
+
+            // if `pixel_positions` is empty or undefined, we need to initialize it
+            // otherwise, we need to determine to grow or shrink it
+            if(typeof pixel_positions === "undefined" || !pixel_positions.length){
+                pixel_positions = new Float32Array(numPixels * 2); // x, y for each pixel
+            }else{
+                // shrink || grow
+                // if we're shrinking, we need to truncate the array
+                // if we're growing, we need to pad the array
+                if(pixel_positions.length > numPixels * 2){
+                    // truncate
+                    pixel_positions = pixel_positions.slice(0,numPixels * 2);
+                }else if(pixel_positions.length < numPixels * 2){
+                    // pad
+                    let new_pixel_positions = new Float32Array(numPixels * 2);
+                    new_pixel_positions.set(pixel_positions);
+                    pixel_positions = new_pixel_positions;
+                }
+            }
+
+            resetOffsetTexture();
+            if(typeof pixelData === "undefined" || !pixelData.length){
+                pixelData = new Uint8Array(numPixels * bytesPerPixel); // RGBA for each pixel
+
+                // Initialize position and pixel data
+                for (let y = 0; y < fixedPixelsY; y++) {
+                    for (let x = 0; x < fixedPixelsX; x++) {
+                        const index = (y * fixedPixelsX + x) * 2;
+                        const pixelIndex = (y * fixedPixelsX + x) * bytesPerPixel;
+
+                        // Set position (x, y)
+                        pixel_positions[index] = (x / fixedPixelsX) * 2 - 1; // Convert to clip space
+                        pixel_positions[index + 1] = (y / fixedPixelsY) * 2 - 1; // Convert to clip space
+
+                        // Initialize pixel data with random colors
+                        pixelData[pixelIndex] = Math.floor(Math.random() * 256); // R
+                        pixelData[pixelIndex + 1] = Math.floor(Math.random() * 256); // G
+                        pixelData[pixelIndex + 2] = Math.floor(Math.random() * 256); // B
+                        pixelData[pixelIndex + 3] = Math.floor(Math.random() * 256); // Alpha
+                    }
+                }
+
+                // Bind the base texture to our initial pixel data ( a frozen snapshot of the initial state of the pixels for our lerping algo. to work with )
+                // THREE.WebGLRenderer.setTexture2D(baseTexture, 0);
+                // THREE.WebGLRenderer.setTexture2D(pixelData, 0, THREE.RGBAFormat, fixedPixelsX, fixedPixelsY, 0, THREE.RGBAFormat, THREE.UnsignedByteType);
+
+
+            }else{
+                // grow or shrink pixelData
+                if(pixelData.length > numPixels * bytesPerPixel){
+                    // truncate
+                    pixelData = pixelData.slice(0,numPixels * bytesPerPixel);
+                }else if(pixelData.length < numPixels * bytesPerPixel){
+                    // pad
+                    let new_pixelData = new Uint8Array(numPixels * bytesPerPixel);
+                    new_pixelData.set(pixelData);
+                    pixelData = new_pixelData;
+                }
+            }
+        }
+
+        function rgbToHsv(color){
+            let r = color[0] / 255;
+            let g = color[1] / 255;
+            let b = color[2] / 255;
+            let max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, v = max;
+        
+            let d = max - min;
+            s = max == 0 ? 0 : d / max;
+        
+            if (max == min) {
+                h = 0; // achromatic
+            } else {
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+        
+                h /= 6;
+            }
+        
+            return [ h, s, v ];
+        }
+
+        let swapped = false;
+        let DID_COMPLETE_SORT_SINCE_RESET = false;
+        // current sorting offset
+        // we pass this to our fragment shader 
+        // so we can color the pixels that are currently being sorted
+        // we also pass the window width, so we can color the pixels that are being compared
+        let sortOffset = 0;
+        window.sortStepSize = 10e5; //-1; //10e3; // Number of elements to sort per call, adjust as needed
+        window.current_sortStepSize = window.sortStepSize;
+
+        window.resetOffsetTexture = function(erasePixelData = false){
+            // reset offset texture to all 0s with 255 for alpha channel
+            let zeros = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
+            zeros = zeros.map((value, index) => {
+                if (index === 3) {
+                    return 255;
+                }
+                return value;
+            });
+
+            // TODO!!! replace these two with THREE.js corresponding calls
+            // gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+            // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedPixelsX, fixedPixelsY, 0, gl.RGBA, gl.UNSIGNED_BYTE, zeros);
+
+            if(erasePixelData){
+                // reset pixel data to all 0s
+                pixelData = new Uint8Array(fixedPixelsX * fixedPixelsY * bytesPerPixel);
+            }
+        }
+
+        function newCheck(inner_i, currentColor, currentHSV, nextColor, nextHSV){
+            let swapped = 0;
+            let rankA = 0; // should we swap?
+            let rankB = 0;
+            rankA += currentHSV[0] > nextHSV[0] ? 1 : 0;
+            rankB += currentHSV[0] < nextHSV[0] ? 1 : 0;
+
+            rankA += currentHSV[1] > nextHSV[1] ? 1 : 0;
+            rankB += currentHSV[1] < nextHSV[1] ? 1 : 0;
+
+            rankA += currentHSV[2] > nextHSV[2] ? 1 : 0;
+            rankB += currentHSV[2] < nextHSV[2] ? 1 : 0;
+
+            rankA *= currentColor[3]/255; // account for alpha
+            rankB *= nextColor[3]/255; // account for alpha
+
+            //console.warn({rankA,rankB})
+
+            // old:
+            //if(rankA > rankB){
+
+            // new: epsilon-based approach
+            if(rankA > rankB + Math.random()*0.001){
+                // Swap colors in pixel data
+                [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
+                [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
+                [pixelData[inner_i * bytesPerPixel + 2], pixelData[(inner_i + 1) * bytesPerPixel + 2]] = [pixelData[(inner_i + 1) * bytesPerPixel + 2], pixelData[inner_i * bytesPerPixel + 2]];
+
+                // NOTE: we don't swap, we're going to just update our pixelData using r to represent x offset, and g to represent y offset
+                // we'll use the fragment shader to do the actual swapping
+                // use our fixedPixelsX to account for row/column wrapping in this x/y calculation
+                // we're visually how far the pixel has moved in terms of 1D array indexes, from it's original position to it's sorted position over time
+                // we're going to be additively writing incremental changes as brightness adjustments to the offset texture
+                // negative when we need to move left/up, positive when we need to move right/down
+                // keeping in mind that we're accounting for going from 1D array space to 2D screen space as though the array were laid out in a rasterized pattern
+                let x_offset = (inner_i + 1) % fixedPixelsX - inner_i % fixedPixelsX;
+                let y_offset = Math.floor((inner_i + 1) / fixedPixelsX) - Math.floor(inner_i / fixedPixelsX);
+
+                // make the offset a fixed value from 0 - 0.1
+                x_offset = Math.sign(x_offset) * 0.1;
+                y_offset = Math.sign(y_offset) * 0.1;
+
+                // NOTE: given how array shifting works, we need to "write" an additive value to the offset texture for each intermediary pixel between the two pixels we're swapping
+                // nice thing about this algo is, it's bitwise, so we can do it in parallel, AND there's no interviening pixels, so we don't have to account for it with our current sort algo
+                pixelData[inner_i * bytesPerPixel] += x_offset;
+                pixelData[inner_i * bytesPerPixel + 1] += y_offset;
+                // empty green channel
+                pixelData[inner_i * bytesPerPixel + 2] = 0;
+
+                swapped = true;
+            }
+            return swapped;
+        }
+
+        let noSwapStreak = 0; // Track consecutive passes without swaps
+        let prevDidSwap = false; // Track whether a swap occurred in the previous pass
+
+        function finalSortPass() {
+            sortStepSize = 1; // Set window size to minimum
+            applyBubbleSortStep(); // Perform final sort pass
+        }
+
+        function isOverlookingPixels() {
+            // Implement logic to check for consistently overlooked pixels
+            // This could be a heuristic based on tracking which pixels haven't moved in several passes
+            // or it could be a heuristic based on the number of pixels that have moved in the last pass
+            
+            return false; // Placeholder return
+        }
+
+        /** 
+         * return true if swapped
+         * */
+        function applyBubbleSortStep() {
+            //console.warn("Applying bubble sort step");
+            // Apply one step of the bubble sort algorithm
+            swapped = false;
+
+            let crossedCycleBoundaryThisPass = false;
+
+            const numPixels = fixedPixelsX * fixedPixelsY;
+            let _sortStepSize = window.sortStepSize === -1 ? numPixels : window.sortStepSize;
+
+            if (window.sortStepSize === -1) {
+                let scale;
+                if (numPixels < 1e5) {
+                    // do multiple passes per frame when the image is small enough to fit into a single pass
+                    scale = 1e5 / numPixels;
+                } else {
+                    // break into smaller chunks for large images
+                    scale = numPixels / 1e5;
+                }
+                _sortStepSize = numPixels * scale; // Adjusting for pixel density
+            }
+            window.current_sortStepSize = _sortStepSize;
+            
+            // if _sortStepSize is > than the size of threads on our GPU, we need to break it up into multiple passes
+
+            // Calculate the end of the current sorting window
+            //const windowEnd = Math.min(sortOffset + _sortStepSize, numPixels - 1);
+            const windowEnd = Math.max(0, sortOffset + _sortStepSize);
+
+            // NOTE: there's a bug where if the offset is too large, we always wrap around before reaching the end of the base texture
+            // we need to detect when this might happen and apply a correction to the window size to make sure that the whole texture is sorted
+            // NOTE sortOffset is dynamic, and windowEnd is dynamic, so,
+            // our heuristic to check if we might've overlooked pixels is defined as:
+            // 
+
+            // Update the sorting offset
+            sortOffset += _sortStepSize;
+            crossedCycleBoundaryThisPass = false;
+            if (sortOffset >= numPixels) {
+                crossedCycleBoundaryThisPass = true;
+                // wrap around
+                sortOffset = sortOffset % numPixels;
+                // if we didnt swap this pass, 
+                if(!prevDidSwap && !swapped){
+                    // note we attribute multiple passes without swaps to the same cycle
+                    noSwapStreak += Math.floor(((sortOffset % numPixels) / numPixels));
+                }
+            }
+
+            for (let i = sortOffset; i < windowEnd - 1; i++) {
+                let inner_i = i
+                // if inner_i has gone out of bounds, we need to wrap it around
+                if(inner_i >= numPixels){
+                    inner_i = inner_i % numPixels;
+                }
+                const currentColor = pixelData.subarray(inner_i * bytesPerPixel, (inner_i + 1) * bytesPerPixel);
+                const nextColor = pixelData.subarray((inner_i + 1) * bytesPerPixel, (inner_i + 2) * bytesPerPixel);
+
+                let a_larger = (
+                    currentColor[0] 
+                    + currentColor[1] 
+                    + currentColor[2] 
+                    > 
+                    nextColor[0] 
+                    + nextColor[1] 
+                    + nextColor[2]
+                ) ? 1 : 0;
+
+                if(window.reverseSort){
+                    a_larger = !a_larger;
+                }
+
+                // Compare colors based on the sum of RGB values
+                if (
+                    a_larger
+                ) {
+                    // Swap colors in pixel data
+                    [pixelData[inner_i * bytesPerPixel], pixelData[(inner_i + 1) * bytesPerPixel]] = [pixelData[(inner_i + 1) * bytesPerPixel], pixelData[inner_i * bytesPerPixel]];
+                    [pixelData[inner_i * bytesPerPixel + 1], pixelData[(inner_i + 1) * bytesPerPixel + 1]] = [pixelData[(inner_i + 1) * bytesPerPixel + 1], pixelData[inner_i * bytesPerPixel + 1]];
+                    [pixelData[inner_i * bytesPerPixel + 2], pixelData[(inner_i + 1) * bytesPerPixel + 2]] = [pixelData[(inner_i + 1) * bytesPerPixel + 2], pixelData[inner_i * bytesPerPixel + 2]];
+                    swapped = true;
+                }
+
+                // convert to hsb , sort by hue, then value, then saturation
+                // const currentHSV = rgbToHsv(currentColor);
+                // const nextHSV = rgbToHsv(nextColor);
+                // if(newCheck(inner_i, currentColor, currentHSV, nextColor, nextHSV)){
+                //     swapped = true;
+                // }
+            }
+
+            
+            
+            if (swapped) {
+                // If a swap occurred, update the texture
+                window.baseTexture.needsUpdate = true;
+                window.offsetTexture.needsUpdate = true;
+                window.targetPixelDataTexture.needsUpdate = true;
+                // TODO: determine which bounding box DID change, and only update that region...
+                window.baseTexture.image.data.set(pixelData);
+            }
+
+            // if we've somehow gone negative, flip positive and clamp to 0
+            if(sortOffset < 0){
+                throw new Error("sortOffset is negative");
+            }
+
+            prevDidSwap = swapped;
+
+            return swapped;
+        }
+
+        /** @deprecating - STILL REFERENCING - DO NOT REMOVE YET - **/
+        /*
+        function render(now) {
+            const deltaTime = now - then;
+            then = now;
+            tickBigSweep();
+
+            //if (deltaTime > 0){//0.001) {
+            if(do_sort){
+                const swapped = applyBubbleSortStep();
+                // if(
+                //     noSwapStreak > 0 
+                //     && !DID_COMPLETE_SORT_SINCE_RESET 
+                //     && window.sortStepSize <= 2
+                // ){
+                //     DID_COMPLETE_SORT_SINCE_RESET = true;
+                // }else{
+                    if(
+                        noSwapStreak > 0 // did we make it a full cycle with no swaps?
+                        && !DID_COMPLETE_SORT_SINCE_RESET 
+                        && window.sortStepSize > 2
+                    ){
+                        // let's start confirming by decreasing our sortStepSize
+                        // reduce sortStepSize by factor of 2
+                        window.sortStepSize = Math.max(2,parseInt(window.sortStepSize / 2));
+                        console.warn('decreasing sortStepSize',window.sortStepSize);
+                        if(window.sortStepSize <= 4){
+                            // run our final sort pass
+                            console.warn('final sort pass!')
+                            DID_COMPLETE_SORT_SINCE_RESET = true;
+                            finalSortPass();
+                        }
+                    }
+                    if(
+                        // if noSwapStreak reset, and we haven't completed the sort since the last reset
+                        // and our current sortStepSize is less than our MAX_SORT_STEP_SIZE
+                        // we increase the sortStepSize by factor of 2
+                        noSwapStreak === 0 
+                        && !DID_COMPLETE_SORT_SINCE_RESET 
+                        && window.sortStepSize < window.MAX_SORT_STEP_SIZE
+                    ){
+                        // increase sortStepSize
+                        window.sortStepSize = Math.min(window.MAX_SORT_STEP_SIZE,parseInt(window.sortStepSize * 2));
+                        console.warn('increasing sortStepSize',window.sortStepSize,{
+                            max: window.MAX_SORT_STEP_SIZE,
+                        });
+                    }
+                //}
+            }
+            //}
+        }
+        */
+
+        window.uScrollOffsetYSpeed = 0.05;
+        window.uScrollOffsetXSpeed = -0.05;
+
+        window.bigSweepActive = false, window.bigSweepInterval = 0;
+        window.sweepFactor = 0.1;
+        window.tickBigSweep = function() {
+            if (window.bigSweepActive) {
+                window.mouseX = (Math.sin(Date.now() * 0.001) + 1) * ((window.innerWidth / 2) * window.sweepFactor);
+                window.mouseY = (Math.cos(Date.now() * 0.001) + 1) * ((window.innerHeight / 2) * window.sweepFactor);
+            }
+        }
+        window.toggleBigSweep = function(){
+            window.bigSweepActive = !window.bigSweepActive;
+            console.warn("window.bigSweepActive",window.bigSweepActive);   
+        }
+
+        window.jiggleSwirl = false;
+        window.swirlFreq = 1;
+        window.swirlMax = 1;
+        window.toggleJiggleSwirl = function(){
+            window.jiggleSwirl = !window.jiggleSwirl;
+            console.warn("window.jiggleSwirl",window.jiggleSwirl);
+
+            clearInterval(window.mouseJiggler); 
+            if(window.jiggleSwirl){
+                window.mouseJiggler = setInterval(
+                    ()=>{
+                        window.mouseX = (Math.sin(Date.now()*window.swirlFreq*0.0015) * window.swirlMax*256)
+                    },16)
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
+            // create if not exist
+            if(!imageElement){
+                imageElement = document.createElement('img');
+                imageElement.id = 'image';
+                imageElement.style.display = 'none';
+                document.body.appendChild(imageElement);
+            }
+
+            
+        });
+        function createImageBitmap(imageBlob){
+            return new Promise((resolve,reject)=>{
+                // let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
+                // // create if not exist
+                // if(!imageElement){
+                //     imageElement = document.createElement('img');
+                //     imageElement.id = 'image';
+                //     imageElement.style.display = 'none';
+                //     document.body.appendChild(imageElement);
+                // }
+                // imageElement.onload = function(e){
+                //     // once we can read the image, we can forward it to our shader...
+                //     resolve(imageElement);
+                // }
+                let _image = new Image();
+                _image.onload = function(e){
+                    // once we can read the image, we can forward it to our shader...
+                    resolve(_image);
+                }
+                imageElement.src = URL.createObjectURL(imageBlob);
+            });
+        }
+        async function onPasteAttempt(e){
+            try {
+                handleFileInput(e);
+                hideIntroText()
+
+            } catch (error) {
+                console.error('Error accessing clipboard:', error);
+                // Handle error appropriately
+            }
+        }
+        function hideIntroText(){
+            canvas.classList.add('unblur');
+            let match = document.getElementsByClassName('drop-here-text');
+            if (match.length > 0) {
+                Array.from(match).forEach((el) => {
+                    el.classList.add('fadeout');
+                });
+            }
+        }
+        function showIntroText(skipBlur=false){
+            if(!skipBlur){
+                canvas.classList.remove('unblur');
+            }
+            let match = document.getElementsByClassName('drop-here-text');
+            if (match.length > 0) {
+                Array.from(match).forEach((el) => {
+                    el.style.display = 'block';
+                });
+            }
+        }
+        document.addEventListener('keydown',async(e)=>{
+            // if command v on mac,
+            // or control v on other,
+            // paste image from clipboard
+            if ( 
+                (e.keyCode === 22 || e.keyCode === 86)
+                && (e.metaKey || e.ctrlKey)
+            ){
+                await onPasteAttempt(e);
+            }
+        },false)
+
+
+        document.addEventListener('touchmove',async(e)=>{
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+        })
+        document.addEventListener('touchstart',async(e)=>{
+            mouseX = e.touches[0].clientX;
+            mouseY = e.touches[0].clientY;
+        })
+
+        // Mobile double-tap detection
+        let doubleTapDetected = false;
+        let doubleTapTimeout = null;
+        const doubleTapDelay = 300;
+
+        window.leftMouseDown = false;
+
+        // uniform "double-tap"/double-click detection
+
+        function checkDoubleTapDetected(){
+            if (doubleTapDetected) {
+                // Reset
+                doubleTapDetected = false;
+                clearTimeout(doubleTapTimeout);
+                doubleTapTimeout = null;
+                
+                // showIntroText();
+                // // update url
+                // let uri = "https://jakedowns.com/media/0006.mp4";
+                // window.videoTexture.image.src = uri;
+                // window.videoTexture.needsUpdate = true;
+
+                mandlebulbTexture = window.videoTexture;
+            } else {
+                doubleTapDetected = true;
+                doubleTapTimeout = setTimeout(() => {
+                    // Actions to perform if not a double tap
+                    // Currently, it's set to perform the same actions, 
+                    // but you can change this to suit your needs.
+
+                    // Reset double tap detection
+                    doubleTapDetected = false;
+                    doubleTapTimeout = null;
+                }, doubleTapDelay);
+            }
+        }
+        document.addEventListener('dblclick', (e) => {
+            checkDoubleTapDetected();
+        }, false);
+
+        document.addEventListener('touchend', (e) => {
+            checkDoubleTapDetected();
+        }, false);
+        var num_modes = 5;
+        document.addEventListener('click', (e)=>{
+            MODE = (MODE + 1) % num_modes;
+            // console.log("MODE",MODE);
+            
+            checkDoubleTapDetected();
+
+            window.mouseRaw.set(
+                window.mouseX, 
+                window.innerHeight - window.mouseY, 
+                window.leftMouseDown ? 1 : -1, 
+                0
+            );
+            window.mouseLerping.set(
+                window.mouseX, 
+                window.innerHeight - window.mouseY, 
+                window.leftMouseDown ? 1 : -1, 
+                0
+            );
+            
+
+            // if(!window.do_sort){
+            //     window.do_sort = true;
+            //     console.log("do_sort",window.do_sort);
+            // }
+        });
+        window.mouseX = window.mouseY = 0;
+        document.addEventListener('mousemove', (e)=>{
+            window.mouseX = e.clientX;
+            window.mouseY = e.clientY;
+        });
+        document.addEventListener('mousedown', (e)=>{
+            window.leftMouseDown = e.button === 0;
+            window.middleMouseDown = e.button === 1;
+            window.rightMouseDown = e.button === 2;
+            // window.mouse_btn_3 = e.button === 3;
+            // window.mouse_btn_4 = e.button === 4;
+            // window.mouse_btn_5 = e.button === 5;
+            window.anyMouseDown = true;
+        });
+        document.addEventListener('mouseup', (e)=>{
+            window.anyMouseDown = false;
+            window.leftMouseDown = false;
+            window.middleMouseDown = false;
+            window.rightMouseDown = false;
+        });
+        function imageBlobToBase64(imageBlob){
+            return new Promise((resolve,reject)=>{
+                let reader = new FileReader();
+                reader.onload = function(e){
+                    resolve(e.target.result);
+                }
+                reader.readAsDataURL(imageBlob);
+            });
+        }
+        
+        document.addEventListener("DOMContentLoaded", onReady);
+
+    </script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        setTimeout(function() {
+            var script = document.createElement('script');
+            script.src = "https://www.googletagmanager.com/gtag/js?id=G-GYK2ZMX0M9";
+            script.async = true;
+            document.body.appendChild(script);
+
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-GYK2ZMX0M9');
+        }, 3000);
+    });
+</script>
 </body>
 </html>
