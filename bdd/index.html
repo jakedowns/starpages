@@ -133,6 +133,14 @@
 <body class="">
 
 <div id="app" class="flex-row p-4 h-screen overflow-hidden">
+    <project-selector
+        :selected-project-id="selectedProjectId"
+        :searchable-project-names="searchableProjectNames"
+        :projects="projects"
+        :selected-project="selectedProject"
+        :selected-project-index="selectedProjectIndex"
+        :select-project-index="selectProjectIndex"
+    ></project-selector>
     <feature-selector
         :selected-feature-index="selectedFeatureIndex"
         :selected-feature="selectedFeature"
@@ -169,12 +177,38 @@
     <delete-modal v-if="showDeleteModal" :delete-scenario="deleteScenario"></delete-modal>
 </div>
 
+<!-- ProjectSelector project-selector -->
+<script type="text/x-template" id="project-selector-template">
+    <div class="w-full project-selector z-11">
+        <vue-typeahead
+            :label="'Projects'"
+            placeholder="Project Name..."
+            :backingData="searchableProjectNames"
+            :new-thing-name="'Project'"
+            :items="projects"
+            :minChars="1"
+            :show-dropdown-on-focus="true"
+            :class="{'text-2xl font-bold mb-4': true}"
+            :v-model="projectSelectorInput"
+            @hit="onProjectSelectorHit"
+            @searching="onSearchingStateChanged"
+            @filtered-options-updated="onProjectSelectorResultsUpdated"
+            @reset="onProjectSelectorReset"
+            @select="onProjectSelectorSelect"
+            @focus="onFocusIn"
+            @blur="onFocusOut"
+        ></vue-typeahead>
+    </div>
+</script>
+
 <!-- Feature Selector is a type-head text field that doubles as a H1 header for the selected Feature as well as an input that allows you to fuzzy-search to switch the selected feature, and there's always a default option to "Create New Feature Named... %whatever the user was typing%" -->
 <!-- FeatureSelector -->
 <script type="text/x-template" id="feature-selector-template">
     <div class="w-full feature-selector z-11">
         <vue-typeahead
             placeholder="Feature Name..."
+            :new-thing-name="'Feature'"
+            :label="'Features'"
             :backingData="searchableFeatureNames"
             :items="features"
             :minChars="1"
@@ -354,7 +388,7 @@
             @input="onTypeaheadValueInput" />
         <div class="relative">
             <ul class="overflow-y-auto absolute left-0 z-10 w-full typeahead-dropdown border rounded shadow-lg" v-if="showDropdown && localFilteredSet.length > 0">
-                <li class="clearfix"><div class="float-left">Features:</div><div class="float-right">Status:</div></li>
+                <li class="clearfix"><div class="float-left">{{label}}:</div><div class="float-right">Status:</div></li>
                 <li class="p-2 hover:bg-purple-100 cursor-pointer clearfix"
                     :class="{ 'bg-blue-200': index === highlightedOptionIndex }"
                     v-for="(item, index) in localFilteredSet" :key="index" @click="clickItem(index)">
@@ -375,6 +409,10 @@
         name: 'vue-typeahead',
         template: "#vue-typeahead-template",
         props: {
+            label: {
+                type: String,
+                default: 'Things'
+            },
             newThingName: {
                 type: String,
                 default: 'Thing'
@@ -732,6 +770,7 @@
 
             selectedFeatureIndex: 0,
             newScenarioNameInput: '',
+            projectSearchInput: '',
             featureSearchInput: '',
         });
         window.gwt_state = state;
@@ -765,11 +804,18 @@
             setup() {
                 const projects = ref([
                     {
-                        name: 'BDD Test Manager',
+                        name: '🧪 GWT/BDD Test Manager (this tool)',
+                        id: '001',
                         description: 'a suite of tests describing a basic Gherkin Test Manager app'
+                    },
+                    {
+                        name: '🕸️ Website Features',
+                        id: '002',
+                        description: 'a suite of test describing a website'
                     }
                 ])
                 const features = ref([{
+                    project_id: '001',
                     name: 'GWT MVP -- Features',
                     description: 'This is the minimum viable product for the Gherkin Web Test Manager',
                     scenarios: [{
@@ -808,6 +854,7 @@
                         then: ['user does not see the deleted feature in the feature list']
                     }]
                 },{
+                    project_id: '001',
                     name: 'GWT MVP -- Scenarios',
                     scenarios: [{
                         title: 'user adds a scenario',
@@ -830,6 +877,7 @@
                         then: ['user sees the scenario is deleted']
                     }]
                 },{
+                    project_id: '001',
                     name: 'GWT MVP -- Running Scenarios',
                     scenarios: [
                         {
@@ -844,6 +892,7 @@
                         }
                     ]
                 },{
+                    project_id: '001',
                     name: 'GWT MVP -- Type Ahead Field',
                     scenarios: [
                         {
@@ -854,6 +903,7 @@
                         }
                     ]
                 },{
+                    project_id: '002',
                     name: '👤 User Registration',
                     description: 'All scenarios around registering and verifying a new web account',
                     scenarios: [{
@@ -883,6 +933,7 @@
                         then: ['user is verified']
                     }]
                 },{
+                    project_id: '002',
                     name: '🗝️ User Authentication: Happy Path',
                     scenarios:[{
                         title: 'user logs in via login page',
@@ -901,6 +952,7 @@
                         then: ['user is logged in']
                     }]
                 },{
+                    project_id: '002',
                     name: '❌ User Authentication: Edge Cases',
                     scenarios:[{
                         title: 'user submits invalid email/password via login page',
@@ -919,6 +971,7 @@
                         then: ['user sees validation errors in the modal']
                     }]
                 },{
+                    project_id: '002',
                     name: '🔑 User Password Actions',
                     description: 'All scenarios around changing and resetting a user\'s password',
                     scenarios: [{
@@ -948,29 +1001,53 @@
                         then: ['user sees invalid token error']
                     }]
                 },{
+                    project_id: '002',
                     name: '🔍 KYC',
                     scenarios:[],
                 },{
+                    project_id: '002',
                     name: '📱 SMS',
                     scenarios:[],
                 },{
+                    project_id: '002',
                     name: '🚫 Banned Users',
                     scenarios:[],
                 },{
+                    project_id: '002',
                     name: '👁️ Watched Lots',
                     scenarios:[],
                 },{
+                    project_id: '002',
                     name: '📝 Sale Registration',
                     scenarios:[],
                 },{
+                    project_id: '002',
                     name: '💰 Pre-sale Bidding',
                     scenarios:[],
                 },{
+                    project_id: '002',
                     name: '📆 Day Of Sale',
                     scenarios:[],
                 }])
+                const selectedProjectIndex = ref(0);
+                //const selectedProjectId = ref(null);
+                const selectedProjectId = computed(()=>{
+                    return projects.value[selectedProjectIndex.value]?.id;
+                })
                 const selectedFeatureIndex = ref(0);
                 const selectedScenarioIndex = ref(0);
+                const selectedProject = computed(()=>{
+                    return projects.value[selectedProjectIndex.value];
+                })
+
+                const addProject = () => {
+                    console.warn("Global Action: addProject", arguments); 
+                    // Add logic for adding a project here
+                }
+                const addFeature = () => {
+                    console.warn("Global Action: addFeature", arguments); 
+                    // Add logic for adding a feature here
+                }
 
                 const addScenario = () => {
                     console.warn("Global Action: addScenario", arguments); 
@@ -1001,6 +1078,15 @@
                         document.querySelector('.given-input input').focus();
                     },100)
                 };
+
+                const selectProjectIndex = (projectIndex) => {
+                    if(!projects.value[projectIndex]){
+                        console.warn("selectProjectIndex: projectIndex is null");
+                        return;
+                    }
+                    console.warn('setting selectedProjectIndex',projectIndex);
+                    selectedProjectIndex.value = projectIndex;
+                }
 
                 const selectFeatureIndex = (featureIndex) => {
                     if(!features.value[featureIndex]){
@@ -1033,8 +1119,14 @@
                 //     state.... = value;
                 // });
 
+                const searchableProjectNames = computed(() => {
+                    return projects.value.map(
+                        project => project.name
+                    )
+                });
+
                 const searchableFeatureNames = computed(() => {
-                    return features.value.map(feature => feature.name);
+                    return features.value.filter(feature => feature.project_id === selectedProjectId.value).map(feature => feature.name);
                 });
 
                 const searchableScenarioNames = computed(() => {
@@ -1172,13 +1264,20 @@
                 })
 
                 const app_stuff = {
+                    projects,
                     features,
                     scenarios,
+
+                    searchableProjectNames,
                     searchableFeatureNames,
                     searchableScenarioNames,
                     searchableGivenNames,
                     searchableWhenNames,
                     searchableThenNames,
+
+                    selectedProjectIndex,
+                    selectedProject,
+                    selectedProjectId,
                     selectedFeatureIndex,
                     selectedFeature,
                     selectedScenarioIndex,
@@ -1187,7 +1286,10 @@
                     showingModal,
                     showDeleteModal,
 
+                    addProject,
+                    addFeature,
                     addScenario,
+                    selectProjectIndex,
                     selectFeatureIndex,
                     selectScenarioIndex,
                     deleteScenario,
@@ -1205,6 +1307,77 @@
         app.component('draggable', window.vuedraggable)
         //console.warn('registering VueNextTypeahead', window.VueNextTypeahead);
         app.component('vue-typeahead', window.VueNextTypeahead)
+
+        // ProjectSelector
+        app.component('project-selector', {
+            template: '#project-selector-template',
+            data(){
+                return {
+                    searching: false,
+                    focused: false
+                }
+            },
+            props: [
+                'selectedProject',
+                'selectedProjectId',
+                'selectedProjectIndex',
+                'projects',
+                'searchableProjectNames',
+                'selectProjectIndex',
+                'addProject'
+            ],
+            methods: {
+                // via filtered-options-updated aka filteredOptionsUpdated
+                onProjectSelectorResultsUpdated: function(results){
+                    //console.warn('onProjectSelectorResultsUpdated', results);
+                },
+                onProjectSelectorSelect: function(index){
+                    console.warn('onProjectSelectorSelect', index);
+                    //this.$emit('select-Project-index', index);
+                },
+                onProjectSelectorHit: function(index){
+                    console.warn('onProjectSelectorHit', index);
+                    // this.$emit('select-Project-index', index);
+                    window.gwt_app.selectProjectIndex(index);
+                },
+                onSearchingStateChanged: function(isSearching){
+                    //console.warn('onSearchingStateChanged', isSearching);
+                    this.searching = isSearching;
+                },
+                onProjectSelectorReset: function(){
+                    //window.gwt_state.newScenarioNameInput = '';
+                },
+                onFocusIn(){
+                    this.focused = true;
+                },
+                onFocusOut(){
+                    this.focused = false;
+                }
+            },
+            computed: {
+                projectSelectorInput: {
+                    get(){
+                        // if we're focused, it's a text input, not a header
+                        if(this.focused){
+                            return window.gwt_state.projectSearchInput;
+                        }
+                        // show the currently selected project (if any)
+                        return 'Project ' + (this.selectedProjectIndex + 1) + ') ' + this.selectedProject?.name ?? '';
+                        
+                    },
+                    set(value){
+                        window.gwt_state.projectSearchInput = value;
+                    }
+                }
+            },
+            mounted(){
+                // focus the input
+                setTimeout(()=>{
+                    document.querySelector('.project-selector input').focus();
+                },100)
+            }
+        });
+
         // FeatureSelector
         app.component('feature-selector', {
             template: '#feature-selector-template',
@@ -1270,10 +1443,7 @@
                     props: JSON.parse(JSON.stringify(this.$props)),
                     _this: this
                 })
-                // focus the input
-                setTimeout(()=>{
-                    document.querySelector('.feature-selector input').focus();
-                },100)
+                
             }
         });
         // ScenarioList
