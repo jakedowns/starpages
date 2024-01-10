@@ -27,18 +27,31 @@ export async function setupDatabase(cb: Function) {
 
     //await db.migrate({ force: 'last' });
 
-    // features
+    // projects (id, name, description) // have many features
+    // features (id, name, description, project_id)
     // scenarios (id, feature_id, name, description)
     // steps (id, scenario_id, type, description)
     // taggable_tags (id, taggable_id, taggable_type, tag_id)
     // tags (id, name)
     // users (id, email, password, verification_token, verified, reset_token, reset_token_expires_at, created_at, updated_at)
+    
+    await db.exec(`
+CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT
+);
+`)
+    
+    
     await db.exec(`
 CREATE TABLE IF NOT EXISTS features (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     description TEXT,
-    tags TEXT
+    tags TEXT,
+    project_id INTEGER,
+    FOREIGN KEY(project_id) REFERENCES projects(id)
 );
 `);
 

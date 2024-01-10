@@ -5,15 +5,14 @@
 	"main": "server.js",
 	"type": "module",
 	"scripts": {
-		"start": "node --harmony server.mjs",
-		"serve": "http-server -c-1 --cors='*' -o -S -C ./self-signed-neat.app.key.crt -K ./self-signed-neat.app.key",
-		"both": "concurrently \"npm run start\" \"npm run serve\""
+		"start": "node server.mjs"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
 	"dependencies": {
 		"@types/p5": "^1.7.4",
+		"cluster": "^0.7.7",
 		"concurrently": "^8.2.2"
 	},
 	"devDependencies": {

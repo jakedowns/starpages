@@ -14,6 +14,10 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+// start a basic file server in the background
+import { fork } from 'child_process';
+const fileServer = fork('basic_bg_file_server.mjs');
+
 /*
 */
 const anger_management_course = [
@@ -122,4 +126,9 @@ io.on('connection', (socket) => {
     });
 });
 
+
+
+
+
 server.listen(4001, () => console.log(`Listening on port 4001`));
+
