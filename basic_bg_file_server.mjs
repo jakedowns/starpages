@@ -10,7 +10,7 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(express.static(path.resolve('public')));
+app.use(express.static(path.resolve('')));
 
 https.createServer({
     key: fs.readFileSync(path.resolve('./self-signed-neat.app.key')),
