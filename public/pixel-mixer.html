@@ -1,18 +1,18 @@
 <!DOCTYPE html>
-<meta charset="utf-8">
-<!-- 
-    https://jakedowns.github.io/starpages/webgl2.html
-    TODO:
-    - bitonic sort
-
-    // finish back merging "video texture" / three.js bindings
-
-    // finish triple-buffering
-    - lerping between colors using an intermediary accumulator texture which we display
-        // backed by our current Original, and Target textures
--->
 <html>
-<head>
+    <head>
+    <meta charset="utf-8">
+    <!-- 
+        https://jakedowns.github.io/starpages/webgl2.html
+        TODO:
+        - bitonic sort
+    
+        // finish back merging "video texture" / three.js bindings
+    
+        // finish triple-buffering
+        - lerping between colors using an intermediary accumulator texture which we display
+            // backed by our current Original, and Target textures
+    -->
     <script>
         window.capturerSpeedReduction = 0.5;
     </script>
@@ -33,17 +33,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
-    <!-- <script type="module">
-        import { GUI } from './import/threejs/examples/jsm/libs/lil-gui.module.min.js';
+    <script type="module">
+        import { GUI } from 'lil-gui';
         const panel = new GUI( );
 			
-				panel.add( settings, 'res', 1, 6, 1 ).name( 'Res' ).onFinishChange( compile );
-				panel.add( settings, 'bounds', 1, 10, 1 ).name( 'Bounds' ).onFinishChange( compile );
-				panel.add( settings, 'material', [ 'depth', 'normal' ] ).name( 'Material' ).onChange( setMaterial );
-				panel.add( settings, 'wireframe' ).name( 'Wireframe' ).onChange( setMaterial );
-				panel.add( settings, 'autoRotate' ).name( 'Auto Rotate' );
-				panel.add( settings, 'vertexCount' ).name( 'Vertex count' ).listen().disable();
-    </script> -->
+        window.panel = panel;
+    </script>
     <script>
         // stat.js
         (function(){
@@ -652,6 +647,9 @@
             window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
             window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
             window.accumulationTexture.needsUpdate = true;
+            
+            window._originalCurrentFrameTexture = window.currentFrameTexture;
+            window._originalAccumulationTexture = window.accumulationTexture;
 
             
             // Assuming you have a texture loaded into a variable named 'texture'
@@ -963,20 +961,37 @@
                 updateMouseUniform();
 
                 // Render the scene into the currentFrameTexture
-                renderer.setRenderTarget(window.currentFrameTexture);
-                renderer.render(scene, camera);
-
-                // Use the rendered texture as input for the next pass
-                shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+                if(window?.currentFrameTexture?.texture){
+                    try{
+                        renderer.setRenderTarget(window.currentFrameTexture);
+                        renderer.render(scene, camera);
+                        // Use the rendered texture as input for the next pass
+                        shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+                    }catch(e){
+                        console.error(e);
+                    }
+    
+                }else{
+                    console.warn('ok');
+                }
+                
 
                 // Render the accumulation pass to the screen
                 renderer.setRenderTarget(null);
                 renderer.render(scene, camera);
 
                 // Swap the textures
-                let temp = window.currentFrameTexture;
-                window.currentFrameTexture = window.accumulationTexture;
-                window.accumulationTexture = temp;
+                if(settings.useDoubleBuffer){
+                    let temp = window.currentFrameTexture;
+                    window.currentFrameTexture = window.accumulationTexture;
+                    window.accumulationTexture = temp;
+                }else{
+                    // window._originalCurrentFrameTexture
+                    // window._originalAccumulationTexture
+                    // just render to the same texture
+                    window.accumulationTexture = window._originalAccumulationTexture;
+                    window.currentFrameTexture = window._originalCurrentFrameTexture;
+                }
 
                 
                 // sub-frame playback
@@ -1415,11 +1430,17 @@
             // clear out our accumulator texture
             // clear out our textures
             window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.currentFrameTexture.texture.magFilter = THREE.NearestFilter;
+            window.currentFrameTexture.texture.minFilter = THREE.NearestFilter;
             window.currentFrameTexture.needsUpdate = true;
             window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
             window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
             window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
             window.accumulationTexture.needsUpdate = true;
+
+            // re-assign our "og" textures
+            window._originalCurrentFrameTexture = window.currentFrameTexture;
+            window._originalAccumulationTexture = window.accumulationTexture;
 
             // set shaderMaterial and accumulationMaterial to use the new, clean, textures
             window.shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
@@ -1429,14 +1450,67 @@
             window.shaderAccumulationMaterial.uniforms.iChannel0.value.needsUpdate = true;
         }
 
+        window.settings = {
+            pixel_density: 8,
+            useDoubleBuffer: true,
+            ambientLightColor: "#ff0000ff",
+        }
+
         // domready
         async function onReady(){
+
+            panel.add( settings, 'pixel_density', 1, 16, 1 )
+                .name( 'Pixel Density' )
+                //.onFinishChange( compile );
+
+            // ambientLightColor
+            panel.addColor(settings, 'ambientLightColor', true)
+                .name('Ambient Light Color')
+                .onChange((value)=>{
+                    ambientLightColor = value;
+                });
+            
+            // add a boolean checkbox for settings.useDoubleBuffer
+            panel.add(settings, 'useDoubleBuffer')
+                .name('Use Double Buffer')
+                .onChange((value)=>{
+                    settings.useDoubleBuffer = value;
+                    // if(value){
+                    //     window.shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+                    //     window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+                    // }else{
+                    //     window.shaderMaterial.uniforms.iChannel0.value = window.accumulationTexture.texture;
+                    //     window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.accumulationTexture.texture;
+                    // }
+                });
+
+            // panel.add( settings, 'res', 1, 6, 1 )
+            //     .name( 'Res' )
+            //     .onFinishChange( compile );
+
+            // panel.add( settings, 'bounds', 1, 10, 1 )
+            //     .name( 'Bounds' )
+            //     .onFinishChange( compile );
+
+            // panel.add( settings, 'material', [ 'depth', 'normal' ] )
+            //     .name( 'Material' ).onChange( setMaterial );
+
+            // panel.add( settings, 'wireframe' )
+            //     .name( 'Wireframe' ).onChange( setMaterial );
+
+            // panel.add( settings, 'autoRotate' )
+            //     .name( 'Auto Rotate' );
+
+            // panel.add( settings, 'vertexCount' )
+            //     .name( 'Vertex count' ).listen().disable();
+
             // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
             //     return;
             // }
             // window.fragmentShaderSource = await (await fetch("./shaders/fresh.glsl")).text();
             // window.fragmentShaderSource = await (await fetch("./shaders/uber-shader.glsl")).text();
-            window.fragmentShaderSource = await (await fetch("../shaders/frosted-video-mandlebulb.glsl")).text();
+            // window.fragmentShaderSource = await (await fetch("../shaders/frosted-video-mandlebulb.glsl")).text();
+            window.fragmentShaderSource = await (await fetch("../shaders/simple-ripple.glsl")).text();
             window.combineTexturesShaderSource = `
             // Fragment shader
             uniform sampler2D iChannel0;
