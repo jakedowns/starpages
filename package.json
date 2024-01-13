@@ -5,7 +5,7 @@
 	"main": "server.js",
 	"type": "module",
 	"scripts": {
-		"start": "concurrently 'node server.mjs' 'npm run vite'"
+		"start": "concurrently 'node server.mjs' 'npx vite'"
 	},
 	"keywords": [],
 	"author": "",
@@ -14,6 +14,7 @@
 		"@types/p5": "^1.7.4",
 		"cluster": "^0.7.7",
 		"concurrently": "^8.2.2",
+		"create-vite": "^5.1.0",
 		"lil-gui": "^0.19.1",
 		"three": "^0.160.0"
 	},
@@ -26,6 +27,7 @@
 		"openai": "^4.20.1",
 		"peerjs": "^1.5.1",
 		"simple-peer": "^9.11.1",
-		"socket.io": "^4.7.2"
+		"socket.io": "^4.7.2",
+		"vite": "^5.0.11"
 	}
 }
