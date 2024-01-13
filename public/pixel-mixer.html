@@ -34,23 +34,12 @@
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
     <script type="module">
-        import { GUI } from 'lil-gui';
+        import GUI from 'lil-gui';
         const panel = new GUI( );
 			
         window.panel = panel;
     </script>
-    <script>
-        // stat.js
-        (function(){
-            var script=document.createElement('script');script.onload=function(){
-                var stats=new Stats();
-                document.body.appendChild(stats.dom);
-                stats.dom.style.position = 'absolute';
-                stats.dom.style.bottom = '0px';
-                stats.dom.style.top = 'auto';
-                requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';document.head.appendChild(script);})()
-        
-    </script>
+    
     <style>
         html, body { margin: 0; padding: 0; overflow: hidden;  background-color: #000; }
         canvas#canvas {
@@ -457,6 +446,60 @@
             );
         });
 
+        /* adds paste support for Clipboard ImageBlob -> Three.js Texture */
+        window.doPasteFromClipboard = async function(){
+            try{
+                const items = await navigator.clipboard.read();
+                console.warn('items',items)
+                for (const item of items) {
+                    if (item.types.includes('image/png')) {
+                        const blob = await item.getType('image/png');
+                        const url = URL.createObjectURL(blob);
+                        if(window?.baseTexture?.image){
+                            return;
+                        }
+                        window.baseTexture.image.onload = function() {
+                            URL.revokeObjectURL(url);
+                            window.baseTexture.needsUpdate = true;
+                        };
+                        window.baseTexture.image.src = url;
+                        break;
+                    }
+                    // or if ti's a base64 image in a text string, pass _that_ to image.src
+                    if (item.types.includes('text/plain')) {
+                        const text = await item.getType('text/plain');
+                        if(window?.baseTexture?.image){
+                            return;
+                        }
+                        window.baseTexture.image.onload = function() {
+                            URL.revokeObjectURL(url);
+                            window.baseTexture.needsUpdate = true;
+                        };
+                        window.baseTexture.image.src = text;
+                        break;
+                    }
+                }
+            }catch(e){
+                console.error(e);
+            }
+        }
+
+        window.refreshPingPongTextures = function(){
+            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.currentFrameTexture.texture.magFilter = THREE.NearestFilter;
+            window.currentFrameTexture.texture.minFilter = THREE.NearestFilter;
+            window.currentFrameTexture.needsUpdate = true;
+
+            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTexture.needsUpdate = true;
+            
+            window._originalCurrentFrameTexture = window.currentFrameTexture;
+            window._originalAccumulationTexture = window.accumulationTexture;
+        }
+
+
         window.setupThree = async function(){
 
             const pasteFromClipboardPrompt = document.getElementById("pasteFromClipboardPrompt");
@@ -512,44 +555,7 @@
             //     }
             // },1000);
             
-            /* adds paste support for Clipboard ImageBlob -> Three.js Texture */
-            window.doPasteFromClipboard = async function(){
-                try{
-                    const items = await navigator.clipboard.read();
-                    console.warn('items',items)
-                    for (const item of items) {
-                        if (item.types.includes('image/png')) {
-                            const blob = await item.getType('image/png');
-                            const url = URL.createObjectURL(blob);
-                            if(window?.baseTexture?.image){
-                                return;
-                            }
-                            window.baseTexture.image.onload = function() {
-                                URL.revokeObjectURL(url);
-                                window.baseTexture.needsUpdate = true;
-                            };
-                            window.baseTexture.image.src = url;
-                            break;
-                        }
-                        // or if ti's a base64 image in a text string, pass _that_ to image.src
-                        if (item.types.includes('text/plain')) {
-                            const text = await item.getType('text/plain');
-                            if(window?.baseTexture?.image){
-                                return;
-                            }
-                            window.baseTexture.image.onload = function() {
-                                URL.revokeObjectURL(url);
-                                window.baseTexture.needsUpdate = true;
-                            };
-                            window.baseTexture.image.src = text;
-                            break;
-                        }
-                    }
-                }catch(e){
-                    console.error(e);
-                }
-            }
-
+            
             document.addEventListener("keydown",(e)=>{
                 if(e.key == "v" && (e.ctrlKey || e.metaKey)){
                     try{
@@ -624,7 +630,7 @@
                 THREE.RGBAFormat, 
                 THREE.UnsignedByteType
             );
-            // 3. our "accumulator" texture, which we use to lerp between the original and target textures
+            // 3. our lerping output texture, which we use to lerp between the original and target textures
             // this is our output buffer for now, but we may add additional buffers later
             window.lerpedColorTexture = new THREE.DataTexture(
                 new Uint8Array(4 * fixedPixelsX * fixedPixelsY), 
@@ -642,15 +648,7 @@
                 THREE.UnsignedByteType
             );
 
-            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
-            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
-            window.accumulationTexture.needsUpdate = true;
-            
-            window._originalCurrentFrameTexture = window.currentFrameTexture;
-            window._originalAccumulationTexture = window.accumulationTexture;
-
+            refreshPingPongTextures();
             
             // Assuming you have a texture loaded into a variable named 'texture'
             window.baseTexture.wrapS = THREE.MirroredRepeatWrapping; // For horizontal mirroring
@@ -915,6 +913,10 @@
                             window.videoTexture.crossOrigin = 'anonymous';
                             window.videoTexture.needsUpdate = true;
 
+                            // re-assign our "og" textures
+                            window._originalCurrentFrameTexture = window.currentFrameTexture;
+                            window._originalAccumulationTexture = window.accumulationTexture;
+
                             setTimeout(()=>{
                                 window.videoIsPlaying = true;
                                 window.videoIsVirtuallyPlaying = true;
@@ -928,97 +930,16 @@
 
             window.progressElement = document.getElementById("progress");
 
-            window.animate = function(time) {
-                if (resizeRendererToDisplaySize(renderer)) {
-                    canvas = renderer.domElement;
-                    // enforce dimensions of 2 for ffmpeg compatibility
-                    canvas.width = 2 * Math.floor(canvas.clientWidth / 2);
-                    canvas.height = 2 * Math.floor(canvas.clientHeight / 2);
-
-                    camera.aspect = canvas.width / canvas.height;
-                    camera.updateProjectionMatrix();
-                }
-
-                let _time = window.fixedTime ? window.fixedTime : time * 0.001;
-
-                // Use a custom shader material that combines the textures
-                window.shaderMaterial.uniforms.iChannel0.value = window.mandlebulbTexture;
-
-
-                window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture;
-                window.shaderAccumulationMaterial.uniforms.iChannel1.value = accumulationTexture;
-                window.shaderAccumulationMaterial.uniforms.iTime.value = _time;
-
-                shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
-                shaderMaterial.uniforms.iChannel0.value = accumulationTexture;
-                shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
-
-                window.accumulationTexture.needsUpdate = true;
-
-                // Update uniforms
-                shaderMaterial.uniforms.u_time.value = _time;
-                shaderMaterial.uniforms.u_resolution.value.set(pixelWidth, pixelHeight);
-                updateMouseUniform();
-
-                // Render the scene into the currentFrameTexture
-                if(window?.currentFrameTexture?.texture){
-                    try{
-                        renderer.setRenderTarget(window.currentFrameTexture);
-                        renderer.render(scene, camera);
-                        // Use the rendered texture as input for the next pass
-                        shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
-                    }catch(e){
-                        console.error(e);
-                    }
-    
-                }else{
-                    console.warn('ok');
-                }
-                
-
-                // Render the accumulation pass to the screen
-                renderer.setRenderTarget(null);
-                renderer.render(scene, camera);
-
-                // Swap the textures
-                if(settings.useDoubleBuffer){
-                    let temp = window.currentFrameTexture;
-                    window.currentFrameTexture = window.accumulationTexture;
-                    window.accumulationTexture = temp;
-                }else{
-                    // window._originalCurrentFrameTexture
-                    // window._originalAccumulationTexture
-                    // just render to the same texture
-                    window.accumulationTexture = window._originalAccumulationTexture;
-                    window.currentFrameTexture = window._originalCurrentFrameTexture;
-                }
-
-                
-                // sub-frame playback
-                maybeAdvanceVideoOneFrame();
-                
-                if(window.capturing){
-                    // update recording progress
-                    if (progressElement) {
-                        // Calculate progress based on targetRecordingDurationSeconds
-                        progressElement.value = (window.subframePlaybackCurrentFrame / maxFrames) * 100;
-                    }
-                    window.capturer.capture(canvas);
-                    
-                    if(window.subframePlaybackCurrentFrame >= maxFrames){
-                        window.stopCapture();
-                    }else{
-                        // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
-                        setTimeout(() => {
-                            window.animate(time + window.currentFrameDelta);
-                        }, 0);
-                    }
-                }else{
-                    // next frame
-                    requestAnimationFrame(animate);
-                }
+            window.updateUniformsForMaterial(material, uniforms){
+                Object
+                .keys(material)
+                .forEach(function(key) {
+                    uniforms[key] = { value: material[key] };
+                });
+                return uniforms;
             }
 
+            
             resizeRendererToDisplaySize(renderer);
 
             // first frame...
@@ -1246,18 +1167,18 @@
         let frameCount = 0;
         let seed = 0;
         let MODE = 1;
-        // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
-        let _pixel_density = 8; //4; 
         let _max_step_sort_size = 1e5 * 2;
-        Object.defineProperty(window, "pixel_density", {
-            get: function(){
-                return _pixel_density;
-            },
-            set: function(value){
-                _pixel_density = value;
-                resizeCanvas();
-            }
-        });
+        // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
+        // let _pixel_density = 8; //4; 
+        // Object.defineProperty(window, "pixel_density", {
+        //     get: function(){
+        //         return _pixel_density;
+        //     },
+        //     set: function(value){
+        //         _pixel_density = value;
+        //         resizeCanvas();
+        //     }
+        // });
         Object.defineProperty(window, "MAX_SORT_STEP_SIZE", {
             get: function(){
                 return _max_step_sort_size; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
@@ -1420,6 +1341,8 @@
                 console.warn('no baseTexture.image')
             }
 
+            refreshPingPongTextures();
+
             // update our originalPixelDataTexture (Three.js Texture)
             window.originalPixelDataTexture.image.src = url;
             window.originalPixelDataTexture.needsUpdate = true;
@@ -1427,27 +1350,15 @@
             window.mandlebulbTexture.image.src = url;
             window.mandlebulbTexture.needsUpdate = true;
 
-            // clear out our accumulator texture
-            // clear out our textures
-            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.currentFrameTexture.texture.magFilter = THREE.NearestFilter;
-            window.currentFrameTexture.texture.minFilter = THREE.NearestFilter;
-            window.currentFrameTexture.needsUpdate = true;
-            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
-            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
-            window.accumulationTexture.needsUpdate = true;
+            // i feel like we should copy the image data elsewhere,
+            // but the mandlebulbTexture is the new target for images
 
-            // re-assign our "og" textures
-            window._originalCurrentFrameTexture = window.currentFrameTexture;
-            window._originalAccumulationTexture = window.accumulationTexture;
-
-            // set shaderMaterial and accumulationMaterial to use the new, clean, textures
-            window.shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
-            window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
-            // needs update
-            window.shaderMaterial.uniforms.iChannel0.value.needsUpdate = true;
-            window.shaderAccumulationMaterial.uniforms.iChannel0.value.needsUpdate = true;
+            // // set shaderMaterial and accumulationMaterial to use the new, clean, textures
+            // window.shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+            // window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+            // // needs update
+            // window.shaderMaterial.uniforms.iChannel0.value.needsUpdate = true;
+            // window.shaderAccumulationMaterial.uniforms.iChannel0.value.needsUpdate = true;
         }
 
         window.settings = {
@@ -1456,25 +1367,121 @@
             ambientLightColor: "#ff0000ff",
         }
 
+        window.onSettingsChanged = function(){
+            console.warn('todo: jog shader data');
+        }
+
+        window.animate = function(time) {
+            if (resizeRendererToDisplaySize(renderer)) {
+                canvas = renderer.domElement;
+                // enforce dimensions of 2 for ffmpeg compatibility
+                canvas.width = 2 * Math.floor(canvas.clientWidth / 2);
+                canvas.height = 2 * Math.floor(canvas.clientHeight / 2);
+
+                camera.aspect = canvas.width / canvas.height;
+                camera.updateProjectionMatrix();
+            }
+
+            let _time = window.fixedTime ? window.fixedTime : time * 0.001;
+            
+            // we set these continually in animate()/render()
+            // we don't need them defined here too..
+
+            // window.shaderMaterial.uniforms.iChannel0.value = window.mandlebulbTexture;
+            // // old
+            // window.shaderMaterial.uniforms.u_time.value = _time;
+            // window.shaderMaterial.uniforms.u_resolution.value.set(pixelWidth, pixelHeight);
+            // // new: shadertoy-style
+            // window.shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
+            // window.shaderMaterial.uniforms.iChannel0.value = accumulationTexture;
+            // window.shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
+
+            // // secondary ping-pong material needs the same uniforms
+            // window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.mandlebulbTexture;
+            // window.accumulationTexture.needsUpdate = true;
+
+            // Update uniforms
+            updateMouseUniform();
+
+            // Render the scene into the currentFrameTexture
+            if(window?.currentFrameTexture?.texture){
+                try{
+                    renderer.setRenderTarget(window.currentFrameTexture);
+                    renderer.render(scene, camera);
+                    // Use the rendered texture as input for the next pass
+                    shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+                }catch(e){
+                    console.error(e);
+                }
+
+            }else{
+                console.warn('ok');
+            }
+            
+
+            // Render the accumulation pass to the screen
+            renderer.setRenderTarget(null);
+            renderer.render(scene, camera);
+
+            // Swap the textures
+            if(settings.useDoubleBuffer){
+                let temp = window.currentFrameTexture;
+                window.currentFrameTexture = window.accumulationTexture;
+                window.accumulationTexture = temp;
+            }else{
+                // window._originalCurrentFrameTexture
+                // window._originalAccumulationTexture
+                // just render to the same texture
+                window.accumulationTexture = window._originalAccumulationTexture;
+                window.currentFrameTexture = window._originalCurrentFrameTexture;
+            }
+
+            
+            // sub-frame playback
+            maybeAdvanceVideoOneFrame();
+            
+            if(window.capturing){
+                // update recording progress
+                if (progressElement) {
+                    // Calculate progress based on targetRecordingDurationSeconds
+                    progressElement.value = (window.subframePlaybackCurrentFrame / maxFrames) * 100;
+                }
+                window.capturer.capture(canvas);
+                
+                if(window.subframePlaybackCurrentFrame >= maxFrames){
+                    window.stopCapture();
+                }else{
+                    // emulate being called requestAnimationFrame with a DOMHighResTimeStamp
+                    setTimeout(() => {
+                        window.animate(time + window.currentFrameDelta);
+                    }, 0);
+                }
+            }else{
+                // next frame
+                requestAnimationFrame(animate);
+            }
+        }
+
         // domready
         async function onReady(){
 
             panel.add( settings, 'pixel_density', 1, 16, 1 )
                 .name( 'Pixel Density' )
-                //.onFinishChange( compile );
+                .onFinishChange( window.resizeCanvas() );
 
             // ambientLightColor
             panel.addColor(settings, 'ambientLightColor', true)
                 .name('Ambient Light Color')
-                .onChange((value)=>{
-                    ambientLightColor = value;
-                });
+                // .onChange((value)=>{
+                //     window.settings.ambientLightColor = value;
+                // });
             
             // add a boolean checkbox for settings.useDoubleBuffer
             panel.add(settings, 'useDoubleBuffer')
                 .name('Use Double Buffer')
                 .onChange((value)=>{
                     settings.useDoubleBuffer = value;
+                    console.warn('use double buffer', value);
                     // if(value){
                     //     window.shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
                     //     window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
@@ -1483,6 +1490,12 @@
                     //     window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.accumulationTexture.texture;
                     // }
                 });
+            
+            // panel add a button called "resizeCanvas"
+            panel.
+            addButton('resizeCanvas', function() {
+                window.resizeCanvas();
+            });
 
             // panel.add( settings, 'res', 1, 6, 1 )
             //     .name( 'Res' )
@@ -1548,8 +1561,8 @@
         function resizeCanvas() {
             canvas.width = pixelWidth;
             canvas.height = pixelHeight;
-            fixedPixelsX = Math.floor(canvas.width/pixel_density);
-            fixedPixelsY = Math.floor(canvas.height/pixel_density);
+            fixedPixelsX = Math.floor(canvas.width/settings.pixel_density);
+            fixedPixelsY = Math.floor(canvas.height/settings.pixel_density);
             window.DID_BIND_BASE_SINCE_RESIZE = false;
             // update our iResolution uniform
             shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
@@ -1580,7 +1593,7 @@
         let fixedPixelsX,fixedPixelsY;
         function initializePositionsAndOffsetData(keepPixelData = true) {
             numPixels = canvas.width * canvas.height;
-            numPixels = Math.floor(numPixels / pixel_density);
+            numPixels = Math.floor(numPixels / settings.pixel_density);
 
             if(!keepPixelData){
                 pixel_positions = [];
@@ -2174,6 +2187,17 @@
             gtag('js', new Date());
 
             gtag('config', 'G-GYK2ZMX0M9');
+
+            // stats.js
+            var script=document.createElement('script');script.onload=function(){
+            var stats=new Stats();
+            document.body.appendChild(stats.dom);
+            stats.dom.style.position = 'absolute';
+            stats.dom.style.bottom = '0px';
+            stats.dom.style.top = 'auto';
+            requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};
+            script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';
+            document.head.appendChild(script);
         }, 3000);
     });
 </script>

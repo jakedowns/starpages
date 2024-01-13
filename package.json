@@ -5,7 +5,7 @@
 	"main": "server.js",
 	"type": "module",
 	"scripts": {
-		"start": "node server.mjs"
+		"start": "concurrently 'node server.mjs' 'npm run vite'"
 	},
 	"keywords": [],
 	"author": "",
