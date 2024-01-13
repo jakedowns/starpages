@@ -22,7 +22,14 @@ void main(){
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / min(iResolution.y, iResolution.x);
     vec2 mouse = iMouse.xy / iResolution.xy;
 
-    gl_FragColor = vec4(uv.x, uv.y, 0.0, 1.0);
+    // draw a bouncing ball
+    if(length(uv + 0.5 - mouse) < 0.1){
+        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    gl_FragColor = vec4(texture2D(iChannel0, uv).rgb, 1.0);
+    //gl_FragColor = vec4(uv.x, uv.y, mouse.x, 1.0);
     return;
 
     // Increase the frequency over time to create a zooming effect

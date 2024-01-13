@@ -316,8 +316,8 @@
     
     <canvas id="canvas" class="undarken"></canvas>
     <script>
-        window.pixelWidth = window.innerWidth / 2.0;
-        window.pixelHeight = window.innerHeight / 2.0;
+        window.pixelWidth = window.innerWidth;
+        window.pixelHeight = window.innerHeight;
         window.canvas;
         window.uReflectionY = 0.5; // 0.5 = no reflection, 0 = full reflection, 1 = no reflection
         window.reverseSort = true;
@@ -672,6 +672,8 @@
             });
             canvas = document.getElementById("canvas");
             window.renderer = new THREE.WebGLRenderer({canvas});
+            //renderer.setClearColor(0x000000, 1.0);
+            renderer.autoClear = false;
 
             // "real" size, full screen
             canvas.width = pixelWidth;
@@ -694,9 +696,9 @@
                 frustumSize / 2, 
                 frustumSize / -2, 
                 1, 
-                1000
+                500
             );
-            camera.position.z = 2;
+            camera.position.z = 4;
 
             window.scene = new THREE.Scene();
 
@@ -762,27 +764,6 @@
             window.mouseLerping = new THREE.Vector4();
             window.iMouseWheel = new THREE.Vector4();
 
-            // Uniforms description
-            // iChannel0: Texture
-            // iResolution: Vector3
-            // iMouse: Vector4
-            // iMouseRaw: Vector4
-            // iMouseWheel: Vector4
-            // iTime: float
-            // window.mandleBulbMaterial = new THREE.ShaderMaterial({
-            //     uniforms: {
-            //         iChannel0: { value: window.inputTextureB },
-            //         iResolution: { value: new THREE.Vector3(pixelWidth, pixelHeight, 1.0) },
-            //         iMouse: { value: window.mouseLerping },
-            //         iMouseRaw: { value: window.mouseRaw },
-            //         iMouseWheel: { value: window.iMouseWheel },
-            //         iTime: { value: 1.0 },
-            //     },
-            //     vertexShader: `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-            //     fragmentShader: window.fragmentShaderSource,
-            //     transparent: true, // Enable transparency
-            // });
-
             window.outputMaterialA = new THREE.ShaderMaterial({
                 uniforms: {
                     // compatibility uniforms
@@ -808,28 +789,25 @@
             // tied to combineTexturesShaderSource
             window.outputMaterialB = new THREE.ShaderMaterial({
                 uniforms: {
+                    iTime: { value: 1.0 },
                     iChannel0: { value: window.outputTextureA.texture },
                     iChannel1: { value: window.outputTextureB.texture },
                     iResolution: { value: new THREE.Vector3(0) },
                     iMouse: { value: window.mouseLerping },
                     iMouseRaw: { value: window.mouseRaw },
                     iMouseWheel: { value: window.iMouseWheel },
-                    iTime: { value: 1.0 },
                 },
                 vertexShader: `
                     void main() {
                         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
                     }
                 `,
-                fragmentShader: window.fragmentShaderSource,
+                fragmentShader: window.combineTexturesShaderSource,
                 transparent: true, // Enable transparency
             });
-
-            // window.backPlane = new THREE.Mesh(planeGeometry, window.outputMaterialB);
-            // scene.add(backPlane);
             
             // Creating and adding the plane to the scene
-            window.plane = new THREE.Mesh(planeGeometry, window.outputMaterialB);
+            window.plane = new THREE.Mesh(planeGeometry, window.outputMaterialA);
             scene.add(plane);
 
             window.resizeRendererToDisplaySize = function() {
@@ -995,6 +973,7 @@
             }
 
             resizeCanvas();
+            resetPingPong();
             // first frame...
             requestAnimationFrame(animate);
 
@@ -1144,15 +1123,15 @@
             // document.addEventListener("dblclick",()=>{
             //     maybeFirstInput();
             // })
-            document.addEventListener("resize",()=>{
-                canvas = document.getElementById("canvas");
-                window.renderer = new THREE.WebGLRenderer({canvas,alpha:true});
-                const width = canvas.clientWidth;
-                const height = canvas.clientHeight;
-                fixedPixelsX = safePXDims.x;
-                fixedPixelsY = safePXDims.y;
-                renderer.setSize(fixedPixelsX, pixedPixelsY, false);
-            })
+            // document.addEventListener("resize",()=>{
+            //     canvas = document.getElementById("canvas");
+            //     window.renderer = new THREE.WebGLRenderer({canvas,alpha:true});
+            //     const width = canvas.clientWidth;
+            //     const height = canvas.clientHeight;
+            //     fixedPixelsX = safePXDims.x;
+            //     fixedPixelsY = safePXDims.y;
+            //     renderer.setSize(fixedPixelsX, pixedPixelsY, false);
+            // })
 
             // fast start
             window.targetVideoPlaybackRate = 1.0; 
@@ -1394,8 +1373,8 @@
 
         window.settings = {
             timeScale: 1,
-            pixel_density: 2,
-            useDoubleBuffer: false,
+            pixel_density: 1,
+            useDoubleBuffer: true,
             ambientLightColor: "#ff00ffff",
         }
 
@@ -1406,13 +1385,6 @@
         let cumulativeTime = 0;
         window.animate = function(time) {
             canvas = renderer.domElement;
-            if (window.resizeRendererToDisplaySize()) {
-                // // enforce dimensions of 2 for ffmpeg compatibility
-                // canvas.width = 2 * Math.floor(canvas.clientWidth / 2);
-                // canvas.height = 2 * Math.floor(canvas.clientHeight / 2);
-
-                
-            }
 
             let frameStart = performance.now();
             let _time = window.fixedTime ? window.fixedTime : time;
@@ -1427,7 +1399,7 @@
             
             // _Really_ we only have to update _one_ per frame i think...
             updateMaterialUniforms(window.outputMaterialA, {
-                iChannel0: window.inputTextureA,
+                iChannel0: window.outputTextureA,
                 iChannel1: window.inputTextureB,
                 iTime: cumulativeTime,
                 iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
@@ -1449,6 +1421,8 @@
 
             if(settings.useDoubleBuffer){
                 try{
+                    plane.material = window.outputMaterialA;
+                    window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureB.texture;
                     renderer.setRenderTarget(window.outputTextureA);
                     renderer.render(scene, camera);
                     // Use the rendered texture as input for the next pass
@@ -1458,7 +1432,8 @@
                 }
             }
             
-            // second pass, render to our quad
+            plane.material = window.outputMaterialB;
+            // Reset render target back to the canvas
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
 
@@ -1467,6 +1442,8 @@
                 let tempA = window.outputTextureA;
                 window.outputTextureA = window.outputTextureB;
                 window.outputTextureB = tempA;
+                // window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
+                //window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
             }else{
                 // keep them the same
                 // noop
@@ -1499,7 +1476,7 @@
         window.setupPanel = function () {
             panel.add( settings, 'pixel_density', 1, 16, 1 )
                 .name( 'Pixel Density' )
-                .onFinishChange( window.resizeCanvas );
+                .onChange( window.resizeCanvas );
 
             // ambientLightColor
             panel.addColor(settings, 'ambientLightColor', true)
@@ -1567,13 +1544,13 @@
             uniform vec4 iMouseWheel;
 
             void main() {
-                gl_FragColor = vec4(1.0,1.0,0.0,1.0);
-                // vec2 uv = gl_FragCoord.xy / iResolution.xy;
-                // vec4 currentColor = texture2D(iChannel0, uv.xy);
-                // vec4 previousColor = texture2D(iChannel1, uv.xy);
-                // // decay
-                // previousColor = previousColor * 0.99999;
-                // // apply a "smear" effect between the two
+                vec2 uv = gl_FragCoord.xy / iResolution.xy;
+                vec4 currentColor = texture2D(iChannel0, uv.xy);
+                vec4 previousColor = texture2D(iChannel1, uv.xy);
+                // decay
+                // previousColor = previousColor * 0.9999999;
+                gl_FragColor = currentColor + previousColor;
+                // apply a "smear" effect between the two
                 // float smearFactor = max(0.1, 1.0 - iTime);
                 // vec4 smearColor = mix(previousColor, currentColor, smearFactor);
                 // gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
@@ -1583,19 +1560,31 @@
             setupThree();
         }
 
-        window.addEventListener("resize", ()=>{
+        document.addEventListener("resize", ()=>{
             // onResize
             resizeCanvas();
             // todo: they sould grow and shrink dynamically...
             initializePositionsAndOffsetData(keepPixelData = true);
         });
 
+        // resizeCanvas = function
         function resizeCanvas() {
-            canvas.width = pixelWidth;
-            canvas.height = pixelHeight;
+
+
+
+            window.pixelWidth = window.innerWidth;
+            window.pixelHeight = window.innerHeight;
+            // force to even dimensions for ffmpeg compatibility
+            let width = 2 * Math.floor(pixelWidth / 2);
+            let height = 2 * Math.floor(pixelHeight / 2);
+            canvas.width = width;
+            canvas.height = height;
             fixedPixelsX = safePXDims.x; // Math.floor(canvas.width/settings.pixel_density);
             fixedPixelsY = safePXDims.y; //.floor(canvas.height/settings.pixel_density);
             console.warn('resizeCanvas',pixelWidth,pixelHeight,'->',fixedPixelsX,fixedPixelsY)
+
+            // update our pixel dimensions
+            renderer.setSize(width, height, false);
 
             camera.aspect = canvas.width / canvas.height;
             camera.updateProjectionMatrix();
