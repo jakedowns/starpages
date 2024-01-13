@@ -3,6 +3,7 @@ uniform float iTime;
 uniform sampler2D iChannel0;
 uniform vec3 iResolution;
 uniform vec4 iMouse;
+uniform vec4 iMouseRaw;
 // define PI
 const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
@@ -20,6 +21,9 @@ void main(){
     // > demonstrates sin, cos, mod, iMouse
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / min(iResolution.y, iResolution.x);
     vec2 mouse = iMouse.xy / iResolution.xy;
+
+    gl_FragColor = vec4(uv.x, uv.y, 0.0, 1.0);
+    return;
 
     // Increase the frequency over time to create a zooming effect
     float zoom = sin(iTime*.1) * 10. + 10.;
