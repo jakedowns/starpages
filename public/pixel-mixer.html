@@ -562,7 +562,8 @@
             // sign(mouse.w)  = button is clicked
 
             let dist = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
-            let magnitude = Math.min(dist, 1.0);
+            let magnitude = Math.max(0.9,Math.min(dist, 2.0));
+            magnitude *= vec2MouseWheelLerped.y;
             
             window.mouseRaw.set(
                 window.mouseX, 
@@ -573,29 +574,29 @@
             window.mouseLerping.lerp(window.mouseRaw, .005 * magnitude);
             vec2MouseWheelLerped.lerp(vec2MouseWheelRaw, .08);
 
-            // const setUniforms = (material) => {
-            //     material.uniforms.iMouseRaw.value.set(
-            //         window.mouseRaw.x, 
-            //         window.mouseRaw.y, 
-            //         window.mouseRaw.z, 
-            //         0
-            //     );
-            //     material.uniforms.iMouse.value.set(
-            //         window.mouseLerping.x, 
-            //         window.mouseLerping.y, 
-            //         window.leftMouseDown ? 1 : -1, 
-            //         0
-            //     );
-            //     material.uniforms.iMouseWheel.value.set(
-            //         vec2MouseWheelLerped.x, 
-            //         vec2MouseWheelLerped.y, 
-            //         vec2MouseWheelRaw.x, 
-            //         vec2MouseWheelRaw.y
-            //     );
-            // };
+            const setUniforms = (material) => {
+                material.uniforms.iMouseRaw.value.set(
+                    window.mouseRaw.x, 
+                    window.mouseRaw.y, 
+                    window.mouseRaw.z, 
+                    0
+                );
+                material.uniforms.iMouse.value.set(
+                    window.mouseLerping.x, 
+                    window.mouseLerping.y, 
+                    window.leftMouseDown ? 1 : -1, 
+                    0
+                );
+                material.uniforms.iMouseWheel.value.set(
+                    vec2MouseWheelLerped.x, 
+                    vec2MouseWheelLerped.y, 
+                    vec2MouseWheelRaw.x, 
+                    vec2MouseWheelRaw.y
+                );
+            };
             
-            // setUniforms(window.outputMaterialA);
-            // setUniforms(window.outputMaterialB);
+            setUniforms(window.outputMaterialA);
+            setUniforms(window.outputMaterialB);
         }
 
 
@@ -755,14 +756,14 @@
             window.image_width = inputTextureA.width;
 
             // Set how many times the texture should repeat
-            inputTextureA.repeat.set(2, 2); // Adjust as needed
-            inputTextureB.repeat.set(2, 2); // Adjust as needed
+            // inputTextureA.repeat.set(2, 2); // Adjust as needed
+            // inputTextureB.repeat.set(2, 2); // Adjust as needed
 
             /* Match ShaderToy uniforms for compatibility */
             // Custom Shader
-            window.mouseRaw = new THREE.Vector4();
-            window.mouseLerping = new THREE.Vector4();
-            window.iMouseWheel = new THREE.Vector4();
+            window.mouseRaw = new THREE.Vector4(window.innerWidth/2,window.innerHeight/2, 0, 0);
+            window.mouseLerping = new THREE.Vector4(window.innerWidth/2,window.innerHeight/2, 0, 0);
+            window.iMouseWheel = new THREE.Vector4(0, 10, 0, 0);
 
             window.outputMaterialA = new THREE.ShaderMaterial({
                 uniforms: {
@@ -1425,14 +1426,24 @@
                     window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureB.texture;
                     renderer.setRenderTarget(window.outputTextureA);
                     renderer.render(scene, camera);
+                    window.outputTextureA.needsUpdate = true;
                     // Use the rendered texture as input for the next pass
                     window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+
+                    // now render that to a texture
+                    renderer.setRenderTarget(window.outputTextureB);
+                    renderer.render(scene, camera);
+
+                    window.outputTextureB.needsUpdate = true;
+
                 }catch(e){
                     console.error(e);
                 }
             }
             
             plane.material = window.outputMaterialB;
+            window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+            window.outputMaterialB.uniforms.iChannel1.value = window.outputTextureB.texture;
             // Reset render target back to the canvas
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
@@ -1474,7 +1485,7 @@
         }
 
         window.setupPanel = function () {
-            panel.add( settings, 'pixel_density', 1, 16, 1 )
+            panel.add(settings, 'pixel_density', 0.00001, 32, 0.00001)
                 .name( 'Pixel Density' )
                 .onChange( window.resizeCanvas );
 
@@ -1543,17 +1554,41 @@
             uniform vec4 iMouseRaw;
             uniform vec4 iMouseWheel;
 
+            vec3 hsv2rgb(vec3 c) {
+                vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+                vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+                return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+            }
+
+            vec3 rgb2hsv(vec3 c) {
+                float eps = 1e-10;
+                vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+                vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+                vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+                float d = q.x - min(q.w, q.y);
+                float e = eps * 1.0e3;
+                return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+            }
+
             void main() {
                 vec2 uv = gl_FragCoord.xy / iResolution.xy;
                 vec4 currentColor = texture2D(iChannel0, uv.xy);
                 vec4 previousColor = texture2D(iChannel1, uv.xy);
                 // decay
-                // previousColor = previousColor * 0.9999999;
-                gl_FragColor = currentColor + previousColor;
+                previousColor = previousColor * 0.9999999;
+
+                vec3 b = rgb2hsv(previousColor.rgb);
+                b.x += 0.01 * iTime;
+                b.x = mod(b.x, 1.0);
+                vec3 c = hsv2rgb(b);
+                previousColor.rgb = c;
+
+
+                // gl_FragColor = currentColor + previousColor;
                 // apply a "smear" effect between the two
-                // float smearFactor = max(0.1, 1.0 - iTime);
-                // vec4 smearColor = mix(previousColor, currentColor, smearFactor);
-                // gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
+                float smearFactor = max(0.1, 1.0 - iTime);
+                vec4 smearColor = mix(previousColor, currentColor, smearFactor);
+                gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
             }
             `;
             prepareCCapture();
@@ -1592,12 +1627,12 @@
             // update our iResolution uniforms
             // TODO: allow different resolutions per "layer"
             if(window.outputMaterialA?.uniforms){
-                window.outputMaterialA.uniforms.iResolution.value.set(fixedPixelsX, fixedPixelsY, 1.0);
+                window.outputMaterialA.uniforms.iResolution.value.set(fixedPixelsX, fixedPixelsY, settings.pixel_density);
             }else{
                 console.warn('no outputMaterialA.uniforms')
             }
             if(window.outputMaterialB?.uniforms){
-                window.outputMaterialB.uniforms.iResolution.value.set(fixedPixelsX, fixedPixelsY, 1.0);
+                window.outputMaterialB.uniforms.iResolution.value.set(fixedPixelsX, fixedPixelsY, settings.pixel_density);
             }else{
                 console.warn('no outputMaterialB.uniforms')
             }

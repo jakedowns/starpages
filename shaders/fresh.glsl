@@ -1,9 +1,11 @@
 // Comment these out to past into shadertoy
 uniform float iTime;
 uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
 uniform vec3 iResolution;
 uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
+uniform vec4 iMouseWheel;
 // define PI
 const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
@@ -19,17 +21,34 @@ void main(){
     // > aspect ratio-corrected squares 
     // > based on iMouse position: controls frequency of x, y repeat independently
     // > demonstrates sin, cos, mod, iMouse
-    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / min(iResolution.y, iResolution.x);
-    vec2 mouse = iMouse.xy / iResolution.xy;
+    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+    vec2 mouse = (iMouse.xy - 0.5 * iResolution.xy) / iResolution.y;
+    if (iResolution.z > 1.0) {
+        mouse = mod(mouse * iResolution.z, 1.0) * 2.0 - 1.0;
+        mouse.x *= sign(sin(iResolution.z * PI * mouse.x));
+        mouse.y *= sign(sin(iResolution.z * PI * mouse.y));
+    }
 
-    // draw a bouncing ball
-    if(length(uv + 0.5 - mouse) < 0.1){
-        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+    float radius = 0.01 * (abs(iMouseWheel.y) * 0.1 + 1.0);
+
+    vec3 lightPos = vec3(mouse, 1.0);
+    vec3 sphereCenter = vec3(uv, 0.0);
+    vec3 toLight = normalize(lightPos - sphereCenter);
+
+    vec3 sphereNormal = normalize(vec3(uv - mouse, sqrt(radius*radius - dot(uv - mouse, uv - mouse))));
+
+    float diff = max(dot(sphereNormal, toLight), 0.0);
+
+    vec3 colorUV = diff * vec3(1.0, 0.5, 0.2);
+
+    if(length(uv - mouse) < radius){
+        gl_FragColor = vec4(colorUV, 1.0);
+        gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
         return;
     }
 
-    gl_FragColor = vec4(texture2D(iChannel0, uv).rgb, 1.0);
-    //gl_FragColor = vec4(uv.x, uv.y, mouse.x, 1.0);
+    // If the pixel is not within the radius of the hemisphere, apply a default color and return
+    gl_FragColor = vec4(0.0, 1.0, 1.0, 0.0);
     return;
 
     // Increase the frequency over time to create a zooming effect
