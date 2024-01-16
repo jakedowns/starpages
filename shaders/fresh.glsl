@@ -31,7 +31,7 @@ void main(){
 
     float radius = 0.01 * (abs(iMouseWheel.y) * 0.1 + 1.0);
 
-    vec3 lightPos = vec3(mouse, 1.0);
+    vec3 lightPos = vec3(1.0, 1.0, 1.0);
     vec3 sphereCenter = vec3(uv, 0.0);
     vec3 toLight = normalize(lightPos - sphereCenter);
 
