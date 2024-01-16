@@ -2,23 +2,18 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // Basic project configurations go here
-  // You can specify plugins, define server options, build options, etc.
-
-  // For example, if you are using React:
-  // plugins: [react()]
-
-  // If you need to resolve specific dependencies or alias paths:
-  // resolve: {
-  //   alias: {
-  //     'your-alias': 'your-real-path'
-  //   }
-  // },
+  base: '/starpages/',
 
   // Customizing the build options:
-  // build: {
-  //   // Options like minify, sourcemap, lib configurations, etc.
-  // },
+  build: {
+    rollupOptions: {
+      input: 'public/pixel-mixer.html',
+      output: {
+        dir: `dist/${new Date().getFullYear()}${new Date().getMonth()+1}${new Date().getDate()}`,
+        format: 'es'
+      }
+    }
+  },
 
   // Server-specific configurations for development:
   server: {
