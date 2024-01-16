@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script src="neatWASM.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.8.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/peers/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <!-- <script src="https://d3js.org/d3.v6.min.js"></script> -->
+    <script>
+      document.addEventListener('DOMContentLoaded', (event) => {
+        window.socketIO = io('http://127.0.0.1:4001/', { transports: ['websocket', 'polling'] });
+        console.warn('socketIO', socketIO)
+        // connect to "testOpenAIServer" and send a prompt message
+        socketIO.on('message', function(data){
+          // This event listener will trigger for any type of message received from the server
+          console.log("received message from server", data);
+          system.log(`${JSON.stringify(data)}`);
+        });
+        socketIO.on('connect', function(){
+          console.log("connected to socket.io server");
+
+          // don't do that on boot, it costs money!
+          // socketIO.emit('prompt', "hello world");
+        });
+        socketIO.on('result', function(data){
+          console.log("received result from server", data);
+        });
+        socketIO.on('upgrade', function(){
+          console.log("socket.io connection upgraded");
+        });
+        socketIO.connect();
+      });
+    </script>
+    
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NeatBox</title>
+    <style>
+    html, body {
+        overscroll-behavior-x: none;
+        background: #000;
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+    }
+    body.monochrome {
+      filter: grayscale(100%);
+    }
+    input {
+      z-index: 3;
+    }
+    #bg-image {
+      opacity: 0;
+      position: fixed;
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      opacity: 0.3;
+      z-index: 1;
+      object-fit: cover;
+      transition: filter 1s ease-in-out, opacity 1s ease-in-out;
+      filter: blur(1000px);
+    }
+    main {
+      /* backdrop-filter: blur(10px); */
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 2;
+    }
+    canvas {
+        display: block;
+        transition: filter 1s ease-in-out;
+    }
+    .deep-canvas {
+      pointer-events: none;
+      
+    }
+    iframe {
+      position: absolute;
+      transition: filter 1s ease-in-out;
+    }
+    #cmdprompt-input {
+      border-radius: 100px;
+      outline: none;
+    }
+    #cmdprompt-input:focus {
+      outline: none;
+    }
+    canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #deep-canvas-1 {
+      z-index: 3;
+    }
+    #deep-canvas-2 {
+      z-index: 4;
+    }
+    #deep-canvas-3 {
+      z-index: 5;
+    }
+    iframe, video {
+      z-index: 999;
+    }
+    video {
+      position: absolute;
+    }
+    #glcanvas {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 998;
+      box-sizing: border-box;
+    }
+    #glcanvas canvas {
+      width: 100%;
+      height: 100%;
+      z-index: 998;
+      /* border: 10px solid red; */
+      box-sizing: border-box;
+      /* top: 10px;
+      left: 10px; */
+    }
+    #threejscanvas, #threejscanvas canvas {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1000;
+      box-sizing: border-box;
+    }
+    #under-ui-elms {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9001;
+    }
+    #html-foreground {
+      pointer-events: none;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9002;
+    }
+    #deep-canvas-ui {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9003;
+    }
+    #file-drop-ui {
+      z-index: 9004;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+    }
+    video {
+      border-radius: 50px;
+      z-index: 9005;
+      position: absolute;
+      overflow: hidden;
+      border: 10px solid blue;
+      background: blue;
+      box-shadow: 5px 5px 5px rgba(255,255,255,0.1);
+    }
+    </style>
+    <meta charset="utf-8" />
+
+    <script type="module" crossorigin src="/assets/index-AAkydDJ-.js"></script>
+  </head>
+  <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GYK2ZMX0M9"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-GYK2ZMX0M9');
+</script>
+  <body ondragover="event.preventDefault();" 
+    ondrop="system.onDrop(event);">
+    <svg width="500" height="300" id="d3-layer-001"></svg>
+    <style>
+      #file-drop-ui {
+        opacity: 0;
+        border: 10px dashed yellow;
+        pointer-events: none;
+        backdrop-filter: blur(10px);
+      }
+      #file-drop-ui #drop-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 2em;
+        color: yellow;
+      }
+      body.dragover #file-drop-ui {
+        opacity: 1;
+      }
+    </style>
+    
+    <script>
+      document.body.ondragenter = function(event) {
+        event.preventDefault();
+        document.body.classList.add('dragover');
+      }
+      document.body.ondragleave = function(event) {
+        // if the target is NOT the document element, leave it
+        console.warn('left', event.target);
+        if (event.target !== document) {
+          return;
+        }
+        document.body.classList.remove('dragover');
+      }
+    </script>
+    <img id="bg-image" src="/assets/bg-1-809XFMb7.jpg" alt="">
+    <div id="file-drop-ui">
+      
+      <div id="drop-text">DROP STUFF HERE</div>
+    </div>
+    <div id="deep-canvas-1" class="deep-canvas"></div>
+    <div id="deep-canvas-2" class="deep-canvas"></div>
+    <div id="deep-canvas-3" class="deep-canvas"></div>
+    <main id="main-canvas-context"></main>
+    <div id="p5-3d"></div>
+    <div id="under-ui-elms"><!-- iFrames and stuff go here --></div>
+    <div id="html-foreground"><!-- html inputs that need to go above iframes --></div>
+    <div id="deep-canvas-ui"></div>
+
+    <a href="https://github.com/jakedowns/starpages" target="_blank" style="position: absolute; top: 0; right: 0; border: 0; z-index: 9999;">
+      Github
+    </a>
+
+    <!-- place a github stars badge in the bottom right -->
+    <div class="github-stars-badge">
+      <a href="https://github.com/jakedowns/starpages" target="_blank">
+        <img src="https://img.shields.io/github/stars/jakedowns/starpages?style=social" alt="Github Stars">
+      </a>
+    </div>
+
+    <script>
+      var script = document.createElement('script');
+      script.src = "./neat.js?version=" //+ new Date().getTime();
+      document.head.appendChild(script);
+
+      // load neat-typescript.js TOO
+      var script2 = document.createElement('script');
+      script2.src = "./neat-typescript.js";
+      document.head.appendChild(script2);
+    </script>
+    <script src="https://code.responsivevoice.org/responsivevoice.js?key=QTmqQZWr"></script>
+  </body>
+</html>

@@ -5,7 +5,9 @@
 	"main": "server.js",
 	"type": "module",
 	"scripts": {
-		"start": "concurrently 'node server.mjs' 'npx vite'"
+		"start": "concurrently 'node server.mjs' 'npx vite'",
+		"build": "vite build",
+    	"preview": "vite preview"
 	},
 	"keywords": [],
 	"author": "",
