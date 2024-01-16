@@ -839,8 +839,8 @@
                 window.mouseX = e.clientX;
                 window.mouseY = e.clientY;
             });
-            window.vec2MouseWheelRaw = new THREE.Vector2();
-            window.vec2MouseWheelLerped = new THREE.Vector2();
+            window.vec2MouseWheelRaw = new THREE.Vector2(0.0, 10.0);
+            window.vec2MouseWheelLerped = new THREE.Vector2(0.0, 10.0);
             
 
             // Global variable to store the last played video

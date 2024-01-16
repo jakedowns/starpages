@@ -16,9 +16,15 @@ export default defineConfig({
   // },
 
   // Customizing the build options:
-  // build: {
-  //   // Options like minify, sourcemap, lib configurations, etc.
-  // },
+  build: {
+    rollupOptions: {
+      input: 'public/pixel-mixer.html',
+      output: {
+        dir: `dist/${new Date().getFullYear()}${new Date().getMonth()+1}${new Date().getDate()}`,
+        format: 'es'
+      }
+    }
+  },
 
   // Server-specific configurations for development:
   server: {
