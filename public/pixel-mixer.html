@@ -763,19 +763,25 @@
             window.mouseLerping = new THREE.Vector4(window.innerWidth/2,window.innerHeight/2, 0, 0);
             window.iMouseWheel = new THREE.Vector4(0, 10, 0, 0);
 
+            let DEFAULT_U_VALUES = {
+                // compatibility uniforms
+                iTime: { value: 1.0 },
+                iChannel0: { value: inputTextureA.texture },
+                iChannel1: { value: inputTextureB.texture },
+                // iChannel2: { value: outputTextureB },
+                iResolution: { value: new THREE.Vector3(0) },
+                iMouse: { value: window.mouseLerping },
+                iMouseRaw: { value: window.mouseRaw },
+                iMouseWheel: { value: window.iMouseWheel },
+                numLights: { value: 1 },
+                fxFloats: { value: new THREE.Vector4(0) },
+                ambientLightColor: { value: settings.ambientLightColor },
+                decayColor: { value: settings.decayColor },
+            }   
+
             window.outputMaterialA = new THREE.ShaderMaterial({
                 uniforms: {
-                    // compatibility uniforms
-                    iTime: { value: 1.0 },
-                    iChannel0: { value: inputTextureA.texture },
-                    iChannel1: { value: inputTextureB.texture },
-                    // iChannel2: { value: outputTextureB },
-                    iResolution: { value: new THREE.Vector3(0) },
-                    iMouse: { value: window.mouseLerping },
-                    iMouseRaw: { value: window.mouseRaw },
-                    iMouseWheel: { value: window.iMouseWheel },
-                    numLights: { value: 1 },
-                    fxFloats: { value: new THREE.Vector4(0) }
+                    ...DEFAULT_U_VALUES
                 },
                 vertexShader: `
                     void main() {
@@ -790,15 +796,7 @@
             // tied to combineTexturesShaderSource
             window.outputMaterialB = new THREE.ShaderMaterial({
                 uniforms: {
-                    iTime: { value: 1.0 },
-                    iChannel0: { value: window.outputTextureA.texture },
-                    iChannel1: { value: window.outputTextureB.texture },
-                    iResolution: { value: new THREE.Vector3(0) },
-                    iMouse: { value: window.mouseLerping },
-                    iMouseRaw: { value: window.mouseRaw },
-                    iMouseWheel: { value: window.iMouseWheel },
-                    numLights: { value: 1 },
-                    fxFloats: { value: new THREE.Vector4(0) }
+                    ...DEFAULT_U_VALUES
                 },
                 vertexShader: `
                     void main() {
@@ -941,6 +939,23 @@
             window.progressElement = document.getElementById("progress");
 
             window.updateMaterialUniforms = function(material, uniforms){
+
+                uniforms = {...{
+                    iTime: cumulativeTime,
+                    iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
+                    iMouse: window.mouseLerping,
+                    iMouseRaw: window.mouseRaw,
+                    iMouseWheel: window.iMouseWheel,
+                    numLights: settings.numLights,
+                    ambientLightColor: settings.ambientLightColor,
+                    decayColor: settings.decayColor,
+                    fxFloats: new THREE.Vector4(
+                        settings.alphaShadow,
+                        settings.mixNormals,
+                        0,
+                        0)
+                }, ...uniforms};
+
                 Object
                 .keys(uniforms)
                 .forEach(function(key) {
@@ -975,6 +990,28 @@
                     if(key === 'iChannel0' || key === 'iChannel1' || key === 'iChannel2' || key === 'iChannel3'){
                         //console.warn('setting channel',key,uniforms[key])
                         material.uniforms[key].value = uniforms[key].texture;
+                        return;
+                    }
+
+                    // rgba
+                    if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b') && uniforms[key].hasOwnProperty('a')){
+                        //console.warn('setting color',key,uniforms[key])
+                        material.uniforms[key].value = [
+                            uniforms[key].r, 
+                            uniforms[key].g, 
+                            uniforms[key].b, 
+                            uniforms[key].a
+                        ];
+                        return;
+                    }
+                    // rgb
+                    if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b')){
+                        //console.warn('setting color',key,uniforms[key])
+                        material.uniforms[key].value = [
+                            uniforms[key].r, 
+                            uniforms[key].g, 
+                            uniforms[key].b
+                        ];
                         return;
                     }
 
@@ -1427,10 +1464,13 @@
             timeScale: 1,
             pixel_density: 1,
             useDoubleBuffer: true,
-            ambientLightColor: "#ff00ffff",
+            ambientLightColor: {r:0.0,g:0.0,b:0.0,a:0.0},
             numLights: 3,
             alphaShadow: 0.0,
-            radius: 10.0
+            decayColorAlpha: 0.01,
+            mixNormals: 0,
+            radius: 10.0,
+            decayColor: {r: 0.0, g: 0.0, b: 0.0, a: 0.01},
         }
 
         window.onSettingsChanged = function(){
@@ -1464,24 +1504,10 @@
             updateMaterialUniforms(window.outputMaterialA, {
                 iChannel0: window.outputTextureA,
                 iChannel1: window.inputTextureB,
-                iTime: cumulativeTime,
-                iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
-                iMouse: window.mouseLerping,
-                iMouseRaw: window.mouseRaw,
-                iMouseWheel: window.iMouseWheel,
-                numLights: settings.numLights,
-                fxFloats: new THREE.Vector4(settings.alphaShadow,0,0,0)
             });
             updateMaterialUniforms(window.outputMaterialB, {
                 iChannel0: window.outputTextureA,
                 iChannel1: window.outputTextureB,
-                iTime: cumulativeTime,
-                iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
-                iMouse: window.mouseLerping,
-                iMouseRaw: window.mouseRaw,
-                iMouseWheel: window.iMouseWheel,
-                numLights: settings.numLights,
-                fxFloats: new THREE.Vector4(settings.alphaShadow,0,0,0)
             });
 
             
@@ -1550,9 +1576,47 @@
             }
         }
 
+        // Function to parse the hash from URL
+        function getHashSettings() {
+            const hash = window.location.hash.substring(1);
+            const settings = {};
+            hash.split('&').forEach(part => {
+                const item = part.split('=');
+                settings[item[0]] = decodeURIComponent(item[1]);
+            });
+            return settings;
+        }
+
+        function getSettingsAsHash(){
+            const _settings = JSON.parse(JSON.stringify(settings));
+            delete _settings.useDoubleBuffer;
+            //delete _settings.pixel_density;
+            return Object.keys(_settings).map(key => `${key}=${encodeURIComponent(_settings[key].value || _settings[key])}`).join('&');
+        }
+
+        // Function to update URL hash
+        function updateHash(controller) {
+            const hashSettings = getSettingsAsHash();
+            hashSettings[controller.property] = controller.getValue();
+            const newHash = Object.keys(hashSettings).map(key => `${key}=${encodeURIComponent(hashSettings[key])}`).join('&');
+            window.location.hash = newHash;
+        }
+
+        // Generic change handler function
+        function handleChange() {
+            const values = {};
+            Object.keys(gui.__controllers).forEach(key => {
+                const controller = gui.__controllers[key];
+                values[controller.property] = controller.getValue();
+            });
+            updateHash(this);
+        }
+
         window.setupPanel = function () {
             if(!window.panel){
-                window.panel = new lil.GUI();
+                window.panel = new lil.GUI({
+                    closed:true
+                });
                 //console.warn('window.setupPanel, panel not ready yet');
                 //return;
             }
@@ -1576,9 +1640,28 @@
             // ambientLightColor
             panel.addColor(settings, 'ambientLightColor', true)
                 .name('Ambient Light Color')
-                // .onChange((value)=>{
-                //     window.settings.ambientLightColor = value;
-                // });
+                .onChange((value)=>{
+                    window.settings.ambientLightColor = value
+                });
+
+            // decayColor
+            panel.addColor(settings, 'decayColor', true)
+                .name('Decay Color')
+                .onChange((value)=>{
+                    window.settings.decayColor = value
+                });
+            panel.add(settings, 'decayColorAlpha', 0, 1, 0.0001)
+                .name( 'Decay Color Alpha' )
+                .onChange((value)=>{
+                    window.settings.decayColor.a = Math.pow(value,2);
+                });
+
+            panel.add(settings, 'mixNormals', 0, 1, 0.01)
+                .name('Show Normal Map')
+                .onChange((value)=>{
+                    settings.mixNormals = value;
+                    // console.warn('mix normal map', value);
+                });
             
             // add a boolean checkbox for settings.useDoubleBuffer
             panel.add(settings, 'useDoubleBuffer')
@@ -1598,12 +1681,27 @@
             // toggleJiggleSwirl
             panel.add({ toggleJiggleSwirl: function() { window.toggleJiggleSwirl(); } }, 'toggleJiggleSwirl');
 
+            // Lastly
+            // Apply the change handler to all controllers
+            // panel.__controllers.forEach(controller => {
+            //     controller.onChange(handleChange);
+            // });
+
             window.addEventListener('keydown', (e)=>{
                 if(e.key === 'c' || e.key === 'C'
                     || e.key === 'r' || e.key === 'R'
                 
                 ){
                     window.resetPingPong();
+                }
+                if(e.key === 'q' || e.key === 'Q'){
+                    window.vec2MouseWheelRaw.y += 10;
+                }
+                if(e.key === 'a' || e.key === 'A'){
+                    window.vec2MouseWheelRaw.y -= 10;
+                }
+                if(e.key === 'w' || e.key === 'W'){
+                    window.vec2MouseWheelRaw.y = 10;
                 }
             });
 
