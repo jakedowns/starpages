@@ -7,7 +7,7 @@ uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
 uniform vec4 iMouseWheel;
 uniform float numLights;
-uniform float alphaShadow;
+uniform vec4 fxFloats;
 // define PI
 const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
@@ -51,9 +51,9 @@ void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
     vec2 mouse = (iMouse.xy - 0.5 * iResolution.xy) / iResolution.y;
     if (iResolution.z > 1.0) {
-        mouse = mod(mouse * iResolution.z, 1.0) * 2.0 - 1.0;
-        mouse.x *= sign(sin(iResolution.z * PI * mouse.x));
-        mouse.y *= sign(sin(iResolution.z * PI * mouse.y));
+        mouse *= iMouse.z;
+        // pull back to 0-1 range
+        mouse += 0.5;
     }
 
     float radius = 0.01 * (abs(iMouseWheel.y) * 0.1 + 1.0);
@@ -94,20 +94,24 @@ void main() {
     vec3 colorUV3 = diff * vec3(0.15, 0.62, 0.33); // Third light color
 
     // Combine the three lights
-    vec3 colorUV;
-    // if (numLights <= 2.0) {
-    //     colorUV = colorUV1;
-    // } else if (numLights <= 3.0) {
-    //     colorUV = colorUV1 + colorUV2;
-    // } else {
-        colorUV = colorUV1 + colorUV2 + colorUV3;
-    // }
+    vec3 colorUV = colorUV1;
+    colorUV = colorUV1 + colorUV2 + colorUV3;
     // vec3 colorUV = diff * vec3(0.27, 0.15, 0.62);
+    // colorUV.r = sphereNormal.x * 0.5 + 0.5;
+    // colorUV.g = sphereNormal.y * 0.5 + 0.5;
+    // colorUV.b = sphereNormal.z * 0.5 + 0.5;
 
-    if(length(uv - mouse) < radius){
+    if(length(uv - mouse) < radius){//} && iMouse.z > 0.0){
+
+        if(fxFloats.x > 0.0) {
+            // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+            gl_FragColor.a = ((colorUV.r) + (colorUV.g) + (colorUV.b)) / 3.0;
+        }
+
         gl_FragColor = vec4(colorUV, 1.0);
-        if(alphaShadow > 0.0) {
-            gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+        if(fxFloats.x > 0.0) {
+            // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+            gl_FragColor.a = ((gl_FragColor.r) + (gl_FragColor.g) + (gl_FragColor.b)) / 3.0;
         }else{
             gl_FragColor.a = 1.0;
         }
@@ -115,6 +119,7 @@ void main() {
     }
 
     // If the pixel is not within the radius of the hemisphere, apply a default color and return
+    //gl_FragColor = vec4(0.0, 0.0, 0.0, 0.05);
     gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
     return;
 

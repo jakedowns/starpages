@@ -775,7 +775,7 @@
                     iMouseRaw: { value: window.mouseRaw },
                     iMouseWheel: { value: window.iMouseWheel },
                     numLights: { value: 1 },
-                    alphaShadow: {value: 0}
+                    fxFloats: { value: new THREE.Vector4(0) }
                 },
                 vertexShader: `
                     void main() {
@@ -798,7 +798,7 @@
                     iMouseRaw: { value: window.mouseRaw },
                     iMouseWheel: { value: window.iMouseWheel },
                     numLights: { value: 1 },
-                    alphaShadow: {value: 0}
+                    fxFloats: { value: new THREE.Vector4(0) }
                 },
                 vertexShader: `
                     void main() {
@@ -960,9 +960,9 @@
                         return;
                     }
 
-                    if(key === 'alphaShadow'){
-                        //console.log('setting alphaShadow',uniforms[key])
-                        material.uniforms.alphaShadow.value = parseFloat(uniforms[key]);
+                    if(key === 'fxFloats'){
+                        // console.log('setting alphaShadow',uniforms[key])
+                        material.uniforms.fxFloats.value = uniforms[key];
                         return;
                     }
 
@@ -971,30 +971,40 @@
                         material.uniforms[key].value = uniforms[key];
                         return;
                     }
+
                     if(key === 'iChannel0' || key === 'iChannel1' || key === 'iChannel2' || key === 'iChannel3'){
                         //console.warn('setting channel',key,uniforms[key])
                         material.uniforms[key].value = uniforms[key].texture;
                         return;
                     }
-                    
 
-                    if(typeof uniforms[key].value === 'object'){
-                        let value = uniforms[key].value;
-                        if('w' in value){
-                            material.uniforms[key].value.set(value.x, value.y, value.z, value.w);
-                        } else if('z' in value){
-                            material.uniforms[key].value.set(value.x, value.y, value.z);
-                        } else if('y' in value){
-                            material.uniforms[key].value.set(value.x, value.y);
-                        } else if('x' in value){
-                            material.uniforms[key].value.set(value.x);
-                        }
-                        return;
+                    if (uniforms[key] instanceof THREE.Vector4) {
+                        material.uniforms[key].value.set(
+                            uniforms[key].x, 
+                            uniforms[key].y, 
+                            uniforms[key].z, 
+                            uniforms[key].w
+                        );
+                    } else if (uniforms[key] instanceof THREE.Vector3) {
+                        material.uniforms[key].value.set(
+                            uniforms[key].x, 
+                            uniforms[key].y, 
+                            uniforms[key].z
+                        );
+                    } else if (uniforms[key] instanceof THREE.Vector2) {
+                        material.uniforms[key].value.set(
+                            uniforms[key].x, 
+                            uniforms[key].y
+                        );
+                    } else if (typeof uniforms[key].value === 'number') {
+                        material.uniforms[key].value.set(uniforms[key].value);
+                    } else {
+                        console.warn('Unknown uniform type', key, uniforms[key]);
                     }
 
 
 
-                    //console.warn('unknown uniform type',key,uniforms[key],typeof uniforms[key].value)
+                    // console.warn('unknown uniform type',key,uniforms[key],typeof uniforms[key].value)
                     
                     //else{
                     //     // console.warn('passing single argument', {key}, uniforms[key], 'to', material.uniforms[key].value)
@@ -1460,7 +1470,7 @@
                 iMouseRaw: window.mouseRaw,
                 iMouseWheel: window.iMouseWheel,
                 numLights: settings.numLights,
-                alphaShadow: settings.alphaShadow
+                fxFloats: new THREE.Vector4(settings.alphaShadow,0,0,0)
             });
             updateMaterialUniforms(window.outputMaterialB, {
                 iChannel0: window.outputTextureA,
@@ -1471,7 +1481,7 @@
                 iMouseRaw: window.mouseRaw,
                 iMouseWheel: window.iMouseWheel,
                 numLights: settings.numLights,
-                alphaShadow: settings.alphaShadow
+                fxFloats: new THREE.Vector4(settings.alphaShadow,0,0,0)
             });
 
             
