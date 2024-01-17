@@ -451,8 +451,8 @@
             
         }
 
-        document.addEventListener('wheel', (e) => {
-            vec2MouseWheelRaw.set(
+        document.addEventListener('wheel', (e) => {vec2MouseWheelRaw
+            .set(
                 vec2MouseWheelRaw.x + e.deltaX * 0.1, 
                 vec2MouseWheelRaw.y + e.deltaY * 0.1
             );
@@ -946,6 +946,12 @@
                         return;
                     }
 
+                    // if it's a float, just set it
+                    if(typeof uniforms[key] === 'number'){
+                        material.uniforms[key].value = uniforms[key];
+                        return;
+                    }
+
                     // if(typeof uniforms[key].value === 'object' && 'x' in uniforms[key].value && 'y' in uniforms[key].value && 'z' in uniforms[key].value && 'w' in uniforms[key].value){
                     //     // console.warn('passing object with x, y, z, w', {key}, uniforms[key], 'to', material.uniforms[key].value)
                     //     material.uniforms[key].value.set(uniforms[key].value.x, uniforms[key].value.y, uniforms[key].value.z, uniforms[key].value.w);
@@ -1378,16 +1384,24 @@
         }
 
         let cumulativeTime = 0;
+        let frameStart = 0;
+        let startedAt;
         window.animate = function(time) {
             canvas = renderer.domElement;
-
-            let frameStart = performance.now();
-            let _time = window.fixedTime ? window.fixedTime : time;
-            if(!window.fixedTime){
-                cumulativeTime += 1;
-            }else{
-                cumulativeTime = _time;
+            if(!startedAt){
+                startedAt = performance.now();
             }
+
+            let now = performance.now();
+            let diff = now - frameStart;
+            diff /= 1000;
+            frameStart = now;
+            let _time = window.fixedTime ? window.fixedTime : time;
+            // if(!window.fixedTime){
+                cumulativeTime += diff;
+            // }else{
+            //     cumulativeTime = _time;
+            // }
 
             // Update uniforms
             updateMouseUniforms();
@@ -1539,7 +1553,7 @@
             // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
             //     return;
             // }
-            window.fragmentShaderSource = await (await fetch("../../shaders/fresh.glsl")).text();
+            window.fragmentShaderSource = await (await fetch("/starpages/shaders/fresh.glsl")).text();
             //  window.fragmentShaderSource = await (await fetch("../shaders/uber-shader.glsl")).text();
             // window.fragmentShaderSource = await (await fetch("../shaders/frosted-video-mandlebulb.glsl")).text();
             // window.fragmentShaderSource = await (await fetch("../shaders/simple-ripple.glsl")).text();

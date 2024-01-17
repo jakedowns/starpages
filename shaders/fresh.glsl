@@ -16,11 +16,36 @@ vec3 hsv2rgb(vec3 c) {
     return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
-void main(){
-    // divide the canvas into checkerboard with alternating colors 
-    // > aspect ratio-corrected squares 
-    // > based on iMouse position: controls frequency of x, y repeat independently
-    // > demonstrates sin, cos, mod, iMouse
+// Quaternion operations
+vec4 quat_from_axis_angle(vec3 axis, float angle) {
+    float halfAngle = angle * 0.5;
+    float s = sin(halfAngle);
+    return vec4(axis * s, cos(halfAngle));
+}
+
+vec4 quat_multiply(vec4 q1, vec4 q2) {
+    return vec4(
+        q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+        q1.w * q2.y + q1.y * q2.w + q1.z * q2.x - q1.x * q2.z,
+        q1.w * q2.z + q1.z * q2.w + q1.x * q2.y - q1.y * q2.x,
+        q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z
+    );
+}
+
+vec3 rotate_by_quaternion(vec3 p, vec4 q) {
+    vec4 pQuat = vec4(p, 0.0);
+    vec4 qConj = vec4(-q.xyz, q.w);
+    vec4 rotatedQuat = quat_multiply(quat_multiply(q, pQuat), qConj);
+    return rotatedQuat.xyz;
+}
+
+// fastsqrt function
+float fastsqrt(float x) {
+    return x * inversesqrt(x);
+}
+
+// Shader main code
+void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
     vec2 mouse = (iMouse.xy - 0.5 * iResolution.xy) / iResolution.y;
     if (iResolution.z > 1.0) {
@@ -31,15 +56,22 @@ void main(){
 
     float radius = 0.01 * (abs(iMouseWheel.y) * 0.1 + 1.0);
 
-    vec3 lightPos = vec3(1.0, 1.0, 1.0);
+    // Quaternion-based rotation
+    float angleX = mod(iTime * 10.0, 360.0); // Rotation angle around X-axis
+    float angleY = mod(iTime * 80.0, 360.0); // Rotation angle around Y-axis
+    vec4 quatX = quat_from_axis_angle(vec3(1, 0, 0), radians(angleX));
+    vec4 quatY = quat_from_axis_angle(vec3(0, 1, 0), radians(angleY));
+    vec4 quatRot = quat_multiply(quatX, quatY);
+
+    vec3 lightPos = rotate_by_quaternion(vec3(1, 0, 0), quatRot);
     vec3 sphereCenter = vec3(uv, 0.0);
     vec3 toLight = normalize(lightPos - sphereCenter);
 
-    vec3 sphereNormal = normalize(vec3(uv - mouse, sqrt(radius*radius - dot(uv - mouse, uv - mouse))));
+    vec3 sphereNormal = normalize(vec3(uv - mouse, fastsqrt(radius*radius - dot(uv - mouse, uv - mouse))));
 
     float diff = max(dot(sphereNormal, toLight), 0.0);
 
-    vec3 colorUV = diff * vec3(1.0, 0.5, 0.2);
+    vec3 colorUV = diff * vec3(0.62, 0.33, 0.15);
 
     if(length(uv - mouse) < radius){
         gl_FragColor = vec4(colorUV, 1.0);
@@ -48,8 +80,10 @@ void main(){
     }
 
     // If the pixel is not within the radius of the hemisphere, apply a default color and return
-    gl_FragColor = vec4(0.0, 1.0, 1.0, 0.0);
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
     return;
+
+/*
 
     // Increase the frequency over time to create a zooming effect
     float zoom = sin(iTime*.1) * 10. + 10.;
@@ -69,4 +103,5 @@ void main(){
     //color = hsv2rgb(hsv);
 
     gl_FragColor = vec4(color, 1.0);
+*/
 }
