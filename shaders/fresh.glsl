@@ -7,6 +7,7 @@ uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
 uniform vec4 iMouseWheel;
 uniform float numLights;
+uniform float alphaShadow;
 // define PI
 const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
@@ -105,7 +106,11 @@ void main() {
 
     if(length(uv - mouse) < radius){
         gl_FragColor = vec4(colorUV, 1.0);
-        gl_FragColor.a = 1.0;// ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+        if(alphaShadow > 0.0) {
+            gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+        }else{
+            gl_FragColor.a = 1.0;
+        }
         return;
     }
 

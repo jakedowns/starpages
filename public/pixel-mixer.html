@@ -451,7 +451,10 @@
             
         }
 
-        document.addEventListener('wheel', (e) => {vec2MouseWheelRaw
+        document.addEventListener('wheel', (e) => {
+            settings.radius = Math.max(0, settings.radius + e.deltaY * 0.01);
+
+            vec2MouseWheelRaw
             .set(
                 vec2MouseWheelRaw.x + e.deltaX * 0.1, 
                 vec2MouseWheelRaw.y + e.deltaY * 0.1
@@ -771,9 +774,8 @@
                     iMouse: { value: window.mouseLerping },
                     iMouseRaw: { value: window.mouseRaw },
                     iMouseWheel: { value: window.iMouseWheel },
-                    numLights: {
-                        value: 1
-                    }
+                    numLights: { value: 1 },
+                    alphaShadow: {value: 0}
                 },
                 vertexShader: `
                     void main() {
@@ -795,7 +797,8 @@
                     iMouse: { value: window.mouseLerping },
                     iMouseRaw: { value: window.mouseRaw },
                     iMouseWheel: { value: window.iMouseWheel },
-                    numLights: { value: 1 }
+                    numLights: { value: 1 },
+                    alphaShadow: {value: 0}
                 },
                 vertexShader: `
                     void main() {
@@ -957,6 +960,12 @@
                         return;
                     }
 
+                    if(key === 'alphaShadow'){
+                        //console.log('setting alphaShadow',uniforms[key])
+                        material.uniforms.alphaShadow.value = parseFloat(uniforms[key]);
+                        return;
+                    }
+
                     // if it's a float, just set it
                     if(typeof uniforms[key] === 'number'){
                         material.uniforms[key].value = uniforms[key];
@@ -985,7 +994,7 @@
 
 
 
-                    console.warn('unknown uniform type',key,uniforms[key])
+                    //console.warn('unknown uniform type',key,uniforms[key],typeof uniforms[key].value)
                     
                     //else{
                     //     // console.warn('passing single argument', {key}, uniforms[key], 'to', material.uniforms[key].value)
@@ -1410,6 +1419,8 @@
             useDoubleBuffer: true,
             ambientLightColor: "#ff00ffff",
             numLights: 3,
+            alphaShadow: 0.0,
+            radius: 10.0
         }
 
         window.onSettingsChanged = function(){
@@ -1448,7 +1459,8 @@
                 iMouse: window.mouseLerping,
                 iMouseRaw: window.mouseRaw,
                 iMouseWheel: window.iMouseWheel,
-                numLights: settings.numLights
+                numLights: settings.numLights,
+                alphaShadow: settings.alphaShadow
             });
             updateMaterialUniforms(window.outputMaterialB, {
                 iChannel0: window.outputTextureA,
@@ -1458,7 +1470,8 @@
                 iMouse: window.mouseLerping,
                 iMouseRaw: window.mouseRaw,
                 iMouseWheel: window.iMouseWheel,
-                numLights: settings.numLights
+                numLights: settings.numLights,
+                alphaShadow: settings.alphaShadow
             });
 
             
@@ -1533,13 +1546,22 @@
                 //console.warn('window.setupPanel, panel not ready yet');
                 //return;
             }
+            
+            panel.add(settings, 'radius', 0.1, 100.0, 0.1)
+                .name( 'Radius' )
+                .onChange((value) => {
+                    vec2MouseWheelRaw.y = value;
+                });
+
             panel.add(settings, 'pixel_density', 0.00001, 32, 0.00001)
                 .name( 'Pixel Density' )
                 .onChange( window.resizeCanvas );
 
-                panel.add(settings, 'numLights', 1, 3, 1)
+            panel.add(settings, 'numLights', 1, 3, 1)
                 .name( 'Num Lights #️⃣💡' )
-                //.onChange( )
+        
+            panel.add(settings, 'alphaShadow', 0, 1, 0.01)
+                .name( 'Alpha Shadow' )
 
             // ambientLightColor
             panel.addColor(settings, 'ambientLightColor', true)
@@ -1558,10 +1580,22 @@
             
             // panel add a button called "resizeCanvas"
             panel.add({ resizeCanvas: function() { window.resizeCanvas(); } }, 'resizeCanvas');
-            panel.add({ resetPingPong: function() { window.resetPingPong(); } }, 'resetPingPong');
+            
+            panel.add({ resetPingPong: window.resetPingPong }, 'resetPingPong')
+                .name('[C] clear buffer')
+
             panel.add({ toggleBigSweep: function() { window.toggleBigSweep(); } }, 'toggleBigSweep');
             // toggleJiggleSwirl
             panel.add({ toggleJiggleSwirl: function() { window.toggleJiggleSwirl(); } }, 'toggleJiggleSwirl');
+
+            window.addEventListener('keydown', (e)=>{
+                if(e.key === 'c' || e.key === 'C'
+                    || e.key === 'r' || e.key === 'R'
+                
+                ){
+                    window.resetPingPong();
+                }
+            });
 
             // panel.add( settings, 'res', 1, 6, 1 )
             //     .name( 'Res' )
