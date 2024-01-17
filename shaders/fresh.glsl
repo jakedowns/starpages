@@ -7,7 +7,9 @@ uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
 uniform vec4 iMouseWheel;
 uniform float numLights;
-uniform float alphaShadow;
+uniform vec4 fxFloats;
+uniform vec4 ambientLightColor;
+uniform vec4 decayColor;
 // define PI
 const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
@@ -51,9 +53,9 @@ void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
     vec2 mouse = (iMouse.xy - 0.5 * iResolution.xy) / iResolution.y;
     if (iResolution.z > 1.0) {
-        mouse = mod(mouse * iResolution.z, 1.0) * 2.0 - 1.0;
-        mouse.x *= sign(sin(iResolution.z * PI * mouse.x));
-        mouse.y *= sign(sin(iResolution.z * PI * mouse.y));
+        mouse *= iMouse.z;
+        // pull back to 0-1 range
+        mouse += 0.5;
     }
 
     float radius = 0.01 * (abs(iMouseWheel.y) * 0.1 + 1.0);
@@ -93,29 +95,62 @@ void main() {
     diff = max(dot(sphereNormal, toLight3), 0.0);
     vec3 colorUV3 = diff * vec3(0.15, 0.62, 0.33); // Third light color
 
-    // Combine the three lights
-    vec3 colorUV;
-    // if (numLights <= 2.0) {
-    //     colorUV = colorUV1;
-    // } else if (numLights <= 3.0) {
-    //     colorUV = colorUV1 + colorUV2;
-    // } else {
-        colorUV = colorUV1 + colorUV2 + colorUV3;
-    // }
-    // vec3 colorUV = diff * vec3(0.27, 0.15, 0.62);
+    // Incorporate ambientLightColor using a different blend than add for highlight/shadow
+    colorUV1 = mix(colorUV1, ambientLightColor.rgb, ambientLightColor.a);
+    colorUV2 = mix(colorUV2, ambientLightColor.rgb, ambientLightColor.a);
+    colorUV3 = mix(colorUV3, ambientLightColor.rgb, ambientLightColor.a);
 
-    if(length(uv - mouse) < radius){
-        gl_FragColor = vec4(colorUV, 1.0);
-        if(alphaShadow > 0.0) {
-            gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
-        }else{
-            gl_FragColor.a = 1.0;
+    // Combine the three lights
+    vec3 colorUV = colorUV1;
+    colorUV = colorUV1 + colorUV2 + colorUV3;
+
+    vec3 colorNormalMap = vec3(0.0);// diff * vec3(0.27, 0.15, 0.62);
+    colorNormalMap.r = sphereNormal.x * 0.5 + 0.5;
+    colorNormalMap.g = sphereNormal.y * 0.5 + 0.5;
+    colorNormalMap.b = sphereNormal.z * 0.5 + 0.5;
+
+    // fxFloats.x = alphaShadow
+    // fxFloats.y = mixNormals
+    // fxFloats.z = clickMouseToDraw
+    float doDraw = 1.;
+    if(fxFloats.z > 0.){
+        doDraw = 0.;
+        if(iMouse.z > 0.0){
+            doDraw = 1.;
         }
+    }
+    if(length(uv - mouse) < radius && doDraw > 0.){
+
+        if(fxFloats.x > -1.0) {
+            // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+            gl_FragColor.a = ((colorUV.r) + (colorUV.g) + (colorUV.b)) / 3.0;
+        }
+
+        colorUV = mix(colorUV, colorNormalMap, fxFloats.y);
+
+        gl_FragColor = vec4(colorUV, 1.0);
+
+
+        if(fxFloats.x > 0.0) {
+            // gl_FragColor = vec4(100.0,0.0,0.0, 1.0);
+            // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+            gl_FragColor.a = ((gl_FragColor.r) + (gl_FragColor.g) + (gl_FragColor.b)) / 3.0;
+            gl_FragColor.a *= fxFloats.x;
+        }else{
+        //     gl_FragColor.a = 1.0;
+        }
+        // mix decayColor with the colorUV
+        // gl_FragColor = mix(decayColor, gl_FragColor, fxFloats.x);
+
         return;
     }
 
     // If the pixel is not within the radius of the hemisphere, apply a default color and return
-    gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+    gl_FragColor = decayColor;
+    //gl_FragColor.a = 0.;
+    if(fxFloats.x <= 0.0){
+        gl_FragColor.a = 1.0;
+    }
     return;
 
 /*
