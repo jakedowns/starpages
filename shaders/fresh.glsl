@@ -95,6 +95,11 @@ void main() {
     diff = max(dot(sphereNormal, toLight3), 0.0);
     vec3 colorUV3 = diff * vec3(0.15, 0.62, 0.33); // Third light color
 
+    // Incorporate ambientLightColor using a different blend than add for highlight/shadow
+    colorUV1 = mix(colorUV1, ambientLightColor.rgb, ambientLightColor.a);
+    colorUV2 = mix(colorUV2, ambientLightColor.rgb, ambientLightColor.a);
+    colorUV3 = mix(colorUV3, ambientLightColor.rgb, ambientLightColor.a);
+
     // Combine the three lights
     vec3 colorUV = colorUV1;
     colorUV = colorUV1 + colorUV2 + colorUV3;
@@ -106,9 +111,15 @@ void main() {
 
     // fxFloats.x = alphaShadow
     // fxFloats.y = mixNormals
-
-/// TODO: checkbox for clickToDraw
-    if(length(uv - mouse) < radius){//} && iMouse.z > 0.0){
+    // fxFloats.z = clickMouseToDraw
+    float doDraw = 1.;
+    if(fxFloats.z > 0.){
+        doDraw = 0.;
+        if(iMouse.z > 0.0){
+            doDraw = 1.;
+        }
+    }
+    if(length(uv - mouse) < radius && doDraw > 0.){
 
         if(fxFloats.x > -1.0) {
             // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
@@ -136,7 +147,7 @@ void main() {
 
     // If the pixel is not within the radius of the hemisphere, apply a default color and return
     gl_FragColor = decayColor;
-    gl_FragColor.a = 0.;
+    //gl_FragColor.a = 0.;
     if(fxFloats.x <= 0.0){
         gl_FragColor.a = 1.0;
     }

@@ -776,7 +776,9 @@
                 numLights: { value: 1 },
                 fxFloats: { value: new THREE.Vector4(0) },
                 ambientLightColor: { value: settings.ambientLightColor },
+                ambientLightColorAlpha: { value: settings.ambientLightColorAlpha },
                 decayColor: { value: settings.decayColor },
+                clickMouseToDraw: { value: settings.clickMouseToDraw }
             }   
 
             window.outputMaterialA = new THREE.ShaderMaterial({
@@ -952,8 +954,9 @@
                     fxFloats: new THREE.Vector4(
                         settings.alphaShadow,
                         settings.mixNormals,
-                        0,
-                        0)
+                        settings.clickMouseToDraw > 0,
+                        0
+                    )
                 }, ...uniforms};
 
                 Object
@@ -1463,14 +1466,18 @@
         window.settings = {
             timeScale: 1,
             pixel_density: 1,
+            
             useDoubleBuffer: true,
             ambientLightColor: {r:0.0,g:0.0,b:0.0,a:0.0},
+            ambientLightColorAlpha: 0.1,
             numLights: 3,
             alphaShadow: 0.0,
             decayColorAlpha: 0.01,
             mixNormals: 0,
             radius: 10.0,
             decayColor: {r: 0.0, g: 0.0, b: 0.0, a: 0.01},
+
+            clickMouseToDraw: true
         }
 
         window.onSettingsChanged = function(){
@@ -1612,11 +1619,12 @@
             updateHash(this);
         }
 
+        window.lastMouseMoveWasFake = false;
+
         window.setupPanel = function () {
             if(!window.panel){
-                window.panel = new lil.GUI({
-                    closed:true
-                });
+                window.panel = new lil.GUI();
+                window.panel.close();
                 //console.warn('window.setupPanel, panel not ready yet');
                 //return;
             }
@@ -1643,9 +1651,15 @@
                 .onChange((value)=>{
                     window.settings.ambientLightColor = value
                 });
+            // ambientLightColorAlpha
+            panel.add(settings, 'ambientLightColorAlpha', 0.01, 1, 0.01)
+                .name('Ambient Light Color Alpha')
+                .onChange((value)=>{
+                    window.settings.ambientLightColor.a = value;
+                });
 
             // decayColor
-            panel.addColor(settings, 'decayColor', true)
+            panel.addColor(settings, 'decayColor')
                 .name('Decay Color')
                 .onChange((value)=>{
                     window.settings.decayColor = value
@@ -1662,24 +1676,30 @@
                     settings.mixNormals = value;
                     // console.warn('mix normal map', value);
                 });
-            
-            // add a boolean checkbox for settings.useDoubleBuffer
-            panel.add(settings, 'useDoubleBuffer')
-                .name('Use Double Buffer')
+
+            panel.add(settings, 'clickMouseToDraw')
+                .name("Use Mouse To Draw")
                 .onChange((value)=>{
-                    settings.useDoubleBuffer = value;
-                    console.warn('use double buffer', value);
+                    settings.clickMouseToDraw = value;
                 });
             
+            // add a boolean checkbox for settings.useDoubleBuffer
+            // panel.add(settings, 'useDoubleBuffer')
+            //     .name('Use Double Buffer')
+            //     .onChange((value)=>{
+            //         settings.useDoubleBuffer = value;
+            //         console.warn('use double buffer', value);
+            //     });
+            
             // panel add a button called "resizeCanvas"
-            panel.add({ resizeCanvas: function() { window.resizeCanvas(); } }, 'resizeCanvas');
+            // panel.add({ resizeCanvas: function() { window.resizeCanvas(); } }, 'resizeCanvas');
             
             panel.add({ resetPingPong: window.resetPingPong }, 'resetPingPong')
-                .name('[C] clear buffer')
+                .name('[c] clear buffer')
 
-            panel.add({ toggleBigSweep: function() { window.toggleBigSweep(); } }, 'toggleBigSweep');
+            // panel.add({ toggleBigSweep: function() { window.toggleBigSweep(); } }, 'toggleBigSweep');
             // toggleJiggleSwirl
-            panel.add({ toggleJiggleSwirl: function() { window.toggleJiggleSwirl(); } }, 'toggleJiggleSwirl');
+            // panel.add({ toggleJiggleSwirl: function() { window.toggleJiggleSwirl(); } }, 'toggleJiggleSwirl');
 
             // Lastly
             // Apply the change handler to all controllers
@@ -1702,6 +1722,23 @@
                 }
                 if(e.key === 'w' || e.key === 'W'){
                     window.vec2MouseWheelRaw.y = 10;
+                }
+                // arrows drive iMouseRaw
+                if(e.key === 'ArrowUp'){
+                    lastMouseMoveWasFake = true;
+                    window.mouseRaw.y += 1;
+                }
+                if(e.key === 'ArrowDown'){
+                    lastMouseMoveWasFake = true;
+                    window.mouseRaw.y -= 1;
+                }
+                if(e.key === 'ArrowLeft'){
+                    lastMouseMoveWasFake = true;
+                    window.mouseRaw.x -= 1;
+                }
+                if(e.key === 'ArrowRight'){
+                    lastMouseMoveWasFake = true;
+                    window.mouseRaw.x += 1;
                 }
             });
 
@@ -2323,6 +2360,7 @@
         document.addEventListener('touchmove',async(e)=>{
             mouseX = e.touches[0].clientX;
             mouseY = e.touches[0].clientY;
+            lastMouseMoveWasFake = false;
         })
         document.addEventListener('touchstart',async(e)=>{
             mouseX = e.touches[0].clientX;
@@ -2402,6 +2440,7 @@
         document.addEventListener('mousemove', (e)=>{
             window.mouseX = e.clientX;
             window.mouseY = e.clientY;
+            lastMouseMoveWasFake = false;
         });
         document.addEventListener('mousedown', (e)=>{
             window.leftMouseDown = e.button === 0;
