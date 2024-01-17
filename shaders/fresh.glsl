@@ -6,6 +6,7 @@ uniform vec3 iResolution;
 uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
 uniform vec4 iMouseWheel;
+uniform float numLights;
 // define PI
 const float PI = 3.1415926535897932384626433832795;
 // End shadertoy global uniforms
@@ -55,27 +56,56 @@ void main() {
     }
 
     float radius = 0.01 * (abs(iMouseWheel.y) * 0.1 + 1.0);
-
     // Quaternion-based rotation
-    float angleX = mod(iTime * 10.0, 360.0); // Rotation angle around X-axis
-    float angleY = mod(iTime * 80.0, 360.0); // Rotation angle around Y-axis
-    vec4 quatX = quat_from_axis_angle(vec3(1, 0, 0), radians(angleX));
-    vec4 quatY = quat_from_axis_angle(vec3(0, 1, 0), radians(angleY));
-    vec4 quatRot = quat_multiply(quatX, quatY);
-
-    vec3 lightPos = rotate_by_quaternion(vec3(1, 0, 0), quatRot);
+    float angleX = mod(iTime * 100.0, 360.0); // Rotation angle around X-axis
+    float angleY = mod(iTime * -100.0, 360.0); // Rotation angle around Y-axis
+    
+    // First light
+    vec4 quatX1 = quat_from_axis_angle(vec3(1, 0, 0), radians(angleX));
+    vec4 quatY1 = quat_from_axis_angle(vec3(0, 1, 0), radians(angleY));
+    vec4 quatRot1 = quat_multiply(quatX1, quatY1);
     vec3 sphereCenter = vec3(uv, 0.0);
-    vec3 toLight = normalize(lightPos - sphereCenter);
-
     vec3 sphereNormal = normalize(vec3(uv - mouse, fastsqrt(radius*radius - dot(uv - mouse, uv - mouse))));
 
-    float diff = max(dot(sphereNormal, toLight), 0.0);
+    vec3 lightPos1 = rotate_by_quaternion(vec3(1, 0, 0), quatRot1);
+    vec3 toLight1 = normalize(lightPos1 - sphereCenter);
+    float diff = max(dot(sphereNormal, toLight1), 0.0);
+    vec3 colorUV1 = diff * vec3(0.62, 0.33, 0.15); // First light color
 
-    vec3 colorUV = diff * vec3(0.62, 0.33, 0.15);
+    // Second light
+    vec4 quatX2 = quat_from_axis_angle(vec3(1, 0, 0), radians(angleX + 90.0)); // Change rotation for second light
+    vec4 quatY2 = quat_from_axis_angle(vec3(0, 1, 0), radians(angleY + 90.0)); // Change rotation for second light
+    vec4 quatRot2 = quat_multiply(quatX2, quatY2);
+
+    vec3 lightPos2 = rotate_by_quaternion(vec3(1, 0, 0), quatRot2);
+    vec3 toLight2 = normalize(lightPos2 - sphereCenter);
+    diff = max(dot(sphereNormal, toLight2), 0.0);
+    vec3 colorUV2 = diff * vec3(0.15, 0.33, 0.62); // Second light color
+
+    // Third light
+    vec4 quatX3 = quat_from_axis_angle(vec3(1, 0, 0), radians(angleX + 180.0)); // Change rotation for third light
+    vec4 quatY3 = quat_from_axis_angle(vec3(0, 1, 0), radians(angleY + 180.0)); // Change rotation for third light
+    vec4 quatRot3 = quat_multiply(quatX3, quatY3);
+
+    vec3 lightPos3 = rotate_by_quaternion(vec3(1, 0, 0), quatRot3);
+    vec3 toLight3 = normalize(lightPos3 - sphereCenter);
+    diff = max(dot(sphereNormal, toLight3), 0.0);
+    vec3 colorUV3 = diff * vec3(0.15, 0.62, 0.33); // Third light color
+
+    // Combine the three lights
+    vec3 colorUV;
+    // if (numLights <= 2.0) {
+    //     colorUV = colorUV1;
+    // } else if (numLights <= 3.0) {
+    //     colorUV = colorUV1 + colorUV2;
+    // } else {
+        colorUV = colorUV1 + colorUV2 + colorUV3;
+    // }
+    // vec3 colorUV = diff * vec3(0.27, 0.15, 0.62);
 
     if(length(uv - mouse) < radius){
         gl_FragColor = vec4(colorUV, 1.0);
-        gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+        gl_FragColor.a = 1.0;// ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
         return;
     }
 
