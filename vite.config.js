@@ -7,7 +7,7 @@ export default defineConfig({
   // Customizing the build options:
   build: {
     rollupOptions: {
-      input: 'public/pixel-mixer.html',
+      input: '/public/pixel-mixer.html',
       output: {
         dir: `dist/${new Date().getFullYear()}${new Date().getMonth()+1}${new Date().getDate()}`,
         format: 'es'
