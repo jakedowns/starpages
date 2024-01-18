@@ -49,7 +49,8 @@ void main() {
     float noise = fract(sin(dot(uv.xy ,vec2(12.9898,78.233))) * 43758.5453);
     if (noise < 0.01) {
         float brightness = noise * 2.0 - 1.0; // random brightness change between -1 and 1
-        gl_FragColor += vec4(brightness, brightness, brightness, 0.0);
+        brightness *= 0.5;
+        gl_FragColor *= vec4(brightness, brightness, brightness, 1.0);
         return;
     }
 

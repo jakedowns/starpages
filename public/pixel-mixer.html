@@ -327,12 +327,15 @@
         import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
         import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
         import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+        import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
         import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
 
         // import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
         // import { BloomEffect } from 'three/examples/jsm/effects/BloomEffect.js';
         // import { VignetteEffect } from 'three/examples/jsm/effects/VignetteEffect.js';
+        
+        import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
         let canvas;
         
 
@@ -484,8 +487,8 @@
 
             vec2MouseWheelRaw
             .set(
-                vec2MouseWheelRaw.x + e.deltaX * 0.1, 
-                vec2MouseWheelRaw.y + e.deltaY * 0.1
+                vec2MouseWheelRaw.x + e.deltaX * 0.01, 
+                vec2MouseWheelRaw.y - e.deltaY * 0.01
             );
         });
 
@@ -1168,35 +1171,28 @@
             window.progressElement = document.getElementById("progress");
 
             window.shaderPass = new ShaderPass(window.outputMaterialB, "iChannel0");
-            
             composer.addPass( shaderPass );
 
-            // gamma correction
-            window.gammaCorrectionPass = new ShaderPass(GammaCorrectionShader);
+            // // gamma correction
+            // window.gammaCorrectionPass = new ShaderPass(GammaCorrectionShader);
+            // console.warn(Object.keys(window.gammaCorrectionPass));
             // gammaCorrectionPass.renderToScreen = true;
-            // gammaCorrectionPass.uniforms["gamma"] = {value: 0.1}
+            // //gammaCorrectionPass.uniforms["gamma"] = {value: 0.1}
             // composer.addPass( gammaCorrectionPass );
 
 
             // const ssaoPass = new SSAOPass( scene, camera, window.innerWidth, window.innerHeight );
             // composer.addPass( ssaoPass );
 
-            // const shaderPass = new ShaderPass(VignetteShader);
-            // shaderPass.uniforms["offset"].value = 0.95;
-            // shaderPass.uniforms["darkness"].value = 1.6;
-            // composer.addPass( shaderPass );
-
-            
+            // const vignettePass = new ShaderPass(VignetteShader);
+            // vignettePass.uniforms["offset"].value = 0.95;
+            // vignettePass.uniforms["darkness"].value = 1.6;
+            // composer.addPass( vignettePass );
 
             // const effectPass = new EffectPass(camera, new BloomEffect());
             // composer.addPass( effectPass );
 
-            // const bloomPass = new BloomPass(
-            //     1.0,    // strength
-            //     25,   // kernel size
-            //     4,    // sigma ?
-            //     256,  // blur render target resolution
-            // );
+            // const bloomPass = new UnrealBloomPass();
             // composer.addPass( bloomPass );
 
             const outputPass = new OutputPass();
