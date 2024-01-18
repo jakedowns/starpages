@@ -321,6 +321,7 @@
     <canvas id="canvas" class="undarken"></canvas>
     <script type="module">
         import * as THREE from 'three';
+        import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
         //import { WebGPURenderer } from 'three/addons/renderers/webgpu/WebGPURenderer.js';
         import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -912,6 +913,9 @@
             renderer.setPixelRatio( dpr );
             renderer.setSize( window.innerWidth, window.innerHeight );
 				
+            // 3. Enable WebXR in the renderer:
+            renderer.xr.enabled = true;
+            document.body.appendChild(VRButton.createButton(renderer));
 
             // "real" size, full screen
             canvas.width = pixelWidth;
@@ -1862,6 +1866,8 @@
 
         // domready
         async function onReady(){
+
+            
 
             setupPanel();
 
