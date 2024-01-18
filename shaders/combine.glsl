@@ -1,10 +1,10 @@
-layout(location = 1) out vec4 iBuffer0;
-layout(location = 2) out vec4 iBuffer1;
+// layout(location = 1) out vec4 iBuffer0;
+// layout(location = 2) out vec4 iBuffer1;
 
 // Fragment shader
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
-uniform sampler2D iChannel2;
+// uniform sampler2D iChannel2;
 uniform vec3 iResolution;
 uniform float iTime;
 uniform vec4 iMouse;
@@ -30,21 +30,25 @@ vec3 rgb2hsv(vec3 c) {
 
 void main() {
     vec2 uv = gl_FragColor.xy / iResolution.xy;
-    vec4 currentColor = texture2D(iChannel0, uv.xy);
     vec4 previousColor = texture2D(iChannel1, uv.xy);
+    vec4 currentColor = texture2D(iChannel0, uv.xy);
     // decay
-    previousColor = previousColor * 0.9999999;
+    previousColor = previousColor * 0.99;
 
-    vec3 b = rgb2hsv(previousColor.rgb);
-    b.x += 0.01 * iTime;
-    b.x = mod(b.x, 1.0);
-    vec3 c = hsv2rgb(b);
-    previousColor.rgb = c;
-
+    // vec3 b = rgb2hsv(previousColor.rgb);
+    // b.x += 0.1 * iTime;
+    // b.x = mod(b.x, 1.0);
+    // vec3 c = hsv2rgb(b);
+    // previousColor.rgb = c;
 
     // gl_FragColor = currentColor + previousColor;
     // apply a "smear" effect between the two
-    float smearFactor = max(0.1, 1.0 - iTime);
-    vec4 smearColor = mix(previousColor, currentColor, smearFactor);
-    gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
+    // float smearFactor = max(0.1, sin(iTime * 0.1));
+    // vec4 smearColor = mix(previousColor, currentColor, smearFactor);
+    // gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
+    if(uv.x < 0.5) {
+        gl_FragColor = currentColor;
+    } else {
+        gl_FragColor = previousColor;
+    }
 }
