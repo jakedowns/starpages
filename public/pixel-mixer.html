@@ -590,7 +590,7 @@
                     vec2MouseWheelRaw.x, 
                     vec2MouseWheelRaw.y
                 );
-                material.uniforms.numLights = window.settings.numLights;
+                material.uniforms.numLights.value = window.settings.numLights.value;
             };
             
             setUniforms(window.outputMaterialA);
@@ -773,7 +773,7 @@
                 iMouse: { value: window.mouseLerping },
                 iMouseRaw: { value: window.mouseRaw },
                 iMouseWheel: { value: window.iMouseWheel },
-                numLights: { value: 1 },
+                numLights: { value: settings.numLights },
                 fxFloats: { value: new THREE.Vector4(0) },
                 ambientLightColor: { value: settings.ambientLightColor },
                 ambientLightColorAlpha: { value: settings.ambientLightColorAlpha },
@@ -973,7 +973,7 @@
                     }
 
                     if(key === 'numLights'){
-                        //console.log('setting numLights',uniforms[key])
+                        // console.log('setting numLights',uniforms[key])
                         material.uniforms.numLights.value = parseFloat(uniforms[key]);
                         return;
                     }

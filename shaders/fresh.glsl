@@ -102,7 +102,14 @@ void main() {
 
     // Combine the three lights
     vec3 colorUV = colorUV1;
-    colorUV = colorUV1 + colorUV2 + colorUV3;
+    //colorUV = colorUV1 + colorUV2 + colorUV3;
+
+    if(numLights >= 2.0){
+        colorUV += colorUV2 + colorUV3;
+    }
+    else if(numLights >= 1.0){
+        colorUV += colorUV2;
+    }
 
     vec3 colorNormalMap = vec3(0.0);// diff * vec3(0.27, 0.15, 0.62);
     colorNormalMap.r = sphereNormal.x * 0.5 + 0.5;
