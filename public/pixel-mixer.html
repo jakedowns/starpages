@@ -321,7 +321,19 @@
     <script type="module">
         import * as THREE from 'three';
         //import { WebGPURenderer } from 'three/addons/renderers/webgpu/WebGPURenderer.js';
+        import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+        import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+        import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+        import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
+
+        // import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+        // import { BloomEffect } from 'three/examples/jsm/effects/BloomEffect.js';
+        // import { VignetteEffect } from 'three/examples/jsm/effects/VignetteEffect.js';
         let canvas;
+        
+
         const dpr = window.devicePixelRatio;
         const presentationFormat = navigator?.gpu?.getPreferredCanvasFormat();
         window.pixelWidth = window.innerWidth;
@@ -527,6 +539,8 @@
                 safePXDims,
             })
 
+            composer.swapBuffers();
+
             window.outputTextureA = new THREE.WebGLRenderTarget(safePXDims.x, safePXDims.y);
             window.outputTextureA.texture.magFilter = THREE.NearestFilter;
             window.outputTextureA.texture.minFilter = THREE.NearestFilter;
@@ -615,14 +629,14 @@
                     vec2MouseWheelRaw.y
                 ),
 
-                numLights: settings.numLights,
+                num_lights: {value:settings.num_lights},
                 ambientLightColor: settings.ambientLightColor,
                 decayColor: settings.decayColor,
                 fxFloats: new THREE.Vector4(
                     settings.alphaShadow,
                     settings.mixNormals,
                     settings.clickMouseToDraw ? 1.0 : 0.0,
-                    0.0
+                    settings.num_lights
                 )
             }, ...uniforms};
 
@@ -641,9 +655,9 @@
                     return;
                 }
 
-                if(key === 'numLights'){
-                    // console.log('setting numLights',material.uniforms[key])
-                    material.uniforms.numLights = parseFloat(uniforms[key]);
+                if(key === 'num_lights'){
+                    // console.log('setting num_lights',material.uniforms.num_lights,'<-',uniforms[key].value)
+                    material.uniforms.num_lights = uniforms[key].value; // parseFloat(uniforms[key]);
                     return;
                 }
 
@@ -723,14 +737,29 @@
         window.randomWalkTimeout = null;
         window.randomWalk_inner = function(){
             // pick a random delay
-            let randomDelay = Math.floor(Math.random() * 1000) + 500;
+            let randomDelay = Math.floor(Math.random() * 500) + 10;
             // pick a random direction
             let randomDirection = {
-                x: Math.random() < 0.5 ? -1 : 1,
-                y: Math.random() < 0.5 ? -1 : 1
+                x: Math.random() < 0.5 ? -0.2 : 0.2,
+                y: Math.random() < 0.5 ? -0.2 : 0.2,
+                z: Math.random() < 0.5 ? -0.2 : 0.2,
+            }
+            let scalar = Math.random() * 1.5 + 0.1;
+            randomDirection.x *= scalar;
+            randomDirection.y *= scalar;
+            randomDirection.z *= scalar;
+
+
+            // bounce off the edges
+            if(window.mouseX + randomDirection.x * window.safePXDims.x > window.pixelWidth || window.mouseX + randomDirection.x * window.safePXDims.x < 0){
+                randomDirection.x *= -1;
+            }
+            if(window.mouseY + randomDirection.y * window.safePXDims.y > window.pixelHeight || window.mouseY + randomDirection.y * window.safePXDims.y < 0){
+                randomDirection.y *= -1;
             }
             window.mouseX += randomDirection.x * window.safePXDims.x;
             window.mouseY += randomDirection.y * window.safePXDims.y;
+            window.vec2MouseWheelRaw.y += randomDirection.z * 10;
 
             window.randomWalkTimeout = setTimeout(()=>{
                 window.randomWalk_inner();
@@ -746,9 +775,66 @@
             window.randomWalk_inner();
         }
 
+        window.setupMaterials = function(){
+            let DEFAULT_U_VALUES = {
+                // compatibility uniforms
+                // tDiffuse: { value: inputTextureA.texture },
+                iTime: { value: 1.0 },
+                iChannel0: { value: inputTextureA.texture },
+                iChannel1: { value: inputTextureB.texture },
+                //iChannel2: { value: normalTexture.texture },
+                iChannel3: { value: userInputTexture.texture },
+
+
+                // output buffer slot 1
+                // iBuffer0: { value: outputTextureA.texture },
+                // iBuffer1: { value: normalTexture.texture },
+
+                iResolution: { value: new THREE.Vector3(0) },
+                iMouse: { value: window.mouseLerping },
+                iMouseRaw: { value: window.mouseRaw },
+                iMouseWheel: { value: window.iMouseWheel },
+                num_lights: { value: settings.num_lights },
+                fxFloats: { value: new THREE.Vector4(0) },
+                ambientLightColor: { value: settings.ambientLightColor },
+                ambientLightColorAlpha: { value: settings.ambientLightColorAlpha },
+                decayColor: { value: settings.decayColor },
+                clickMouseToDraw: { value: settings.clickMouseToDraw }
+            }   
+
+            window.outputMaterialA = new THREE.ShaderMaterial({
+                //glslVersion: THREE.GLSL3,
+                uniforms: {
+                    ...DEFAULT_U_VALUES
+                },
+                vertexShader: `
+                    void main() {
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: window.fragmentShaderSource,
+                transparent: true, // Enable transparency
+            });
+
+            // do a SECOND material
+            // tied to combineTexturesShaderSource
+            window.outputMaterialB = new THREE.ShaderMaterial({
+                //glslVersion: THREE.GLSL3,
+                uniforms: {
+                    ...DEFAULT_U_VALUES
+                },
+                vertexShader: `
+                    void main() {
+                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: window.combineTexturesShaderSource,
+                transparent: true, // Enable transparency
+            });
+        }
+
 
         window.setupThree = async function(){
-
             const pasteFromClipboardPrompt = document.getElementById("pasteFromClipboardPrompt");
             function showPasteFromClipboardPrompt(){
                 pasteFromClipboardPrompt.classList.add("show");
@@ -853,6 +939,17 @@
 
             window.scene = new THREE.Scene();
 
+            window.composer = new EffectComposer(renderer);
+            // disable auto clear
+            // composer.autoClear = false;
+            
+            const renderPass = new RenderPass( scene, camera );
+            composer.addPass( renderPass );
+
+            
+
+            
+
             // Full-screen plane geometry
             window.planeGeometry = new THREE.PlaneGeometry(2 * aspect, 2);
 
@@ -923,60 +1020,15 @@
             // window.normalTexture.texture.wrapT = THREE.MirroredRepeatWrapping;
             // window.normalTexture.needsUpdate = true;
 
-            let DEFAULT_U_VALUES = {
-                // compatibility uniforms
-                iTime: { value: 1.0 },
-                iChannel0: { value: inputTextureA.texture },
-                iChannel1: { value: inputTextureB.texture },
-                //iChannel2: { value: normalTexture.texture },
-                iChannel3: { value: userInputTexture.texture },
+            setupMaterials();
+            // shaderPass.uniforms.iChannel0 = window.outputTextureA;
+            outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
 
+            // window.passA = new ShaderPass(window.outputMaterialA);
+            // passA.uniforms.iChannel0.value = outputTextureB.texture;
 
-                // output buffer slot 1
-                // iBuffer0: { value: outputTextureA.texture },
-                // iBuffer1: { value: normalTexture.texture },
-
-                iResolution: { value: new THREE.Vector3(0) },
-                iMouse: { value: window.mouseLerping },
-                iMouseRaw: { value: window.mouseRaw },
-                iMouseWheel: { value: window.iMouseWheel },
-                numLights: { value: settings.numLights },
-                fxFloats: { value: new THREE.Vector4(0) },
-                ambientLightColor: { value: settings.ambientLightColor },
-                ambientLightColorAlpha: { value: settings.ambientLightColorAlpha },
-                decayColor: { value: settings.decayColor },
-                clickMouseToDraw: { value: settings.clickMouseToDraw }
-            }   
-
-            window.outputMaterialA = new THREE.ShaderMaterial({
-                //glslVersion: THREE.GLSL3,
-                uniforms: {
-                    ...DEFAULT_U_VALUES
-                },
-                vertexShader: `
-                    void main() {
-                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                    }
-                `,
-                fragmentShader: window.fragmentShaderSource,
-                transparent: true, // Enable transparency
-            });
-
-            // do a SECOND material
-            // tied to combineTexturesShaderSource
-            window.outputMaterialB = new THREE.ShaderMaterial({
-                //glslVersion: THREE.GLSL3,
-                uniforms: {
-                    ...DEFAULT_U_VALUES
-                },
-                vertexShader: `
-                    void main() {
-                        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                    }
-                `,
-                fragmentShader: window.combineTexturesShaderSource,
-                transparent: true, // Enable transparency
-            });
+            // window.passB = new ShaderPass(window.outputMaterialB);
+            // passB.uniforms.iChannel0.value = outputTextureA.texture;
             
             // Creating and adding the plane to the scene
             window.plane = new THREE.Mesh(planeGeometry, window.outputMaterialA);
@@ -1110,7 +1162,40 @@
 
             window.progressElement = document.getElementById("progress");
 
+            window.shaderPass = new ShaderPass(window.outputMaterialB, "iChannel0");
             
+            composer.addPass( shaderPass );
+
+            // gamma correction
+            window.gammaCorrectionPass = new ShaderPass(GammaCorrectionShader);
+            // gammaCorrectionPass.renderToScreen = true;
+            // gammaCorrectionPass.uniforms["gamma"] = {value: 0.1}
+            // composer.addPass( gammaCorrectionPass );
+
+
+            // const ssaoPass = new SSAOPass( scene, camera, window.innerWidth, window.innerHeight );
+            // composer.addPass( ssaoPass );
+
+            // const shaderPass = new ShaderPass(VignetteShader);
+            // shaderPass.uniforms["offset"].value = 0.95;
+            // shaderPass.uniforms["darkness"].value = 1.6;
+            // composer.addPass( shaderPass );
+
+            
+
+            // const effectPass = new EffectPass(camera, new BloomEffect());
+            // composer.addPass( effectPass );
+
+            // const bloomPass = new BloomPass(
+            //     1.0,    // strength
+            //     25,   // kernel size
+            //     4,    // sigma ?
+            //     256,  // blur render target resolution
+            // );
+            // composer.addPass( bloomPass );
+
+            const outputPass = new OutputPass();
+            composer.addPass( outputPass );
 
             resizeCanvas();
             resetPingPong();
@@ -1428,7 +1513,7 @@
             useDoubleBuffer: true,
             ambientLightColor: {r:0.0,g:0.0,b:0.0,a:0.0},
             ambientLightColorAlpha: 0.01,
-            numLights: 3,
+            num_lights: 0.5,
             alphaShadow: 0.9,
             decayColorAlpha: 0.001,
             mixNormals: 0,
@@ -1445,6 +1530,7 @@
         let cumulativeTime = 0;
         let frameStart = 0;
         let startedAt;
+        let frame = 0;
         window.animate = function(time) {
             canvas = renderer.domElement;
             if(!startedAt){
@@ -1471,58 +1557,60 @@
                 iChannel1: window.inputTextureB,
                 iChannel3: window.userInputTexture,
             });
+            window.outputMaterialA.uniformsNeedUpdate = true;
             updateMaterialUniforms(window.outputMaterialB, {
                 iChannel0: window.outputTextureA,
                 iChannel1: window.outputTextureB,
                 iChannel3: window.userInputTexture,
             });
-
-            
-
-            if(settings.useDoubleBuffer){
-                try{
-                    plane.material = window.outputMaterialA;
-                    window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureB.texture;
-                    window.outputMaterialA.uniformsNeedUpdate = true;
-                    renderer.setRenderTarget(window.outputTextureA);
-                    renderer.render(scene, camera);
-                    window.outputTextureA.needsUpdate = true;
-                    // // Use the rendered texture as input for the next pass
-                    // window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
-                    // window.outputMaterialB.uniformsNeedUpdate = true;
-
-                    // // now render that to a texture
-                    // renderer.setRenderTarget(window.outputTextureB);
-                    // renderer.render(scene, camera);
-
-                    // window.outputTextureB.needsUpdate = true;
-
-                }catch(e){
-                    console.error(e);
-                }
-            }
-            
-            plane.material = window.outputMaterialB;
-            window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
-            window.outputMaterialB.uniforms.iChannel1.value = window.outputTextureB.texture;
             window.outputMaterialB.uniformsNeedUpdate = true;
+
+            
+
+            // if(settings.useDoubleBuffer){
+            //     try{
+            //         plane.material = window.outputMaterialA;
+            //         window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureB.texture;
+            //         window.outputMaterialA.uniformsNeedUpdate = true;
+            //         renderer.setRenderTarget(window.outputTextureA);
+            //         renderer.render(scene, camera);
+            //         window.outputTextureA.needsUpdate = true;
+            //         // // Use the rendered texture as input for the next pass
+            //         // window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+            //         // window.outputMaterialB.uniformsNeedUpdate = true;
+
+            //         // // now render that to a texture
+            //         // renderer.setRenderTarget(window.outputTextureB);
+            //         // renderer.render(scene, camera);
+
+            //         // window.outputTextureB.needsUpdate = true;
+
+            //     }catch(e){
+            //         console.error(e);
+            //     }
+            // }
+            
+            // plane.material = window.outputMaterialB;
+            // window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+            // window.outputMaterialB.uniforms.iChannel1.value = window.outputTextureB.texture;
+            // window.outputMaterialB.uniformsNeedUpdate = true;
             // Reset render target back to the canvas
-            renderer.setRenderTarget(null);
+            // renderer.setRenderTarget(null);
             renderer.render(scene, camera);
 
-            if(settings.useDoubleBuffer){
-                // continually swap the textures (ping-pong buffer trade's off read/write duty)
-                let tempA = window.outputTextureA;
-                window.outputTextureA = window.outputTextureB;
-                window.outputTextureB = tempA;
-                window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
-                window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
-                window.outputMaterialA.uniformsNeedUpdate = true;
-                window.outputMaterialB.uniformsNeedUpdate = true;
-            }else{
-                // keep them the same
-                // noop
-            }
+            // if(settings.useDoubleBuffer){
+            //     // continually swap the textures (ping-pong buffer trade's off read/write duty)
+            //     let tempA = window.outputTextureA;
+            //     window.outputTextureA = window.outputTextureB;
+            //     window.outputTextureB = tempA;
+            //     window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
+            //     window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+            //     window.outputMaterialA.uniformsNeedUpdate = true;
+            //     window.outputMaterialB.uniformsNeedUpdate = true;
+            // }else{
+            //     // keep them the same
+            //     // noop
+            // }
 
             if(window.capturing){
                 window.currentFrameDelta = targetRecordingFPS / 1000;
@@ -1545,6 +1633,22 @@
                 window.currentFrameDelta = performance.now() - frameStart;
                 // next frame
                 requestAnimationFrame(animate);
+                // Render to targetA in even frames, targetB in odd frames
+                // composer.renderTarget1 = frame % 2 === 0 ? outputTextureA : outputTextureB;
+                // composer.renderTarget2 = frame % 2 === 0 ? outputTextureB : outputTextureA;
+
+                // console.warn('composer pass len', composer.passes.length);
+
+                // Swap passes
+                // let temp = composer.passes[1];
+                // composer.passes[1] = composer.passes[2];
+                // composer.passes[2] = temp;
+
+                // outputMaterialB.uniforms.iChannel0.value = outputTextureA.texture;
+
+                composer.render();
+
+                frame++;
             }
         }
 
@@ -1604,7 +1708,7 @@
                 .name( 'Pixel Density' )
                 .onChange( window.resizeCanvas );
 
-            panel.add(settings, 'numLights', 1, 3, 1.01)
+            panel.add(settings, 'num_lights', 0, 1, .2)
                 .name( 'Num Lights #️⃣💡' )
         
             panel.add(settings, 'alphaShadow', 0, 1, 0.01)
@@ -1674,10 +1778,11 @@
 
             window.addEventListener('keydown', (e)=>{
                 if(e.key === 'c' || e.key === 'C'
-                    || e.key === 'r' || e.key === 'R'
-                
                 ){
                     window.resetPingPong();
+                }
+                if(e.key === 'r' || e.key === 'R'){
+                    window.randomWalk();
                 }
                 if(e.key === 'q' || e.key === 'Q'){
                     window.vec2MouseWheelRaw.y += 10;

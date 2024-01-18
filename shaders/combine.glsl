@@ -27,16 +27,13 @@ vec3 rgb2hsv(vec3 c) {
 
 void main() {
     vec2 uv = gl_FragCoord.xy / iResolution.xy;
-    
-    
-    
 
     // // if we're on the left half draw the full "previous" color
     // if (uv.x < 0.5) {
     //     uv.x = uv.x * 2.0;
         vec4 previousColor = texture2D(iChannel1, uv.xy);
     // decay
-    previousColor = previousColor * .9;
+    previousColor = previousColor * .01;
     //     gl_FragColor = previousColor;
     //     return;
     // }else{
@@ -56,7 +53,8 @@ void main() {
 
     // hue shift
     vec3 hsv = rgb2hsv(gl_FragColor.rgb);
-    hsv.x += 0.1;
+    hsv.x += 1.0 / 360.0;
+    hsv.x = mod(hsv.x, 1.0);
     gl_FragColor.rgb = hsv2rgb(hsv);
 
 }
