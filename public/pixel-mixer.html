@@ -516,8 +516,8 @@
         Object.defineProperty(window, "safePXDims", {
             get: function() {
                 return {
-                    x: Math.floor(window.pixelWidth / window.settings.pixel_density / 2) * 2,
-                    y: Math.floor(window.pixelHeight / window.settings.pixel_density / 2) * 2
+                    x: Math.floor(window.pixelWidth / window.settings.pixel_density * dpr / 2) * 2,
+                    y: Math.floor(window.pixelHeight / window.settings.pixel_density * dpr / 2) * 2
                 }
             }
         });
@@ -576,9 +576,9 @@
             // sign(mouse.z)  = button is down
             // sign(mouse.w)  = button is clicked
 
-            let dist = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
-            let magnitude = Math.max(0.9,Math.min(dist, 2.0));
-            magnitude *= vec2MouseWheelLerped.y;
+            // let dist = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+            // let magnitude = Math.max(0.9,Math.min(dist, 2.0));
+            // magnitude *= vec2MouseWheelLerped.y;
             
             window.mouseRaw.set(
                 window.mouseX, 
@@ -586,33 +586,8 @@
                 window.leftMouseDown ? 1 : -1, 
                 0
             );
-            window.mouseLerping.lerp(window.mouseRaw, .1 * magnitude);
+            window.mouseLerping.lerp(window.mouseRaw, .1);
             vec2MouseWheelLerped.lerp(vec2MouseWheelRaw, .08);
-
-            // const setUniforms = (material) => {
-            //     material.uniforms.iMouseRaw.value.set(
-            //         window.mouseRaw.x, 
-            //         window.mouseRaw.y, 
-            //         window.mouseRaw.z, 
-            //         0
-            //     );
-            //     material.uniforms.iMouse.value.set(
-            //         window.mouseLerping.x, 
-            //         window.mouseLerping.y, 
-            //         window.leftMouseDown ? 1 : -1, 
-            //         0
-            //     );
-            //     material.uniforms.iMouseWheel.value.set(
-            //         vec2MouseWheelLerped.x, 
-            //         vec2MouseWheelLerped.y, 
-            //         vec2MouseWheelRaw.x, 
-            //         vec2MouseWheelRaw.y
-            //     );
-            //     material.uniforms.numLights.value = window.settings.numLights.value;
-            // };
-            
-            // setUniforms(window.outputMaterialA);
-            // setUniforms(window.outputMaterialB);
         }
 
         window.updateMaterialUniforms = function(material, uniforms){
@@ -667,7 +642,7 @@
                 }
 
                 if(key === 'numLights'){
-                    //console.log('setting numLights',uniforms[key])
+                    // console.log('setting numLights',material.uniforms[key])
                     material.uniforms.numLights = parseFloat(uniforms[key]);
                     return;
                 }
@@ -742,6 +717,33 @@
                     console.warn('Unknown uniform type', key, uniforms[key]);
             });
             return material;
+        }
+
+        window.randomWalking = false;
+        window.randomWalkTimeout = null;
+        window.randomWalk_inner = function(){
+            // pick a random delay
+            let randomDelay = Math.floor(Math.random() * 1000) + 500;
+            // pick a random direction
+            let randomDirection = {
+                x: Math.random() < 0.5 ? -1 : 1,
+                y: Math.random() < 0.5 ? -1 : 1
+            }
+            window.mouseX += randomDirection.x * window.safePXDims.x;
+            window.mouseY += randomDirection.y * window.safePXDims.y;
+
+            window.randomWalkTimeout = setTimeout(()=>{
+                window.randomWalk_inner();
+            }, randomDelay);
+        }
+        window.randomWalk = function() {
+            if(window.randomWalking){
+                window.randomWalking = false;
+                clearTimeout(window.randomWalkTimeout);
+                return;
+            }
+            window.randomWalking = true;
+            window.randomWalk_inner();
         }
 
 
@@ -859,9 +861,10 @@
             let rand_int_1_thru_17 = Math.floor(Math.random() * 17) + 1;
             //let url = `./res/bg_${rand_int_1_thru_17}.png`;
             //let url = "./res/download (3).png";
-            let url = "../res/inspiration/Bsodwindows10.png";
+            let url = "/starpages/res/inspiration/Bsodwindows10.png";
             window.inputTextureA = await textureLoader.loadAsync(url);
-            window.inputTextureB = window.inputTextureA; // clone
+            window.inputTextureB = window.inputTextureA.clone(); // clone
+            window.userInputTexture = window.inputTextureA.clone(); // clone
 
             // define our textures / buffers
             // 1. our starting values (provided by user image or video, etc)
@@ -925,7 +928,8 @@
                 iTime: { value: 1.0 },
                 iChannel0: { value: inputTextureA.texture },
                 iChannel1: { value: inputTextureB.texture },
-                // iChannel2: { value: normalTexture.texture },
+                //iChannel2: { value: normalTexture.texture },
+                iChannel3: { value: userInputTexture.texture },
 
 
                 // output buffer slot 1
@@ -1083,6 +1087,7 @@
                             window.videoTexture.needsUpdate = true;
 
                             window.targetInputTexture = window.videoTexture;
+                            window.userInputTexture = window.videoTexture;
                             window.inputTextureA = window.targetInputTexture;
                             window.inputTextureB = window.targetInputTexture;
 
@@ -1105,144 +1110,7 @@
 
             window.progressElement = document.getElementById("progress");
 
-            window.updateMaterialUniforms = function(material, uniforms){
-
-                uniforms = {...{
-                    iTime: cumulativeTime,
-                    iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
-                    iMouse: new THREE.Vector4(
-                        window.mouseLerping.x, 
-                        window.mouseLerping.y, 
-                        window.leftMouseDown ? 1 : -1, 
-                        0
-                    ),
-                    iMouseRaw: new THREE.Vector4(
-                        window.mouseRaw.x, 
-                        window.mouseRaw.y, 
-                        window.mouseRaw.z, 
-                        0
-                    ),
-                    iMouseWheel: new THREE.Vector4(
-                        vec2MouseWheelLerped.x, 
-                        vec2MouseWheelLerped.y, 
-                        vec2MouseWheelRaw.x, 
-                        vec2MouseWheelRaw.y
-                    ),
-                    numLights: settings.numLights,
-                    ambientLightColor: settings.ambientLightColor,
-                    decayColor: settings.decayColor,
-                    fxFloats: new THREE.Vector4(
-                        settings.alphaShadow,
-                        settings.mixNormals,
-                        settings.clickMouseToDraw > 0,
-                        0
-                    )
-                }, ...uniforms};
-
-                Object
-                .keys(uniforms)
-                .forEach(function(key) {
-                    if(typeof uniforms[key] === 'undefined'){
-                        console.warn("uniforms["+key+"] is undefined", uniforms);
-                        return;
-                    }
-
-                    if(typeof material.uniforms[key] === 'undefined'){
-                        console.warn("Material does not have a uniform named: " + key);
-                        return;
-                    }
-
-                    if(key === 'numLights'){
-                        // console.log('setting numLights',uniforms[key])
-                        material.uniforms.numLights.value = parseFloat(uniforms[key]);
-                        return;
-                    }
-
-                    if(key === 'fxFloats'){
-                        // console.log('setting alphaShadow',uniforms[key])
-                        material.uniforms.fxFloats.value = uniforms[key];
-                        return;
-                    }
-
-                    // if it's a float, just set it
-                    if(typeof uniforms[key] === 'number'){
-                        material.uniforms[key].value = uniforms[key];
-                        return;
-                    }
-
-                    if(key === 'iChannel0' || key === 'iChannel1' || key === 'iChannel2' || key === 'iChannel3'){
-                        //console.warn('setting channel',key,uniforms[key])
-                        material.uniforms[key].value = uniforms[key].texture;
-                        return;
-                    }
-
-                    // rgba
-                    if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b') && uniforms[key].hasOwnProperty('a')){
-                        //console.warn('setting color',key,uniforms[key])
-                        material.uniforms[key].value = [
-                            uniforms[key].r, 
-                            uniforms[key].g, 
-                            uniforms[key].b, 
-                            uniforms[key].a
-                        ];
-                        return;
-                    }
-                    // rgb
-                    if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b')){
-                        //console.warn('setting color',key,uniforms[key])
-                        material.uniforms[key].value = [
-                            uniforms[key].r, 
-                            uniforms[key].g, 
-                            uniforms[key].b
-                        ];
-                        return;
-                    }
-
-                    if (uniforms[key] instanceof THREE.Vector4) {
-                        material.uniforms[key].value.set(
-                            uniforms[key].x, 
-                            uniforms[key].y, 
-                            uniforms[key].z, 
-                            uniforms[key].w
-                        );
-                    } else if (uniforms[key] instanceof THREE.Vector3) {
-                        material.uniforms[key].value.set(
-                            uniforms[key].x, 
-                            uniforms[key].y, 
-                            uniforms[key].z
-                        );
-                    } else if (uniforms[key] instanceof THREE.Vector2) {
-                        material.uniforms[key].value.set(
-                            uniforms[key].x, 
-                            uniforms[key].y
-                        );
-                    } else if (typeof uniforms[key].value === 'number') {
-                        material.uniforms[key].value.set(uniforms[key].value);
-                    } else {
-                        console.warn('Unknown uniform type', key, uniforms[key]);
-                    }
-
-
-
-                    // console.warn('unknown uniform type',key,uniforms[key],typeof uniforms[key].value)
-                    
-                    //else{
-                    //     // console.warn('passing single argument', {key}, uniforms[key], 'to', material.uniforms[key].value)
-                    //     // console.warn({
-                    //     //     a: typeof material.uniforms[key],
-                    //     //     b: typeof material.uniforms[key].value,
-                    //     //     c: typeof uniforms[key],
-                    //     // });
-                    //     // apply the single argument to the uniforms set function
-                    //     if(typeof material.uniforms[key].value?.set !== 'function'){
-                    //         material.uniforms[key].value = uniforms[key];
-                    //     }else{
-                    //         material.uniforms[key].value.set(uniforms[key]);
-                    //     }
-                    // }
-                });
-                return material;
-            }
+            
 
             resizeCanvas();
             resetPingPong();
@@ -1526,7 +1394,7 @@
             if(url.includes('.gif')){
                 //window.setVideoAsChannel(url);
                 //return;
-                console.warn('gifs not supported yet :/')
+                console.error('gifs not supported yet :/')
             }
 
             window.inputTextureA = await textureLoader.loadAsync(url);
@@ -1549,7 +1417,8 @@
             window.originalPixelDataTexture.image = window.inputTextureA.image;
             window.originalPixelDataTexture.needsUpdate = true;
 
-            window.targetInputTexture = window.inputTextureA;
+            window.userInputTexture = window.inputTextureA.clone();
+            window.targetInputTexture = window.userInputTexture;
         }
 
         window.settings = {
@@ -1600,10 +1469,12 @@
             updateMaterialUniforms(window.outputMaterialA, {
                 iChannel0: window.outputTextureA,
                 iChannel1: window.inputTextureB,
+                iChannel3: window.userInputTexture,
             });
             updateMaterialUniforms(window.outputMaterialB, {
                 iChannel0: window.outputTextureA,
                 iChannel1: window.outputTextureB,
+                iChannel3: window.userInputTexture,
             });
 
             
@@ -1733,7 +1604,7 @@
                 .name( 'Pixel Density' )
                 .onChange( window.resizeCanvas );
 
-            panel.add(settings, 'numLights', 1, 3, 1)
+            panel.add(settings, 'numLights', 1, 3, 1.01)
                 .name( 'Num Lights #️⃣💡' )
         
             panel.add(settings, 'alphaShadow', 0, 1, 0.01)
@@ -1820,26 +1691,47 @@
                     window.vec2MouseWheelRaw.y = 10;
                     settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
+                console.warn(e.key);
                 // arrows drive iMouseRaw
                 if(e.key === 'ArrowUp'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.y += 10;
-                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
+                    window.mouseY -= 10;
                 }
                 if(e.key === 'ArrowDown'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.y -= 10;
-                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
+                    window.mouseY += 10;
                 }
                 if(e.key === 'ArrowLeft'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.x -= 10;
+                    window.mouseX -= 10;
                 }
                 if(e.key === 'ArrowRight'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.x += 10;
+                    window.mouseX += 10;
                 }
             });
+
+            panel.add({
+                toggleFullscreen: function() {
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen();
+                    } else {
+                        document.documentElement.requestFullscreen();
+                    }
+                }
+            }, 'toggleFullscreen').name('[f] fullscreen');
+
+            // panel.add({
+            //     toggleSlowMotion: function() {
+            //         window.toggleSlowMotion();
+            //     }
+            // }, 'toggleSlowMotion').name('[s] slow motion');
+
+            panel.add({
+                randomWalk: function() {
+                    window.randomWalk();
+                }
+            }, 'randomWalk').name('[r] random walk');
 
             // panel.add( settings, 'res', 1, 6, 1 )
             //     .name( 'Res' )
@@ -2303,34 +2195,34 @@
         window.uScrollOffsetYSpeed = 0.05;
         window.uScrollOffsetXSpeed = -0.05;
 
-        window.bigSweepActive = false, window.bigSweepInterval = 0;
-        window.sweepFactor = 0.1;
-        window.tickBigSweep = function() {
-            if (window.bigSweepActive) {
-                window.mouseX = (Math.sin(Date.now() * 0.001) + 1) * ((window.innerWidth / 2) * window.sweepFactor);
-                window.mouseY = (Math.cos(Date.now() * 0.001) + 1) * ((window.innerHeight / 2) * window.sweepFactor);
-            }
-        }
-        window.toggleBigSweep = function(){
-            window.bigSweepActive = !window.bigSweepActive;
-            console.warn("window.bigSweepActive",window.bigSweepActive);   
-        }
+        // window.bigSweepActive = false, window.bigSweepInterval = 0;
+        // window.sweepFactor = 0.1;
+        // window.tickBigSweep = function() {
+        //     if (window.bigSweepActive) {
+        //         window.mouseX = (Math.sin(Date.now() * 0.001) + 1) * ((window.innerWidth / 2) * window.sweepFactor);
+        //         window.mouseY = (Math.cos(Date.now() * 0.001) + 1) * ((window.innerHeight / 2) * window.sweepFactor);
+        //     }
+        // }
+        // window.toggleBigSweep = function(){
+        //     window.bigSweepActive = !window.bigSweepActive;
+        //     console.warn("window.bigSweepActive",window.bigSweepActive);   
+        // }
 
-        window.jiggleSwirl = false;
-        window.swirlFreq = 1;
-        window.swirlMax = 1;
-        window.toggleJiggleSwirl = function(){
-            window.jiggleSwirl = !window.jiggleSwirl;
-            console.warn("window.jiggleSwirl",window.jiggleSwirl);
+        // window.jiggleSwirl = false;
+        // window.swirlFreq = 1;
+        // window.swirlMax = 1;
+        // window.toggleJiggleSwirl = function(){
+        //     window.jiggleSwirl = !window.jiggleSwirl;
+        //     console.warn("window.jiggleSwirl",window.jiggleSwirl);
 
-            clearInterval(window.mouseJiggler); 
-            if(window.jiggleSwirl){
-                window.mouseJiggler = setInterval(
-                    ()=>{
-                        window.mouseX = (Math.sin(Date.now()*window.swirlFreq*0.0015) * window.swirlMax*256)
-                    },16)
-            }
-        }
+        //     clearInterval(window.mouseJiggler); 
+        //     if(window.jiggleSwirl){
+        //         window.mouseJiggler = setInterval(
+        //             ()=>{
+        //                 window.mouseX = (Math.sin(Date.now()*window.swirlFreq*0.0015) * window.swirlMax*256)
+        //             },16)
+        //     }
+        // }
         
         document.addEventListener('DOMContentLoaded', async () => {
             let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
@@ -2409,14 +2301,29 @@
         },false)
 
 
+        let startTouchesDistance = 0;
         document.addEventListener('touchmove',async(e)=>{
             mouseX = e.touches[0].clientX;
             mouseY = e.touches[0].clientY;
             lastMouseMoveWasFake = false;
+            if(e.touches.length > 1) {
+                let currentTouchesDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                vec2MouseWheelRaw.y = startTouchesDistance - currentTouchesDistance;
+                startTouchesDistance = currentTouchesDistance;
+            }
         })
         document.addEventListener('touchstart',async(e)=>{
             mouseX = e.touches[0].clientX;
             mouseY = e.touches[0].clientY;
+            if(e.touches.length > 1) {
+                startTouchesDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            }
         })
 
         // Mobile double-tap detection

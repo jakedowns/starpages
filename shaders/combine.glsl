@@ -27,11 +27,36 @@ vec3 rgb2hsv(vec3 c) {
 
 void main() {
     vec2 uv = gl_FragCoord.xy / iResolution.xy;
-    vec4 currentColor = texture2D(iChannel0, uv.xy);
-    vec4 previousColor = texture2D(iChannel1, uv.xy);
     
-    // decay
-    previousColor = previousColor * 0.999;
+    
+    
 
-    gl_FragColor = mix(currentColor, previousColor, 0.5);
+    // // if we're on the left half draw the full "previous" color
+    // if (uv.x < 0.5) {
+    //     uv.x = uv.x * 2.0;
+        vec4 previousColor = texture2D(iChannel1, uv.xy);
+    // decay
+    previousColor = previousColor * .9;
+    //     gl_FragColor = previousColor;
+    //     return;
+    // }else{
+    //     uv.x = (uv.x - 0.5) * 2.0;
+        vec4 currentColor = texture2D(iChannel0, uv.xy);
+    //     gl_FragColor = currentColor;
+    // }
+
+    // small chance of black pixel (noise)
+    if (fract(sin(dot(uv.xy ,vec2(12.9898,78.233))) * 43758.5453) < 0.01) {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+
+    gl_FragColor = previousColor + currentColor;
+
+    // hue shift
+    vec3 hsv = rgb2hsv(gl_FragColor.rgb);
+    hsv.x += 0.1;
+    gl_FragColor.rgb = hsv2rgb(hsv);
+
 }

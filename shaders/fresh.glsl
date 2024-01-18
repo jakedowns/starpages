@@ -4,6 +4,7 @@ uniform float iTime;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform sampler2D iChannel2; // normal map
+uniform sampler2D iChannel3; // user upload
 uniform vec3 iResolution;
 uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
@@ -51,44 +52,11 @@ float fastsqrt(float x) {
 }
 
 // Shader main code
-void main() {
+void main_inner(vec2 uv) {
 
-    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
-    vec2 mouse = (iMouseRaw.xy - 0.5 * iResolution.xy) / iResolution.y;
-
-    // // draw a debug bar graph that shows the mouse wheel value
-    // float barWidth = 0.01;
-    // float barHeight = 0.1;
-    // float barX = 0.5 - barWidth / 2.0;
-    // float barY = 0.5 - barHeight / 2.0;
-    // float barValue = iMouseWheel.y;
-    // if (barValue < 0.0) {
-    //     barValue = 0.0;
-    // }
-    // if (barValue > 1.0) {
-    //     barValue = 1.0;
-    // }
-    // if (uv.x > barX && uv.x < barX + barWidth && uv.y > barY && uv.y < barY + barHeight) {
-    //     gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-    //     return;
-    // }
-
-    // // if(iMouse.z > 0.0){
-    // //     gl_FragColor = vec4(1.0,0.0,0.0,1.0);
-    // //     return;
-    // // }
-    
-    // // gl_FragColor = vec4(uv.x*10., uv.y*10., 1.0, 1.0);
-    // // gl_FragColor = (vec4(gl_FragCoord.x, gl_FragCoord.y, 0.0, 1.0) + gl_FragColor) / 2.0;
-    // // gl_FragColor = (vec4(mouse.x, mouse.y, 0.0, 1.0) + gl_FragColor) / 2.0;
-
-    // // circle
-    // float radius = clamp(abs(iMouseWheel.y * 0.01),-1.,1.);
-    // if(length(uv - mouse) < radius){
-    //     gl_FragColor = vec4(1.0,0.0,0.0,1.0);
-    //     return;
-    // }
-    // return;
+    //vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+    vec2 mouse = (iMouse.xy - 0.5 * iResolution.xy) / iResolution.y;
+    mouse += 0.25;
 
     if (iResolution.z > 1.0) {
         mouse *= iMouse.z;
@@ -136,14 +104,25 @@ void main() {
     // colorUV1 = mix(colorUV1, ambientLightColor.rgb, ambientLightColor.a);
     // colorUV2 = mix(colorUV2, ambientLightColor.rgb, ambientLightColor.a);
     // colorUV3 = mix(colorUV3, ambientLightColor.rgb, ambientLightColor.a);
+
+    // vec3 sphereSurface = sphereCenter + sphereNormal * radius;
+    // sphereSurface = vec3(uv, 0.0) + sphereNormal * radius;
+    // vec3 toLight4 = normalize(sphereSurface - sphereCenter);
+    // diff = max(dot(sphereNormal, toLight4), 0.0);
+    // vec4 colorUserInput = texture2D(iChannel3, gl_FragCoord.xy / iResolution.xy);
+    // vec3 colorUV4 = colorUserInput.rgb; // todo * diff
+
     //Combine the three lights
     vec3 colorUV = colorUV1;
-    if(numLights >= 2.0){
+    // if(numLights > 2.0){
         colorUV += colorUV2 + colorUV3;
-    }
-    else if(numLights >= 1.0){
-        colorUV += colorUV2;
-    }
+    // }
+    // else if(numLights > 1.0){
+    //     colorUV += colorUV2;
+    // }
+
+    // colorUV += colorUV4;
+    // colorUV = colorUV4;
 
     
 
@@ -192,25 +171,41 @@ void main() {
     }
     return;
 
-/*
+    /*
 
-    // Increase the frequency over time to create a zooming effect
-    float zoom = sin(iTime*.1) * 10. + 10.;
-    float checker = mod(floor((mouse.x + zoom) * uv.x) + floor((mouse.y + zoom) * uv.y), 4.0);
+        // Increase the frequency over time to create a zooming effect
+        float zoom = sin(iTime*.1) * 10. + 10.;
+        float checker = mod(floor((mouse.x + zoom) * uv.x) + floor((mouse.y + zoom) * uv.y), 4.0);
 
-    // Apply a scrolling gradient using sin and cos
-    float gradient = 0.5 * (sin(iTime + uv.x) + cos(iTime + uv.y));
+        // Apply a scrolling gradient using sin and cos
+        float gradient = 0.5 * (sin(iTime + uv.x) + cos(iTime + uv.y));
 
-    vec3 hsv = vec3(gradient, 1.0, 1.0);
+        vec3 hsv = vec3(gradient, 1.0, 1.0);
 
-    // Mix the original color with the gradient
-    // vec3 color = mix(vec3(1.0), vec3(0.8), checker);
-    // color = mix(color, vec3(gradient), 0.5);
-    // Mix the original color with the gradient
-    vec3 color = mix(vec3(1.0), vec3(0.8), checker);
-    color = mix(color, vec3(gradient), 0.5);
-    //color = hsv2rgb(hsv);
+        // Mix the original color with the gradient
+        // vec3 color = mix(vec3(1.0), vec3(0.8), checker);
+        // color = mix(color, vec3(gradient), 0.5);
+        // Mix the original color with the gradient
+        vec3 color = mix(vec3(1.0), vec3(0.8), checker);
+        color = mix(color, vec3(gradient), 0.5);
+        //color = hsv2rgb(hsv);
 
-    iBuffer0 = vec4(color, 1.0);
-*/
+        iBuffer0 = vec4(color, 1.0);
+    */
+}
+
+void main(){
+    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+    // if we're on the left half draw the full "previous" color
+    // float baselineShift = 0.05; // Define the baseline shift value
+    // if (uv.x < 0.) {
+    //     uv.x = (uv.x * 2.0) - baselineShift; // Shift uv.x for left eye
+    //     uv.y = uv.y * 2.0; // hold aspect ratio
+    //     main_inner(uv.xy);
+    // }else{
+    //     uv.x = ((uv.x - 0.5) * 2.0) + baselineShift; // Shift uv.x for right eye
+    //     uv.y = uv.y * 2.0; // hold aspect ratio
+    //     main_inner(uv.xy);
+    // }
+    main_inner(uv.xy);
 }
