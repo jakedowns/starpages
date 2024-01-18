@@ -321,7 +321,13 @@
     <script type="module">
         import * as THREE from 'three';
         //import { WebGPURenderer } from 'three/addons/renderers/webgpu/WebGPURenderer.js';
+        import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+        import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+        import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
         let canvas;
+        
+
         const dpr = window.devicePixelRatio;
         const presentationFormat = navigator?.gpu?.getPreferredCanvasFormat();
         window.pixelWidth = window.innerWidth;
@@ -852,6 +858,19 @@
             camera.position.z = 4;
 
             window.scene = new THREE.Scene();
+
+            window.composer = new EffectComposer(renderer);
+            window.renderPass = new RenderPass(scene, camera);
+            composer.addPass(renderPass);
+
+            // vignettePass.uniforms["offset"].value = 1.0;
+            // vignettePass.uniforms["darkness"].value = 1.5;
+
+            // let shaderPass = new ShaderPass();
+            // composer.addPass(shaderPass);
+
+            window.vignettePass = new ShaderPass(VignetteShader);
+            composer.addPass(vignettePass);
 
             // Full-screen plane geometry
             window.planeGeometry = new THREE.PlaneGeometry(2 * aspect, 2);
@@ -1479,50 +1498,50 @@
 
             
 
-            if(settings.useDoubleBuffer){
-                try{
-                    plane.material = window.outputMaterialA;
-                    window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureB.texture;
-                    window.outputMaterialA.uniformsNeedUpdate = true;
-                    renderer.setRenderTarget(window.outputTextureA);
-                    renderer.render(scene, camera);
-                    window.outputTextureA.needsUpdate = true;
-                    // // Use the rendered texture as input for the next pass
-                    // window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
-                    // window.outputMaterialB.uniformsNeedUpdate = true;
+            // if(settings.useDoubleBuffer){
+            //     try{
+            //         plane.material = window.outputMaterialA;
+            //         window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureB.texture;
+            //         window.outputMaterialA.uniformsNeedUpdate = true;
+            //         renderer.setRenderTarget(window.outputTextureA);
+            //         renderer.render(scene, camera);
+            //         window.outputTextureA.needsUpdate = true;
+            //         // // Use the rendered texture as input for the next pass
+            //         // window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+            //         // window.outputMaterialB.uniformsNeedUpdate = true;
 
-                    // // now render that to a texture
-                    // renderer.setRenderTarget(window.outputTextureB);
-                    // renderer.render(scene, camera);
+            //         // // now render that to a texture
+            //         // renderer.setRenderTarget(window.outputTextureB);
+            //         // renderer.render(scene, camera);
 
-                    // window.outputTextureB.needsUpdate = true;
+            //         // window.outputTextureB.needsUpdate = true;
 
-                }catch(e){
-                    console.error(e);
-                }
-            }
+            //     }catch(e){
+            //         console.error(e);
+            //     }
+            // }
             
-            plane.material = window.outputMaterialB;
-            window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
-            window.outputMaterialB.uniforms.iChannel1.value = window.outputTextureB.texture;
-            window.outputMaterialB.uniformsNeedUpdate = true;
+            // plane.material = window.outputMaterialB;
+            // window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+            // window.outputMaterialB.uniforms.iChannel1.value = window.outputTextureB.texture;
+            // window.outputMaterialB.uniformsNeedUpdate = true;
             // Reset render target back to the canvas
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
 
-            if(settings.useDoubleBuffer){
-                // continually swap the textures (ping-pong buffer trade's off read/write duty)
-                let tempA = window.outputTextureA;
-                window.outputTextureA = window.outputTextureB;
-                window.outputTextureB = tempA;
-                window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
-                window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
-                window.outputMaterialA.uniformsNeedUpdate = true;
-                window.outputMaterialB.uniformsNeedUpdate = true;
-            }else{
-                // keep them the same
-                // noop
-            }
+            // if(settings.useDoubleBuffer){
+            //     // continually swap the textures (ping-pong buffer trade's off read/write duty)
+            //     let tempA = window.outputTextureA;
+            //     window.outputTextureA = window.outputTextureB;
+            //     window.outputTextureB = tempA;
+            //     window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
+            //     window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+            //     window.outputMaterialA.uniformsNeedUpdate = true;
+            //     window.outputMaterialB.uniformsNeedUpdate = true;
+            // }else{
+            //     // keep them the same
+            //     // noop
+            // }
 
             if(window.capturing){
                 window.currentFrameDelta = targetRecordingFPS / 1000;
@@ -1545,6 +1564,7 @@
                 window.currentFrameDelta = performance.now() - frameStart;
                 // next frame
                 requestAnimationFrame(animate);
+                composer.render();
             }
         }
 
