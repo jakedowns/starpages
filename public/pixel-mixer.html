@@ -50,8 +50,17 @@
     <!-- <meta property="og:locale:alternate" content="fr_FR" /> -->
     <!-- <meta property="og:locale:alternate" content="es_ES" /> -->
     <meta property="og:site_name" content="Pixel Mixer" />
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script> -->
+    <script src="/public/three/build/three-webgpu.module.js" type="module"></script>
+    <!-- <script src="/public/three/examples/jsm/renderers/webgpu/WebGPURenderer.js" type="module"></script> -->
+    
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.umd.js"></script>
@@ -310,6 +319,10 @@
     
     <canvas id="canvas" class="undarken"></canvas>
     <script>
+        // import * as THREE from 'three';
+        // import { WebGPURenderer } from 'three/addons/renderers/webgpu/WebGPURenderer.js';
+
+        const dpr = window.devicePixelRatio;
         window.pixelWidth = window.innerWidth;
         window.pixelHeight = window.innerHeight;
         window.canvas;
@@ -518,6 +531,8 @@
             window.outputTextureA.texture.minFilter = THREE.NearestFilter;
             window.outputTextureA.texture.wrapS = THREE.MirroredRepeatWrapping;
             window.outputTextureA.texture.wrapT = THREE.MirroredRepeatWrapping;
+            window.outputTextureA.depthTexture = new THREE.DepthTexture();
+            window.outputTextureA.depthTexture.type = THREE.FloatType;
             window.outputTextureA.needsUpdate = true;
 
             window.outputTextureB = new THREE.WebGLRenderTarget(safePXDims.x, safePXDims.y);
@@ -525,6 +540,8 @@
             window.outputTextureB.texture.minFilter = THREE.NearestFilter;
             window.outputTextureB.texture.wrapS = THREE.MirroredRepeatWrapping;
             window.outputTextureB.texture.wrapT = THREE.MirroredRepeatWrapping;
+            window.outputTextureB.depthTexture = new THREE.DepthTexture();
+            window.outputTextureB.depthTexture.type = THREE.FloatType;
             window.outputTextureB.needsUpdate = true;
 
             window._originalOutputTextureA = window.outputTextureA;
@@ -670,9 +687,12 @@
                 handleFileInput(e);
             });
             canvas = document.getElementById("canvas");
-            window.renderer = new THREE.WebGLRenderer({canvas});
+            window.renderer = new THREE.WebGPURenderer({canvas, antialias: true});
             //renderer.setClearColor(0x000000, 1.0);
             renderer.autoClear = false;
+            renderer.setPixelRatio( dpr );
+            renderer.setSize( window.innerWidth, window.innerHeight );
+				
 
             // "real" size, full screen
             canvas.width = pixelWidth;
@@ -763,12 +783,25 @@
             window.mouseLerping = new THREE.Vector4(window.innerWidth/2,window.innerHeight/2, 0, 0);
             window.iMouseWheel = new THREE.Vector4(0, 10, 0, 0);
 
+            window.normalTexture = new THREE.WebGLRenderTarget(safePXDims.x, safePXDims.y);
+            window.normalTexture.texture.magFilter = THREE.NearestFilter;
+            window.normalTexture.texture.minFilter = THREE.NearestFilter;
+            window.normalTexture.texture.wrapS = THREE.MirroredRepeatWrapping;
+            window.normalTexture.texture.wrapT = THREE.MirroredRepeatWrapping;
+            window.normalTexture.needsUpdate = true;
+
             let DEFAULT_U_VALUES = {
                 // compatibility uniforms
                 iTime: { value: 1.0 },
                 iChannel0: { value: inputTextureA.texture },
                 iChannel1: { value: inputTextureB.texture },
-                // iChannel2: { value: outputTextureB },
+                iChannel2: { value: normalTexture.texture },
+
+
+                // output buffer slot 1
+                iBuffer0: { value: outputTextureA.texture },
+                iBuffer1: { value: normalTexture.texture },
+
                 iResolution: { value: new THREE.Vector3(0) },
                 iMouse: { value: window.mouseLerping },
                 iMouseRaw: { value: window.mouseRaw },
@@ -782,6 +815,7 @@
             }   
 
             window.outputMaterialA = new THREE.ShaderMaterial({
+                glslVersion: THREE.GLSL3,
                 uniforms: {
                     ...DEFAULT_U_VALUES
                 },
@@ -797,6 +831,7 @@
             // do a SECOND material
             // tied to combineTexturesShaderSource
             window.outputMaterialB = new THREE.ShaderMaterial({
+                glslVersion: THREE.GLSL3,
                 uniforms: {
                     ...DEFAULT_U_VALUES
                 },
@@ -1469,15 +1504,15 @@
             
             useDoubleBuffer: true,
             ambientLightColor: {r:0.0,g:0.0,b:0.0,a:0.0},
-            ambientLightColorAlpha: 0.1,
+            ambientLightColorAlpha: 0.01,
             numLights: 3,
-            alphaShadow: 0.0,
-            decayColorAlpha: 0.01,
+            alphaShadow: 0.9,
+            decayColorAlpha: 0.001,
             mixNormals: 0,
             radius: 10.0,
             decayColor: {r: 0.0, g: 0.0, b: 0.0, a: 0.01},
 
-            clickMouseToDraw: true
+            clickMouseToDraw: 0
         }
 
         window.onSettingsChanged = function(){
@@ -1775,54 +1810,7 @@
             //  window.fragmentShaderSource = await (await fetch("../shaders/uber-shader.glsl")).text();
             // window.fragmentShaderSource = await (await fetch("../shaders/frosted-video-mandlebulb.glsl")).text();
             // window.fragmentShaderSource = await (await fetch("../shaders/simple-ripple.glsl")).text();
-            window.combineTexturesShaderSource = `
-            // Fragment shader
-            uniform sampler2D iChannel0;
-            uniform sampler2D iChannel1;
-            uniform vec3 iResolution;
-            uniform float iTime;
-            uniform vec4 iMouse;
-            uniform vec4 iMouseRaw;
-            uniform vec4 iMouseWheel;
-            uniform int numLights;
-
-            vec3 hsv2rgb(vec3 c) {
-                vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-                vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-                return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-            }
-
-            vec3 rgb2hsv(vec3 c) {
-                float eps = 1e-10;
-                vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-                vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-                vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-                float d = q.x - min(q.w, q.y);
-                float e = eps * 1.0e3;
-                return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-            }
-
-            void main() {
-                vec2 uv = gl_FragCoord.xy / iResolution.xy;
-                vec4 currentColor = texture2D(iChannel0, uv.xy);
-                vec4 previousColor = texture2D(iChannel1, uv.xy);
-                // decay
-                previousColor = previousColor * 0.9999999;
-
-                vec3 b = rgb2hsv(previousColor.rgb);
-                b.x += 0.01 * iTime;
-                b.x = mod(b.x, 1.0);
-                vec3 c = hsv2rgb(b);
-                previousColor.rgb = c;
-
-
-                // gl_FragColor = currentColor + previousColor;
-                // apply a "smear" effect between the two
-                float smearFactor = max(0.1, 1.0 - iTime);
-                vec4 smearColor = mix(previousColor, currentColor, smearFactor);
-                gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
-            }
-            `;
+            window.combineTexturesShaderSource = await (await fetch("/starpages/shaders/combine.glsl")).text();
             prepareCCapture();
             setupThree();
         }

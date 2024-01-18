@@ -7,7 +7,7 @@
 	"scripts": {
 		"start": "concurrently 'node server.mjs' 'npx vite'",
 		"build": "vite build",
-    	"preview": "vite preview"
+		"preview": "vite preview"
 	},
 	"keywords": [],
 	"author": "",
