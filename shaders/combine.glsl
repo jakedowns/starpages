@@ -42,18 +42,20 @@ void main() {
     //     gl_FragColor = currentColor;
     // }
 
-    // small chance of black pixel (noise)
-    if (fract(sin(dot(uv.xy ,vec2(12.9898,78.233))) * 43758.5453) < 0.01) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
-    }
-
 
     gl_FragColor = previousColor + currentColor;
 
+    // small chance of brightness increase or decrease (noise)
+    float noise = fract(sin(dot(uv.xy ,vec2(12.9898,78.233))) * 43758.5453);
+    if (noise < 0.01) {
+        float brightness = noise * 2.0 - 1.0; // random brightness change between -1 and 1
+        gl_FragColor += vec4(brightness, brightness, brightness, 0.0);
+        return;
+    }
+
     // hue shift
     vec3 hsv = rgb2hsv(gl_FragColor.rgb);
-    hsv.x += 1.0 / 360.0;
+    hsv.x += 1.0 / (360.0/255.0);
     hsv.x = mod(hsv.x, 1.0);
     gl_FragColor.rgb = hsv2rgb(hsv);
 
