@@ -1,7 +1,11 @@
 // Comment these out to past into shadertoy
+layout(location = 1) out vec4 iBuffer0;
+layout(location = 2) out vec4 iBuffer1;
+
 uniform float iTime;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
+uniform sampler2D iChannel2; // normal map
 uniform vec3 iResolution;
 uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
@@ -126,21 +130,23 @@ void main() {
             doDraw = 1.;
         }
     }
+    // write to normal map
+    iBuffer1 = vec4(texture2D(iChannel2, uv), 1.0);
     if(length(uv - mouse) < radius && doDraw > 0.){
 
         if(fxFloats.x > -1.0) {
-            // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
-            gl_FragColor.a = ((colorUV.r) + (colorUV.g) + (colorUV.b)) / 3.0;
+            // iBuffer0.a = ((iBuffer0.r * .4) + (iBuffer0.g * 1.3) + (iBuffer0.b * .9)) / 3.0;
+            iBuffer0.a = ((colorUV.r) + (colorUV.g) + (colorUV.b)) / 3.0;
         }
 
         colorUV = mix(colorUV, colorNormalMap, fxFloats.y);
 
-        gl_FragColor = vec4(colorUV, 1.0);
+        iBuffer1 = vec4(colorUV, 1.0);
 
 
         if(fxFloats.x > 0.0) {
-            // gl_FragColor = vec4(100.0,0.0,0.0, 1.0);
-            // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+            // iBuffer0 = vec4(100.0,0.0,0.0, 1.0);
+            // iBuffer0.a = ((iBuffer0.r * .4) + (iBuffer0.g * 1.3) + (iBuffer0.b * .9)) / 3.0;
             gl_FragColor.a = ((gl_FragColor.r) + (gl_FragColor.g) + (gl_FragColor.b)) / 3.0;
             gl_FragColor.a *= fxFloats.x;
         }else{
@@ -154,9 +160,9 @@ void main() {
 
     // If the pixel is not within the radius of the hemisphere, apply a default color and return
     gl_FragColor = decayColor;
-    //gl_FragColor.a = 0.;
+    //iBuffer0.a = 0.;
     if(fxFloats.x <= 0.0){
-        gl_FragColor.a = 1.0;
+        iBuffer0.a = 1.0;
     }
     return;
 
@@ -179,6 +185,6 @@ void main() {
     color = mix(color, vec3(gradient), 0.5);
     //color = hsv2rgb(hsv);
 
-    gl_FragColor = vec4(color, 1.0);
+    iBuffer0 = vec4(color, 1.0);
 */
 }
