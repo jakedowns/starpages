@@ -1,6 +1,7 @@
 // Comment these out to past into shadertoy
 
 uniform float iTime;
+uniform float num_lights;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform sampler2D iChannel2; // normal map
@@ -9,7 +10,6 @@ uniform vec3 iResolution;
 uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
 uniform vec4 iMouseWheel;
-uniform float numLights;
 uniform vec4 fxFloats;
 uniform vec4 ambientLightColor;
 uniform vec4 decayColor;
@@ -113,13 +113,15 @@ void main_inner(vec2 uv) {
     // vec3 colorUV4 = colorUserInput.rgb; // todo * diff
 
     //Combine the three lights
-    vec3 colorUV = colorUV1;
-    // if(numLights > 2.0){
-        colorUV += colorUV2 + colorUV3;
-    // }
-    // else if(numLights > 1.0){
-    //     colorUV += colorUV2;
-    // }
+    vec3 colorUV = vec3(0.0);
+    if(fxFloats.w >= 0.6){
+        colorUV = colorUV1 + colorUV2 + colorUV3;
+    }
+    else if(fxFloats.w >= 0.3){
+        colorUV = colorUV1 + colorUV2;
+    }else{
+        colorUV = colorUV1;
+    }
 
     // colorUV += colorUV4;
     // colorUV = colorUV4;
@@ -134,6 +136,7 @@ void main_inner(vec2 uv) {
     // fxFloats.x = alphaShadow
     // fxFloats.y = mixNormals
     // fxFloats.z = clickMouseToDraw
+    // fxFloats.w = num_lights
     float doDraw = 1.;
     if(fxFloats.z > 0.){
         doDraw = 0.;
@@ -144,7 +147,7 @@ void main_inner(vec2 uv) {
     // write to normal map
     //iBuffer1 = vec4(texture2D(iChannel2, uv), 1.0);
 
-    if(length(uv - mouse) < radius){
+    if(length(uv - mouse) < radius && doDraw > 0.){
         colorUV = mix(colorUV, colorNormalMap, fxFloats.y);
 
         //iBuffer1 = vec4(colorUV, 1.0);
@@ -197,15 +200,15 @@ void main_inner(vec2 uv) {
 void main(){
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
     // if we're on the left half draw the full "previous" color
-    // float baselineShift = 0.05; // Define the baseline shift value
-    // if (uv.x < 0.) {
-    //     uv.x = (uv.x * 2.0) - baselineShift; // Shift uv.x for left eye
-    //     uv.y = uv.y * 2.0; // hold aspect ratio
-    //     main_inner(uv.xy);
-    // }else{
-    //     uv.x = ((uv.x - 0.5) * 2.0) + baselineShift; // Shift uv.x for right eye
-    //     uv.y = uv.y * 2.0; // hold aspect ratio
-    //     main_inner(uv.xy);
-    // }
-    main_inner(uv.xy);
+    float baselineShift = 0.05; // Define the baseline shift value
+    if (uv.x < 0.) {
+        uv.x = (uv.x * 2.0) - baselineShift; // Shift uv.x for left eye
+        uv.y = uv.y * 2.0; // hold aspect ratio
+        main_inner(uv.xy);
+    }else{
+        uv.x = ((uv.x - 0.5) * 2.0) + baselineShift; // Shift uv.x for right eye
+        uv.y = uv.y * 2.0; // hold aspect ratio
+        main_inner(uv.xy);
+    }
+    // main_inner(uv.xy);
 }
