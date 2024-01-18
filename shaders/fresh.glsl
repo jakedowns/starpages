@@ -54,9 +54,41 @@ float fastsqrt(float x) {
 void main() {
 
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
-    vec2 mouse = (iMouse.xy - 0.5 * iResolution.xy) / iResolution.y;
+    vec2 mouse = (iMouseRaw.xy - 0.5 * iResolution.xy) / iResolution.y;
+
+    // draw a debug bar graph that shows the mouse wheel value
+    float barWidth = 0.01;
+    float barHeight = 0.1;
+    float barX = 0.5 - barWidth / 2.0;
+    float barY = 0.5 - barHeight / 2.0;
+    float barValue = iMouseWheel.y;
+    if (barValue < 0.0) {
+        barValue = 0.0;
+    }
+    if (barValue > 1.0) {
+        barValue = 1.0;
+    }
+    if (uv.x > barX && uv.x < barX + barWidth && uv.y > barY && uv.y < barY + barHeight) {
+        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    // if(iMouse.z > 0.0){
+    //     gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+    //     return;
+    // }
     
-    gl_FragColor = vec4(gl_FragCoord.x, gl_FragCoord.y, 0.0, 1.0);
+    // gl_FragColor = vec4(uv.x*10., uv.y*10., 1.0, 1.0);
+    // gl_FragColor = (vec4(gl_FragCoord.x, gl_FragCoord.y, 0.0, 1.0) + gl_FragColor) / 2.0;
+    // gl_FragColor = (vec4(mouse.x, mouse.y, 0.0, 1.0) + gl_FragColor) / 2.0;
+
+    // circle
+    float radius = clamp(abs(iMouseWheel.y * 0.01),-1.,1.);
+    if(length(uv - mouse) < radius){
+        gl_FragColor = vec4(1.0,0.0,0.0,1.0);
+        return;
+    }
+    return;
 
     // if (iResolution.z > 1.0) {
     //     mouse *= iMouse.z;
@@ -100,6 +132,16 @@ void main() {
     // vec3 toLight3 = normalize(lightPos3 - sphereCenter);
     // diff = max(dot(sphereNormal, toLight3), 0.0);
     // vec3 colorUV3 = diff * vec3(0.15, 0.62, 0.33); // Third light color
+    // Combine the three lights
+    // vec3 colorUV = colorUV1;
+    // //colorUV = colorUV1 + colorUV2 + colorUV3;
+
+    // if(numLights >= 2.0){
+    //     colorUV += colorUV2 + colorUV3;
+    // }
+    // else if(numLights >= 1.0){
+    //     colorUV += colorUV2;
+    // }
 
     // // Incorporate ambientLightColor using a different blend than add for highlight/shadow
     // colorUV1 = mix(colorUV1, ambientLightColor.rgb, ambientLightColor.a);

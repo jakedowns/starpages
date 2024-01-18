@@ -18,6 +18,7 @@
 		"concurrently": "^8.2.2",
 		"create-vite": "^5.1.0",
 		"lil-gui": "^0.19.1",
+		"spectorjs": "^0.9.29",
 		"three": "^0.160.0"
 	},
 	"devDependencies": {

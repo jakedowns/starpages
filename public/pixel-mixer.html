@@ -532,8 +532,8 @@
             window.outputTextureA.texture.minFilter = THREE.NearestFilter;
             window.outputTextureA.texture.wrapS = THREE.MirroredRepeatWrapping;
             window.outputTextureA.texture.wrapT = THREE.MirroredRepeatWrapping;
-            window.outputTextureA.depthTexture = new THREE.DepthTexture();
-            window.outputTextureA.depthTexture.type = THREE.FloatType;
+            // window.outputTextureA.depthTexture = new THREE.DepthTexture();
+            // window.outputTextureA.depthTexture.type = THREE.FloatType;
             window.outputTextureA.needsUpdate = true;
 
             window.outputTextureB = new THREE.WebGLRenderTarget(safePXDims.x, safePXDims.y);
@@ -541,8 +541,8 @@
             window.outputTextureB.texture.minFilter = THREE.NearestFilter;
             window.outputTextureB.texture.wrapS = THREE.MirroredRepeatWrapping;
             window.outputTextureB.texture.wrapT = THREE.MirroredRepeatWrapping;
-            window.outputTextureB.depthTexture = new THREE.DepthTexture();
-            window.outputTextureB.depthTexture.type = THREE.FloatType;
+            // window.outputTextureB.depthTexture = new THREE.DepthTexture();
+            // window.outputTextureB.depthTexture.type = THREE.FloatType;
             window.outputTextureB.needsUpdate = true;
 
             window._originalOutputTextureA = window.outputTextureA;
@@ -608,7 +608,7 @@
             //         vec2MouseWheelRaw.x, 
             //         vec2MouseWheelRaw.y
             //     );
-            //     material.uniforms.numLights = window.settings.numLights;
+            //     material.uniforms.numLights.value = window.settings.numLights.value;
             // };
             
             // setUniforms(window.outputMaterialA);
@@ -620,9 +620,26 @@
             uniforms = {...{
                 iTime: cumulativeTime,
                 iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
-                iMouse: window.mouseLerping,
-                iMouseRaw: window.mouseRaw,
-                iMouseWheel: window.iMouseWheel,
+                
+                iMouseRaw: new THREE.Vector3(
+                    window.mouseRaw.x, 
+                    window.mouseRaw.y, 
+                    window.mouseRaw.z, 
+                    0
+                ),
+                iMouse: new THREE.Vector4(
+                    window.mouseLerping.x, 
+                    window.mouseLerping.y, 
+                    window.leftMouseDown ? 1 : -1, 
+                    0
+                ),
+                iMouseWheel: new THREE.Vector4(
+                    vec2MouseWheelLerped.x, 
+                    vec2MouseWheelLerped.y, 
+                    vec2MouseWheelRaw.x, 
+                    vec2MouseWheelRaw.y
+                ),
+
                 numLights: settings.numLights,
                 ambientLightColor: settings.ambientLightColor,
                 decayColor: settings.decayColor,
@@ -802,7 +819,7 @@
             canvas = document.getElementById("canvas");
             window.renderer = new THREE.WebGLRenderer({canvas, alpha: true});
             //renderer.setClearColor(0x000000, 1.0);
-            renderer.autoClear = false;
+            renderer.autoClear = true;
             // renderer.setPixelRatio( dpr );
             renderer.setSize( window.innerWidth, window.innerHeight );
 				
@@ -896,12 +913,12 @@
             window.mouseLerping = new THREE.Vector4(window.innerWidth/2,window.innerHeight/2, 0, 0);
             window.iMouseWheel = new THREE.Vector4(0, 10, 0, 0);
 
-            window.normalTexture = new THREE.WebGLRenderTarget(safePXDims.x, safePXDims.y);
-            window.normalTexture.texture.magFilter = THREE.NearestFilter;
-            window.normalTexture.texture.minFilter = THREE.NearestFilter;
-            window.normalTexture.texture.wrapS = THREE.MirroredRepeatWrapping;
-            window.normalTexture.texture.wrapT = THREE.MirroredRepeatWrapping;
-            window.normalTexture.needsUpdate = true;
+            // window.normalTexture = new THREE.WebGLRenderTarget(safePXDims.x, safePXDims.y);
+            // window.normalTexture.texture.magFilter = THREE.NearestFilter;
+            // window.normalTexture.texture.minFilter = THREE.NearestFilter;
+            // window.normalTexture.texture.wrapS = THREE.MirroredRepeatWrapping;
+            // window.normalTexture.texture.wrapT = THREE.MirroredRepeatWrapping;
+            // window.normalTexture.needsUpdate = true;
 
             let DEFAULT_U_VALUES = {
                 // compatibility uniforms
@@ -919,7 +936,7 @@
                 iMouse: { value: window.mouseLerping },
                 iMouseRaw: { value: window.mouseRaw },
                 iMouseWheel: { value: window.iMouseWheel },
-                numLights: { value: 1 },
+                numLights: { value: settings.numLights },
                 fxFloats: { value: new THREE.Vector4(0) },
                 ambientLightColor: { value: settings.ambientLightColor },
                 ambientLightColorAlpha: { value: settings.ambientLightColorAlpha },
@@ -1087,6 +1104,145 @@
             }
 
             window.progressElement = document.getElementById("progress");
+
+            window.updateMaterialUniforms = function(material, uniforms){
+
+                uniforms = {...{
+                    iTime: cumulativeTime,
+                    iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
+                    iMouse: new THREE.Vector4(
+                        window.mouseLerping.x, 
+                        window.mouseLerping.y, 
+                        window.leftMouseDown ? 1 : -1, 
+                        0
+                    ),
+                    iMouseRaw: new THREE.Vector4(
+                        window.mouseRaw.x, 
+                        window.mouseRaw.y, 
+                        window.mouseRaw.z, 
+                        0
+                    ),
+                    iMouseWheel: new THREE.Vector4(
+                        vec2MouseWheelLerped.x, 
+                        vec2MouseWheelLerped.y, 
+                        vec2MouseWheelRaw.x, 
+                        vec2MouseWheelRaw.y
+                    ),
+                    numLights: settings.numLights,
+                    ambientLightColor: settings.ambientLightColor,
+                    decayColor: settings.decayColor,
+                    fxFloats: new THREE.Vector4(
+                        settings.alphaShadow,
+                        settings.mixNormals,
+                        settings.clickMouseToDraw > 0,
+                        0
+                    )
+                }, ...uniforms};
+
+                Object
+                .keys(uniforms)
+                .forEach(function(key) {
+                    if(typeof uniforms[key] === 'undefined'){
+                        console.warn("uniforms["+key+"] is undefined", uniforms);
+                        return;
+                    }
+
+                    if(typeof material.uniforms[key] === 'undefined'){
+                        console.warn("Material does not have a uniform named: " + key);
+                        return;
+                    }
+
+                    if(key === 'numLights'){
+                        // console.log('setting numLights',uniforms[key])
+                        material.uniforms.numLights.value = parseFloat(uniforms[key]);
+                        return;
+                    }
+
+                    if(key === 'fxFloats'){
+                        // console.log('setting alphaShadow',uniforms[key])
+                        material.uniforms.fxFloats.value = uniforms[key];
+                        return;
+                    }
+
+                    // if it's a float, just set it
+                    if(typeof uniforms[key] === 'number'){
+                        material.uniforms[key].value = uniforms[key];
+                        return;
+                    }
+
+                    if(key === 'iChannel0' || key === 'iChannel1' || key === 'iChannel2' || key === 'iChannel3'){
+                        //console.warn('setting channel',key,uniforms[key])
+                        material.uniforms[key].value = uniforms[key].texture;
+                        return;
+                    }
+
+                    // rgba
+                    if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b') && uniforms[key].hasOwnProperty('a')){
+                        //console.warn('setting color',key,uniforms[key])
+                        material.uniforms[key].value = [
+                            uniforms[key].r, 
+                            uniforms[key].g, 
+                            uniforms[key].b, 
+                            uniforms[key].a
+                        ];
+                        return;
+                    }
+                    // rgb
+                    if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b')){
+                        //console.warn('setting color',key,uniforms[key])
+                        material.uniforms[key].value = [
+                            uniforms[key].r, 
+                            uniforms[key].g, 
+                            uniforms[key].b
+                        ];
+                        return;
+                    }
+
+                    if (uniforms[key] instanceof THREE.Vector4) {
+                        material.uniforms[key].value.set(
+                            uniforms[key].x, 
+                            uniforms[key].y, 
+                            uniforms[key].z, 
+                            uniforms[key].w
+                        );
+                    } else if (uniforms[key] instanceof THREE.Vector3) {
+                        material.uniforms[key].value.set(
+                            uniforms[key].x, 
+                            uniforms[key].y, 
+                            uniforms[key].z
+                        );
+                    } else if (uniforms[key] instanceof THREE.Vector2) {
+                        material.uniforms[key].value.set(
+                            uniforms[key].x, 
+                            uniforms[key].y
+                        );
+                    } else if (typeof uniforms[key].value === 'number') {
+                        material.uniforms[key].value.set(uniforms[key].value);
+                    } else {
+                        console.warn('Unknown uniform type', key, uniforms[key]);
+                    }
+
+
+
+                    // console.warn('unknown uniform type',key,uniforms[key],typeof uniforms[key].value)
+                    
+                    //else{
+                    //     // console.warn('passing single argument', {key}, uniforms[key], 'to', material.uniforms[key].value)
+                    //     // console.warn({
+                    //     //     a: typeof material.uniforms[key],
+                    //     //     b: typeof material.uniforms[key].value,
+                    //     //     c: typeof uniforms[key],
+                    //     // });
+                    //     // apply the single argument to the uniforms set function
+                    //     if(typeof material.uniforms[key].value?.set !== 'function'){
+                    //         material.uniforms[key].value = uniforms[key];
+                    //     }else{
+                    //         material.uniforms[key].value.set(uniforms[key]);
+                    //     }
+                    // }
+                });
+                return material;
+            }
 
             resizeCanvas();
             resetPingPong();
@@ -1456,17 +1612,19 @@
                 try{
                     plane.material = window.outputMaterialA;
                     window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureB.texture;
+                    window.outputMaterialA.uniformsNeedUpdate = true;
                     renderer.setRenderTarget(window.outputTextureA);
                     renderer.render(scene, camera);
                     window.outputTextureA.needsUpdate = true;
-                    // Use the rendered texture as input for the next pass
-                    window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+                    // // Use the rendered texture as input for the next pass
+                    // window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+                    // window.outputMaterialB.uniformsNeedUpdate = true;
 
-                    // now render that to a texture
-                    renderer.setRenderTarget(window.outputTextureB);
-                    renderer.render(scene, camera);
+                    // // now render that to a texture
+                    // renderer.setRenderTarget(window.outputTextureB);
+                    // renderer.render(scene, camera);
 
-                    window.outputTextureB.needsUpdate = true;
+                    // window.outputTextureB.needsUpdate = true;
 
                 }catch(e){
                     console.error(e);
@@ -1476,6 +1634,7 @@
             plane.material = window.outputMaterialB;
             window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
             window.outputMaterialB.uniforms.iChannel1.value = window.outputTextureB.texture;
+            window.outputMaterialB.uniformsNeedUpdate = true;
             // Reset render target back to the canvas
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
@@ -1485,8 +1644,10 @@
                 let tempA = window.outputTextureA;
                 window.outputTextureA = window.outputTextureB;
                 window.outputTextureB = tempA;
-                // window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
-                //window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+                window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
+                window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+                window.outputMaterialA.uniformsNeedUpdate = true;
+                window.outputMaterialB.uniformsNeedUpdate = true;
             }else{
                 // keep them the same
                 // noop
@@ -1565,7 +1726,7 @@
             panel.add(settings, 'radius', 0.1, 100.0, 0.1)
                 .name( 'Radius' )
                 .onChange((value) => {
-                    vec2MouseWheelRaw.y = value;
+                    vec2MouseWheelRaw.y = Math.max(-100, Math.min(value, 100));
                 });
 
             panel.add(settings, 'pixel_density', 0.00001, 32, 0.00001)
@@ -1649,29 +1810,34 @@
                 }
                 if(e.key === 'q' || e.key === 'Q'){
                     window.vec2MouseWheelRaw.y += 10;
+                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
                 if(e.key === 'a' || e.key === 'A'){
                     window.vec2MouseWheelRaw.y -= 10;
+                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
                 if(e.key === 'w' || e.key === 'W'){
                     window.vec2MouseWheelRaw.y = 10;
+                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
                 // arrows drive iMouseRaw
                 if(e.key === 'ArrowUp'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.y += 1;
+                    window.mouseRaw.y += 10;
+                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
                 if(e.key === 'ArrowDown'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.y -= 1;
+                    window.mouseRaw.y -= 10;
+                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
                 if(e.key === 'ArrowLeft'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.x -= 1;
+                    window.mouseRaw.x -= 10;
                 }
                 if(e.key === 'ArrowRight'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.x += 1;
+                    window.mouseRaw.x += 10;
                 }
             });
 
