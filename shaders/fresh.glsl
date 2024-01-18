@@ -1,7 +1,10 @@
 // Comment these out to past into shadertoy
+
 uniform float iTime;
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
+uniform sampler2D iChannel2; // normal map
+uniform sampler2D iChannel3; // user upload
 uniform vec3 iResolution;
 uniform vec4 iMouse;
 uniform vec4 iMouseRaw;
@@ -49,16 +52,19 @@ float fastsqrt(float x) {
 }
 
 // Shader main code
-void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+void main_inner(vec2 uv) {
+
+    //vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
     vec2 mouse = (iMouse.xy - 0.5 * iResolution.xy) / iResolution.y;
+    mouse += 0.25;
+
     if (iResolution.z > 1.0) {
         mouse *= iMouse.z;
         // pull back to 0-1 range
         mouse += 0.5;
     }
 
-    float radius = 0.01 * (abs(iMouseWheel.y) * 0.1 + 1.0);
+    float radius = clamp(abs(iMouseWheel.y * 0.01),-1.,1.);
     // Quaternion-based rotation
     float angleX = mod(iTime * 100.0, 360.0); // Rotation angle around X-axis
     float angleY = mod(iTime * -100.0, 360.0); // Rotation angle around Y-axis
@@ -94,15 +100,31 @@ void main() {
     vec3 toLight3 = normalize(lightPos3 - sphereCenter);
     diff = max(dot(sphereNormal, toLight3), 0.0);
     vec3 colorUV3 = diff * vec3(0.15, 0.62, 0.33); // Third light color
-
     // Incorporate ambientLightColor using a different blend than add for highlight/shadow
-    colorUV1 = mix(colorUV1, ambientLightColor.rgb, ambientLightColor.a);
-    colorUV2 = mix(colorUV2, ambientLightColor.rgb, ambientLightColor.a);
-    colorUV3 = mix(colorUV3, ambientLightColor.rgb, ambientLightColor.a);
+    // colorUV1 = mix(colorUV1, ambientLightColor.rgb, ambientLightColor.a);
+    // colorUV2 = mix(colorUV2, ambientLightColor.rgb, ambientLightColor.a);
+    // colorUV3 = mix(colorUV3, ambientLightColor.rgb, ambientLightColor.a);
 
-    // Combine the three lights
+    // vec3 sphereSurface = sphereCenter + sphereNormal * radius;
+    // sphereSurface = vec3(uv, 0.0) + sphereNormal * radius;
+    // vec3 toLight4 = normalize(sphereSurface - sphereCenter);
+    // diff = max(dot(sphereNormal, toLight4), 0.0);
+    // vec4 colorUserInput = texture2D(iChannel3, gl_FragCoord.xy / iResolution.xy);
+    // vec3 colorUV4 = colorUserInput.rgb; // todo * diff
+
+    //Combine the three lights
     vec3 colorUV = colorUV1;
-    colorUV = colorUV1 + colorUV2 + colorUV3;
+    // if(numLights > 2.0){
+        colorUV += colorUV2 + colorUV3;
+    // }
+    // else if(numLights > 1.0){
+    //     colorUV += colorUV2;
+    // }
+
+    // colorUV += colorUV4;
+    // colorUV = colorUV4;
+
+    
 
     vec3 colorNormalMap = vec3(0.0);// diff * vec3(0.27, 0.15, 0.62);
     colorNormalMap.r = sphereNormal.x * 0.5 + 0.5;
@@ -119,59 +141,71 @@ void main() {
             doDraw = 1.;
         }
     }
-    if(length(uv - mouse) < radius && doDraw > 0.){
+    // write to normal map
+    //iBuffer1 = vec4(texture2D(iChannel2, uv), 1.0);
 
-        if(fxFloats.x > -1.0) {
-            // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
-            gl_FragColor.a = ((colorUV.r) + (colorUV.g) + (colorUV.b)) / 3.0;
-        }
-
+    if(length(uv - mouse) < radius){
         colorUV = mix(colorUV, colorNormalMap, fxFloats.y);
 
+        //iBuffer1 = vec4(colorUV, 1.0);
         gl_FragColor = vec4(colorUV, 1.0);
 
-
         if(fxFloats.x > 0.0) {
-            // gl_FragColor = vec4(100.0,0.0,0.0, 1.0);
-            // gl_FragColor.a = ((gl_FragColor.r * .4) + (gl_FragColor.g * 1.3) + (gl_FragColor.b * .9)) / 3.0;
+            // iBuffer0 = vec4(100.0,0.0,0.0, 1.0);
+            // iBuffer0.a = ((iBuffer0.r * .4) + (iBuffer0.g * 1.3) + (iBuffer0.b * .9)) / 3.0;
             gl_FragColor.a = ((gl_FragColor.r) + (gl_FragColor.g) + (gl_FragColor.b)) / 3.0;
             gl_FragColor.a *= fxFloats.x;
         }else{
-        //     gl_FragColor.a = 1.0;
+            // gl_FragColor.a = 1.0;
         }
         // mix decayColor with the colorUV
-        // gl_FragColor = mix(decayColor, gl_FragColor, fxFloats.x);
-
+        gl_FragColor = mix(decayColor, gl_FragColor, fxFloats.x);
         return;
     }
 
     // If the pixel is not within the radius of the hemisphere, apply a default color and return
     gl_FragColor = decayColor;
-    //gl_FragColor.a = 0.;
+    //iBuffer0.a = 0.;
     if(fxFloats.x <= 0.0){
         gl_FragColor.a = 1.0;
     }
     return;
 
-/*
+    /*
 
-    // Increase the frequency over time to create a zooming effect
-    float zoom = sin(iTime*.1) * 10. + 10.;
-    float checker = mod(floor((mouse.x + zoom) * uv.x) + floor((mouse.y + zoom) * uv.y), 4.0);
+        // Increase the frequency over time to create a zooming effect
+        float zoom = sin(iTime*.1) * 10. + 10.;
+        float checker = mod(floor((mouse.x + zoom) * uv.x) + floor((mouse.y + zoom) * uv.y), 4.0);
 
-    // Apply a scrolling gradient using sin and cos
-    float gradient = 0.5 * (sin(iTime + uv.x) + cos(iTime + uv.y));
+        // Apply a scrolling gradient using sin and cos
+        float gradient = 0.5 * (sin(iTime + uv.x) + cos(iTime + uv.y));
 
-    vec3 hsv = vec3(gradient, 1.0, 1.0);
+        vec3 hsv = vec3(gradient, 1.0, 1.0);
 
-    // Mix the original color with the gradient
-    // vec3 color = mix(vec3(1.0), vec3(0.8), checker);
-    // color = mix(color, vec3(gradient), 0.5);
-    // Mix the original color with the gradient
-    vec3 color = mix(vec3(1.0), vec3(0.8), checker);
-    color = mix(color, vec3(gradient), 0.5);
-    //color = hsv2rgb(hsv);
+        // Mix the original color with the gradient
+        // vec3 color = mix(vec3(1.0), vec3(0.8), checker);
+        // color = mix(color, vec3(gradient), 0.5);
+        // Mix the original color with the gradient
+        vec3 color = mix(vec3(1.0), vec3(0.8), checker);
+        color = mix(color, vec3(gradient), 0.5);
+        //color = hsv2rgb(hsv);
 
-    gl_FragColor = vec4(color, 1.0);
-*/
+        iBuffer0 = vec4(color, 1.0);
+    */
+}
+
+void main(){
+    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+    // if we're on the left half draw the full "previous" color
+    // float baselineShift = 0.05; // Define the baseline shift value
+    // if (uv.x < 0.) {
+    //     uv.x = (uv.x * 2.0) - baselineShift; // Shift uv.x for left eye
+    //     uv.y = uv.y * 2.0; // hold aspect ratio
+    //     main_inner(uv.xy);
+    // }else{
+    //     uv.x = ((uv.x - 0.5) * 2.0) + baselineShift; // Shift uv.x for right eye
+    //     uv.y = uv.y * 2.0; // hold aspect ratio
+    //     main_inner(uv.xy);
+    // }
+    main_inner(uv.xy);
 }

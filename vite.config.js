@@ -6,6 +6,7 @@ export default defineConfig({
 
   // Customizing the build options:
   build: {
+    target: 'ES2020',
     rollupOptions: {
       input: '/public/pixel-mixer.html',
       output: {
@@ -13,6 +14,10 @@ export default defineConfig({
         format: 'es'
       }
     }
+  },
+
+  esbuild: {
+    target: 'ES2020'
   },
 
   // Server-specific configurations for development:

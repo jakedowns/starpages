@@ -50,8 +50,17 @@
     <!-- <meta property="og:locale:alternate" content="fr_FR" /> -->
     <!-- <meta property="og:locale:alternate" content="es_ES" /> -->
     <meta property="og:site_name" content="Pixel Mixer" />
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+    <!-- <script src="/public/three/build/three-webgpu.module.js" type="module"></script> -->
+    <!-- <script src="/public/three/examples/jsm/renderers/webgpu/WebGPURenderer.js" type="module"></script> -->
+    
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.umd.js"></script>
@@ -309,7 +318,12 @@
     <div class="drop-here-text">pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     
     <canvas id="canvas" class="undarken"></canvas>
-    <script>
+    <script type="module">
+        import * as THREE from 'three';
+        //import { WebGPURenderer } from 'three/addons/renderers/webgpu/WebGPURenderer.js';
+        let canvas;
+        const dpr = window.devicePixelRatio;
+        const presentationFormat = navigator?.gpu?.getPreferredCanvasFormat();
         window.pixelWidth = window.innerWidth;
         window.pixelHeight = window.innerHeight;
         window.canvas;
@@ -502,8 +516,8 @@
         Object.defineProperty(window, "safePXDims", {
             get: function() {
                 return {
-                    x: Math.floor(window.pixelWidth / window.settings.pixel_density / 2) * 2,
-                    y: Math.floor(window.pixelHeight / window.settings.pixel_density / 2) * 2
+                    x: Math.floor(window.pixelWidth / window.settings.pixel_density * dpr / 2) * 2,
+                    y: Math.floor(window.pixelHeight / window.settings.pixel_density * dpr / 2) * 2
                 }
             }
         });
@@ -518,6 +532,8 @@
             window.outputTextureA.texture.minFilter = THREE.NearestFilter;
             window.outputTextureA.texture.wrapS = THREE.MirroredRepeatWrapping;
             window.outputTextureA.texture.wrapT = THREE.MirroredRepeatWrapping;
+            // window.outputTextureA.depthTexture = new THREE.DepthTexture();
+            // window.outputTextureA.depthTexture.type = THREE.FloatType;
             window.outputTextureA.needsUpdate = true;
 
             window.outputTextureB = new THREE.WebGLRenderTarget(safePXDims.x, safePXDims.y);
@@ -525,6 +541,8 @@
             window.outputTextureB.texture.minFilter = THREE.NearestFilter;
             window.outputTextureB.texture.wrapS = THREE.MirroredRepeatWrapping;
             window.outputTextureB.texture.wrapT = THREE.MirroredRepeatWrapping;
+            // window.outputTextureB.depthTexture = new THREE.DepthTexture();
+            // window.outputTextureB.depthTexture.type = THREE.FloatType;
             window.outputTextureB.needsUpdate = true;
 
             window._originalOutputTextureA = window.outputTextureA;
@@ -558,9 +576,9 @@
             // sign(mouse.z)  = button is down
             // sign(mouse.w)  = button is clicked
 
-            let dist = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
-            let magnitude = Math.max(0.9,Math.min(dist, 2.0));
-            magnitude *= vec2MouseWheelLerped.y;
+            // let dist = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+            // let magnitude = Math.max(0.9,Math.min(dist, 2.0));
+            // magnitude *= vec2MouseWheelLerped.y;
             
             window.mouseRaw.set(
                 window.mouseX, 
@@ -568,33 +586,164 @@
                 window.leftMouseDown ? 1 : -1, 
                 0
             );
-            window.mouseLerping.lerp(window.mouseRaw, .005 * magnitude);
+            window.mouseLerping.lerp(window.mouseRaw, .1);
             vec2MouseWheelLerped.lerp(vec2MouseWheelRaw, .08);
+        }
 
-            const setUniforms = (material) => {
-                material.uniforms.iMouseRaw.value.set(
+        window.updateMaterialUniforms = function(material, uniforms){
+
+            uniforms = {...{
+                iTime: cumulativeTime,
+                iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
+                
+                iMouseRaw: new THREE.Vector3(
                     window.mouseRaw.x, 
                     window.mouseRaw.y, 
                     window.mouseRaw.z, 
                     0
-                );
-                material.uniforms.iMouse.value.set(
+                ),
+                iMouse: new THREE.Vector4(
                     window.mouseLerping.x, 
                     window.mouseLerping.y, 
                     window.leftMouseDown ? 1 : -1, 
                     0
-                );
-                material.uniforms.iMouseWheel.value.set(
+                ),
+                iMouseWheel: new THREE.Vector4(
                     vec2MouseWheelLerped.x, 
                     vec2MouseWheelLerped.y, 
                     vec2MouseWheelRaw.x, 
                     vec2MouseWheelRaw.y
-                );
-                material.uniforms.numLights = window.settings.numLights;
-            };
-            
-            setUniforms(window.outputMaterialA);
-            setUniforms(window.outputMaterialB);
+                ),
+
+                numLights: settings.numLights,
+                ambientLightColor: settings.ambientLightColor,
+                decayColor: settings.decayColor,
+                fxFloats: new THREE.Vector4(
+                    settings.alphaShadow,
+                    settings.mixNormals,
+                    settings.clickMouseToDraw ? 1.0 : 0.0,
+                    0.0
+                )
+            }, ...uniforms};
+
+            // console.warn('setting uniforms',uniforms)
+
+            Object
+            .keys(uniforms)
+            .forEach(function(key) {
+                if(typeof uniforms[key] === 'undefined'){
+                    console.warn("uniforms["+key+"] is undefined", uniforms);
+                    return;
+                }
+
+                if(typeof material.uniforms[key] === 'undefined'){
+                    console.warn("Material does not have a uniform named: " + key);
+                    return;
+                }
+
+                if(key === 'numLights'){
+                    // console.log('setting numLights',material.uniforms[key])
+                    material.uniforms.numLights = parseFloat(uniforms[key]);
+                    return;
+                }
+
+                if(key === 'fxFloats'){
+                    // console.log('setting alphaShadow',uniforms[key])
+                    material.uniforms.fxFloats.value = uniforms[key];
+                    return;
+                }
+
+                // if it's a float, just set it
+                if(typeof uniforms[key] === 'number' && typeof material.uniforms[key].value === 'number'){
+                    material.uniforms[key].value = uniforms[key];
+                    return;
+                }
+
+            if(key === 'iChannel0' || key === 'iChannel1' || key === 'iChannel2' || key === 'iChannel3'){
+                    //console.warn('setting channel',key,uniforms[key])
+                    material.uniforms[key].value = uniforms[key].texture;
+                    return;
+                }
+
+                // rgba
+            if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b') && uniforms[key].hasOwnProperty('a')){
+                    //console.warn('setting color',key,uniforms[key])
+                    material.uniforms[key].value = [
+                        uniforms[key].r, 
+                        uniforms[key].g, 
+                        uniforms[key].b, 
+                        uniforms[key].a
+                    ];
+
+                    return;
+                }
+                // rgb
+            if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b')){
+                    //console.warn('setting color',key,uniforms[key])
+                    material.uniforms[key].value = [
+                        uniforms[key].r, 
+                        uniforms[key].g, 
+                        uniforms[key].b
+                    ];
+
+                    return;
+                }
+
+            if (uniforms[key] instanceof THREE.Vector4) {
+                    material.uniforms[key].value.set(
+                        uniforms[key].x, 
+                        uniforms[key].y, 
+                        uniforms[key].z, 
+                        uniforms[key].w
+                    );
+
+                    return;
+                }if (uniforms[key] instanceof THREE.Vector3) {
+                    material.uniforms[key].value.set(
+                        uniforms[key].x, 
+                        uniforms[key].y, 
+                        uniforms[key].z
+                    );
+
+                    return;
+                }if (uniforms[key] instanceof THREE.Vector2) {
+                    material.uniforms[key].value.set(
+                        uniforms[key].x, 
+                        uniforms[key].y
+                    );
+
+                    return;
+                }
+                    console.warn('Unknown uniform type', key, uniforms[key]);
+            });
+            return material;
+        }
+
+        window.randomWalking = false;
+        window.randomWalkTimeout = null;
+        window.randomWalk_inner = function(){
+            // pick a random delay
+            let randomDelay = Math.floor(Math.random() * 1000) + 500;
+            // pick a random direction
+            let randomDirection = {
+                x: Math.random() < 0.5 ? -1 : 1,
+                y: Math.random() < 0.5 ? -1 : 1
+            }
+            window.mouseX += randomDirection.x * window.safePXDims.x;
+            window.mouseY += randomDirection.y * window.safePXDims.y;
+
+            window.randomWalkTimeout = setTimeout(()=>{
+                window.randomWalk_inner();
+            }, randomDelay);
+        }
+        window.randomWalk = function() {
+            if(window.randomWalking){
+                window.randomWalking = false;
+                clearTimeout(window.randomWalkTimeout);
+                return;
+            }
+            window.randomWalking = true;
+            window.randomWalk_inner();
         }
 
 
@@ -670,9 +819,12 @@
                 handleFileInput(e);
             });
             canvas = document.getElementById("canvas");
-            window.renderer = new THREE.WebGLRenderer({canvas});
+            window.renderer = new THREE.WebGLRenderer({canvas, alpha: true});
             //renderer.setClearColor(0x000000, 1.0);
             renderer.autoClear = false;
+            renderer.setPixelRatio( dpr );
+            renderer.setSize( window.innerWidth, window.innerHeight );
+				
 
             // "real" size, full screen
             canvas.width = pixelWidth;
@@ -709,9 +861,10 @@
             let rand_int_1_thru_17 = Math.floor(Math.random() * 17) + 1;
             //let url = `./res/bg_${rand_int_1_thru_17}.png`;
             //let url = "./res/download (3).png";
-            let url = "../res/inspiration/Bsodwindows10.png";
+            let url = "/starpages/res/inspiration/Bsodwindows10.png";
             window.inputTextureA = await textureLoader.loadAsync(url);
-            window.inputTextureB = window.inputTextureA; // clone
+            window.inputTextureB = window.inputTextureA.clone(); // clone
+            window.userInputTexture = window.inputTextureA.clone(); // clone
 
             // define our textures / buffers
             // 1. our starting values (provided by user image or video, etc)
@@ -763,17 +916,31 @@
             window.mouseLerping = new THREE.Vector4(window.innerWidth/2,window.innerHeight/2, 0, 0);
             window.iMouseWheel = new THREE.Vector4(0, 10, 0, 0);
 
+            // window.normalTexture = new THREE.WebGLRenderTarget(safePXDims.x, safePXDims.y);
+            // window.normalTexture.texture.magFilter = THREE.NearestFilter;
+            // window.normalTexture.texture.minFilter = THREE.NearestFilter;
+            // window.normalTexture.texture.wrapS = THREE.MirroredRepeatWrapping;
+            // window.normalTexture.texture.wrapT = THREE.MirroredRepeatWrapping;
+            // window.normalTexture.needsUpdate = true;
+
             let DEFAULT_U_VALUES = {
                 // compatibility uniforms
                 iTime: { value: 1.0 },
                 iChannel0: { value: inputTextureA.texture },
                 iChannel1: { value: inputTextureB.texture },
-                // iChannel2: { value: outputTextureB },
+                //iChannel2: { value: normalTexture.texture },
+                iChannel3: { value: userInputTexture.texture },
+
+
+                // output buffer slot 1
+                // iBuffer0: { value: outputTextureA.texture },
+                // iBuffer1: { value: normalTexture.texture },
+
                 iResolution: { value: new THREE.Vector3(0) },
                 iMouse: { value: window.mouseLerping },
                 iMouseRaw: { value: window.mouseRaw },
                 iMouseWheel: { value: window.iMouseWheel },
-                numLights: { value: 1 },
+                numLights: { value: settings.numLights },
                 fxFloats: { value: new THREE.Vector4(0) },
                 ambientLightColor: { value: settings.ambientLightColor },
                 ambientLightColorAlpha: { value: settings.ambientLightColorAlpha },
@@ -782,6 +949,7 @@
             }   
 
             window.outputMaterialA = new THREE.ShaderMaterial({
+                //glslVersion: THREE.GLSL3,
                 uniforms: {
                     ...DEFAULT_U_VALUES
                 },
@@ -797,6 +965,7 @@
             // do a SECOND material
             // tied to combineTexturesShaderSource
             window.outputMaterialB = new THREE.ShaderMaterial({
+                //glslVersion: THREE.GLSL3,
                 uniforms: {
                     ...DEFAULT_U_VALUES
                 },
@@ -918,6 +1087,7 @@
                             window.videoTexture.needsUpdate = true;
 
                             window.targetInputTexture = window.videoTexture;
+                            window.userInputTexture = window.videoTexture;
                             window.inputTextureA = window.targetInputTexture;
                             window.inputTextureB = window.targetInputTexture;
 
@@ -940,157 +1110,12 @@
 
             window.progressElement = document.getElementById("progress");
 
-            window.updateMaterialUniforms = function(material, uniforms){
-
-                uniforms = {...{
-                    iTime: cumulativeTime,
-                    iResolution: new THREE.Vector3(safePXDims.x, safePXDims.y, 1.0),
-                    iMouse: window.mouseLerping,
-                    iMouseRaw: window.mouseRaw,
-                    iMouseWheel: window.iMouseWheel,
-                    numLights: settings.numLights,
-                    ambientLightColor: settings.ambientLightColor,
-                    decayColor: settings.decayColor,
-                    fxFloats: new THREE.Vector4(
-                        settings.alphaShadow,
-                        settings.mixNormals,
-                        settings.clickMouseToDraw > 0,
-                        0
-                    )
-                }, ...uniforms};
-
-                Object
-                .keys(uniforms)
-                .forEach(function(key) {
-                    if(typeof uniforms[key] === 'undefined'){
-                        console.warn("uniforms["+key+"] is undefined", uniforms);
-                        return;
-                    }
-
-                    if(typeof material.uniforms[key] === 'undefined'){
-                        console.warn("Material does not have a uniform named: " + key);
-                        return;
-                    }
-
-                    if(key === 'numLights'){
-                        //console.log('setting numLights',uniforms[key])
-                        material.uniforms.numLights.value = parseFloat(uniforms[key]);
-                        return;
-                    }
-
-                    if(key === 'fxFloats'){
-                        // console.log('setting alphaShadow',uniforms[key])
-                        material.uniforms.fxFloats.value = uniforms[key];
-                        return;
-                    }
-
-                    // if it's a float, just set it
-                    if(typeof uniforms[key] === 'number'){
-                        material.uniforms[key].value = uniforms[key];
-                        return;
-                    }
-
-                    if(key === 'iChannel0' || key === 'iChannel1' || key === 'iChannel2' || key === 'iChannel3'){
-                        //console.warn('setting channel',key,uniforms[key])
-                        material.uniforms[key].value = uniforms[key].texture;
-                        return;
-                    }
-
-                    // rgba
-                    if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b') && uniforms[key].hasOwnProperty('a')){
-                        //console.warn('setting color',key,uniforms[key])
-                        material.uniforms[key].value = [
-                            uniforms[key].r, 
-                            uniforms[key].g, 
-                            uniforms[key].b, 
-                            uniforms[key].a
-                        ];
-                        return;
-                    }
-                    // rgb
-                    if(uniforms[key].hasOwnProperty('r') && uniforms[key].hasOwnProperty('g') && uniforms[key].hasOwnProperty('b')){
-                        //console.warn('setting color',key,uniforms[key])
-                        material.uniforms[key].value = [
-                            uniforms[key].r, 
-                            uniforms[key].g, 
-                            uniforms[key].b
-                        ];
-                        return;
-                    }
-
-                    if (uniforms[key] instanceof THREE.Vector4) {
-                        material.uniforms[key].value.set(
-                            uniforms[key].x, 
-                            uniforms[key].y, 
-                            uniforms[key].z, 
-                            uniforms[key].w
-                        );
-                    } else if (uniforms[key] instanceof THREE.Vector3) {
-                        material.uniforms[key].value.set(
-                            uniforms[key].x, 
-                            uniforms[key].y, 
-                            uniforms[key].z
-                        );
-                    } else if (uniforms[key] instanceof THREE.Vector2) {
-                        material.uniforms[key].value.set(
-                            uniforms[key].x, 
-                            uniforms[key].y
-                        );
-                    } else if (typeof uniforms[key].value === 'number') {
-                        material.uniforms[key].value.set(uniforms[key].value);
-                    } else {
-                        console.warn('Unknown uniform type', key, uniforms[key]);
-                    }
-
-
-
-                    // console.warn('unknown uniform type',key,uniforms[key],typeof uniforms[key].value)
-                    
-                    //else{
-                    //     // console.warn('passing single argument', {key}, uniforms[key], 'to', material.uniforms[key].value)
-                    //     // console.warn({
-                    //     //     a: typeof material.uniforms[key],
-                    //     //     b: typeof material.uniforms[key].value,
-                    //     //     c: typeof uniforms[key],
-                    //     // });
-                    //     // apply the single argument to the uniforms set function
-                    //     if(typeof material.uniforms[key].value?.set !== 'function'){
-                    //         material.uniforms[key].value = uniforms[key];
-                    //     }else{
-                    //         material.uniforms[key].value.set(uniforms[key]);
-                    //     }
-                    // }
-                });
-                return material;
-            }
+            
 
             resizeCanvas();
             resetPingPong();
             // first frame...
             requestAnimationFrame(animate);
-
-            // make sure we don't pick the same one back to back
-            // also make sure we auto switch to the next one after the end of the video
-            // function pickOne(){
-            //     console.warn("pick one called");
-            //     // video time
-            //     let much = [
-            //         // "Katy Perry - California Gurls (Official Music Video) ft. Snoop Dogg.mp4",
-            //         // "Katy Perry - Dark Horse ft. Juicy J.mp4",
-            //         // "Katy Perry - Firework (Official Music Video).mp4"
-            //     ]
-            //     return;
-            //     // Filter out the last played video
-            //     let filteredMuch = much.filter(v => v !== lastPlayedVideo);
-
-            //     // Randomly select a video from the filtered list
-            //     let one = filteredMuch[Math.floor(Math.random() * filteredMuch.length)];
-
-            //     // Update the last played video
-            //     lastPlayedVideo = one;
-
-            //     setVideoAsChannel("https://jakedowns.com/media/"+one);
-            // }
 
             let did_react_to_first_user_input = false;
             let maybeFirstInput = ()=>{
@@ -1121,75 +1146,7 @@
 
             
 
-            // async function onPasteAttempt(){
-            //     try {
-            //             // Check if the Clipboard API is available
-            //             if (!navigator.clipboard) {
-            //                 console.warn('Clipboard API not available.');
-            //                 throw new Error('Clipboard API not available');
-            //             }
-
-            //             // Attempt to read from the clipboard
-            //             const clipboardItems = await navigator.clipboard.read();
-            //             console.log('Clipboard items retrieved:', clipboardItems);
-
-            //             let clipboardBag = {images:[]};
-
-            //             // Find text content in clipboard items
-            //             const textItem = clipboardItems.find(item => item.types.includes('text/plain'));
-            //             if (textItem) {
-            //                 const textBlob = await textItem.getType('text/plain');
-            //                 const text = await textBlob.text();
-            //                 console.log('Pasted text content: ', text);
-            //                 clipboardBag.text = text;
-            //             }
-
-            //             // Find HTML content in clipboard items
-            //             const htmlItem = clipboardItems.find(item => item.types.includes('text/html'));
-            //             if (htmlItem) {
-            //                 const htmlBlob = await htmlItem.getType('text/html');
-            //                 const html = await htmlBlob.text();
-            //                 console.log('Pasted HTML content: ', html);
-            //                 clipboardBag.html = html;
-            //             }
-            //             // Note: imageBlob is an instance of Blob
-            //             // to get pixel data OUT of the blob and INTO 3D space, we need to load it as a texture
-            //             // to do THAT (we need to assume it could be a _local_ file so we _can not_ use the img.src shortcut,)
-            //             // we need to do the slow, full conversion of a Blob to a base64 encoded string
-            //             // then we can use that base64 encoded string to load the image as a texture
-                        
-
-
-            //             // Find any "image" items:
-            //             const imageItems = clipboardItems.filter(item => item.types.includes('image/png'));
-            //             // Alert if there's multiple, we only support one for now
-            //             if (imageItems.length > 1) {
-            //                 alert('Multiple images found. Using the last image.');
-            //             }
-            //             for (const imageItem of imageItems) {
-            //                 const imageBlob = await imageItem.getType('image/png');
-            //                 //console.log('Pasted image: ', image);
-            //                 clipboardBag.imageBlob = imageBlob;
-
-            //                 //loadImageBlobAsTexture(imageBlob);
-                            
-            //                 let b64 = await imageBlobToBase64(imageBlob);
-            //                 //console.log('Pasted image: ', b64);
-
-            //                 await loadBase64AsTexture(b64);
-            //                 clipboardBag.images.push(b64);
-            //             }
-
-            //             hideIntroText()
-
-            //             // Process clipboardBag as needed
-            //             console.warn({clipboardBag});
-
-            //         } catch (error) {
-            //             console.error('Error accessing clipboard:', error);
-            //             // Handle error appropriately
-            //         }
-            // }
+            
 
             document.addEventListener("keydown",async(e)=>{
                 if(e.key == "Escape"){
@@ -1437,7 +1394,7 @@
             if(url.includes('.gif')){
                 //window.setVideoAsChannel(url);
                 //return;
-                console.warn('gifs not supported yet :/')
+                console.error('gifs not supported yet :/')
             }
 
             window.inputTextureA = await textureLoader.loadAsync(url);
@@ -1460,7 +1417,8 @@
             window.originalPixelDataTexture.image = window.inputTextureA.image;
             window.originalPixelDataTexture.needsUpdate = true;
 
-            window.targetInputTexture = window.inputTextureA;
+            window.userInputTexture = window.inputTextureA.clone();
+            window.targetInputTexture = window.userInputTexture;
         }
 
         window.settings = {
@@ -1469,15 +1427,15 @@
             
             useDoubleBuffer: true,
             ambientLightColor: {r:0.0,g:0.0,b:0.0,a:0.0},
-            ambientLightColorAlpha: 0.1,
+            ambientLightColorAlpha: 0.01,
             numLights: 3,
-            alphaShadow: 0.0,
-            decayColorAlpha: 0.01,
+            alphaShadow: 0.9,
+            decayColorAlpha: 0.001,
             mixNormals: 0,
             radius: 10.0,
-            decayColor: {r: 0.0, g: 0.0, b: 0.0, a: 0.01},
+            decayColor: {r: 1.0, g: 0.0, b: 0.0, a: 0.001},
 
-            clickMouseToDraw: true
+            clickMouseToDraw: false
         }
 
         window.onSettingsChanged = function(){
@@ -1511,10 +1469,12 @@
             updateMaterialUniforms(window.outputMaterialA, {
                 iChannel0: window.outputTextureA,
                 iChannel1: window.inputTextureB,
+                iChannel3: window.userInputTexture,
             });
             updateMaterialUniforms(window.outputMaterialB, {
                 iChannel0: window.outputTextureA,
                 iChannel1: window.outputTextureB,
+                iChannel3: window.userInputTexture,
             });
 
             
@@ -1523,17 +1483,19 @@
                 try{
                     plane.material = window.outputMaterialA;
                     window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureB.texture;
+                    window.outputMaterialA.uniformsNeedUpdate = true;
                     renderer.setRenderTarget(window.outputTextureA);
                     renderer.render(scene, camera);
                     window.outputTextureA.needsUpdate = true;
-                    // Use the rendered texture as input for the next pass
-                    window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+                    // // Use the rendered texture as input for the next pass
+                    // window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+                    // window.outputMaterialB.uniformsNeedUpdate = true;
 
-                    // now render that to a texture
-                    renderer.setRenderTarget(window.outputTextureB);
-                    renderer.render(scene, camera);
+                    // // now render that to a texture
+                    // renderer.setRenderTarget(window.outputTextureB);
+                    // renderer.render(scene, camera);
 
-                    window.outputTextureB.needsUpdate = true;
+                    // window.outputTextureB.needsUpdate = true;
 
                 }catch(e){
                     console.error(e);
@@ -1543,6 +1505,7 @@
             plane.material = window.outputMaterialB;
             window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
             window.outputMaterialB.uniforms.iChannel1.value = window.outputTextureB.texture;
+            window.outputMaterialB.uniformsNeedUpdate = true;
             // Reset render target back to the canvas
             renderer.setRenderTarget(null);
             renderer.render(scene, camera);
@@ -1552,8 +1515,10 @@
                 let tempA = window.outputTextureA;
                 window.outputTextureA = window.outputTextureB;
                 window.outputTextureB = tempA;
-                // window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
-                //window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+                window.outputMaterialA.uniforms.iChannel0.value = window.outputTextureA.texture;
+                window.outputMaterialB.uniforms.iChannel0.value = window.outputTextureA.texture;
+                window.outputMaterialA.uniformsNeedUpdate = true;
+                window.outputMaterialB.uniformsNeedUpdate = true;
             }else{
                 // keep them the same
                 // noop
@@ -1632,14 +1597,14 @@
             panel.add(settings, 'radius', 0.1, 100.0, 0.1)
                 .name( 'Radius' )
                 .onChange((value) => {
-                    vec2MouseWheelRaw.y = value;
+                    vec2MouseWheelRaw.y = Math.max(-100, Math.min(value, 100));
                 });
 
             panel.add(settings, 'pixel_density', 0.00001, 32, 0.00001)
                 .name( 'Pixel Density' )
                 .onChange( window.resizeCanvas );
 
-            panel.add(settings, 'numLights', 1, 3, 1)
+            panel.add(settings, 'numLights', 1, 3, 1.01)
                 .name( 'Num Lights #️⃣💡' )
         
             panel.add(settings, 'alphaShadow', 0, 1, 0.01)
@@ -1716,31 +1681,57 @@
                 }
                 if(e.key === 'q' || e.key === 'Q'){
                     window.vec2MouseWheelRaw.y += 10;
+                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
                 if(e.key === 'a' || e.key === 'A'){
                     window.vec2MouseWheelRaw.y -= 10;
+                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
                 if(e.key === 'w' || e.key === 'W'){
                     window.vec2MouseWheelRaw.y = 10;
+                    settings.radius = Math.max(-100, Math.min(window.vec2MouseWheelRaw.y, 100));
                 }
+                console.warn(e.key);
                 // arrows drive iMouseRaw
                 if(e.key === 'ArrowUp'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.y += 1;
+                    window.mouseY -= 10;
                 }
                 if(e.key === 'ArrowDown'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.y -= 1;
+                    window.mouseY += 10;
                 }
                 if(e.key === 'ArrowLeft'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.x -= 1;
+                    window.mouseX -= 10;
                 }
                 if(e.key === 'ArrowRight'){
                     lastMouseMoveWasFake = true;
-                    window.mouseRaw.x += 1;
+                    window.mouseX += 10;
                 }
             });
+
+            panel.add({
+                toggleFullscreen: function() {
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen();
+                    } else {
+                        document.documentElement.requestFullscreen();
+                    }
+                }
+            }, 'toggleFullscreen').name('[f] fullscreen');
+
+            // panel.add({
+            //     toggleSlowMotion: function() {
+            //         window.toggleSlowMotion();
+            //     }
+            // }, 'toggleSlowMotion').name('[s] slow motion');
+
+            panel.add({
+                randomWalk: function() {
+                    window.randomWalk();
+                }
+            }, 'randomWalk').name('[r] random walk');
 
             // panel.add( settings, 'res', 1, 6, 1 )
             //     .name( 'Res' )
@@ -1760,7 +1751,7 @@
             //     .name( 'Auto Rotate' );
 
             // panel.add( settings, 'vertexCount' )
-            //     .name( 'Vertex count' ).listen().disable();
+                // .name( 'Vertex count' ).listen().disable();
         }
 
         // domready
@@ -1775,54 +1766,7 @@
             //  window.fragmentShaderSource = await (await fetch("../shaders/uber-shader.glsl")).text();
             // window.fragmentShaderSource = await (await fetch("../shaders/frosted-video-mandlebulb.glsl")).text();
             // window.fragmentShaderSource = await (await fetch("../shaders/simple-ripple.glsl")).text();
-            window.combineTexturesShaderSource = `
-            // Fragment shader
-            uniform sampler2D iChannel0;
-            uniform sampler2D iChannel1;
-            uniform vec3 iResolution;
-            uniform float iTime;
-            uniform vec4 iMouse;
-            uniform vec4 iMouseRaw;
-            uniform vec4 iMouseWheel;
-            uniform int numLights;
-
-            vec3 hsv2rgb(vec3 c) {
-                vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-                vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-                return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-            }
-
-            vec3 rgb2hsv(vec3 c) {
-                float eps = 1e-10;
-                vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-                vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-                vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-                float d = q.x - min(q.w, q.y);
-                float e = eps * 1.0e3;
-                return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-            }
-
-            void main() {
-                vec2 uv = gl_FragCoord.xy / iResolution.xy;
-                vec4 currentColor = texture2D(iChannel0, uv.xy);
-                vec4 previousColor = texture2D(iChannel1, uv.xy);
-                // decay
-                previousColor = previousColor * 0.9999999;
-
-                vec3 b = rgb2hsv(previousColor.rgb);
-                b.x += 0.01 * iTime;
-                b.x = mod(b.x, 1.0);
-                vec3 c = hsv2rgb(b);
-                previousColor.rgb = c;
-
-
-                // gl_FragColor = currentColor + previousColor;
-                // apply a "smear" effect between the two
-                float smearFactor = max(0.1, 1.0 - iTime);
-                vec4 smearColor = mix(previousColor, currentColor, smearFactor);
-                gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
-            }
-            `;
+            window.combineTexturesShaderSource = await (await fetch("/starpages/shaders/combine.glsl")).text();
             prepareCCapture();
             setupThree();
         }
@@ -2251,34 +2195,34 @@
         window.uScrollOffsetYSpeed = 0.05;
         window.uScrollOffsetXSpeed = -0.05;
 
-        window.bigSweepActive = false, window.bigSweepInterval = 0;
-        window.sweepFactor = 0.1;
-        window.tickBigSweep = function() {
-            if (window.bigSweepActive) {
-                window.mouseX = (Math.sin(Date.now() * 0.001) + 1) * ((window.innerWidth / 2) * window.sweepFactor);
-                window.mouseY = (Math.cos(Date.now() * 0.001) + 1) * ((window.innerHeight / 2) * window.sweepFactor);
-            }
-        }
-        window.toggleBigSweep = function(){
-            window.bigSweepActive = !window.bigSweepActive;
-            console.warn("window.bigSweepActive",window.bigSweepActive);   
-        }
+        // window.bigSweepActive = false, window.bigSweepInterval = 0;
+        // window.sweepFactor = 0.1;
+        // window.tickBigSweep = function() {
+        //     if (window.bigSweepActive) {
+        //         window.mouseX = (Math.sin(Date.now() * 0.001) + 1) * ((window.innerWidth / 2) * window.sweepFactor);
+        //         window.mouseY = (Math.cos(Date.now() * 0.001) + 1) * ((window.innerHeight / 2) * window.sweepFactor);
+        //     }
+        // }
+        // window.toggleBigSweep = function(){
+        //     window.bigSweepActive = !window.bigSweepActive;
+        //     console.warn("window.bigSweepActive",window.bigSweepActive);   
+        // }
 
-        window.jiggleSwirl = false;
-        window.swirlFreq = 1;
-        window.swirlMax = 1;
-        window.toggleJiggleSwirl = function(){
-            window.jiggleSwirl = !window.jiggleSwirl;
-            console.warn("window.jiggleSwirl",window.jiggleSwirl);
+        // window.jiggleSwirl = false;
+        // window.swirlFreq = 1;
+        // window.swirlMax = 1;
+        // window.toggleJiggleSwirl = function(){
+        //     window.jiggleSwirl = !window.jiggleSwirl;
+        //     console.warn("window.jiggleSwirl",window.jiggleSwirl);
 
-            clearInterval(window.mouseJiggler); 
-            if(window.jiggleSwirl){
-                window.mouseJiggler = setInterval(
-                    ()=>{
-                        window.mouseX = (Math.sin(Date.now()*window.swirlFreq*0.0015) * window.swirlMax*256)
-                    },16)
-            }
-        }
+        //     clearInterval(window.mouseJiggler); 
+        //     if(window.jiggleSwirl){
+        //         window.mouseJiggler = setInterval(
+        //             ()=>{
+        //                 window.mouseX = (Math.sin(Date.now()*window.swirlFreq*0.0015) * window.swirlMax*256)
+        //             },16)
+        //     }
+        // }
         
         document.addEventListener('DOMContentLoaded', async () => {
             let imageElement = document.getElementById('image'); // Assuming there's an img element with id 'image'
@@ -2357,14 +2301,29 @@
         },false)
 
 
+        let startTouchesDistance = 0;
         document.addEventListener('touchmove',async(e)=>{
             mouseX = e.touches[0].clientX;
             mouseY = e.touches[0].clientY;
             lastMouseMoveWasFake = false;
+            if(e.touches.length > 1) {
+                let currentTouchesDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                vec2MouseWheelRaw.y = startTouchesDistance - currentTouchesDistance;
+                startTouchesDistance = currentTouchesDistance;
+            }
         })
         document.addEventListener('touchstart',async(e)=>{
             mouseX = e.touches[0].clientX;
             mouseY = e.touches[0].clientY;
+            if(e.touches.length > 1) {
+                startTouchesDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+            }
         })
 
         // Mobile double-tap detection
