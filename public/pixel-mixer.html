@@ -819,8 +819,8 @@
             canvas = document.getElementById("canvas");
             window.renderer = new THREE.WebGLRenderer({canvas, alpha: true});
             //renderer.setClearColor(0x000000, 1.0);
-            renderer.autoClear = true;
-            // renderer.setPixelRatio( dpr );
+            renderer.autoClear = false;
+            renderer.setPixelRatio( dpr );
             renderer.setSize( window.innerWidth, window.innerHeight );
 				
 

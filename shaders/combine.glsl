@@ -31,15 +31,7 @@ void main() {
     vec4 previousColor = texture2D(iChannel1, uv.xy);
     
     // decay
-    previousColor = previousColor * 0.5;
+    previousColor = previousColor * 0.999;
 
-    // vec3 b = rgb2hsv(previousColor.rgb);
-    // b.x += 0.1 * iTime;
-    // b.x = mod(b.x, 1.0);
-    // vec3 c = hsv2rgb(b);
-    // previousColor.rgb = c;
-
-    gl_FragColor = currentColor + previousColor;
-    vec4 smearColor = mix(previousColor, currentColor, 0.9);
-    gl_FragColor = smearColor; //iMouse.x > 0.5 ? smearColor : currentColor;
+    gl_FragColor = mix(currentColor, previousColor, 0.5);
 }
