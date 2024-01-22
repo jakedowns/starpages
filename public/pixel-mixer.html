@@ -316,7 +316,7 @@
 
     <div class="intro-underlay fade-out" onclick="window.hideWelcome()"></div>
 
-    <div class="drop-here-text">pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
+    <div class="drop-here-text fadeout">pixel mixer<span>drop an image here<br/>or<br/>tap here to select an image <span class="hint">(local only, doesn't get uploaded anywhere)</span></span></div>
     
     <canvas id="canvas" class="undarken"></canvas>
     <script type="module">
@@ -339,7 +339,7 @@
         let canvas;
         
 
-        const dpr = window.devicePixelRatio;
+        const dpr = 1; // window.devicePixelRatio;
         const presentationFormat = navigator?.gpu?.getPreferredCanvasFormat();
         window.pixelWidth = window.innerWidth;
         window.pixelHeight = window.innerHeight;
@@ -482,13 +482,21 @@
             
         }
 
-        document.addEventListener('wheel', (e) => {
-            settings.radius = Math.max(0, settings.radius + e.deltaY * 0.01);
+        let minRadius = 10.0;
+        let maxRadius = 100.0;
+        let minX = 0.0;
+        let maxX = 100.0;
+        let minY = 0.0;
+        let maxY = 100.0;
 
-            vec2MouseWheelRaw
-            .set(
-                vec2MouseWheelRaw.x + e.deltaX * 0.01, 
-                vec2MouseWheelRaw.y - e.deltaY * 0.01
+        document.addEventListener('wheel', (e) => {
+            // Assuming minRadius and maxRadius are your minimum and maximum values for radius
+            settings.radius = Math.max(minRadius, Math.min(maxRadius, settings.radius + e.deltaY * 0.01));
+
+            // Assuming minX, maxX, minY, maxY are your minimum and maximum values for vec2MouseWheelRaw.x and vec2MouseWheelRaw.y
+            vec2MouseWheelRaw.set(
+                Math.max(minX, Math.min(maxX, vec2MouseWheelRaw.x + e.deltaX * 0.01)),
+                Math.max(minY, Math.min(maxY, vec2MouseWheelRaw.y - e.deltaY * 0.01))
             );
         });
 
@@ -605,7 +613,7 @@
                 window.leftMouseDown ? 1 : -1, 
                 0
             );
-            window.mouseLerping.lerp(window.mouseRaw, .1);
+            window.mouseLerping.lerp(window.mouseRaw, window.settings.mouseLerpFactor);
             vec2MouseWheelLerped.lerp(vec2MouseWheelRaw, .08);
         }
 
@@ -633,8 +641,15 @@
                     vec2MouseWheelRaw.x, 
                     vec2MouseWheelRaw.y
                 ),
+                // maybe we do a mouse position heatmap offscreen buffer at somepoint
+                iPrevMouse: new THREE.Vector4(
+                    window.prevMousePosition.x, 
+                    window.prevMousePosition.y, 
+                    window.prevMousePosition.z, 
+                    window.prevMousePosition.w
+                ),
 
-                num_lights: {value:settings.num_lights},
+                // num_lights: {value:settings.num_lights},
                 ambientLightColor: settings.ambientLightColor,
                 decayColor: settings.decayColor,
                 fxFloats: new THREE.Vector4(
@@ -642,7 +657,14 @@
                     settings.mixNormals,
                     settings.clickMouseToDraw ? 1.0 : 0.0,
                     settings.num_lights
-                )
+                ),
+                fxFloats2: new THREE.Vector4(
+                    settings.baseLineScaling,
+                    //settings.baseLineOffset,
+                    settings.hueShiftSpeed,
+                    settings.hueShiftOffset,
+                    0
+                ),
             }, ...uniforms};
 
             // console.warn('setting uniforms',uniforms)
@@ -660,15 +682,15 @@
                     return;
                 }
 
-                if(key === 'num_lights'){
-                    // console.log('setting num_lights',material.uniforms.num_lights,'<-',uniforms[key].value)
-                    material.uniforms.num_lights = uniforms[key].value; // parseFloat(uniforms[key]);
-                    return;
-                }
+                // if(key === 'num_lights'){
+                //     // console.log('setting num_lights',material.uniforms.num_lights,'<-',uniforms[key].value)
+                //     material.uniforms.num_lights = uniforms[key].value; // parseFloat(uniforms[key]);
+                //     return;
+                // }
 
-                if(key === 'fxFloats'){
+                if(key === 'fxFloats' || key === 'fxFloats2'){
                     // console.log('setting alphaShadow',uniforms[key])
-                    material.uniforms.fxFloats.value = uniforms[key];
+                    material.uniforms[key].value = uniforms[key];
                     return;
                 }
 
@@ -781,7 +803,7 @@
         }
 
         window.setupMaterials = function(){
-            let DEFAULT_U_VALUES = {
+            let DEFAULT_UNIFORMS = {
                 // compatibility uniforms
                 // tDiffuse: { value: inputTextureA.texture },
                 iTime: { value: 1.0 },
@@ -796,11 +818,13 @@
                 // iBuffer1: { value: normalTexture.texture },
 
                 iResolution: { value: new THREE.Vector3(0) },
+                iPrevMouse: { value: new THREE.Vector4(0) },
                 iMouse: { value: window.mouseLerping },
                 iMouseRaw: { value: window.mouseRaw },
                 iMouseWheel: { value: window.iMouseWheel },
-                num_lights: { value: settings.num_lights },
+                // num_lights: { value: settings.num_lights },
                 fxFloats: { value: new THREE.Vector4(0) },
+                fxFloats2: { value: new THREE.Vector4(0) },
                 ambientLightColor: { value: settings.ambientLightColor },
                 ambientLightColorAlpha: { value: settings.ambientLightColorAlpha },
                 decayColor: { value: settings.decayColor },
@@ -810,7 +834,7 @@
             window.outputMaterialA = new THREE.ShaderMaterial({
                 //glslVersion: THREE.GLSL3,
                 uniforms: {
-                    ...DEFAULT_U_VALUES
+                    ...DEFAULT_UNIFORMS
                 },
                 vertexShader: `
                     void main() {
@@ -826,7 +850,7 @@
             window.outputMaterialB = new THREE.ShaderMaterial({
                 //glslVersion: THREE.GLSL3,
                 uniforms: {
-                    ...DEFAULT_U_VALUES
+                    ...DEFAULT_UNIFORMS
                 },
                 vertexShader: `
                     void main() {
@@ -943,7 +967,7 @@
                 1, 
                 500
             );
-            camera.position.z = 4;
+            camera.position.z = 1;
 
             window.scene = new THREE.Scene();
 
@@ -1066,7 +1090,17 @@
             }
 
             window.mouseX = window.mouseY = 0;
+            window.prevMousePosition = new THREE.Vector4(0,0,0,0);
+            window.updatePrevMouse = function(){
+                prevMousePosition = {
+                    x: window.mouseX,
+                    y: window.mouseY,
+                    z: window.leftMouseDown ? 1 : -1,
+                    w: 0
+                }
+            }
             document.addEventListener('mousemove', (e)=>{
+                updatePrevMouse();
                 window.mouseX = e.clientX;
                 window.mouseY = e.clientY;
             });
@@ -1512,16 +1546,42 @@
             pixel_density: 1,
             
             useDoubleBuffer: true,
-            ambientLightColor: {r:0.0,g:0.0,b:0.0,a:0.0},
-            ambientLightColorAlpha: 0.01,
-            num_lights: 0.5,
+            ambientLightColor: {r:0.5,g:0.0,b:1.0,a:0.5},
+            ambientLightColorAlpha: 0.02,
+            num_lights: 0.999,
             alphaShadow: 0.9,
             decayColorAlpha: 0.001,
             mixNormals: 0,
             radius: 10.0,
-            decayColor: {r: 1.0, g: 0.0, b: 0.0, a: 0.001},
+            decayColor: {r: 1.0, g: 0.0, b: 0.0, a: 0.01},
 
-            clickMouseToDraw: false
+            clickMouseToDraw: false,
+
+            baseLineScaling: 0.0,
+
+            mouseLerpFactor: 0.1, // 0.1
+
+            hueShiftSpeed: 0.0,
+            hueShiftOffset: 0.0,
+        }
+
+        window.randomizeSettings = function(){
+            settings.ambientLightColor.r = Math.random();
+            settings.ambientLightColor.g = Math.random();
+            settings.ambientLightColor.b = Math.random();
+            settings.ambientLightColor.a = Math.random();
+            settings.ambientLightColorAlpha = Math.random();
+            settings.num_lights = Math.random();
+            settings.alphaShadow = Math.random();
+            settings.decayColorAlpha = Math.random();
+            settings.mixNormals = Math.random();
+            settings.radius = Math.random();
+            settings.decayColor.r = Math.random();
+            settings.decayColor.g = Math.random();
+            settings.decayColor.b = Math.random();
+            settings.decayColor.a = Math.random();
+            settings.baseLineScaling = Math.random();
+            settings.mouseLerpFactor = Math.random();
         }
 
         window.onSettingsChanged = function(){
@@ -1709,11 +1769,20 @@
                 .name( 'Pixel Density' )
                 .onChange( window.resizeCanvas );
 
-            panel.add(settings, 'num_lights', 0, 1, .2)
+            panel.add(settings, 'num_lights', 0, 1, .3)
                 .name( 'Num Lights #️⃣💡' )
+                .onChange(value => {
+                    window.settings.num_lights = value;
+                })
         
             panel.add(settings, 'alphaShadow', 0, 1, 0.01)
                 .name( 'Alpha Shadow' )
+
+            panel.add(settings, 'baseLineScaling', -2, 2, 0.01)
+                .name( 'Base Line Scaling' )
+                .onChange((value)=>{
+                    window.settings.baseLineScaling = value;
+                })
 
             // ambientLightColor
             panel.addColor(settings, 'ambientLightColor', true)
@@ -1734,7 +1803,7 @@
                 .onChange((value)=>{
                     window.settings.decayColor = value
                 });
-            panel.add(settings, 'decayColorAlpha', 0, 1, 0.0001)
+            panel.add(settings, 'decayColorAlpha', 0, .1, 0.0001)
                 .name( 'Decay Color Alpha' )
                 .onChange((value)=>{
                     window.settings.decayColor.a = Math.pow(value,2);
@@ -1747,8 +1816,11 @@
                     // console.warn('mix normal map', value);
                 });
 
+            panel.add(settings, 'mouseLerpFactor', 0, 1, 0.01)
+                .name("Lerp Factor")
+
             panel.add(settings, 'clickMouseToDraw')
-                .name("Use Mouse To Draw")
+                .name("Press To Draw")
                 .onChange((value)=>{
                     settings.clickMouseToDraw = value;
                 });
@@ -1766,6 +1838,19 @@
             
             panel.add({ resetPingPong: window.resetPingPong }, 'resetPingPong')
                 .name('[c] clear buffer')
+
+            // Hue Shift Speed
+            // Hue Shift Offset
+            panel.add(settings, 'hueShiftSpeed', 0, 1, 0.01)
+                .name('Hue Shift Speed')
+                .onChange((value)=>{
+                    settings.hueShiftSpeed = value;
+                });
+            panel.add(settings, 'hueShiftOffset', 0, 1, 0.01)
+                .name('Hue Shift Offset')
+                .onChange((value)=>{
+                    settings.hueShiftOffset = value;
+                });
 
             // panel.add({ toggleBigSweep: function() { window.toggleBigSweep(); } }, 'toggleBigSweep');
             // toggleJiggleSwirl
@@ -2490,12 +2575,7 @@
                 window.leftMouseDown ? 1 : -1, 
                 0
             );
-            window.mouseLerping.set(
-                window.mouseX, 
-                window.innerHeight - window.mouseY, 
-                window.leftMouseDown ? 1 : -1, 
-                0
-            );
+            window.mouseLerping.copy(window.mouseRaw)
             
 
             // if(!window.do_sort){
@@ -2558,7 +2638,7 @@
             requestAnimationFrame(function loop(){stats.update();requestAnimationFrame(loop)});};
             script.src='https://mrdoob.github.io/stats.js/build/stats.min.js';
             document.head.appendChild(script);
-        }, 1000);
+        }, 10000);
     });
 </script>
 </body>

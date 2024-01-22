@@ -9,6 +9,8 @@ uniform vec4 iMouseRaw;
 uniform vec4 iMouseWheel;
 uniform int numLights;
 
+uniform vec4 fxFloats2;
+
 vec3 hsv2rgb(vec3 c) {
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
     vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
@@ -46,18 +48,27 @@ void main() {
     gl_FragColor = previousColor + currentColor;
 
     // small chance of brightness increase or decrease (noise)
-    float noise = fract(sin(dot(uv.xy ,vec2(12.9898,78.233))) * 43758.5453);
-    if (noise < 0.01) {
-        float brightness = noise * 2.0 - 1.0; // random brightness change between -1 and 1
-        brightness *= 0.5;
-        gl_FragColor *= vec4(brightness, brightness, brightness, 1.0);
-        return;
-    }
+    // float noise = fract(sin(dot(uv.xy ,vec2(12.9898,78.233))) * 43758.5453);
+    // if (noise < 0.01) {
+    //     float brightness = noise * 2.0 - 1.0; // random brightness change between -1 and 1
+    //     brightness *= 0.01;
+    //     if(brightness > 0.0){
+    //         gl_FragColor.rgb += brightness;
+    //     }
+    //     else{
+    //         gl_FragColor.rgb -= brightness;
+    //     }
+    //     return;
+    // }
 
     // hue shift
+    // Convert the RGB color to HSV
     vec3 hsv = rgb2hsv(gl_FragColor.rgb);
-    hsv.x += 1.0 / (360.0/255.0);
+    // Add the hue shift speed (fxFloats2.y) to the hue component of the HSV color
+    hsv.x += fxFloats2.y / (360.0/255.0);
+    // Wrap around the hue value
     hsv.x = mod(hsv.x, 1.0);
+    // Convert the HSV color back to RGB
     gl_FragColor.rgb = hsv2rgb(hsv);
 
 }
