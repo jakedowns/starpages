@@ -52,20 +52,49 @@ float fastsqrt(float x) {
     return x * inversesqrt(x);
 }
 
+float invstep(float edge, float x) {
+    return 1.0 - step(edge, x);
+}
+
 // Shader main code
 void main_inner(vec2 uv, vec2 mouse) {
 
     float radius = clamp(abs(iMouseWheel.y * 0.01),-1.,1.);
+    vec3 sphereCenter = vec3(uv, 0.0);
+    vec3 sphereNormal = normalize(vec3(uv - mouse, fastsqrt(radius*radius - dot(uv - mouse, uv - mouse))));
+    
     // Quaternion-based rotation
     float angleX = mod(iTime * 100.0, 360.0); // Rotation angle around X-axis
     float angleY = mod(iTime * -100.0, 360.0); // Rotation angle around Y-axis
+    
+    
+
+    // define 3 moons rotating around our sphere
+    vec3 center1 = vec3(0.5, 0.5, 0.0);
+    float radius1 = 0.1;
+    vec3 center2 = vec3(0.5, 0.5, 0.0);
+    float radius2 = 0.1;
+    vec3 center3 = vec3(0.5, 0.5, 0.0);
+    float radius3 = 0.1;
+
+    // affect the rotation and offset of the moons based on time
+    float time = iTime * 0.1;
+    float spacing = 10.0;
+    // center1.x += sin(time) * spacing;
+    // center1.y += cos(time) * spacing;
+    // center2.x += sin(time + 1.0) * spacing;
+    // center2.y += cos(time + 1.0) * spacing;
+    // center3.x += sin(time + 2.0) * spacing;
+    // center3.y += cos(time + 2.0) * spacing;
+    // // and their radius
+    // radius1 += sin(time) * 0.05;
+    // radius2 += sin(time + 1.0) * 0.05;
+    // radius3 += sin(time + 2.0) * 0.05;
     
     // First light
     vec4 quatX1 = quat_from_axis_angle(vec3(1, 0, 0), radians(angleX));
     vec4 quatY1 = quat_from_axis_angle(vec3(0, 1, 0), radians(angleY));
     vec4 quatRot1 = quat_multiply(quatX1, quatY1);
-    vec3 sphereCenter = vec3(uv, 0.0);
-    vec3 sphereNormal = normalize(vec3(uv - mouse, fastsqrt(radius*radius - dot(uv - mouse, uv - mouse))));
 
     vec3 lightPos1 = rotate_by_quaternion(vec3(1, 0, 0), quatRot1);
     vec3 toLight1 = normalize(lightPos1 - sphereCenter);
@@ -90,34 +119,26 @@ void main_inner(vec2 uv, vec2 mouse) {
     vec3 lightPos3 = rotate_by_quaternion(vec3(1, 0, 0), quatRot3);
     vec3 toLight3 = normalize(lightPos3 - sphereCenter);
     diff = max(dot(sphereNormal, toLight3), 0.0);
-    vec3 colorUV3 = diff * vec3(0.15, 0.62, 0.33); // Third light color
+    // Third light color
+    vec3 colorUV3 = diff * vec3(0.15, 0.62, 0.33); 
+    
     // Incorporate ambientLightColor using a different blend than add for highlight/shadow
-    colorUV1 = mix(colorUV1, ambientLightColor.rgb, ambientLightColor.a);
-    colorUV2 = mix(colorUV2, ambientLightColor.rgb, ambientLightColor.a);
-    colorUV3 = mix(colorUV3, ambientLightColor.rgb, ambientLightColor.a);
+    // colorUV1 = mix(colorUV1, ambientLightColor.rgb, ambientLightColor.a);
+    // colorUV2 = mix(colorUV2, ambientLightColor.rgb, ambientLightColor.a);
+    // colorUV3 = mix(colorUV3, ambientLightColor.rgb, ambientLightColor.a);
 
-    // vec3 sphereSurface = sphereCenter + sphereNormal * radius;
-    // sphereSurface = vec3(uv, 0.0) + sphereNormal * radius;
-    // vec3 toLight4 = normalize(sphereSurface - sphereCenter);
-    // diff = max(dot(sphereNormal, toLight4), 0.0);
-    // vec4 colorUserInput = texture2D(iChannel3, gl_FragCoord.xy / iResolution.xy);
-    // vec3 colorUV4 = colorUserInput.rgb; // todo * diff
+    vec3 sphereSurface = sphereCenter + sphereNormal * radius;
+    sphereSurface = vec3(uv, 0.0) + sphereNormal * radius;
+    vec3 toLight4 = normalize(sphereSurface - sphereCenter);
+    diff = max(dot(sphereNormal, toLight4), 0.0);
+    vec4 colorUserInput = texture2D(iChannel3, gl_FragCoord.xy / iResolution.xy);
+    vec3 colorUV4 = colorUserInput.rgb; // todo * diff
 
     //Combine the three lights
-    vec3 colorUV;// = vec3(0.0);
-    if(fxFloats.w >= 0.6){
-        colorUV = colorUV1 + colorUV2 + colorUV3;
-    }
-    else if(fxFloats.w >= 0.3){
-        colorUV = colorUV1 + colorUV2;
-    }else{
-        colorUV = colorUV1;
-    }
+    vec3 colorUV = colorUV1 * step(0.0, fxFloats.w) + colorUV2 * step(0.3, fxFloats.w) + colorUV3 * step(0.6, fxFloats.w);
 
     // colorUV += colorUV4;
     // colorUV = colorUV4;
-
-    
 
     vec3 colorNormalMap = vec3(0.0);// diff * vec3(0.27, 0.15, 0.62);
     colorNormalMap.r = sphereNormal.x * 0.5 + 0.5;
@@ -128,41 +149,39 @@ void main_inner(vec2 uv, vec2 mouse) {
     // fxFloats.y = mixNormals
     // fxFloats.z = clickMouseToDraw
     // fxFloats.w = num_lights
-    float doDraw = 1.;
-    if(fxFloats.z > 0.){
-        doDraw = 0.;
-        if(iMouse.z > 0.0){
-            doDraw = 1.;
-        }
-    }
+    // float doDraw = 1.;
+    // if(fxFloats.z > 0.){
+    //     doDraw = 0.;
+    //     if(iMouse.z > 0.0){
+    //         doDraw = 1.;
+    //     }
+    // }
     // write to normal map
     //iBuffer1 = vec4(texture2D(iChannel2, uv), 1.0);
 
-    if(length(uv - mouse) < radius && doDraw > 0.){
-        colorUV = mix(colorUV, colorNormalMap, fxFloats.y);
+    float inCircle1 = step(dot(uv - center1.xy, uv - center1.xy), radius1 * radius1);
+    float inCircle2 = step(dot(uv - center2.xy, uv - center2.xy), radius2 * radius2);
+    float inCircle3 = step(dot(uv - center3.xy, uv - center3.xy), radius3 * radius3);
 
-        //iBuffer1 = vec4(colorUV, 1.0);
-        gl_FragColor = vec4(colorUV, 1.0);
+    float inMainCircle = step(dot(uv - sphereCenter.xy, uv - sphereCenter.xy), radius * radius);
 
-        if(fxFloats.x > 0.0) {
-            // iBuffer0 = vec4(100.0,0.0,0.0, 1.0);
-            // iBuffer0.a = ((iBuffer0.r * .4) + (iBuffer0.g * 1.3) + (iBuffer0.b * .9)) / 3.0;
-            gl_FragColor.a = ((gl_FragColor.r) + (gl_FragColor.g) + (gl_FragColor.b)) / 3.0;
-            gl_FragColor.a *= fxFloats.x;
-        }else{
-            // gl_FragColor.a = 1.0;
-        }
-        // mix decayColor with the colorUV
-        gl_FragColor = mix(decayColor, gl_FragColor, fxFloats.x);
-        return;
-    }
+    float inAnyCircle = max(
+        max(inCircle1, inCircle2), 
+        inCircle3
+    );
+    inAnyCircle = max(inAnyCircle, inMainCircle);
+    float doDraw = 1.0; // step(0.0, fxFloats.z);
 
-    // If the pixel is not within the radius of the hemisphere, apply a default color and return
-    gl_FragColor = decayColor;
-    //iBuffer0.a = 0.;
-    if(fxFloats.x <= 0.0){
-        gl_FragColor.a = 1.0;
-    }
+    // Calculate colorUV and alpha
+    colorUV = mix(colorUV, colorNormalMap, fxFloats.y);
+    vec4 color = vec4(colorUV, 1.0);
+    color.a = mix(1.0, ((color.r) + (color.g) + (color.b)) / 3.0 * fxFloats.x, step(0.0, fxFloats.x));
+
+    // Calculate final color based on inAnyCircle and doDraw
+    vec4 finalColor = mix(decayColor, color, inAnyCircle * doDraw);
+    finalColor.a = mix(1.0, finalColor.a, step(0.0, fxFloats.x));
+
+    gl_FragColor = finalColor;
     return;
 
     /*

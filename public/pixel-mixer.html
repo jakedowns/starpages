@@ -812,7 +812,6 @@
                 //iChannel2: { value: normalTexture.texture },
                 iChannel3: { value: userInputTexture.texture },
 
-
                 // output buffer slot 1
                 // iBuffer0: { value: outputTextureA.texture },
                 // iBuffer1: { value: normalTexture.texture },
@@ -1104,8 +1103,9 @@
                 window.mouseX = e.clientX;
                 window.mouseY = e.clientY;
             });
-            window.vec2MouseWheelRaw = new THREE.Vector2(0.0, 10.0);
-            window.vec2MouseWheelLerped = new THREE.Vector2(0.0, 10.0);
+            let wheelStartRadius = Math.max(window.innerWidth, window.innerHeight) / 2;
+            window.vec2MouseWheelRaw = new THREE.Vector2(0.0, wheelStartRadius);
+            window.vec2MouseWheelLerped = new THREE.Vector2(0.0, wheelStartRadius);
             
 
             // Global variable to store the last played video
@@ -1552,7 +1552,7 @@
             alphaShadow: 0.9,
             decayColorAlpha: 0.001,
             mixNormals: 0,
-            radius: 10.0,
+            radius: Math.max(window.innerWidth, window.innerHeight) / 2,
             decayColor: {r: 1.0, g: 0.0, b: 0.0, a: 0.01},
 
             clickMouseToDraw: false,
@@ -1919,6 +1919,12 @@
             // }, 'toggleSlowMotion').name('[s] slow motion');
 
             panel.add({
+                randomizeSettings: function() {
+                    window.randomizeSettings();
+                }
+            }, 'randomizeSettings').name('[x] randomize settings');
+
+            panel.add({
                 randomWalk: function() {
                     window.randomWalk();
                 }
@@ -1947,9 +1953,6 @@
 
         // domready
         async function onReady(){
-
-            
-
             setupPanel();
 
             // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
