@@ -298,8 +298,8 @@
     
     <canvas id="canvas" classname="undarken"></canvas>
     <script>
-        window.pixelWidth = window.innerWidth / 2.0;
-        window.pixelHeight = window.innerHeight / 2.0;
+        window.pixelWidth = window.innerWidth;
+        window.pixelHeight = window.innerHeight;
         window.canvas;
         window.uReflectionY = 0.5; // 0.5 = no reflection, 0 = full reflection, 1 = no reflection
         window.reverseSort = true;
@@ -703,7 +703,7 @@
                 uniforms: {
                     iChannel0: { value: window.mandlebulbTexture },
                     iChannel1: { value: window.accumulationTexture.texture },
-                    iResolution: { value: new THREE.Vector3(pixelWidth, pixelHeight, 1.0) },
+                    iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                     iMouse: { value: window.mouseLerping },
                     iMouseRaw: { value: window.mouseRaw },
                     iMouseWheel: { value: window.iMouseWheel },
@@ -728,8 +728,8 @@
 
             function resizeRendererToDisplaySize(renderer) {
                 canvas = renderer.domElement;
-                let width = pixelWidth ?? window.innerWidth;
-                let height = pixelHeight ?? window.innerHeight;
+                let width = window.innerWidth;
+                let height = window.innerHeight;
 
                 // force to even dimensions for ffmpeg compatibility
                 width = 2 * Math.floor(width / 2);
@@ -737,6 +737,8 @@
 
                 const needResize = canvas.width !== width || canvas.height !== height;
                 if (needResize) {
+                    canvas.width = width;
+                    canvas.height = height;
                     renderer.setSize(width, height, false);
                 }
                 return needResize;
@@ -920,9 +922,7 @@
             window.animate = function(time) {
                 if (resizeRendererToDisplaySize(renderer)) {
                     canvas = renderer.domElement;
-                    // enforce dimensions of 2 for ffmpeg compatibility
-                    canvas.width = 2 * Math.floor(canvas.clientWidth / 2);
-                    canvas.height = 2 * Math.floor(canvas.clientHeight / 2);
+                    console.warn('resizing');
 
                     camera.aspect = canvas.width / canvas.height;
                     camera.updateProjectionMatrix();
@@ -1162,6 +1162,8 @@
                 const renderer = new THREE.WebGLRenderer({canvas,alpha:true});
                 const width = canvas.clientWidth;
                 const height = canvas.clientHeight;
+                pixelWidth = width;
+                pixelHeight = height;
                 renderer.setSize(width, height, false);
             })
 
@@ -1219,17 +1221,17 @@
         let seed = 0;
         let MODE = 1;
         // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
-        let _pixel_density = 8; //4; 
+        // let _pixel_density = 1; //4; 
         let _max_step_sort_size = 1e5 * 2;
-        Object.defineProperty(window, "pixel_density", {
-            get: function(){
-                return _pixel_density;
-            },
-            set: function(value){
-                _pixel_density = value;
-                resizeCanvas();
-            }
-        });
+        // Object.defineProperty(window, "pixel_density", {
+        //     get: function(){
+        //         return _pixel_density;
+        //     },
+        //     set: function(value){
+        //         _pixel_density = value;
+        //         resizeCanvas();
+        //     }
+        // });
         Object.defineProperty(window, "MAX_SORT_STEP_SIZE", {
             get: function(){
                 return _max_step_sort_size; // Math.floor(canvas.width / pixel_density) * Math.floor(canvas.height / pixel_density);
@@ -1418,6 +1420,7 @@
 
         // domready
         async function onReady(){
+            
             // if(!confirm('this demo produces flashing lights, are you sure you want to continue?')){
             //     return;
             // }
@@ -1449,6 +1452,7 @@
             `;
             prepareCCapture();
             setupThree();
+            resizeCanvas();
         }
 
         window.addEventListener("resize", ()=>{
@@ -1459,10 +1463,10 @@
         });
 
         function resizeCanvas() {
-            canvas.width = pixelWidth;
-            canvas.height = pixelHeight;
-            fixedPixelsX = Math.floor(canvas.width/pixel_density);
-            fixedPixelsY = Math.floor(canvas.height/pixel_density);
+            canvas.width = window.innerWidth; //pixelWidth;
+            canvas.height = window.innerHeight; //pixelHeight;
+            fixedPixelsX = Math.floor(canvas.width);
+            fixedPixelsY = Math.floor(canvas.height);
             window.DID_BIND_BASE_SINCE_RESIZE = false;
             // update our iResolution uniform
             shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
@@ -1493,7 +1497,7 @@
         let fixedPixelsX,fixedPixelsY;
         function initializePositionsAndOffsetData(keepPixelData = true) {
             numPixels = canvas.width * canvas.height;
-            numPixels = Math.floor(numPixels / pixel_density);
+            numPixels = Math.floor(numPixels);
 
             if(!keepPixelData){
                 pixel_positions = [];

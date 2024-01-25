@@ -165,11 +165,11 @@ void main_inner(vec2 uv, vec2 mouse) {
 
     float inMainCircle = step(dot(uv - sphereCenter.xy, uv - sphereCenter.xy), radius * radius);
 
-    float inAnyCircle = max(
+    /*inAnyCircle = max(
         max(inCircle1, inCircle2), 
         inCircle3
-    );
-    inAnyCircle = max(inAnyCircle, inMainCircle);
+    );*/
+    float inAnyCircle = step(0.0, inMainCircle);
     float doDraw = 1.0; // step(0.0, fxFloats.z);
 
     // Calculate colorUV and alpha
@@ -179,7 +179,8 @@ void main_inner(vec2 uv, vec2 mouse) {
 
     // Calculate final color based on inAnyCircle and doDraw
     vec4 finalColor = mix(decayColor, color, inAnyCircle * doDraw);
-    finalColor.a = mix(1.0, finalColor.a, step(0.0, fxFloats.x));
+    //finalColor.a = mix(1.0, finalColor.a, step(0.0, fxFloats.x));
+    finalColor.a = 1.0;
 
     gl_FragColor = finalColor;
     return;

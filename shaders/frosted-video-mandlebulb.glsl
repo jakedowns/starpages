@@ -335,13 +335,13 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     
     if (length(fragCoord - iMouse.xy) < 30.0 * mws) {
         fragColor += vec4(0.0, 1.0, 0.0, debug_element_alpha);
-        //return;
+        return;
     }
 
     // if we're within a 30px radius of iMouseRaw, return full red
     if (length(fragCoord - iMouseRaw.xy) < 20.0 * mws) {
         fragColor += vec4(1.0, 0.0, 0.0, debug_element_alpha);
-        //return;
+        return;
     }
 
     
@@ -577,7 +577,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // Define the number of samples per pixel
-    const int numSamples = 1;//4;
+    const int numSamples = 1;
 
     // Initialize color accumulator
     vec4 accumColor = vec4(0.0);
@@ -605,7 +605,14 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 // Comment this out on shadertoy
 void main() {
     vec4 fragColor = vec4(0.0);
-    vec2 fragCoord = gl_FragCoord.xy;
+    vec2 fragCoord = gl_FragCoord.xy; // / iResolution.xy;
+
+    // Define the pixelation factor
+    float pixelationFactor = 10.0; // Increase this value for more pixelation
+
+    // Modify the fragment coordinates for pixelation
+    fragCoord = floor(fragCoord / pixelationFactor) * pixelationFactor;
+
     mainImage(fragColor, fragCoord);
     gl_FragColor = fragColor;
 }
