@@ -319,6 +319,22 @@ vec3 transform3DPointToUVDepth(vec3 point, vec3 normal, vec3 camPos, vec3 camToP
     return vec3(uv, camDist);
 }
 
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 rgb2hsv(vec3 c) {
+    float eps = 1e-10;
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    float e = eps * 1.0e3;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
 void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) { 
 
     fragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -330,18 +346,18 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     mws = abs(mws);
     //mws += .1;
 
-    float debug_element_alpha = .2;
+    float debug_element_alpha = .01;
     //float debug_element_prescale = .01;
     
     if (length(fragCoord - iMouse.xy) < 30.0 * mws) {
         fragColor += vec4(0.0, 1.0, 0.0, debug_element_alpha);
-        return;
+        //return;
     }
 
     // if we're within a 30px radius of iMouseRaw, return full red
     if (length(fragCoord - iMouseRaw.xy) < 20.0 * mws) {
         fragColor += vec4(1.0, 0.0, 0.0, debug_element_alpha);
-        return;
+        //return;
     }
 
     
@@ -349,7 +365,7 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     // Define the up vector
     vec3 up = vec3(0.0, 1.0, 0.0);
      // Sample from iChannel0
-    vec4 texColor = texture(iChannel0, fragCoord / iResolution.xy);
+    vec4 texColor = texture(iChannel0, fragCoord);// / iResolution.xy);
 
     // Calculate luminance
     float luminance = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
@@ -404,8 +420,10 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
 
     // The background color is calculated based on the y coordinate of the view.
     vec3 bg = exp(uv.y - 2.0) * vec3(0.4, 1.6, 1.0);
-    // hue-shift the bg
-    bg = mix(bg, vec3(0.4, 1.6, 1.0), 0.5);
+    // hue-shift the bg (rgb->hsv->rgb)
+    vec3 b2 = rgb2hsv(bg);
+    b2.x += mod(iTime * 0.1, 1.0);
+    bg = hsv2rgb(b2);
 
     // The halo effect is calculated based on the dot product of the normalized vectors from the camera to the origin and the ray direction.
     float halo = clamp(dot(normalize(vec3(-ro.x, -ro.y, -ro.z)), rd), 0.0, 1.0);
@@ -422,13 +440,15 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
     // result
     vec3 res = intersect(ro, rd, time);
     if(res.x > 0.0) {
-        float SHADOW_ATTENUATION = .1; //-2.;
+        // A value of 0.0 means no shadow, while 1.0 means full shadow.
+        // Valid range for 'k' is [0.0, 1.0].
+        float SHADOW_ATTENUATION = 10.; //-2.;
         p = ro + res.x * rd;
         vec3 n = nor(p, time);
         float shadow = softshadow(p, sundir, SHADOW_ATTENUATION, time);
 
         // Define base colors for the lighting components
-        vec3 sunColor = vec3(0.4, 1.0, 1.0);
+        vec3 sunColor = vec3(0.82, 0.4, 1.0);
         vec3 skyColor = vec3(0.29, 0.11, 0.41);
         vec3 backgroundColor = vec3(0.93, 0.06, 0.89);
 
@@ -494,10 +514,11 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         // 1.0 is the maximum value for the dot product of the normal and the ray direction
         // 3.0 is the power to which the result is raised, controlling the intensity of the fresnel effect
         // ===
-        float factor2 = (iMouseRaw.y/iResolution.y);
+        float factor2 =  ( (iMouseRaw.y/iResolution.y)*2.0 - 1.0 );
         float fresnel = pow(1.0 - dot(n, rd), 3. * factor2);
-        vec3 fresnelEffect = vec3(1.0, 1.0, 1.0) * fresnel;
-        col += 1.0 - fresnelEffect;  // Additively mix the fresnel effect
+        vec3 fresColor = vec3(0.0, 0.0, 1.0);
+        vec3 fresnelEffect = fresColor * fresnel;
+        col += fresnelEffect;  // Additively mix the fresnel effect
 
         
         
@@ -530,11 +551,12 @@ void mainImageSuperSampled(out vec4 fragColor, in vec2 fragCoord) {
         float lightDistance = length(p - ro);
         float lightAmount = smoothstep(lightRadius, 0.0, lightDistance);
         // set the color to magenta in a variable
-        vec3 magentaColor = vec3(1.0, 0.0, 1.0);
+        vec3 magentaColor = vec3(0.22, 0.0, 1.0);
         col = mix(col, magentaColor, lightAmount);
 
         // blur / diffusion
 
+        // noise
         //random sample to create a grainy / bokeh effect based on distance to camera
         float randomSample = fract(sin(dot(p.xy, vec2(12.9898, 78.233))) * 43758.5453);
         float grainAmount = smoothstep(0.0, 1.0, randomSample * 0.9 * camDist);
@@ -579,13 +601,16 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     // Define the number of samples per pixel
     const int numSamples = 1;
 
+    //fragCoord /= 4.0;
+    fragCoord += vec2(2.0);
+
     // Initialize color accumulator
     vec4 accumColor = vec4(0.0);
 
     // Loop over each sample
     for (int i = 0; i < numSamples; ++i) {
         // Generate a random offset within the pixel
-        vec2 offset = vec2(float(i) / float(numSamples)) - 0.5;
+        vec2 offset = vec2(0.0); //vec2(float(i) / float(numSamples)) - 0.5;
 
         // Add the offset to the fragment coordinates
         vec2 sampleCoord = fragCoord + offset;
@@ -606,12 +631,6 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 void main() {
     vec4 fragColor = vec4(0.0);
     vec2 fragCoord = gl_FragCoord.xy; // / iResolution.xy;
-
-    // Define the pixelation factor
-    float pixelationFactor = 10.0; // Increase this value for more pixelation
-
-    // Modify the fragment coordinates for pixelation
-    fragCoord = floor(fragCoord / pixelationFactor) * pixelationFactor;
 
     mainImage(fragColor, fragCoord);
     gl_FragColor = fragColor;

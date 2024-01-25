@@ -20,7 +20,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://jakedowns.github.io/starpages/res/CCapture.all.min.js"></script>
     <link href="https://unpkg.com/tailwindcss@^2.0.2/dist/tailwind.min.css" rel="stylesheet">
-    <!-- <script type="module">
+    <script type="module">
         import { GUI } from './import/threejs/examples/jsm/libs/lil-gui.module.min.js';
         const panel = new GUI( );
 			
@@ -30,7 +30,7 @@
 				panel.add( settings, 'wireframe' ).name( 'Wireframe' ).onChange( setMaterial );
 				panel.add( settings, 'autoRotate' ).name( 'Auto Rotate' );
 				panel.add( settings, 'vertexCount' ).name( 'Vertex count' ).listen().disable();
-    </script> -->
+    </script>
     <script>
         // stat.js
         (function(){
@@ -274,7 +274,7 @@
     <div id="controls"> 
         <input type="file" accept="image/*,video/*,image/svg+xml" id="fileupload" />
         <progress id="progress" value="0" max="100"></progress>
-        <button onclick="window.startCapture()">record video</button>
+        <button onclick="window.startCapture()" style="background:white; color:black;">record video</button>
     </div>
 
     <div class="intro-card transition-opacity fade-out">
@@ -634,11 +634,11 @@
                 THREE.UnsignedByteType
             );
 
-            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
-            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
-            window.accumulationTexture.needsUpdate = true;
+            window.currentFrameTextureRT = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTextureRT = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTextureRT.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTextureRT.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTextureRT.needsUpdate = true;
 
             
             // Assuming you have a texture loaded into a variable named 'texture'
@@ -677,10 +677,6 @@
 
             window.shaderMaterial = new THREE.ShaderMaterial({
                 uniforms: {
-                    u_time: { value: 1.0 },
-                    u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-                    
-                    // compatibility uniforms
                     iTime: { value: 1.0 },
                     iChannel0: { value: mandlebulbTexture },
                     iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
@@ -702,7 +698,7 @@
             window.shaderAccumulationMaterial = new THREE.ShaderMaterial({
                 uniforms: {
                     iChannel0: { value: window.mandlebulbTexture },
-                    iChannel1: { value: window.accumulationTexture.texture },
+                    iChannel1: { value: window.accumulationTextureRT.texture },
                     iResolution: { value: new THREE.Vector3(window.innerWidth, window.innerHeight, 1.0) },
                     iMouse: { value: window.mouseLerping },
                     iMouseRaw: { value: window.mouseRaw },
@@ -728,8 +724,8 @@
 
             function resizeRendererToDisplaySize(renderer) {
                 canvas = renderer.domElement;
-                let width = window.innerWidth;
-                let height = window.innerHeight;
+                let width = window.innerWidth * window.PIXEL_RATIO;
+                let height = window.innerHeight * window.PIXEL_RATIO;
 
                 // force to even dimensions for ffmpeg compatibility
                 width = 2 * Math.floor(width / 2);
@@ -838,7 +834,7 @@
             let lastPlayedVideo = null;
 
             window.onVideoPause = function(){
-                window.fixedTime = shaderMaterial.uniforms.u_time.value;
+                window.fixedTime = shaderMaterial.uniforms.iTime.value;
                 if(!window.capturing && !handling_slow_motion_advance){
                     window.videoIsPlaying = false;
                 }
@@ -931,39 +927,42 @@
                 let _time = window.fixedTime ? window.fixedTime : time * 0.001;
 
                 // Use a custom shader material that combines the textures
-                window.shaderMaterial.uniforms.iChannel0.value = window.mandlebulbTexture;
+                window.shaderMaterial.uniforms.iChannel0.value = window.mandlebulbTexture.texture;
 
 
-                window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture;
-                window.shaderAccumulationMaterial.uniforms.iChannel1.value = accumulationTexture;
+                window.shaderAccumulationMaterial.uniforms.iChannel0.value 
+                    //= window.currentFrameTextureRT.texture;
+                    = window.mandlebulbTexture.texture;
+
+                window.shaderAccumulationMaterial.uniforms.iChannel1.value 
+                    = accumulationTextureRT.texture;
+                
                 window.shaderAccumulationMaterial.uniforms.iTime.value = _time;
 
-                shaderMaterial.uniforms.iTime.value = shaderMaterial.uniforms.u_time.value
-                shaderMaterial.uniforms.iChannel0.value = accumulationTexture;
+                shaderMaterial.uniforms.iTime.value = _time;
+                shaderMaterial.uniforms.iChannel0.value = accumulationTextureRT.texture;
                 shaderMaterial.uniforms.iResolution.value.set(pixelWidth, pixelHeight, 1.0);
 
-                window.accumulationTexture.needsUpdate = true;
+                window.accumulationTextureRT.needsUpdate = true;
 
                 // Update uniforms
-                shaderMaterial.uniforms.u_time.value = _time;
-                shaderMaterial.uniforms.u_resolution.value.set(pixelWidth, pixelHeight);
                 updateMouseUniform();
 
-                // Render the scene into the currentFrameTexture
-                renderer.setRenderTarget(window.currentFrameTexture);
-                renderer.render(scene, camera);
+                // // Render the scene into the currentFrameTextureRT
+                // renderer.setRenderTarget(window.currentFrameTextureRT);
+                // renderer.render(scene, camera);
 
-                // Use the rendered texture as input for the next pass
-                shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+                // // Use the rendered texture as input for the next pass
+                // shaderMaterial.uniforms.iChannel0.value = window.currentFrameTextureRT.texture;
 
                 // Render the accumulation pass to the screen
                 renderer.setRenderTarget(null);
                 renderer.render(scene, camera);
 
                 // Swap the textures
-                let temp = window.currentFrameTexture;
-                window.currentFrameTexture = window.accumulationTexture;
-                window.accumulationTexture = temp;
+                // let temp = window.currentFrameTextureRT;
+                // window.currentFrameTextureRT = window.accumulationTextureRT;
+                // window.accumulationTextureRT = temp;
 
                 
                 // sub-frame playback
@@ -1220,6 +1219,7 @@
         let frameCount = 0;
         let seed = 0;
         let MODE = 1;
+        window.PIXEL_RATIO = 0.5;
         // larger = LARGER pixels, smaller = smaller (FASTER, LOWER REZ), 1:1 pixel ratio (SLOWER, HIGH REZ)
         // let _pixel_density = 1; //4; 
         let _max_step_sort_size = 1e5 * 2;
@@ -1398,21 +1398,22 @@
             window.originalPixelDataTexture.image.src = url;
             window.originalPixelDataTexture.needsUpdate = true;
 
+            // clone it to mandelbulbTexture
             window.mandlebulbTexture.image.src = url;
             window.mandlebulbTexture.needsUpdate = true;
 
             // clear out our accumulator texture
             // clear out our textures
-            window.currentFrameTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.currentFrameTexture.needsUpdate = true;
-            window.accumulationTexture = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
-            window.accumulationTexture.texture.magFilter = THREE.NearestFilter;
-            window.accumulationTexture.texture.minFilter = THREE.NearestFilter;
-            window.accumulationTexture.needsUpdate = true;
+            window.currentFrameTextureRT = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.currentFrameTextureRT.needsUpdate = true;
+            window.accumulationTextureRT = new THREE.WebGLRenderTarget(pixelWidth, pixelHeight);
+            window.accumulationTextureRT.texture.magFilter = THREE.NearestFilter;
+            window.accumulationTextureRT.texture.minFilter = THREE.NearestFilter;
+            window.accumulationTextureRT.needsUpdate = true;
 
             // set shaderMaterial and accumulationMaterial to use the new, clean, textures
-            window.shaderMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
-            window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.currentFrameTexture.texture;
+            window.shaderMaterial.uniforms.iChannel0.value = window.mandlebulbTexture;// window.currentFrameTexture.texture;
+            window.shaderAccumulationMaterial.uniforms.iChannel0.value = window.mandlebulbTexture; //window.currentFrameTexture.texture;
             // needs update
             window.shaderMaterial.uniforms.iChannel0.value.needsUpdate = true;
             window.shaderAccumulationMaterial.uniforms.iChannel0.value.needsUpdate = true;
