@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>GPU Bubble Sort (TSL)</title>
+	<style>
+		html, body { margin: 0; height: 100%; background: #111; color: #ddd; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; }
+		#ui { position: fixed; top: 8px; left: 8px; display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.4); padding: 8px 10px; border-radius: 8px; }
+		#ui .hint { cursor: help; opacity: 0.85; user-select: none; }
+		#drop-overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); background: rgba(0,0,0,0.35); color: #fff; font-size: 20px; letter-spacing: 0.3px; text-shadow: 0 1px 2px rgba(0,0,0,0.6); z-index: 10; }
+		#drop-overlay .panel { border: 2px dashed rgba(255,255,255,0.6); padding: 16px 20px; border-radius: 10px; background: rgba(0,0,0,0.25); }
+		label { opacity: 0.9; }
+		canvas { display: block; width: 100vw; height: 100vh; object-fit: contain; }
+	</style>
+
+</head>
+<body>
+	<div id="ui">
+		<label>Speed <input id="speed" type="range" min="1" max="256" step="1" value="10"></label>
+		<label>Mode
+			<select id="mode">
+				<option value="lumHoriz">lumHoriz</option>
+				<option value="hueLumVert" selected>hueLumVert</option>
+			</select>
+		</label>
+		<button id="reset">Reset</button>
+		<span id="status"></span>
+		<span class="hint" title="Drop a file here to sort">🛈</span>
+	</div>
+	<div id="drop-overlay"><div class="panel">Drop an image anywhere to sort</div></div>
+	<script type="importmap">
+		{
+			"imports": {
+				"three": "https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.webgpu.js",
+				"three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.webgpu.js",
+				"three/tsl": "https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.tsl.js",
+				"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.181.0/examples/jsm/"
+			}
+		}
+	</script>
+		<script type="module">
+			import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.webgpu.min.js';
+			import { Fn, uv, uniform, vec2, vec3, vec4, float, int, If, mod, floor, clamp, dot, texture } from 'https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.tsl.min.js';
+
+		// NOTE: This implements a GPU odd-even (brick) sort pass per frame across image rows
+		// using ping-pong framebuffers. It's compute-like and runs entirely on the GPU.
+		// Each pass compares adjacent pairs (i, i+1) for either odd or even i based on phase.
+		// Over many passes it approximates a bubble sort of each row by luminance.
+
+		const IMAGE_URL = './res/360_F_202297164_NSSIqkr7QKi5Ltjrizwh9XGzH0MNANRN.jpg';
+
+		const renderer = new THREE.WebGPURenderer({ antialias: false, powerPreference: 'high-performance' });
+		renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+		document.body.appendChild(renderer.domElement);
+		await renderer.init();
+
+		const scene = new THREE.Scene();
+		const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+		const quadGeom = new THREE.PlaneGeometry(2, 2);
+
+			// Fullscreen blit material (TSL)
+			const blit_tInput = uniform(null);
+			const blitMat = new THREE.MeshBasicNodeMaterial({ depthTest: false, depthWrite: false });
+			blitMat.colorNode = Fn(() => {
+				return texture(blit_tInput, uv());
+			})();
+
+			// Odd-even row sort pass material (horizontal, luminance) - TSL
+			const sortH_tInput = uniform(null);
+			const sortH_resolution = uniform(new THREE.Vector2(1,1), 'vec2');
+			const sortH_phase = uniform(0, 'int');
+			const sortH_direction = uniform(0, 'int');
+			const sortMatLumHoriz = new THREE.MeshBasicNodeMaterial({ depthTest: false, depthWrite: false });
+			sortMatLumHoriz.colorNode = Fn(() => {
+				const size = sortH_resolution;
+				const texel = vec2(1,1).div(size);
+				const pxy = uv().mul(size).sub(0.5);
+				const ip = pxy.add(0.5).floor();
+				const ipx = clamp(ip.x, float(0), size.x.sub(1.0));
+				const ipy = clamp(ip.y, float(0), size.y.sub(1.0));
+				const ipClamped = vec2(ipx, ipy);
+				const start = float(sortH_phase);
+				const isLeft = mod(ipClamped.x, 2.0).equal(start);
+				const isRight = mod(ipClamped.x, 2.0).equal(float(1.0).sub(start));
+				const A = texture(sortH_tInput, ipClamped.add(0.5).mul(texel));
+				const lum = (c) => dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+				let outColor = A.toVar();
+				If( isLeft.and( ipClamped.x.add(1.0).lessThan( size.x ) ), () => {
+					const B = texture(sortH_tInput, vec2(ipClamped.x.add(1.0), ipClamped.y).add(0.5).mul(texel));
+					const La = lum(A);
+					const Lb = lum(B);
+					const swap = sortH_direction.equal( int(0) ).select( La.greaterThan(Lb), La.lessThan(Lb) );
+					If( swap, () => { outColor.assign( B ); } );
+				});
+				If( isRight.and( ipClamped.x.sub(1.0).greaterThanEqual( float(0) ) ), () => {
+					const Lc = texture(sortH_tInput, vec2(ipClamped.x.sub(1.0), ipClamped.y).add(0.5).mul(texel));
+					const Ll = lum(Lc);
+					const La2 = lum(A);
+					const swap2 = sortH_direction.equal( int(0) ).select( Ll.greaterThan(La2), Ll.lessThan(La2) );
+					If( swap2, () => { outColor.assign( Lc ); } );
+				});
+				return outColor;
+			})();
+
+			// Odd-even column sort pass material (vertical, hue with luminance tiebreaker) - TSL
+			const sortV_tInput = uniform(null);
+			const sortV_resolution = uniform(new THREE.Vector2(1,1), 'vec2');
+			const sortV_phase = uniform(0, 'int');
+			const sortV_direction = uniform(0, 'int');
+			const sortMatHueVert = new THREE.MeshBasicNodeMaterial({ depthTest: false, depthWrite: false });
+			sortMatHueVert.colorNode = Fn(() => {
+				const size = sortV_resolution;
+				const texel = vec2(1,1).div(size);
+				const pxy = uv().mul(size).sub(0.5);
+				const ip = pxy.add(0.5).floor();
+				const ipx = clamp(ip.x, float(0), size.x.sub(1.0));
+				const ipy = clamp(ip.y, float(0), size.y.sub(1.0));
+				const ipClamped = vec2(ipx, ipy);
+				const start = float(sortV_phase);
+				const isTop = mod(ipClamped.y, 2.0).equal(start);
+				const isBottom = mod(ipClamped.y, 2.0).equal(float(1.0).sub(start));
+				const A = texture(sortV_tInput, ipClamped.add(0.5).mul(texel));
+				const lum = (c) => dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+				const hueOf = (c) => {
+					const r = c.r, g = c.g, b = c.b;
+					const maxc = r.max(g).max(b);
+					const minc = r.min(g).min(b);
+					const delta = maxc.sub(minc);
+					const isZero = delta.lessThan( float(1e-6) );
+					let h = float(0).toVar();
+					If( maxc.equal(r), () => {
+						h.assign( g.sub(b).div(delta).add( g.lessThan(b).select( float(6.0), float(0.0) ) ) );
+					});
+					If( maxc.equal(g), () => { h.assign( b.sub(r).div(delta).add( float(2.0) ) ); });
+					If( maxc.equal(b), () => { h.assign( r.sub(g).div(delta).add( float(4.0) ) ); });
+					return isZero.select( float(0.0), h.div(6.0).fract() );
+				};
+				let outColor = A.toVar();
+				If( isTop.and( ipClamped.y.add(1.0).lessThan( size.y ) ), () => {
+					const B = texture(sortV_tInput, vec2(ipClamped.x, ipClamped.y.add(1.0)).add(0.5).mul(texel));
+					let Ha = hueOf(A).toVar();
+					let Hb = hueOf(B).toVar();
+					let swap = sortV_direction.equal( int(0) ).select( Ha.greaterThan(Hb), Ha.lessThan(Hb) ).toVar();
+					If( Ha.sub(Hb).abs().lessThan( float(1e-3) ), () => {
+						const La = lum(A);
+						const Lb = lum(B);
+						swap.assign( sortV_direction.equal( int(0) ).select( La.greaterThan(Lb), La.lessThan(Lb) ) );
+					});
+					If( swap, () => { outColor.assign( B ); } );
+				});
+				If( isBottom.and( ipClamped.y.sub(1.0).greaterThanEqual( float(0) ) ), () => {
+					const T = texture(sortV_tInput, vec2(ipClamped.x, ipClamped.y.sub(1.0)).add(0.5).mul(texel));
+					let Ht = hueOf(T).toVar();
+					let Ha2 = hueOf(A).toVar();
+					let swap2 = sortV_direction.equal( int(0) ).select( Ht.greaterThan(Ha2), Ht.lessThan(Ha2) ).toVar();
+					If( Ht.sub(Ha2).abs().lessThan( float(1e-3) ), () => {
+						const Lt = lum(T);
+						const La2 = lum(A);
+						swap2.assign( sortV_direction.equal( int(0) ).select( Lt.greaterThan(La2), Lt.lessThan(La2) ) );
+					});
+					If( swap2, () => { outColor.assign( T ); } );
+				});
+				return outColor;
+			})();
+
+		const quad = new THREE.Mesh(quadGeom, blitMat);
+		scene.add(quad);
+
+		let rtA, rtB, viewRT; // ping-pong render targets
+		const loader = new THREE.TextureLoader();
+		const statusEl = document.getElementById('status');
+		const speedEl = document.getElementById('speed');
+		const resetBtn = document.getElementById('reset');
+		const modeEl = document.getElementById('mode');
+
+		let phase = 0; // legacy, unused in new logic
+		let phaseH = 0; // phase for horizontal passes
+		let phaseV = 0; // phase for vertical passes
+		let passes = 0;
+		let imgW = 0, imgH = 0;
+		let mode = 'lumHoriz';
+
+		function makeTarget(w, h) {
+			return new THREE.WebGLRenderTarget(w, h, {
+				minFilter: THREE.NearestFilter,
+				magFilter: THREE.NearestFilter,
+				format: THREE.RGBAFormat,
+				type: THREE.UnsignedByteType,
+				depthBuffer: false,
+				stencilBuffer: false
+			});
+		}
+
+		function resizeRendererToImage(w, h) {
+			renderer.setSize(w, h, false);
+		}
+
+		function initFromTexture(tex) {
+			tex.minFilter = THREE.NearestFilter;
+			tex.magFilter = THREE.NearestFilter;
+			tex.flipY = false;
+
+			imgW = tex.image.width;
+			imgH = tex.image.height;
+
+			if (rtA) { rtA.dispose(); rtB.dispose(); }
+			rtA = makeTarget(imgW, imgH);
+			rtB = makeTarget(imgW, imgH);
+			viewRT = rtA;
+
+			// Blit original image into rtA
+			blit_tInput.value = tex;
+			renderer.setRenderTarget(rtA);
+			renderer.render(scene, camera);
+			renderer.setRenderTarget(null);
+
+			quad.material = blitMat;
+			blit_tInput.value = rtA.texture;
+			resizeRendererToImage(imgW, imgH);
+
+			sortH_resolution.value.set(imgW, imgH);
+			sortV_resolution.value.set(imgW, imgH);
+			passes = 0;
+			phase = 0;
+			phaseH = 0;
+			phaseV = 0;
+			// updateStatus();
+		}
+
+		function doPass(material, phaseValue) {
+			if (!viewRT) return false;
+			if (material === sortMatLumHoriz) {
+				sortH_tInput.value = viewRT.texture;
+				sortH_phase.value = phaseValue | 0;
+			} else if (material === sortMatHueVert) {
+				sortV_tInput.value = viewRT.texture;
+				sortV_phase.value = phaseValue | 0;
+			}
+
+			quad.material = material;
+			renderer.setRenderTarget(viewRT === rtA ? rtB : rtA);
+			renderer.render(scene, camera);
+			renderer.setRenderTarget(null);
+
+			viewRT = (viewRT === rtA) ? rtB : rtA;
+			quad.material = blitMat;
+			blit_tInput.value = viewRT.texture;
+			passes++;
+			// updateStatus();
+			return true;
+		}
+
+		function sortPass() {
+			if (!viewRT) return;
+			if (mode === 'lumHoriz') {
+				doPass(sortMatLumHoriz, phaseH);
+				phaseH = 1 - phaseH;
+			} else if (mode === 'hueLumVert') {
+				// Vertical hue pass
+				doPass(sortMatHueVert, phaseV);
+				phaseV = 1 - phaseV;
+				// Horizontal luminance pass
+				doPass(sortMatLumHoriz, phaseH);
+				phaseH = 1 - phaseH;
+			}
+		}
+
+		let raf;
+		function animate() {
+			renderer.setAnimationLoop(() => {
+				const steps = parseInt(speedEl.value, 10) | 0;
+				for (let i = 0; i < steps; i++) sortPass();
+				renderer.render(scene, camera);
+			});
+		}
+
+		resetBtn.addEventListener('click', () => {
+			loader.load(IMAGE_URL, initFromTexture);
+		});
+
+		modeEl.addEventListener('change', () => {
+			mode = modeEl.value;
+			phaseH = 0;
+			phaseV = 0;
+		});
+		mode = modeEl.value;
+
+		const overlay = document.getElementById('drop-overlay');
+
+		async function initFromBlob(blob) {
+			try {
+				const bitmap = await createImageBitmap(blob, { colorSpaceConversion: 'default', premultiplyAlpha: 'default', imageOrientation: 'from-image' });
+				const tex = new THREE.Texture(bitmap);
+				tex.needsUpdate = true;
+				initFromTexture(tex);
+			} catch (err) {
+				console.error('Failed to load dropped image', err);
+			}
+		}
+
+		function showOverlay() { overlay.style.display = 'flex'; }
+		function hideOverlay() { overlay.style.display = 'none'; }
+
+		window.addEventListener('dragover', (e) => { e.preventDefault(); showOverlay(); });
+		window.addEventListener('dragenter', (e) => { e.preventDefault(); showOverlay(); });
+		window.addEventListener('dragleave', (e) => {
+			// Hide when leaving document
+			if (!e.relatedTarget || (e.relatedTarget === document || e.relatedTarget === document.documentElement)) hideOverlay();
+		});
+		window.addEventListener('drop', (e) => {
+			e.preventDefault();
+			hideOverlay();
+			const files = e.dataTransfer?.files;
+			if (!files || files.length === 0) return;
+			const file = files[0];
+			if (file && file.type && file.type.startsWith('image/')) {
+				initFromBlob(file);
+			}
+		});
+
+		loader.load(IMAGE_URL, initFromTexture);
+		animate();
+	</script>
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-GYK2ZMX0M9"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-GYK2ZMX0M9');
+</script>
+</body>
+</html>
