@@ -25,7 +25,27 @@
 		</label>
 		<button id="reset">Reset</button>
 		<span id="status"></span>
-		<span class="hint" title="Drop a file here to sort">🛈</span>
+		<span class="hint" id="upload-hint" title="Drop a file here to sort or click to upload">[Select Image...]</span>
+		<input type="file" id="file-input" style="display:none" accept="image/*">
+		<script>
+			const uploadHint = document.getElementById('upload-hint');
+			const fileInput = document.getElementById('file-input');
+
+			uploadHint.addEventListener('click', () => {
+				fileInput.value = '';
+				fileInput.click();
+			});
+			fileInput.addEventListener('change', (e) => {
+				const file = e.target.files && e.target.files[0];
+				if (file && file.type && file.type.startsWith('image/')) {
+					if (typeof initFromBlob === 'function') {
+						initFromBlob(file);
+					}else{
+                        console.warn('where is initFromBlob?');
+                    }
+				}
+			});
+		</script>
 	</div>
 	<div id="drop-overlay"><div class="panel">Drop an image anywhere to sort</div></div>
 	<script type="module">
@@ -343,6 +363,7 @@
 				console.error('Failed to load dropped image', err);
 			}
 		}
+        window.initFromBlob = initFromBlob;
 
 		function showOverlay() { overlay.style.display = 'flex'; }
 		function hideOverlay() { overlay.style.display = 'none'; }
@@ -361,7 +382,9 @@
 			const file = files[0];
 			if (file && file.type && file.type.startsWith('image/')) {
 				initFromBlob(file);
-			}
+			}else{
+                console.warn('bad file?', file?.type ?? 'undefined');
+            }
 		});
 
 		loader.load(IMAGE_URL, initFromTexture);
