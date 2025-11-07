@@ -324,8 +324,8 @@
 
 			function animate() {
 
-				// Ping-pong between -90deg and +90deg z rotation, offset by +90deg (so range is 0 to 180deg)
-				const amplitude = Math.PI / 2; // 90 degrees
+				// Ping-pong between -45deg and +45deg z rotation, offset by +45deg (so range is 0 to 90deg)
+				const amplitude = Math.PI / 4; // 45 degrees
 				const t = performance.now() * 0.0001; // seconds
 				const targetZ = Math.sin(t) * amplitude + Math.PI / 2;
 				for ( const mesh of gltf.children ) {
